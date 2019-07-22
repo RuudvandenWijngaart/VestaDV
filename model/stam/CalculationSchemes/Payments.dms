@@ -1,0 +1,210 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container Payments
+{
+	template substitute
+	{
+		// begin case parameters
+		unit<uint32> src;
+		parameter<string> key;
+		unit<uint8> valueset;
+		parameter<string> key2 := '@@@';
+		// end case parameters
+
+		attribute<bool>   conditionN  (src) := strpos(src/name, key) >= 0;
+		attribute<bool>   conditionL  (src) := strpos(src/leverancier, key) >= 0;
+		attribute<bool>   conditionA  (src) := strpos(src/afnemer, key) >= 0;
+		attribute<bool>   tooManyCodes(src) := conditionN && (conditionL || conditionA);
+		attribute<bool>   condition1  (src) := conditionN || conditionL || conditionA, IntegrityCheck = "!tooManyCodes"; // save on double naming
+		
+		attribute<bool>   condition2  (src) := strpos(src/expr, key) >= 0;
+		
+		attribute<bool>   condition   (src)  := condition1 || condition2, IntegrityCheck = "condition1 == condition2"; // only distributed expressions may be substututed by a group.
+		
+		attribute<uint32> firstResult (src) := uint32(int32(id(src)) + makedefined(cumulate(int32(condition))[id(src)-1]*(int32(#valueset)-1i),0i));
+
+		unit<uint32> result := range(uint32, 0, uint32(int32(#src) + sum(int32(condition))*(int32(#valueset)-1i)))
+		{
+			attribute<src>    src_rel       := classify(id(.), firstResult);
+			attribute<string> valueset_name := MakeDefined(valueset/name[value(id(.)-firstResult[src_rel], valueset)], 'xxx');
+			attribute<string> valueset_code := = (key2=='@@@') ? 'valueset_name' : 'valueset/code[value(id(.)-firstResult[src_rel], valueset)]';
+			attribute<string> name          := replace(src/name        [src_rel], key, valueset_name, key2, valueset_code);
+			attribute<string> leverancier   := replace(src/leverancier [src_rel], key, valueset_name, key2, valueset_code);
+			attribute<string> afnemer       := replace(src/afnemer     [src_rel], key, valueset_name, key2, valueset_code);
+			attribute<string> Expr          := replace(src/Expr        [src_rel], key, valueset_name, key2, valueset_code);
+			attribute<string> PlanRegioRel  := replace(src/PlanRegioRel[src_rel], key, valueset_name, key2, valueset_code);
+		}
+	}
+
+	template actor_mut_table
+	{
+		// begin case parameters
+		unit<uint32> Actor;
+		parameter<Actor> Actor_rel;
+		unit<float64> Quantity;
+		// end case parameters
+
+		unit<uint32> mutatie_elem := impl/mutatie_elem;
+		unit<uint32> mut          := subset(mutatie_elem/actor_rel == Actor_rel)
+		{
+			attribute<mutatie_elem> mutatie_elem_rel := nr_OrgEntity;
+			attribute<Actor>        other_rel        := mutatie_elem/other_rel[mutatie_elem_rel];
+			attribute<string>       name             := mutatie_elem/name[nr_OrgEntity];
+			attribute<string>       actor_name       := Actor/name[mutatie_elem/other_rel[nr_OrgEntity]];
+			attribute<string>       expr             := mutatie_elem/expr[nr_OrgEntity];
+			attribute<actor_rels>   actor_rels_rel   := rlookup(other_rel, actor_rels/values);
+			attribute<string>       full_name        := replace(actor/name[other_rel], '/', '_')+'_'+ name;
+			attribute<string>       Label            := full_name;
+		}
+
+		unit<uint32> actor_rels := unique(mut/other_rel)
+		{
+			attribute<Actor>  Values; // auto-result
+			attribute<string> Label := Actor/full_name[Values];
+		}
+
+		unit<float64> MQuantity := 1000000 * Quantity;
+		// '#unique(mut/full_name_ORG) == #mut'
+		unit<uint32> ActorEntity := Invoer/SpecifiekeInstellingen/PlanRegio;
+		container all_muts  := for_each_neidv(mut/full_name,  mut/expr, 'sum(uint32(mut/full_name == '+Quote(mut/full_name)+')) == 1', ActorEntity, Quantity);
+		container aggr_muts := for_each_nedv(Actor/full_name[actor_rels/values], 'add('+AsItemList('all_muts/'+mut/full_name, mut/actor_rels_rel)+')', ActorEntity, Quantity);
+		attribute<Quantity> Saldo (ActorEntity) := ='add('+AsItemList('aggr_muts/'+Actor/full_name[actor_rels/values])+')';
+
+		container totals: KeepData = "True" 
+		{
+			attribute<string>    all_mut_names (mut)        := mut/full_name;
+			attribute<MQuantity> all_muts      (mut)        := ='union_data(mut, '       +AsItemList('sum(../all_muts/'+mut/full_name+')')+')[MQuantity]';
+			attribute<MQuantity> aggr_muts     (actor_rels) := sum(all_muts, mut/actor_rels_rel);
+			parameter<MQuantity> saldo                      := sum(aggr_muts);
+		}
+
+		parameter<string> all_csv :=
+			'titel;bedrag\n'
+			'[text];'+(is_flow ? '[MEur/Yr]' : '[MEur]')+'\n'
+			+ AsList(string(totals/all_mut_names)+';'+string(totals/all_muts)+'\n', '')
+		,	StorageType = "str", StorageName = "=OutputSubFolder+'/mut_'+Actor/name[actor_rel]+'.csv'";
+	}
+
+	template Main
+	{
+		// begin case parameters
+		container          Accounting1;
+		unit<uint8>        Accounting2;
+		unit<float64>      Quantity;
+		parameter<bool>    is_flow; // false: calc stock only
+		parameter<string>  OutputSubFolder;
+		attribute<Float64> fraction(PR);
+		// end case parameters
+
+		unit<float64> MQuantity := 1000000 * Quantity;
+		unit<uint32>  PR        := Invoer/SpecifiekeInstellingen/PlanRegio;
+		unit<uint32>  Actor     := Classifications/Actor;
+		unit<uint8>   BC        := Classifications/BebouwingsComponent;
+		
+		container impl: IsHidden = "True"
+		{
+			unit<uint32> src := Accounting1/mutatie;
+			
+			unit<uint8> Accounting2Subset := subset(Accounting2/leverancier != '')
+			{
+				attribute<string> name          := Accounting2/descr      [nr_OrgEntity];
+				attribute<string> leverancier   := Accounting2/leverancier[nr_OrgEntity];
+				attribute<string> afnemer       := Accounting2/afnemer    [nr_OrgEntity];
+				attribute<string> full_name     := Accounting2/full_name  [nr_OrgEntity];
+			}
+			unit<uint32> Accounting := union_unit(src, Accounting2Subset) {
+				attribute<string> name          := union_data(., src/name        , Accounting2Subset/name);
+				attribute<string> leverancier   := union_data(., src/leverancier , Accounting2Subset/leverancier);
+				attribute<string> afnemer       := union_data(., src/afnemer     , Accounting2Subset/afnemer);
+				attribute<string> Expr          := union_data(., src/Expr        , 'StateNaAllocatie/Cumulaties/@RO@/'+(is_flow?'Jaarlijks':'Eenmalig')+'/'+Accounting2Subset/full_name);
+				attribute<string> PlanRegioRel  := union_data(., src/PlanRegioRel, const('', Accounting2Subset));
+			}
+			
+			unit<uint8> WKOC := subset(BC/KanWKO)
+			{
+				attribute<string> name := BC/name[nr_OrgEntity];
+			}
+			container applyBC  := substitute(Accounting,      '@BC@'   ,BC);
+			container applyWKOC:= substitute(applyBC/result,  '@WKOC@', WKOC);
+			container applyRO  := substitute(applyWKOC/result,'@RO@'   ,Voorkeuren/ActieveGebiedsOptie);
+
+			unit<uint32> mutatie := applyRO/result
+			{
+				attribute<Actor> Leverancier_rel := rlookup(Leverancier, Actor/name);
+				attribute<Actor> Afnemer_rel     := rlookup(Afnemer,     Actor/name);
+			}
+
+			unit<uint32> mutatie_elem := union_unit(mutatie, mutatie) //van afnemer aan leverancier
+			{
+				attribute<string> name       := union_data(., mutatie/name , mutatie/name);
+				attribute<string> label      := union_data(., mutatie/name+' (deb)', mutatie/name + ' (cr)');
+				attribute<actor>  actor_rel  := union_data(., mutatie/Afnemer_rel, mutatie/Leverancier_rel), IntegrityCheck = "IsDefined(mutatie/Leverancier_rel)";
+				attribute<actor>  other_rel  := union_data(., mutatie/Leverancier_rel, mutatie/Afnemer_rel), IntegrityCheck = "IsDefined(mutatie/Afnemer_rel)";
+				attribute<string> entityRel  := union_data(., mutatie/PlanRegioRel, mutatie/PlanRegioRel);
+				attribute<string> ExprBase   := union_data(., '-('+mutatie/Expr+')', '('+mutatie/Expr+')');
+				attribute<string> ExprSum    := entityRel <> '' ? 'sum('+ExprBase + ', '+entityRel+')' : ExprBase;
+				attribute<string> Expr       := ExprSum +' * fraction';
+			}
+
+			unit<uint32> active_actor := subset(pcount(mutatie_elem/actor_rel) > 0)
+			{
+				attribute<Actor>  Actor_rel                := nr_OrgEntity;
+				attribute<string> name                     := Actor/full_name[Actor_rel];
+				attribute<string> Label                    := name;
+				attribute<bool>   IsMaatschappelijkeKosten := Actor/IsMaatschappelijkeKosten[Actor_rel];
+				attribute<bool>   IsOverheid               := Actor/IsOverheid              [Actor_rel];
+			}
+		}
+
+		container actor_mut_tables := for_each_ne(impl/active_actor/name, 'Payments/actor_mut_table(Actor,'+string(impl/active_actor/nr_OrgEntity)+'[Actor], Quantity)');
+
+		container matrix
+		{
+			unit<uint32> aggr := ='union_unit('+AsItemList('actor_mut_tables/'+impl/active_actor/name+'/actor_rels')+')'
+			{
+				attribute<MQuantity> Saldo := ='union_data(.,'+AsItemList('actor_mut_tables/'+impl/active_actor/name+'/totals/aggr_muts')+')';
+				attribute<actor>     to    := ='union_data(.,'+AsItemList('const(actor_mut_tables/'+impl/active_actor/name+'/Actor_rel, actor_mut_tables/'+impl/active_actor/name+'/actor_rels)')+')';
+				attribute<actor>     from  := ='union_data(.,'+AsItemList('actor_mut_tables/'+impl/active_actor/name+'/Actor_rels/values')+')';
+			}
+
+			unit<uint32> ColSet := impl/active_actor;
+			unit<uint32> RowSet := ColSet;
+
+			container Table := for_each_nedv(ColSet/name,
+				'(1.0 / 1000000.0) * float64(int64(0.5 + 1000000.0*sum(aggr/Saldo * Float64(aggr/from == '+string(ColSet/Actor_rel)+'), aggr/to)[RowSet/Actor_rel]))'
+				, RowSet
+				, MQuantity
+				)
+			{
+				attribute<string>    name      (RowSet) := RowSet/name;
+				attribute<MQuantity> Oji_Totaal(RowSet) := ='add('+AsItemList('max_elem('+ColSet/Name+', 0[MQuantity])')+')';
+				attribute<MQuantity> Kji_Totaal(RowSet) := ='union_data(RowSet, '+AsItemList('sum(max_elem(Table/'+RowSet/Name+', 0[MQuantity]))')+')';
+				attribute<MQuantity> Oji_Netto (RowSet) := (1.0 / 1000000.0) * float64(int64(0.5 + 1000000.0*(Oji_Totaal - Kji_Totaal)));
+			}
+			attribute<string>        rows      (RowSet) := ='add('+AsItemList(quote(';')+'+string(Table/'+ColSet/Name+')')+')';
+
+			parameter<string> csv := 
+				'name;Oji_Totaal;Kji_Totaal;Oji_Netto;'+AsList(ColSet/Name,';')+'\n'+
+				'[text];[MEur/Yr];[MEur/Yr];[MEur/Yr];'+AsList(const('[MEur/Yr]', ColSet),';')+'\n'
+				+ AsList(RowSet/name+';'+string(table/Oji_Totaal)+';'+string(table/Kji_Totaal)+';'+string(table/Oji_Netto)+rows+'\n', '')
+			,	StorageType = "str"
+			,	StorageName = "=OutputSubFolder+'/Matrix.csv'";
+		}
+		attribute<MQuantity> mut_overview   (impl/Active_Actor) := matrix/table/Oji_Netto;
+
+		attribute<string>    mut_herkomst   (impl/Active_Actor) := mut_overview > 0[MQuantity] ? string( mut_overview) : '';
+		attribute<string>    mut_bestemming (impl/Active_Actor) := mut_overview < 0[MQuantity] ? string(-mut_overview) : '';
+
+		parameter<MQuantity> MaatschappelijkEindtotaal          := sum(mut_overview * float64(impl/active_actor/IsMaatschappelijkeKosten));
+		parameter<MQuantity> OverheidEindtotaal                 := sum(mut_overview * float64(impl/active_actor/IsOverheid));
+
+		parameter<string> GenerateAll := 'Ready',
+			ExplicitSuppliers =
+				"=  'matrix/csv'"
+				"+ ';' + AsList('actor_mut_tables/'+impl/active_actor/name + '/all_csv',';')";
+	}
+}

@@ -1,0 +1,48 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+template RegionaleRapportage
+{
+	// begin case parameters
+	unit<uint32>               RapportageRegio;
+	parameter<RapportageRegio> RapportageRegio_sel;
+	container                  BebouwingscomponentGebiedsData;
+	parameter<string>          BebouwingscomponentNaam;
+	unit<uint8>                RapGroep;
+	parameter<string>          RapGroepNaam;
+	parameter<string>          ExportLabel;
+	unit<Float64>              QuantityUnit;
+	// end  case parameters
+	
+	parameter<string>          ReportRegioNaam           := RapportageRegio/Name[RapportageRegio_sel];
+	container                  BCdata                    := BebouwingscomponentGebiedsData/BCdata;
+	container                  RuimtelijkeVraagComponent := BebouwingscomponentGebiedsData/RuimtelijkeVraagComponent;
+	unit<uint32>               BebouwingsObject          := BebouwingscomponentGebiedsData/BebouwingsObject;
+
+	attribute<RapportageRegio>                         PlanRegioRapportageRegio_rel           (Invoer/SpecifiekeInstellingen/PlanRegio) := ='PlanRegio/'+RapportageRegio/RegioNaam + '_rel';
+	attribute<Invoer/SpecifiekeInstellingen/PlanRegio> BebouwingscomponentPlanRegio_rel       (BebouwingsObject)                        := BCdata/PlanRegio_rel;
+	attribute<RapportageRegio>                         BebouwingscomponentRapportageRegio_rel (BebouwingsObject)                        := PlanRegioRapportageRegio_rel[ BebouwingscomponentPlanRegio_rel ];
+	attribute<RapGroep>                                BebouwingscomponentRapGroep_rel        (BebouwingsObject)                        := =RapGroepNaam ;
+
+	parameter<string> ReportFolder := FolderInfo/OutputFolder+'/'+ReportRegioNaam;
+	
+	container impl: isHidden = "True"
+	{
+		unit<uint32> RegioSelectie := Subset(BebouwingscomponentRapportageRegio_rel == RapportageRegio_sel)
+		{
+			attribute<RapGroep> BCGroep_rel(RegioSelectie) := BebouwingscomponentRapGroep_rel[nr_OrgEntity];
+		}
+		attribute<QuantityUnit> Aantal (RapGroep) := sum(RuimtelijkeVraagComponent/NrModelUnits[RegioSelectie/nr_OrgEntity], RegioSelectie/BCGroep_rel);
+	}
+
+	#include<BebouwingsRapportage.dms>
+
+	parameter<string> GenerateAll := 'Ready',
+		ExplicitSuppliers = 
+			"BebouwingsRapportage/Gebouw/Verbeteringen/csv/Result;"
+			"BebouwingsRapportage/Gebouw/Opwekking/csv/Result;"
+			"BebouwingsRapportage/Gebied/csv/Result";
+}

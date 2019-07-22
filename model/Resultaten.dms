@@ -1,0 +1,96 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container Resultaten :=
+	for_each_ne(
+		Classifications/RekenStap/Name
+		, 'Model/CalculationSchemes/Resultaten('
+			+ quote(Classifications/RekenStap/Name) + ','
+			+ quote(Classifications/Zichtjaar/Name[Classifications/RekenStap/zichtjaar_rel])
+			+ ')'
+	)
+	, using = "Model"
+{
+	container ProductiePerBron := 
+		for_each_nedv(Classifications/RekenStap/name
+		,	replace(
+				'sum('
+					'@RW@/KostenBaten/Vj_WarmtePrimairD * Float64(@RW@/GebruikOptie), '
+					'MakeDefined(@RW@/Bronnen/TypeInfoList_rel[@RW@/LastState/CurrBron], Kengetallen/WarmteBronnen/MetaData/TypeInfoList/V/Onbekend)'
+				') / 1000000[Units/GJ / Units/PJ]'
+			,	'@RW@', 'TussenResultaten/@STAP@/GebiedsAllocatie/RestWarmte'
+			,	'@STAP@', Classifications/RekenStap/Name
+			)
+		,	Kengetallen/WarmteBronnen/MetaData/TypeInfoList, Units/PJ_yr
+		);
+
+
+
+	container Exports: isHidden = "True"
+	{
+		parameter<String> GenerateAllIndicatoren := 'Ready', 
+			ExplicitSuppliers = "=AsList(Classifications/rekenstap/Name+'/Generate/All', ';')", IsHidden = "True";
+
+		parameter<string> GenerateAllAlloc := 'ready', 
+			ExplicitSuppliers = "=AsList(Classifications/rekenstap/Name+'/AllocExports/GenerateAll', ';')", IsHidden = "True";
+
+		parameter<string> GenerateDataDumpExports := 'ready', 
+			ExplicitSuppliers = "=AsList(Classifications/rekenstap/Name+'/DataDumpExports/GenerateAll', ';')", IsHidden = "True";
+
+		container t510_indicator_results_test
+		{
+			parameter<string> result := 
+				'<description>Vesta indicator results, Run4Combi_2016_Referentie, <br>'
+				'<I>version</i>: </description>' + 
+				'<result><br><br>' + 
+				' Jaarlijks, Maatschappelijk<br>StartJaar : ' + replace(string(StartJaar/InputOutput/totaal/Ongewogen/Jaarlijks/MaatschappelijkEindtotaal),'.',',') +' mega euro per jaar <br>' + 
+				' 2020 : ' + replace(string(R1_2020/InputOutput/totaal/Ongewogen/Jaarlijks/MaatschappelijkEindtotaal),'.',',') +' mega euro per jaar <br>' + 
+				' 2030 : ' + replace(string(R2_2030/InputOutput/totaal/Ongewogen/Jaarlijks/MaatschappelijkEindtotaal),'.',',') +' mega euro per jaar <br><br>' + 
+				' Energy, O Totaal<br>StartJaar : ' + replace(string(sum(Resultaten/StartJaar/InputOutput/totaal/Ongewogen/jaarlijks/matrix/table/Oji_Totaal)),'.',',') +' peta J per jaar<br>'  + 
+				' 2020 : ' + replace(string(sum(R1_2020/InputOutput/totaal/Ongewogen/jaarlijks/matrix/table/Oji_Totaal)),'.',',') +' peta J per jaar<br>'  + 
+				' 2030 : ' + replace(string(sum(R2_2030/InputOutput/totaal/Ongewogen/jaarlijks/matrix/table/Oji_Totaal)),'.',',') +' peta J per jaar<br><br>'  + 
+				' CO2, O Netto<br>StartJaar : ' + replace(string(sum(StartJaar/InputOutput/totaal/Ongewogen/Uitstoot/CO2/matrix/TableData/Oj_Netto )),'.',',') +' kilo ton per jaar <br>' + 
+				' 2020 : ' + replace(string(sum(R1_2020/InputOutput/totaal/Ongewogen/Uitstoot/CO2/matrix/TableData/Oj_Netto)),'.',',') +' kilo ton per jaar <br>' + 
+				' 2030 : ' + replace(string(sum(R2_2030/InputOutput/totaal/Ongewogen/Uitstoot/CO2/matrix/TableData/Oj_Netto)),'.',',') +' kilo ton per jaar </result>'
+			,	StorageType = "str"
+			,	storagename = "= '%localDataProjDir%/vesta_indicator_results_test.html'";
+		}
+		container BAG
+		{
+			unit<uint32> vbo := Invoer/RuimtelijkeData/BAG/import/vbo;
+			unit<uint32> vbo_oppervlak_gecorrigeerd_INV := vbo
+			{
+				attribute<Units/m2> wonen :=
+					(oppervlak_filters/rare_waarden  || (vbo/Oppervlakte > 10000i && vbo/pand_bouwlagen_fictief > 10f))
+						? vbo/Oppervlakte[Units/m2]
+						: (0 / 0)[Units/m2]
+				,	Descr    = "Dataset van records die afvallen door het filter, statistieken geven inzicht in de verdeling in oppervlaktes";
+
+				attribute<Units/m2> utiliteit :=
+					(oppervlak_filters/rare_waarden  || (vbo/Oppervlakte > 160000i && vbo/pand_bouwlagen_fictief > 45f))
+						? Oppervlakte[Units/m2]
+						: (0 / 0)[Units/m2]
+				,	Descr = "Dataset van records die afvallen door het filter, statistieken geven inzicht in de verdeling in oppervlaktes";
+			
+				unit<uint32> utiliteit_sub := subset(vbo/oppervlakte <> 999999i && vbo/oppervlakte > 160000i && vbo/pand_bouwlagen_fictief > 45f)
+				{
+					attribute<Units/m2> Oppervlakte      := vbo/Oppervlakte[nr_OrgEntity][Units/m2];
+					attribute<float32> bouwlagen_fictief := vbo/pand_bouwlagen_fictief[nr_OrgEntity];
+				}
+			}
+
+			unit<uint32> vbo_utiliteit := Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied;
+			unit<uint32> combine_BouwjaarUtil_utiliteit := combine(Classifications/BouwjaarUtilBestaand ,Classifications/UtilTypeBestaand)
+			{
+				attribute<string>  name_bj                          := Classifications/BouwjaarUtilBestaand/label[nr_1];
+				attribute<string>  name_gd                          := Classifications/UtilTypeBestaand/label[nr_2];
+				attribute<.>       combine_bj_gd_rel(vbo_utiliteit) := combine_data(., Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/BouwjaarUtilBestaand_rel,  Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/gebruiksdoel);
+				attribute<uint32>  count(.)                         := pcount(combine_bj_gd_rel);
+				attribute<float64> sum(.)                           := sum(Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/Oppervlakte,combine_bj_gd_rel);
+			}
+		}
+	}
+}

@@ -1,0 +1,127 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+template AllocatieResultatenComponent
+{
+	// begin case parameters
+	container BCdata;
+	attribute<Classifications/WarmteOptie> WarmteAllocatie (BebouwingsObject);
+	attribute<Eur_yr>                      KoudeAllocatie  (BebouwingsObject);
+	attribute<Eur_yr>                      Om_Comfort      (BebouwingsObject);
+	parameter<string>                      BebouwingsComponent_name;
+	// end case parameters
+
+	container                                         RuimtelijkeVraagComponent                           := BCdata/RuimtelijkeVraagComponent;
+	container                                         VraagKentallen                                      := BCdata/VraagKentallen;
+	unit<uint32>                                      BebouwingsObject                                    := BCdata/BebouwingsObject;
+	unit<uint32>                                      PlanRegio                                           := Invoer/SpecifiekeInstellingen/PlanRegio;
+	unit<float64>                                     ModelUnit                                           := BCdata/ModelUnit;
+	attribute<Classifications/WoningtypeBestaand>     BebouwingsType                   (BebouwingsObject) := BebouwingsObject/BebouwingsType;
+	attribute<PlanRegio>                              PlanRegio_BebouwingsObject_rel   (BebouwingsObject) := point_in_polygon(BebouwingsObject/point, PlanRegio/Geometry);
+	
+	attribute<bool>                                   VeroorzaaktGrondroering          (BebouwingsObject) := Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie];
+	attribute<bool>                                   GrondroeringInPlanRegio          (PlanRegio)        := sum(VeroorzaaktGrondroering ? 1 : 0, PlanRegio_BebouwingsObject_rel) > 0;
+ 
+	attribute<nrAansl>                                AllElec_Aansl_inPlanRegio        (PlanRegio)        := sum(Aansl_capaciteit < 100[kw] ? Aandelen/AllElectric[uint32] : 0, PlanRegio_BebouwingsObject_rel)[nrAansl];
+	attribute<kW>                                     Aansl_capaciteit                 (BebouwingsObject) := BCdata/RuimtelijkeVraagComponent/AansluitCapaciteit/Elektriciteit;
+	
+	attribute<ModelUnit>                              ModelUnits_met_WP_inPlanRegio    (PlanRegio)        := sum(Aandelen/eWP[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit] + sum(Aandelen/hWP[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit];
+	attribute<ModelUnit>                              ModelUnits_zonder_WP_inPlanRegio (PlanRegio)        := sum(BCdata/RuimtelijkeVraagComponent/nrModelUnits, PlanRegio_BebouwingsObject_rel)[ModelUnit] - ModelUnits_met_WP_inPlanRegio;
+	
+	container Aandelen := for_each_nedv(Classifications/GebiedsOptie/name, 'BCdata/Aandeel/WarmteVraag * float64(WarmteAllocatie == Classifications/WarmteOptie/V/'+Classifications/GebiedsOptie/name+')', BebouwingsObject, float64)
+	{
+		attribute<float64> BeWP (BebouwingsObject) := BCdata/Opwekking/BeWP;
+		attribute<float64> AeWP (BebouwingsObject) := BCdata/Opwekking/AeWP;
+		attribute<float64> eWP  (BebouwingsObject) := BeWP + AeWP;
+		attribute<float64> mWKK (BebouwingsObject) := BCdata/Opwekking/mWKK;
+		attribute<float64> EWV  (BebouwingsObject) := BCdata/Opwekking/EWV;
+		attribute<float64> hWP  (BebouwingsObject) := BCdata/Opwekking/hWP;
+		attribute<float64> ventilatie   (BebouwingsObject) := BCdata/Aandeel/Ventilatie;
+
+		attribute<float64> GebiedsOptie (BebouwingsObject) := BCdata/Aandeel/WarmteVraag * float64(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie]);
+		attribute<float64> AardGasExclMicroWKK (BebouwingsObject) :=
+			  BCdata/Aandeel/WarmteVraag * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie]))
+			+ BCdata/Aandeel/NietDeelnemers
+			- BCdata/Aandeel/Electric_mWKK;
+
+		attribute<float64> AardGasInclMicroWKK (BebouwingsObject) := AardGasExclMicroWKK  + mWKK;
+		attribute<float64> AllElectric         (BebouwingsObject) := eWP + EWV + WKO;
+	}
+
+	container MeterVraag := for_each_nedv(Classifications/GebiedsOptie/name, 'Aandelen/'+Classifications/GebiedsOptie/name+' * BCdata/DragerOpties/Warmte/Warmte', BebouwingsObject, GJ_yr) 
+	{
+		attribute<GJ_yr> GebiedsOptie  (BebouwingsObject) := ='add('+AsItemList(Classifications/GebiedsOptie/name)+')';
+
+		attribute<GJ_yr> AardGas_RV    (BebouwingsObject) := Aandelen/AardGasExclMicroWKK * BCdata/DragerOpties/Ruimteverwarming/AardGas * (1.0 - Aandelen/hWP  *VraagKentallen/hWP/DekkingsGraad); // F85
+		attribute<GJ_yr> AardGas_WW    (BebouwingsObject) := Aandelen/AardGasExclMicroWKK * BCdata/DragerOpties/WarmWater/AardGas;
+		attribute<GJ_yr> AardGas_mWKK  (BebouwingsObject) := Aandelen/mWKK                * BCdata/DragerOpties/Warmte/Warmte / (0.8 * 0.5); // rendement: 80% waarvan 50% voor warmte en 50% voor Elektriciteit
+		attribute<GJ_yr> AardGas       (BebouwingsObject) := AardGas_RV + AardGas_WW + AardGas_mWKK, Descr = "incl gas voor Micro WKK, excl gas voor WijkWKK en bijstook in WOS";
+
+		attribute<GJ_yr> BeWP          (BebouwingsObject) := Aandelen/BeWP * BCdata/DragerOpties/Warmte/BeWP; // COP is al toegepast in de DragerOptie
+		attribute<GJ_yr> AeWP          (BebouwingsObject) := Aandelen/AeWP * BCdata/DragerOpties/Warmte/AeWP; // COP is al toegepast in de DragerOptie
+		attribute<GJ_yr> eWP           (BebouwingsObject) := BeWP + AeWP;
+		attribute<GJ_yr> EWV           (BebouwingsObject) := Aandelen/EWV  * BCdata/DragerOpties/Warmte/EWV;  // COP is al toegepast in de DragerOptie
+		attribute<GJ_yr> hWP           (BebouwingsObject) := Aandelen/hWP  * BCdata/DragerOpties/RuimteVerwarming/Warmte * (VraagKentallen/hWP/DekkingsGraad / VraagKentallen/hWP/COP); // F85
+		attribute<GJ_yr> mWKK          (BebouwingsObject) := Aandelen/mWKK * BCdata/DragerOpties/Warmte/Warmte; // op basis van 50/50 productie   
+		attribute<GJ_yr> CvPomp        (BebouwingsObject) := BCdata/Functioneel/PompEnergie * (Aandelen/AardGasExclMicroWKK + Aandelen/eWP - VraagKentallen/hWP/DekkingsGraad * Aandelen/hWP); //TODO: aanname: in hWP zit pompenergie al in de COP
+		attribute<GJ_yr> Koude         (BebouwingsObject) := BCdata/DragerOpties/Koude/Elektriciteit * (1.0 - Aandelen/WKO); // Efficiency/Koude/Elektriciteit is al toegepast in de DragerOptie; WKO en Koude alleen beiden aan bij NieuwbouwUtil
+		attribute<GJ_yr>	Ventilatie		(BebouwingsObject)	:=	Aandelen/ventilatie * BCdata/DragerOpties/Apparatuur/Ventilatie;
+		attribute<GJ_yr>	WarmteMT		(BebouwingsObject)	:=	RestWarmte+GeoThermie+WijkWKK+BioWKK,		Descr = "totale volumevraag naar warmte uit gebiedsopties 70 graden of hoger";
+		attribute<GJ_yr>	WarmteLT		(BebouwingsObject)	:=	Lt15_30 + Lt15_50 + Lt15_70 + Lt30_30 + Lt30_50 + Lt30_70 + WKO + TEO;
+		attribute<GJ_yr>	Warmtetotaal	(BebouwingsObject)	:=	eWP + hWP + Aardgas + GebiedsOptie,			Descr = "totale volumevraag warmte uit gebiedsopties en individuele opwek";
+				
+		attribute<GJ_yr> Elektriciteit (BebouwingsObject) :=
+			  BCdata/DragerOpties/Apparatuur/Elektriciteit // incl aftrek Zon_PV
+			+ CvPomp + Koude + eWP + EWV + hWP + ventilatie 
+			- mWKK
+		,	Descr = "excl elektra voor WKO/LT warmtepomp";
+
+//DEBUG		attribute<GJ_yr> Wko_Koude(BebouwingsObject) := BCdata/DragerOpties/Koude/Elektriciteit * Aandelen/WKO;
+
+		attribute<GJ_yr> Totaal       (BebouwingsObject) := RestWarmte + GeoThermie + WKO + WijkWKK + BioWKK + AardGas + Elektriciteit
+		,	Descr = "Totale Metervraag na verwerking lokale opwekking";
+	}
+
+	container AardGas 
+	{
+		attribute<bool>    heeft_gas        (BebouwingsObject) := Aandelen/AardGasInclMicroWKK * Metervraag/Aardgas > 0.0[GJ_yr];
+		attribute<nrAansl> nrAansl_gas      (BebouwingsObject) := float64(heeft_gas) * RuimtelijkeVraagComponent/nrAansluitingen;
+		attribute<Eur>     AansluitBijdrage (BebouwingsObject) := BCdata/Opbrengsten/AansluitBijdrageG   * float64(heeft_gas);
+		attribute<Eur_yr>  VastRecht        (BebouwingsObject) := BCdata/Opbrengsten/VastRechtBijdrageG  * Aandelen/AardGasInclMicroWKK * float64(Metervraag/Aardgas > 0.0[GJ_yr]);
+
+		unit<uint8> ggk := BCdata/PrijzenAardgas; // gebruiksgrootte klasse
+		attribute<ggk>    ggk_rel          (BebouwingsObject) := classify(MeterVraag/AardGas, ggk/ClassBreak);
+		attribute<Eur_yr> eindgebruik_excl (BebouwingsObject) := MeterVraag/AardGas * ggk/KGJ_eindgebruik_excl[ggk_rel];
+		attribute<Eur_yr> maatschappelijk  (BebouwingsObject) := MeterVraag/AardGas * ggk/KGJ_maatschappelijk [ggk_rel];
+		attribute<Eur_yr> netwerk          (BebouwingsObject) := MeterVraag/AardGas * ggk/KGJ_netwerk         [ggk_rel];
+		attribute<Eur_yr> EnergieHeffing   (BebouwingsObject) := MeterVraag/AardGas * ggk/KGJ_EnergieHeffing  [ggk_rel];
+		attribute<Eur_yr> CO2Heffing       (BebouwingsObject) := MeterVraag/AardGas * ggk/KGJ_CO2Heffing      [ggk_rel];
+	}
+	attribute<nrAansl> aant_g_aansl_per_planregio        (PlanRegio) := sum(AardGas/nrAansl_gas, PlanRegio_BebouwingsObject_rel);
+	attribute<nrAansl> aant_g_aansl_hoogb_per_planregio  (PlanRegio) := sum(BebouwingsType == Classifications/WoningtypeBestaand/V/meergezinspand_hoog ? AardGas/nrAansl_gas : 0[nrAansl], PlanRegio_BebouwingsObject_rel);
+	attribute<nrAansl> aant_g_aansl_laagb_per_planregio  (PlanRegio) := sum(BebouwingsType != Classifications/WoningtypeBestaand/V/meergezinspand_hoog ? AardGas/nrAansl_gas : 0[nrAansl], PlanRegio_BebouwingsObject_rel);
+	
+	container Elektriciteit
+	{
+		attribute<Eur>    AansluitBijdrage (BebouwingsObject) := BCdata/Opbrengsten/AansluitBijdrageE;
+		attribute<Eur_yr> VastRecht        (BebouwingsObject) := BCdata/Opbrengsten/VastRechtBijdrageE;
+		attribute<Eur_yr> Heffingskorting  (BebouwingsObject) := BCdata/Opbrengsten/HeffingskortingE;
+
+		unit<uint8> ggk := BCdata/PrijzenElektriciteit; // gebruiksgrootte klasse
+		attribute<ggk>    ggk_rel          (BebouwingsObject) := classify(MeterVraag/Elektriciteit, ggk/ClassBreak);
+		attribute<Eur_yr> eindgebruik_excl (BebouwingsObject) := MeterVraag/Elektriciteit * ggk/KGJ_eindgebruik_excl[ggk_rel];
+		attribute<Eur_yr> maatschappelijk  (BebouwingsObject) := MeterVraag/Elektriciteit * ggk/KGJ_maatschappelijk [ggk_rel];
+		attribute<Eur_yr> netwerk          (BebouwingsObject) := MeterVraag/Elektriciteit * ggk/KGJ_netwerk         [ggk_rel];
+		attribute<Eur_yr> EnergieHeffing   (BebouwingsObject) := MeterVraag/Elektriciteit * ggk/KGJ_EnergieHeffing  [ggk_rel] - Heffingskorting;
+		attribute<Eur_yr> CO2Heffing       (BebouwingsObject) := MeterVraag/Elektriciteit * ggk/KGJ_CO2Heffing      [ggk_rel];
+	}
+	container CO2
+	{
+		attribute<KG_yr> AardGas           (BebouwingsObject) := MeterVraag/AardGas       * prijzen/AardGas/CO2_GJ;
+		attribute<KG_yr> Elektriciteit     (BebouwingsObject) := MeterVraag/Elektriciteit * prijzen/Elektriciteit/CO2_GJ;
+	}
+}
+

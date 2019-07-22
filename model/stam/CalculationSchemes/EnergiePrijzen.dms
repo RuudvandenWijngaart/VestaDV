@@ -1,0 +1,107 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container EnergiePrijzen
+{
+	template GebruiksSectie
+	{
+		// begin case parameters
+		unit<uint32> Table;
+		parameter<string> code;
+		// end case parameters
+
+		attribute<Eur_GJ> distr_tr         (table) := ='(Table/'+code+'_PC_DIS[Eur_per_eenheid] + Table/'+code+'_PC_TRANS[Eur_per_eenheid]) * OmrekenFactor * InflationFactor';
+		attribute<Eur_GJ> netwerk          (table) := ='Table/'+code+'_PC_NET[Eur_per_eenheid] * OmrekenFactor * InflationFactor';
+		attribute<Eur_GJ> CommodityPrice   (table) := ='Table/'+code+'_PC_COM_EXCL_CO2[Eur_per_eenheid] * OmrekenFactor * InflationFactor';
+		attribute<Eur_GJ> CO2Heffing       (table) := ='Table/'+code+'_PC_CO2         [Eur_per_eenheid] * OmrekenFactor * InflationFactor';
+		attribute<Eur_GJ> EnergieHeffing   (table) := ='(Table/'+code+'_PC_BEL_EL[Eur_per_eenheid] + Table/'+code+'_PC_SDE[Eur_per_eenheid]) * OmrekenFactor * InflationFactor';
+
+		attribute<Eur_GJ> maatschappelijk  (table) := CommodityPrice + CO2Heffing + netwerk;
+		attribute<Eur_GJ> eindgebruik_excl (table) := maatschappelijk + EnergieHeffing;
+	}
+	
+	template ImportElekGas
+	{
+		// begin case parameters
+		parameter<string>     FileName;
+		unit<float64>         model_eenheid;
+		unit<float64>         eenheid_GJ;
+		parameter<eenheid_GJ> OmrekenFactor;
+		parameter<_yr>        AnnualPriceInflationFactor;
+		parameter<string>     GlastuinbouwExpr;
+		// end case parameters
+
+		unit<float64> Eur_per_eenheid := units/Eur / model_eenheid;
+
+		unit<uint32> Table
+		:	StorageName     = "='%EnergieDataProjDir%/'+ FileName + '.csv'"
+		,	StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True"
+		,	SyncMode        = "All";
+
+		container Results
+		{
+			attribute<units/yr_uint16> Jaar            (table) := Table/Jaar[ units/yr_uint16 ];
+			attribute<Ratio>           InflationFactor (table) := exp(float64(Jaar - 2010[units/yr_uint16]) * AnnualPriceInflationFactor);
+			attribute<KG_GJ>           CO2_GJ          (table) := TABLE/RAT_CO2_KWH[KG / model_eenheid] * OmrekenFactor;
+
+			container Teruglevering
+			{
+				parameter<string> code := 'TL';
+
+				attribute<Eur_GJ> distr_tr         (table) := const(0[Eur_GJ], table);
+				attribute<Eur_GJ> netwerk          (table) := const(0[Eur_GJ], table);
+				attribute<Eur_GJ> CommodityPrice   (table) := KleinGebruik/CommodityPrice;
+				attribute<Eur_GJ> CO2Heffing       (table) := const(0[Eur_GJ], table);
+				attribute<Eur_GJ> EnergieHeffing   (table) := const(0[Eur_GJ], table);
+
+				attribute<Eur_GJ> maatschappelijk  (table) := CommodityPrice + CO2Heffing + netwerk;
+				attribute<Eur_GJ> eindgebruik_excl (table) := maatschappelijk + EnergieHeffing;
+			}
+
+			container KleinGebruik        := GebruiksSectie(table, 'KG');
+			container KleinMiddelGebruik  := GebruiksSectie(table, 'KMG');
+			container MiddelMiddelGebruik := GebruiksSectie(table, 'MMG');
+			container GrootGebruik        := GebruiksSectie(table, 'GG');
+			container GlasTuinBouw        := =GlastuinbouwExpr;
+		}
+	}
+
+	template ImportOverig
+	{
+		// begin case parameters
+		parameter<string> FileName;
+		parameter<_yr>    AnnualPriceInflationFactor;
+		// end case parameters
+
+		unit<uint32> Table
+		:	StorageName     = "='%EnergieDataProjDir%/'+ FileName + '.csv'"
+		,	StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True"
+		,	SyncMode        = "All";
+
+		container Results
+		{
+			attribute<units/yr_uint16> Jaar  (table) := Table/Jaar[units/yr_uint16];
+			attribute<Ratio> InflationFactor (table) := exp(float64(Jaar - 2010[ units/yr_uint16 ]) * AnnualPriceInflationFactor);
+			attribute<Eur_GJ> BioMassa       (table) := TABLE/KGJ_BioMassa   [Eur_GJ] * InflationFactor;
+			attribute<Eur_GJ> Kolen_Excl     (table) := TABLE/KGJ_Kolen_Excl [Eur_GJ] * InflationFactor;
+			attribute<Eur_GJ> Kolen_CO2      (table) := TABLE/KGJ_Kolen_CO2  [Eur_GJ] * InflationFactor;
+		}
+	}
+
+	template All
+	{
+		// begin case parameters
+		parameter<string> FileName;
+		parameter<_yr>    AnnualPriceInflationFactor;
+		// end case parameters
+
+		container Elektriciteit := ImportElekGas(FileName + '_Elek',   kwh, Kwh / GJ, value(1000000.0 / 3600.0, kWh / GJ)                             , AnnualPriceInflationFactor, 'GrootGebruik' );
+		container AardGas       := ImportElekGas(FileName + '_Gas',     m3,  m3 / GJ, 1.0 / Invoer/SpecifiekeInstellingen/FysiekeConstanten/GasEnergie, AnnualPriceInflationFactor, 'GebruiksSectie(table, ''GLAST'')');
+		container Overig        := ImportOverig ('OverigeKosten', AnnualPriceInflationFactor);
+	}
+}

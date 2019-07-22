@@ -1,0 +1,102 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+template StartingStateComponent
+{
+	// begin case parameters
+	unit<uint32>  BebouwingsObject;
+	container EnergieVraagModellen;
+	parameter<Classifications/BebouwingsComponent> BebouwingsComponent_rel;
+	// end of case parameters
+
+	unit<uint32> ModelObject := EnergieVraagModellen/ModelObject;
+	unit<uint32> WkoCluster  := Wko/Cluster;
+	
+	attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel (BebouwingsObject) := ='BebouwingsObject/'+Invoer/SpecifiekeInstellingen/PlanRegioNaam+'_rel';
+	attribute<ModelObject>                 Model_rel       (BebouwingsObject) := rlookup(BebouwingsObject/ModelObjectKey, EnergieVraagModellen/ModelObjectKey);
+	attribute<Classifications/WarmteOptie> WarmteAllocatie (BebouwingsObject) := Classifications/EnergieLabel/WarmteOptie_rel[ EnergieLabel/CurrValue ];
+	attribute<Eur_yr>                      KoudeAllocatie  (BebouwingsObject) := const(0[Eur_yr], BebouwingsObject);
+	attribute<Eur_yr>                      Om_Comfort      (BebouwingsObject) := const(0[Eur_yr], BebouwingsObject);
+	attribute<WkoCluster>                  WkoCluster_rel  (BebouwingsObject) := const((0 / 0)[WkoCluster], BebouwingsObject);
+
+	container EnergieLabel
+	{
+		attribute<Classifications/EnergieLabel> ModelValue (BebouwingsObject) := EnergieVraagModellen/Efficiency/EnergieLabel[ Model_rel];
+
+		attribute<Classifications/EnergieLabel> CalcValue  (BebouwingsObject) :=
+			=(BebouwingsComponent_rel == Classifications/BebouwingsComponent/V/BestaandeWoning)
+				? 'value((float64(ModelValue) * (max_elem(BebouwingsObject/Gebied/n, float64(BebouwingsObject/EnergieLabelData_rel/Totaal)) -float64(BebouwingsObject/EnergieLabelData_rel/Totaal)) + float64(BebouwingsObject/EnergieLabelData_rel/TotWeight)) 
+					/ max_elem(BebouwingsObject/Gebied/n, float64(BebouwingsObject/EnergieLabelData_rel/Totaal)) + 0.5,Classifications/EnergieLabel)'
+				: 'ModelValue';
+		attribute<uint8>                        code       (BebouwingsObject) := ModelValue * uint8(#Classifications/EnergieLabel) + CalcValue;
+
+		attribute<Classifications/EnergieLabel> CurrValue  (BebouwingsObject) := MakeDefined(rjoin(code, Classifications/LabelBasedOnModelAndObservedValue/code, Classifications/LabelBasedOnModelAndObservedValue/CurrLabel), ModelValue);
+		attribute<Classifications/LabelSprong>  CurrSprong (BebouwingsObject) := rjoin(code, Classifications/LabelBasedOnModelAndObservedValue/code, Classifications/LabelBasedOnModelAndObservedValue/CurrSprong);
+		attribute<Bool>                         IsChanged  (BebouwingsObject) := CurrValue != ModelValue;
+	}
+
+	container OpwekkingsOpties
+	{
+		container capaciteit
+		{
+			attribute<Ratio> Zon_PV      (BebouwingsObject) := const(0[Ratio], BebouwingsObject);
+			attribute<Ratio> ZonneBoiler (BebouwingsObject) := const(0[Ratio], BebouwingsObject);
+			attribute<Ratio> EWV         (BebouwingsObject) := const(0[Ratio], BebouwingsObject);
+			attribute<Ratio> mWKK        (BebouwingsObject) := const(0[Ratio], BebouwingsObject);
+			attribute<Ratio> hWP         (BebouwingsObject) := const(0[Ratio], BebouwingsObject);
+		}
+	}
+
+	container Efficiency
+	{
+		container Gebouw
+		{
+			attribute<units/Ratio> StartWaarde    (BebouwingsObject) := EnergieVraagModellen/Efficiency/Gebouw[ Model_rel];
+			attribute<units/Ratio> VerbeterFactor_vast (BebouwingsObject) :=
+			
+				EnergieLabel/CurrSprong ==  0[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_H_T/efficiency_vast [Model_rel] :
+				EnergieLabel/CurrSprong ==  1[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_H_B/efficiency_vast [Model_rel] :
+				EnergieLabel/CurrSprong ==  2[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_H_AP/efficiency_vast[Model_rel] :
+				EnergieLabel/CurrSprong ==  3[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_T_B/efficiency_vast [Model_rel] :
+				EnergieLabel/CurrSprong ==  4[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_T_AP/efficiency_vast[Model_rel] :
+				EnergieLabel/CurrSprong ==  5[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_B_AP/efficiency_vast[Model_rel] :
+				EnergieLabel/CurrSprong ==  6[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_H_AP/efficiency_vast[Model_rel] : // gebouw als bij 2
+				EnergieLabel/CurrSprong ==  7[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_T_AP/efficiency_vast[Model_rel] : // gebouw als bij 4
+				EnergieLabel/CurrSprong ==  8[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_B_AP/efficiency_vast[Model_rel] : // gebouw als bij 5
+				EnergieLabel/CurrSprong == 10[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_H_AP/efficiency_vast[Model_rel] : // gebouw als bij 2
+				EnergieLabel/CurrSprong == 11[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_T_AP/efficiency_vast[Model_rel] : // gebouw als bij 4
+				EnergieLabel/CurrSprong == 12[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_B_AP/efficiency_vast[Model_rel] : // gebouw als bij 5
+				1.0[Ratio];
+			attribute<units/Ratio> VerbeterFactor_var (BebouwingsObject) :=
+			
+				EnergieLabel/CurrSprong ==  0[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_H_T/efficiency_var [Model_rel] :
+				EnergieLabel/CurrSprong ==  1[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_H_B/efficiency_var [Model_rel] :
+				EnergieLabel/CurrSprong ==  2[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_H_AP/efficiency_var[Model_rel] :
+				EnergieLabel/CurrSprong ==  3[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_T_B/efficiency_var [Model_rel] :
+				EnergieLabel/CurrSprong ==  4[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_T_AP/efficiency_var[Model_rel] :
+				EnergieLabel/CurrSprong ==  5[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_B_AP/efficiency_var[Model_rel] :
+				EnergieLabel/CurrSprong ==  6[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_H_AP/efficiency_var[Model_rel] : // gebouw als bij 2
+				EnergieLabel/CurrSprong ==  7[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_T_AP/efficiency_var[Model_rel] : // gebouw als bij 4
+				EnergieLabel/CurrSprong ==  8[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_B_AP/efficiency_var[Model_rel] : // gebouw als bij 5
+				EnergieLabel/CurrSprong == 10[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_H_AP/efficiency_var[Model_rel] : // gebouw als bij 2
+				EnergieLabel/CurrSprong == 11[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_T_AP/efficiency_var[Model_rel] : // gebouw als bij 4
+				EnergieLabel/CurrSprong == 12[Classifications/LabelSprong] ? EnergieVraagModellen/Verbeteringen/S_B_AP/efficiency_var[Model_rel] : // gebouw als bij 5
+				1.0[Ratio];
+			attribute<units/Ratio> ResultaatWaarde_vast (BebouwingsObject) := max_elem(StartWaarde, VerbeterFactor_vast);
+			attribute<units/Ratio> ResultaatWaarde_var (BebouwingsObject) := max_elem(StartWaarde, VerbeterFactor_var);
+		}
+	}
+
+	container Sprongen
+	{
+		attribute<float64> Ki_gv (BebouwingsObject) := const(0[Eur / EnergieVraagModellen/ModelUnit], BebouwingsObject);
+	}
+
+	container Kosten
+	{
+		attribute<Eur_yr> Kj_gv_incentive (BebouwingsObject) := const(0[Eur_yr], BebouwingsObject);
+	}
+}

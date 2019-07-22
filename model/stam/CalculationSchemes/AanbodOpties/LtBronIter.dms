@@ -1,0 +1,239 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                                  (C) VESTA 2018                                      //
+//        Het doel van het model is om beleidsinformatie te genereren met betrekking    //
+//        tot de energievoorziening van de gebouwde omgeving.                           //
+//                                                                                      //
+//                         Planbureau voor de Leefomgeving                              //
+//                                    JUNI 2018                                         //
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//     * In het geval van externe publicatie van onderzoeksresultaten waarbij gebruik   //
+//       is gemaakt van de verstrekte gegevens dient de gebruiker deze resultaten aan   //
+//       het PBL mede te delen middels de toezending van 2 exemplaren van de betref-    //
+//       fende publicatie aan het hoofd van het team ROL van het PBL.                   //
+//                                                                                      //
+//     * In elke publicatie waarin de gegevens van het PBL in enige vorm zijn opgenomen,//
+//       zal de gebruiker de vermelding opnemen: "Bron: Planbureau voor de Leefomgeving"//
+//       Indien het een bewerking van de gegevens betreft, dient te worden opgenomen:   //
+//       "Gebaseerd op Planbureau voor de Leefomgeving gegevens".                       //
+//                                                                                      //
+//     * Het PBL is onder geen enkele voorwaarde aansprakelijk tegenover gebruiker voor //
+//       enige schade, mede begrepen winstderving, verlies van gegevens, schade         //
+//       tengevolge van fouten of onjuistheden in gegevens, schade tengevolge van fouten//
+//       of onvolkomenheden in de documentatie of andere incidentele of gevolgschade    //
+//       welke voortvloeit uit of in verband staat met gebruik of het niet kunnen ge-   //
+//       bruiken van gegevens.                                                          //
+//                                                                                      //
+//     * Het PBL staat niet in voor de juistheid van de resultaten die worden verkregen //
+//       door combinatie van diverse, op zichzelf staande PBL-gegevens onderling,       //
+//       of met die uit andere bronnen.                                                 //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+template LtBronIter
+{
+	// begin case parameters
+	unit <uint32> Candidates; // the set of bron-clusters for the current iteration
+	unit <uint32> bron;       // the set of all original bronnen, equal to Candidates in the first iteration
+	// end case parameters
+	
+	container Afweging
+	{
+		// Rentabiliteitsafweging:
+		// max(Ki_ABC, 400000) <= Oj_Netto * DurationFactor
+		// samenvoegen verhoogt rhs additief, lhs minder dan additief als Ki_ABC onder de 400.000 ligt en Ki_Distr niet te veel stijgt, anders ligt het aan de ontwikkeling van Ki_Distr
+		// het door samenvoegen behalen van een positieve afweging wordt verondersteld alleen mogelijk te zijn als  de onderdelen nog onder de 400000 opleveren, maar meer dan de ongerestricteerde Ki_ABC.
+
+		attribute<bool> Marginaal(Candidates) := const(true, Candidates); // Ki_B * NCW/wd28/AnnualisationFactor < AC_Netto;
+		attribute<bool> Cluster  (Candidates) := Candidates/P_Warmte_secundair < 10000[kW]; // TODO: check
+		
+		attribute<bool> Select   (Candidates) := Marginaal && !Cluster; // cluster is klaar
+		attribute<bool> Combi    (Candidates) := Marginaal &&  Cluster; // er moet verder geclusterd worden om aan het minimum te gaan voldoen.
+	}
+
+	unit<uint32> Selected := Subset(Afweging/Select), DialogType = "Map", DialogData = "Point"
+	{
+		attribute<Candidates> Candidates_rel := nr_OrgEntity;
+		attribute<string>    Label := Candidates/Label[Candidates_rel], DialogType = "LabelText";
+		attribute<rdc_meter> Point := Candidates/Point[Candidates_rel];
+		
+		attribute<kW>        P_warmte_primair   := Candidates/P_warmte_primair  [Candidates_rel];
+		attribute<kW>        P_Warmte_secundair := Candidates/P_Warmte_secundair[Candidates_rel];
+		attribute<Ratio>     Weight             := Candidates/Weight   [Candidates_rel];
+		
+		attribute<Ratio>  Bron_vol_Weighted  := Candidates/Bron_vol_Weighted    [Candidates_rel];
+		attribute<Eur_kW> Ki_kW_min_weighted := Candidates/Ki_kW_min_weighted   [Candidates_rel];
+		attribute<Eur_kW> Ki_kW_max_weighted := Candidates/Ki_kW_max_weighted   [Candidates_rel];
+		attribute<Eur_GJ> K_GJ_weighted := Candidates/K_GJ_weighted   [Candidates_rel];
+		
+		attribute<.> per_bron (bron) := invert(Candidates_rel)[Candidates/per_bron];
+		
+		// feature selectie
+		unit<uint32> CandiFeature := Candidates/Feature;
+		unit<uint32> Feature := subset(IsDefined(invert(Candidates_rel)[CandiFeature/MST_rel]))
+		, DialogType = "Map", DialogData = "Geometry"
+		{
+			attribute<CandiFeature> CandiFeature_rel := nr_OrgEntity;
+			attribute<rdc_meter>    Geometry(arc) := CandiFeature/Geometry[CandiFeature_rel];
+			attribute<..>           MST_rel  := invert(Candidates_rel)[CandiFeature/MST_rel[CandiFeature_rel]];			
+		}
+	}
+
+	unit<uint32> ClusterSet := Subset(Afweging/Combi), DialogType = "Map", DialogData = "Point"
+	{
+		attribute<Candidates> Candidates_rel := nr_OrgEntity;
+		attribute<string>    Label := Candidates/Label[Candidates_rel], DialogType = "LabelText";
+		attribute<rdc_meter> Point := Candidates/Point[Candidates_rel];
+		
+		// feature selectie
+		unit<uint32> CandiFeature := Candidates/Feature;
+		unit<uint32> Feature := subset(IsDefined(invert(Candidates_rel)[CandiFeature/MST_rel]))
+		, DialogType = "Map", DialogData = "Geometry"
+		{
+			attribute<CandiFeature> CandiFeature_rel := nr_OrgEntity;
+			attribute<rdc_meter>    Geometry(arc) := CandiFeature/Geometry[CandiFeature_rel];
+			attribute<..>           MST_rel  := invert(Candidates_rel)[CandiFeature/MST_rel[CandiFeature_rel]];			
+		}
+		
+		//  Een Cluster is een set van (mogelijk niet alle) bronnen
+		attribute<.> per_bron (bron) := invert(Candidates_rel)[Candidates/per_bron];		
+		unit<uint32> cluster_bron := subset(IsDefined(per_bron)) {
+			attribute<..> cluster_rel := per_bron[nr_OrgEntity];
+			attribute<rdc_meter> Point:= bron/Point[cluster_bron/nr_OrgEntity];
+		}
+		
+		// connect each cluster_bron to the Arcs of these clusters.
+		container connections := connect_info_ne(Feature/Geometry, Feature/MST_rel, cluster_bron/Point, cluster_bron/cluster_rel) {
+			attribute<float64>     dist    (cluster_bron);
+			attribute<Feature>     ArcID   (cluster_bron);
+			attribute<rdc_meter>   CutPoint(cluster_bron);
+			
+			attribute<..>          cluster_rel(cluster_bron) := Feature/MST_rel[ArcID];
+			attribute<bool>        test_ne (cluster_bron) := cluster_rel != cluster_bron/cluster_rel;
+		}
+		
+		// feature side
+		attribute<cluster_bron> NearBron_rel := min_index(connections/dist, connections/cluster_rel); // welke bron is het minst ver vanuit ieder Cluster
+		attribute<rdc_meter>  Near_Point   := cluster_bron/Point[NearBron_rel];
+		attribute<float64>    Near_dist    := connections/dist[NearBron_rel];                // en hoe ver is dat?
+		attribute<ClusterSet> Near_rel     := cluster_bron/cluster_rel[NearBron_rel];        // en welk cluster is dat?
+		attribute<rdc_meter>  Cut_Point    := connections/CutPoint[NearBron_rel];
+		
+		//TODO: select best order; reverse could be a T-connection
+		attribute<bool>       InCluster    := Near_rel[Near_rel] == id(ClusterSet); // reciprociteit?
+		attribute<bool>       CanCluster   := InCluster && Near_rel > id(ClusterSet) && Near_dist <= Kengetallen/Constanten/L_max_bron_connectie;
+		attribute<bool>       NotInCluster := Not(InCluster);
+	}
+
+	unit <uint32> JoinedClusters := Subset(ClusterSet/CanCluster), DialogType = "Map", DialogData = "Point"
+	{
+		attribute<ClusterSet> cluster1_rel := nr_OrgEntity;
+		attribute<ClusterSet> cluster2_rel := ClusterSet/Near_rel[cluster1_rel];
+		
+		attribute<Candidates> src1 := ClusterSet/nr_OrgEntity[cluster1_rel];
+		attribute<Candidates> src2 := ClusterSet/nr_OrgEntity[cluster2_rel];
+
+		attribute<.> per_bron (bron) := MakeDefined(invert(src1)[Candidates/per_bron], invert(src2)[Candidates/per_bron]);
+
+		attribute<string>    Label       := '['+Candidates/Label  [src1] + ';' + Candidates/Label[src2]+']', DialogType = "LabelText";
+		attribute<rdc_meter> Point       := MEAN(center_bound(Feature/Geometry), Feature/MST_rel);
+		
+		attribute<kW>     P_warmte_primair   := Candidates/P_warmte_primair   [src1] + Candidates/P_warmte_primair   [src2];
+		attribute<kW>     P_Warmte_secundair := Candidates/P_Warmte_secundair   [src1] + Candidates/P_Warmte_secundair   [src2];
+		attribute<Ratio>  Weight             := Candidates/Weight   [src1] + Candidates/Weight   [src2];
+		
+		attribute<Ratio>  Bron_vol_Weighted  := Candidates/Bron_vol_Weighted [src1] + Candidates/Bron_vol_Weighted   [src2];
+		attribute<Eur_kW> Ki_kW_min_weighted := Candidates/Ki_kW_min_weighted[src1] + Candidates/Ki_kW_min_weighted   [src2];
+		attribute<Eur_kW> Ki_kW_max_weighted := Candidates/Ki_kW_max_weighted[src1] + Candidates/Ki_kW_max_weighted   [src2];
+		attribute<Eur_GJ> K_GJ_weighted      := Candidates/K_GJ_weighted     [src1] + Candidates/K_GJ_weighted   [src2];
+
+		// feature selectie
+		unit<uint32> CandiFeatures := Candidates/Feature;
+		unit<uint32> Features1 := subset(IsDefined(invert(src1)[CandiFeatures/MST_rel]));
+		unit<uint32> Features2 := subset(IsDefined(invert(src2)[CandiFeatures/MST_rel]));
+		
+		attribute<rdc_meter> connect1 := ClusterSet/Cut_Point [cluster1_rel];
+		attribute<rdc_meter> connect2 := ClusterSet/Near_Point[cluster1_rel];
+		
+		unit<uint32> connectionPoint := union_unit(., .);
+		attribute<rdc_meter> connection(arc) := points2sequence(
+			union_data(connectionPoint, connect1, connect2), 
+			union_data(connectionPoint, ID(.), ID(.)),
+			union_data(connectionPoint, const(0, .), const(1, .))
+		);
+		
+		unit<uint32> Feature := union_unit(Features1, Features2, .) // left features + right features + connection
+		, DialogType = "Map", DialogData = "Geometry"
+		{
+			attribute<rdc_meter>    Geometry(arc) := union_data(.,
+				CandiFeatures/Geometry[Features1/nr_OrgEntity], 
+				CandiFeatures/Geometry[Features2/nr_OrgEntity], 
+				connection
+			);
+			attribute<..> MST_rel  := value(union_data(., 
+				CandiFeatures/MST_rel[Features1/nr_OrgEntity], 
+				CandiFeatures/MST_rel[Features2/nr_OrgEntity], 
+				ID(..)
+			), ..);
+		}
+	}
+
+	unit <uint32> InheritedClusters := Subset(ClusterSet/NotInCluster), DialogType = "Map", DialogData = "Point"
+	{
+		attribute<Candidates> Candidates_rel := ClusterSet/Candidates_rel[nr_OrgEntity];
+		attribute<.>          per_bron (bron) := invert(Candidates_rel)[Candidates/per_bron];
+		
+		attribute<string>    Label := Candidates/Label[Candidates_rel], DialogType = "LabelText";
+		attribute<rdc_meter> Point := Candidates/Point[Candidates_rel];
+		
+		attribute<kW>      P_warmte_primair   := Candidates/P_warmte_primair  [Candidates_rel];
+		attribute<kW>      P_Warmte_secundair := Candidates/P_Warmte_secundair[Candidates_rel];
+		attribute<Ratio>   Weight             := Candidates/Weight            [Candidates_rel];
+		
+		attribute<Ratio>  Bron_vol_Weighted   := Candidates/Bron_vol_Weighted [Candidates_rel];
+		attribute<Eur_kW> Ki_kW_min_weighted  := Candidates/Ki_kW_min_weighted[Candidates_rel];
+		attribute<Eur_kW> Ki_kW_max_weighted  := Candidates/Ki_kW_max_weighted[Candidates_rel];
+		attribute<Eur_GJ> K_GJ_weighted       := Candidates/K_GJ_weighted     [Candidates_rel];
+
+		// feature selectie
+		unit<uint32> CandiFeature := Candidates/Feature;
+		unit<uint32> Feature := subset(IsDefined(invert(Candidates_rel)[CandiFeature/MST_rel]))
+		, DialogType = "Map", DialogData = "Geometry"
+		{
+			attribute<CandiFeature> CandiFeature_rel := nr_OrgEntity;
+			attribute<rdc_meter>    Geometry(arc) := CandiFeature/Geometry[CandiFeature_rel];
+			attribute<..>           MST_rel  := invert(Candidates_rel)[CandiFeature/MST_rel[CandiFeature_rel]];			
+		}
+	}
+
+	unit <uint32> SelectedClusters := union_unit(InheritedClusters, JoinedClusters), DialogType = "Map", DialogData = "Point"
+	{
+		attribute<string>  Label              := union_data(., InheritedClusters/Label             , JoinedClusters/Label), DialogType = "LabelText";
+		attribute<rdc_meter> Point            := union_data(., InheritedClusters/Point             , JoinedClusters/Point);
+		attribute<kW>      P_warmte_primair   := union_data(., InheritedClusters/P_warmte_primair  , JoinedClusters/P_warmte_primair);
+		attribute<kW>      P_Warmte_secundair := union_data(., InheritedClusters/P_Warmte_secundair, JoinedClusters/P_Warmte_secundair);
+		attribute<Ratio>   Weight             := union_data(., InheritedClusters/Weight            , JoinedClusters/Weight);
+		
+		attribute<Ratio>  Bron_vol_Weighted  := union_data(., InheritedClusters/Bron_vol_Weighted  , JoinedClusters/Bron_vol_Weighted);
+		attribute<Eur_kW> Ki_kW_min_weighted := union_data(., InheritedClusters/Ki_kW_min_weighted , JoinedClusters/Ki_kW_min_weighted);
+		attribute<Eur_kW> Ki_kW_max_weighted := union_data(., InheritedClusters/Ki_kW_max_weighted , JoinedClusters/Ki_kW_max_weighted);
+		attribute<Eur_GJ> K_GJ_weighted      := union_data(., InheritedClusters/K_GJ_weighted      , JoinedClusters/K_GJ_weighted);
+
+		attribute<Ratio>  Bron_vol  := Bron_vol_Weighted  / Weight;
+		attribute<Eur_kW> Ki_kW_min := Ki_kW_min_weighted / Weight;
+		attribute<Eur_kW> Ki_kW_max := Ki_kW_max_weighted / Weight;
+		attribute<Eur_GJ> K_GJ      := K_GJ_weighted      / Weight;
+		attribute<Ratio>  bron_cap  := P_warmte_primair   / P_Warmte_secundair;
+
+		attribute<.>      per_bron (bron) := MakeDefined(InheritedClusters/per_bron, JoinedClusters/per_bron + #InheritedClusters)[.];
+
+		// features samenvoegen 
+		unit<uint32> Feature := union_unit(InheritedClusters/Feature, JoinedClusters/Feature) // left features + right features + connection
+		, DialogType = "Map", DialogData = "Geometry"
+		{
+			attribute<rdc_meter>    Geometry(arc) := union_data(., InheritedClusters/Feature/Geometry, JoinedClusters/Feature/Geometry);
+			attribute<..> MST_rel  := value(union_data(., InheritedClusters/Feature/MST_rel, JoinedClusters/Feature/MST_rel + #InheritedClusters/Feature), ..);
+		}
+	}
+}

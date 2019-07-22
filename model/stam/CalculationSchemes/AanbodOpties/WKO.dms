@@ -1,0 +1,322 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+template WKO
+{
+	// begin case parameters
+	container BeginStatus;
+	container AanbodKentallen;
+	container EnergiePrijzen;
+	parameter<units/yr_uint16> ZichtJaar;
+	// end case parameters
+
+	unit<uint8>			WkoComponent      :=	Classifications/WkoComponent;
+	unit<uint32>		PlanRegio         :=	Invoer/SpecifiekeInstellingen/PlanRegio;
+	unit<uint8>			Prijzen_elec      :=	Prijzen/Elektriciteit/Staffel;
+	
+	parameter<Celsius>	T_ow              :=	20[Celsius]  ,	Descr = "brontemperatuur";
+	parameter<Celsius>	T_sec             :=	50[Celsius]  ,	Descr = "temperatuur in het secundaire net";
+	parameter<bool>		CollectieveWP     :=	T_ow < T_sec ,	Descr = "is er een collectieve warmtepomp nodig ja/nee";
+	parameter<bool>		KoudeBeschikbaar  :=	true         ,	Descr = "wordt er collectief koude geleverd ja/nee";
+
+	container		BebouwingsComponenten :=	BeginStatus/Bebouwing;
+	container		KostenBaten           :=	CalculationSchemes/KostenBaten(BebouwingsComponenten, Energieprijzen);
+	container		Efficiency            :=	Kengetallen/Efficiency/Efficiency_LT(T_ow, T_sec);
+	container		Kostenkentallen       :=	Kengetallen/Kosten_LT(Leercurves/Inpand/Curve, Leercurves/eWPww/Curve, Leercurves/LTnet/Curve, Leercurves/MTnet/Curve);
+	
+	container BestaandeWoningData :=	WKOWoningData(
+											BebouwingsComponenten/BestaandeWoning, 
+											KostenBaten/PlanRegioKaarten/BestaandeWoning/WarmtePrijs, 
+											BebouwingsComponenten/BestaandeWoning/BebouwingsTypeDomein,
+											KostenBaten/KostenD/Wonen/bw,
+											KoudeBeschikbaar);
+
+	container NieuwbouwWoningData :=	WKOWoningData(
+											BebouwingsComponenten/NieuwbouwWoning, 
+											KostenBaten/PlanRegioKaarten/NieuwbouwWoning/WarmtePrijs, 
+											BebouwingsComponenten/NieuwbouwWoning/BebouwingsTypeDomein,
+											KostenBaten/KostenD/Wonen/nw,
+											KoudeBeschikbaar);
+
+	container BestaandeUtilData :=		WKOUtilData(
+											BebouwingsComponenten/BestaandeUtil, 
+											KostenBaten/PlanRegioKaarten/BestaandeUtil/WarmtePrijs,
+											KoudeBeschikbaar);
+	
+	container NieuwbouwUtilData :=		WKOUtilData(
+											BebouwingsComponenten/NieuwbouwUtil, 
+											KostenBaten/PlanRegioKaarten/NieuwbouwUtil/WarmtePrijs,
+											KoudeBeschikbaar);
+	
+
+	container CandidateSets := for_each_ne(WkoComponent/Name, 'WKOData('+WkoComponent/Name+'Data, '+Quote(WkoComponent/Name)+', T_sec)');
+
+	unit <uint32> UnitedCandidates := ='union_unit('+AsItemList('CandidateSets/'+WkoComponent/Name+'/AllowedObjects')+')'
+	,	DialogType = "Map"
+	,	DialogData = "Point"
+	{
+		attribute<string>    Label        := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/AllowedObjects/Label') + ')', DialogType = "LabelText";
+		attribute<.>         Partitioning := id(.);
+		attribute<rdc_meter> Point        := Point(MEAN_Y, MEAN_X, rdc_meter);
+
+		attribute<Eur_yr>    Oj_verbruik  := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/Oj_verbruik[CandidateSets/' + WkoComponent/Name + '/AllowedObjects/nr_OrgEntity]') + ')';
+		attribute<Eur_yr>    Contributiemarge     := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/Contributiemarge  [CandidateSets/' + WkoComponent/Name + '/AllowedObjects/nr_OrgEntity]') + ')';
+		attribute<kW    >    P_Warmte     := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/WkoDataComponent/P_Wsec_netto[CandidateSets/' + WkoComponent/Name + '/AllowedObjects/nr_OrgEntity]') + ')';
+		attribute<kW    >    P_Koude      := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/WkoDataComponent/P_Ksec_netto[CandidateSets/' + WkoComponent/Name + '/AllowedObjects/nr_OrgEntity]') + ')';
+
+		attribute<float64>   n            := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/Gebied/n     [CandidateSets/' + WkoComponent/Name + '/AllowedObjects/nr_OrgEntity]') + ')';
+		attribute<float64>   MEAN_x       := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/Gebied/MEAN_x[CandidateSets/' + WkoComponent/Name + '/AllowedObjects/nr_OrgEntity]') + ')';
+		attribute<float64>   MEAN_y       := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/Gebied/MEAN_y[CandidateSets/' + WkoComponent/Name + '/AllowedObjects/nr_OrgEntity]') + ')';
+		attribute<float64>   SSD_xx       := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/Gebied/SSD_xx[CandidateSets/' + WkoComponent/Name + '/AllowedObjects/nr_OrgEntity]') + ')';
+		attribute<float64>   SSD_xy       := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/Gebied/SSD_xy[CandidateSets/' + WkoComponent/Name + '/AllowedObjects/nr_OrgEntity]') + ')';
+		attribute<float64>   SSD_yy       := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/Gebied/SSD_yy[CandidateSets/' + WkoComponent/Name + '/AllowedObjects/nr_OrgEntity]') + ')';
+	}
+
+	parameter<uint32> NrIterations: [ 25 ];
+	unit<uint32> Iteration := Range(uint32, 0, NrIterations) 
+	{
+		attribute<string> Name := 'I'+string(id(.));
+		attribute<string> Prev := MakeDefined(Name[id(.)-1] + '/SelectedClusters', 'UnitedCandidates');
+		
+		attribute<.> NrSelectedObjects          := ='union_data(Iteration, '+AsItemList('#Iterations/'+Iteration/Name+'/Selected')+')';
+		attribute<.> CumulNrPrevSelectedObjects := #(BeginStatus/Wko/Cluster) + cumulate(NrSelectedObjects) - NrSelectedObjects;
+	}
+
+	container Iterations := for_each_ne(Iteration/Name, 'WKOIter(' + Iteration/Prev + ', UnitedCandidates)');
+//	container IterationTest := WKOIter(UnitedCandidates,UnitedCandidates);
+	container LastIter :=  ='Iterations/'+last(Iteration/Name);
+	container LastClusters := LastIter/SelectedClusters;
+
+	// decouple the cluster to the individual object level to support reporting of the allocation result
+	unit<uint32> Selected := ='union_unit('+asItemList('Iterations/'+Iteration/Name+'/Selected')+', LastClusters)', DialogType = "Map", DialogData = "Point"
+	{
+		attribute<rdc_meter> point := ='union_data(., '+asItemList('Iterations/'+Iteration/Name+'/Selected/point')+', LastClusters/point)';
+		attribute<string>    Label := ='union_data(., '+asItemList('Iterations/'+Iteration/Name+'/Selected/Label')+', LastClusters/Label)';
+		attribute<.>         Partitioning (UnitedCandidates) := ='value(MakeDefined('+asItemList('Iterations/'+Iteration/Name+'/Selected/Partitioning+Iteration/CumulNrPrevSelectedObjects['+string(id(Iteration))+']')+', LastClusters/Partitioning + sum(Iteration/NrSelectedObjects)),.)';
+		
+		attribute<kW>        P_Warmte := sum(UnitedCandidates/P_Warmte, Partitioning);
+		attribute<kW>        P_Koude  := sum(UnitedCandidates/P_Warmte, Partitioning);
+		
+		attribute<Eur_yr>    Contributiemarge := sum(UnitedCandidates/Contributiemarge, Partitioning);
+
+		attribute<Eur>       Ki_wd := ='union_data(., '+AsItemList('Iterations/'+Iteration/Name+'/Selected/Ki_wd')+', LastClusters/Ki_wd)';
+		attribute<Eur>		 Ki_ow_vast        := const(Kostenkentallen/Ki_ow_vast_WKO, .);
+		
+		attribute<Eur_yr>    Oji_netto    := Contributiemarge 
+			- Ki_wd * ((NCW/wd28/AnnualisationFactor * (1.0 - SpecifiekeInstellingen/Beleid/EIA/wd  ) 
+						+ Leercurves/OenM/Curve * (Kengetallen/Onderhoud/R_wd_onderhoud + Kengetallen/Onderhoud/R_wd_admin) * (1.0 - SpecifiekeInstellingen/Beleid/EEA/wd  )))
+			- Ki_ow_vast * ((NCW/ow28/AnnualisationFactor * (1.0 - SpecifiekeInstellingen/Beleid/EIA/WKO ) 
+						+ Leercurves/OenM/Curve * (Kengetallen/Onderhoud/R_WKO_onderhoud + Kengetallen/Onderhoud/R_WKO_admin) * (1.0 - SpecifiekeInstellingen/Beleid/EEA/WKO )));
+		
+		attribute<bool>      Afweging := Oji_netto > 0[Eur_yr];
+	}
+	unit<uint32> RendabelCluster 	:= subset(Selected/Afweging) 
+	{
+		attribute<rdc_meter> point := Selected/Point[nr_OrgEntity];	
+		attribute<.>         Partitioning (UnitedCandidates) := invert(nr_OrgEntity)[Selected/Partitioning];
+	}
+
+	attribute<uint32> NrAllowedObjects          (WkoComponent) := ='union_data(WkoComponent, '+AsItemList('#CandidateSets/'+WkoComponent/Name+'/AllowedObjects')+')';
+	attribute<uint32> NrAllObjects              (WkoComponent) := ='union_data(WkoComponent, '+AsItemList('#CandidateSets/'+WkoComponent/Name+'/BebouwingsObject')+')';
+	attribute<uint32> CumulNrPrevAllowedObjects (WkoComponent) := cumulate(NrAllowedObjects)-NrAllowedObjects;
+	attribute<uint32> CumulNrPrevAllObjects     (WkoComponent) := cumulate(NrAllObjects)-NrAllObjects;
+
+	container ObjectResults :=
+		for_each_ne(WkoComponent/Name, 
+			'WkoResults('
+				'UnitedCandidates, RendabelCluster, CandidateSets/'+WkoComponent/Name+',Classifications/WarmteOptie/V/WKO,'
+				'CumulNrPrevAllowedObjects['+string(id(WkoComponent))+'[WkoComponent]],'
+				'CumulNrPrevAllObjects['+string(id(WkoComponent))+'[WkoComponent]]'
+			')'
+		);
+
+	unit<uint32> AllObjects := ='union_unit('+AsItemList('ObjectResults/'+WkoComponent/Name+'/BebouwingsObject')+')'
+	{
+		attribute<string>   Label       := ='union_data(., ' + asItemList('BebouwingsComponenten/' + WkoComponent/Name + '/BebouwingsObject/Label') + ')', DialogType = "LabelText";
+		attribute<RendabelCluster> Cluster_rel := ='union_data(., ' + AsItemList('ObjectResults/'+WkoComponent/Name+'/Cluster_rel')+')';
+		attribute<Eur>      Ki_id        := ='union_data(., ' + AsItemList('ObjectResults/'+WkoComponent/Name+'/WkoData/Ki_id')+')';
+		attribute<Eur>      Ki_ow_Part   := scalesum(max_elem(Ki_id, 1[Eur]), Cluster_rel, Selected/Ki_ow_vast[RendabelCluster/nr_OrgEntity]);
+		attribute<Eur>      Ki_wd_Part   := scalesum(max_elem(Ki_id, 1[Eur]), Cluster_rel, Selected/Ki_wd     [RendabelCluster/nr_OrgEntity]);
+	}
+
+	container Results := BeginStatus
+	{
+		container Bebouwing :=
+			for_each_ne(Classifications/BebouwingsComponent/Name
+				, Classifications/BebouwingsComponent/KanWKO 
+					? 'ObjectResults/'+Classifications/BebouwingsComponent/Name+'/Result' 
+					: 'BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name
+			);
+			
+		container Wko
+		{
+			container VorigePeriode := BeginStatus/Wko;
+			
+			unit<uint32> Cluster := Selected;
+
+			container Oi_Aansl		:= for_each_nedv(WkoComponent/Name, replace('VorigePeriode/Oi_Aansl/@W@ + ObjectResults/@W@/PR/nieuw/Oi_Aansl', '@W@', WkoComponent/Name), PlanRegio, Eur);
+			container Oj_Vastrecht	:= for_each_nedv(WkoComponent/Name, replace('ObjectResults/@W@/PR/Totaal/Oj_Vastrecht', '@W@', WkoComponent/Name), PlanRegio, Eur_yr);
+			container Oj_Verbruik	:= for_each_nedv(WkoComponent/Name, replace('ObjectResults/@W@/PR/Totaal/Oj_Verbruik', '@W@', WkoComponent/Name), PlanRegio, Eur_yr);
+			container Om_comfort	:= for_each_nedv(WkoComponent/Name, replace('ObjectResults/@W@/PR/Totaal/Om_comfort' , '@W@', WkoComponent/Name), PlanRegio, Eur_yr);
+
+			container Eenmalig
+			{
+				attribute<Eur>		Ki_ge_pm		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Ki_ge_pm	')+')';
+				attribute<Eur>		Ki_ge_ov		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Ki_ge_ov	')+')';		
+				attribute<Eur>		Ki_ow			(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Ki_ow	')+')', Descr = "investering opwekker, gebouwzijde en brongerelateerd";
+				attribute<Eur>		Ki_wd			(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Ki_wd	')+')', Descr = "investering wijkdistributeur, gebouwzijde en brongerelateerd";
+				attribute<Eur>		Ki_id			(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Ki_id	')+')';
+				attribute<Eur>		Ki_pt			(PlanRegio)		:=	const(0[EUR], PlanRegio); // geen primair transport bij WKO
+				
+				attribute<Eur>		Oi_lv_aansl		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' +WkoComponent/Name + '/PR/nieuw/Oi_Aansl')+')';
+				
+				attribute<Eur>		Oi_ow_EIA		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Oi_ow_EIA		')+')';
+				attribute<Eur>		Oi_wd_EIA		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Oi_wd_EIA		')+')';
+				attribute<Eur>		Oi_id_EIA		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Oi_id_EIA		')+')';
+				attribute<Eur>		Oi_ge_EIA		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Oi_ge_EIA		')+')';
+				attribute<Eur>		Oi_pt_EIA		(PlanRegio)		:=	const(0[EUR], PlanRegio); // geen primair transport bij WKO
+			}
+			
+			container Jaarlijks
+			{
+				container ge
+				{				
+					attribute<Eur_yr> Kj_ge_hv     (PlanRegio) := const(0[Eur_yr], PlanRegio); // geen huurverlaging bij LT netten
+					attribute<Eur_yr> Kji_ge_ov    (PlanRegio) := Eenmalig/ki_ge_ov    * (NCW/bw28/StartDiscountFactor * NCW/bw28/AnnualisationFactor) + VorigePeriode/jaarlijks/ge/Kji_ge_ov;
+					attribute<Eur_yr> Kji_ge_pm    (PlanRegio) := Eenmalig/ki_ge_pm    * (NCW/bw28/StartDiscountFactor * NCW/bw28/AnnualisationFactor) + VorigePeriode/jaarlijks/ge/Kji_ge_pm;
+					attribute<Eur_yr> Kmi_ge_ov    (PlanRegio) := Eenmalig/ki_ge_ov    * (NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor) + VorigePeriode/jaarlijks/ge/Kmi_ge_ov;
+					attribute<Eur_yr> Kmi_ge_pm    (PlanRegio) := Eenmalig/ki_ge_pm    * (NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor) + VorigePeriode/jaarlijks/ge/Kmi_ge_pm;
+					attribute<Eur_yr> Om_ge_comfort(PlanRegio) := ='add('+AsItemList('.../Om_Comfort/'+WkoComponent/Name)+')';				
+					
+					attribute<Eur_yr> Bji_ge_Aansl (PlanRegio) := Eenmalig/Oi_lv_Aansl * (NCW/bw28/StartDiscountFactor * NCW/bw28/AnnualisationFactor) + VorigePeriode/jaarlijks/ge/Bji_ge_Aansl;
+					attribute<Eur_yr> Oji_ge_EIA   (PlanRegio) := Eenmalig/Oi_ge_EIA   * (NCW/bw28/StartDiscountFactor * NCW/bw28/AnnualisationFactor) + VorigePeriode/jaarlijks/ge/Oji_ge_EIA;
+					attribute<Eur_yr> Omi_ge_EIA   (PlanRegio) := Eenmalig/Oi_ge_EIA   * (NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor) + VorigePeriode/jaarlijks/ge/Omi_ge_EIA;					
+				}
+				
+				container id
+				{
+					attribute<Eur_yr> Kj_id_elek    (PlanRegio) := ='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Totaal/Kj_id_elek	')+')';
+					attribute<Eur_yr> Km_id_elek    (PlanRegio) := ='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Totaal/Km_id_elek		')+')';
+					attribute<Eur_yr> Kj_id_elek_EH (PlanRegio) := ='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Totaal/Kj_id_elek_EH	')+')';
+					attribute<Eur_yr> Kj_id_elek_CO2(PlanRegio) := ='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Totaal/Kj_id_elek_CO2	')+')';
+					
+					attribute<Eur_yr> Kj_id_gas		(PlanRegio) := const(0[Eur_yr], PlanRegio); // geen gasverbruik bij LT netten
+					attribute<Eur_yr> Km_id_gas		(PlanRegio) := const(0[Eur_yr], PlanRegio); // geen gasverbruik bij LT netten
+					attribute<Eur_yr> Kj_id_gas_CO2	(PlanRegio) := const(0[Eur_yr], PlanRegio); // geen gasverbruik bij LT netten
+					attribute<Eur_yr> Kj_id_gas_EH	(PlanRegio) := const(0[Eur_yr], PlanRegio); // geen gasverbruik bij LT netten
+					
+					attribute<Eur_yr> Kji_id        (PlanRegio) := Eenmalig/ki_id * (NCW/id28/StartDiscountFactor * NCW/id28/AnnualisationFactor) + VorigePeriode/jaarlijks/id/Kji_id;
+					attribute<Eur_yr> Kmi_id		(PlanRegio) := Eenmalig/ki_id * (NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor) + VorigePeriode/jaarlijks/id/Kmi_id;
+					attribute<Eur_yr> Kj_id_oh		(PlanRegio) := ='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/OenM/Kj_id_oh ')+') + VorigePeriode/jaarlijks/id/Kj_id_oh';
+					attribute<Eur_yr> Kj_id_adm		(PlanRegio) := ='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/OenM/Kj_id_adm')+') + VorigePeriode/jaarlijks/id/Kj_id_adm';
+					
+					
+					attribute<Eur_yr> Oji_id_EIA	(PlanRegio) := Eenmalig/Oi_id_EIA * (NCW/id28/StartDiscountFactor * NCW/id28/AnnualisationFactor) + VorigePeriode/jaarlijks/id/Oji_id_EIA;
+					attribute<Eur_yr> Omi_id_EIA	(PlanRegio) := Eenmalig/Oi_id_EIA * (NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor) + VorigePeriode/jaarlijks/id/Omi_id_EIA;
+					attribute<Eur_yr> Oj_id_EEA		(PlanRegio) := ='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Oj_id_EEA	')+') + VorigePeriode/jaarlijks/id/Oj_id_EEA';
+					attribute<Eur_yr> Oj_id_SDE		(PlanRegio) := const(0[Eur_yr], PlanRegio); // geen aparte SDE voor inpandig distributeur				
+				}
+					
+				container wd
+				{					
+					attribute<Eur_yr>	Kji_wd			(PlanRegio)		:=	Eenmalig/ki_wd * NCW/wd28/AnnualisationFactor + VorigePeriode/jaarlijks/wd/Kji_wd;
+					attribute<Eur_yr>	Kmi_wd			(PlanRegio)		:=	Eenmalig/ki_wd * NCW/mr28/AnnualisationFactor + VorigePeriode/jaarlijks/wd/Kmi_wd;
+					attribute<Eur_yr>	Kj_wd_gas		(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen gasverbruik bij WKO
+					attribute<Eur_yr>	Kj_wd_elek		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/totaal/Kj_wd_elek	')+')';
+					attribute<Eur_yr>	Km_wd_elek		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/totaal/Km_wd_elek		')+')';
+					attribute<Eur_yr>	Km_wd_gas		(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen gasverbruik bij LT netten
+					attribute<Eur_yr>	Kj_wd_gas_EH	(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen gasverbruik bij LT netten
+					attribute<Eur_yr>	Kj_wd_gas_CO2	(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen gasverbruik bij LT netten
+					attribute<Eur_yr>	Kj_wd_elek_EH	(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/totaal/Kj_wd_elek_EH	')+')';
+					attribute<Eur_yr>	Kj_wd_elek_CO2	(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/totaal/Kj_wd_elek_CO2	')+')';
+					attribute<Eur_yr>	Oj_wd_SDE		(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen aparte SDE voor wijkdistributeur
+					attribute<Eur_yr>	Oji_wd_EIA		(PlanRegio)		:=	Eenmalig/Oi_wd_EIA * NCW/wd28/AnnualisationFactor + VorigePeriode/jaarlijks/wd/Oji_wd_EIA;
+					attribute<Eur_yr>	Omi_wd_EIA		(PlanRegio)		:=	Eenmalig/Oi_wd_EIA * NCW/mr28/AnnualisationFactor + VorigePeriode/jaarlijks/wd/Omi_wd_EIA;
+					attribute<Eur_yr>	Kj_wd_adm		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/OenM/Kj_wd_adm	')+') + VorigePeriode/jaarlijks/wd/Kj_wd_adm';
+					attribute<Eur_yr>	Kj_wd_oh		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/OenM/Kj_wd_oh		')+') + VorigePeriode/jaarlijks/wd/Kj_wd_oh';					
+					attribute<Eur_yr>	Oj_wd_EEA		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Oj_wd_EEA	')+') + VorigePeriode/jaarlijks/wd/Oj_wd_EEA';
+				}
+
+				container pt
+				{
+					attribute<Eur_yr>	Oj_pt_EEA		(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen primair transport bij LT netten
+					attribute<Eur_yr>	Omi_pt_EIA		(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen primair transport bij LT netten
+					attribute<Eur_yr>	Kj_pt_oh		(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen primair transport bij WKO
+					attribute<Eur_yr>	Kj_pt_adm		(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen primair transport bij LT netten
+					attribute<Eur_yr>	Kji_pt			(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen primair transport bij LT netten
+					attribute<Eur_yr>	Kmi_pt			(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen primair transport bij LT netten
+					attribute<Eur_yr>	Oji_pt_EIA		(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen primair transport bij LT netten
+				}
+				
+				container ow
+				{
+					attribute<Eur_yr>	Kji_ow			(PlanRegio)		:=	Eenmalig/ki_ow * NCW/ow28/AnnualisationFactor + VorigePeriode/jaarlijks/ow/Kji_ow;
+					attribute<Eur_yr>	Kmi_ow			(PlanRegio)		:=	Eenmalig/ki_ow * NCW/mr28/AnnualisationFactor + VorigePeriode/jaarlijks/ow/Kji_ow;
+					attribute<Eur_yr>	Kj_ow_gas_EH	(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen gasverbruik bij LT netten
+					attribute<Eur_yr>	Km_ow_gas		(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen gasverbruik bij LT netten
+					attribute<Eur_yr>	Km_ow_elek		(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen elektriciteitsverbruik bij opwekker
+					attribute<Eur_yr>	Kj_ow_gas_CO2	(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen gasverbruik bij LT netten
+					attribute<Eur_yr>	Kj_ow_elek_EH	(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen elektriciteitsverbruik bij opwekker
+					attribute<Eur_yr>	Kj_ow_elek_CO2	(PlanRegio)		:=	const(0[Eur_yr], PlanRegio);  // geen elektriciteitsverbruik bij opwekker
+					attribute<Eur_yr>	Kj_ow_adm		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/OenM/Kj_ow_adm	')+') + VorigePeriode/jaarlijks/ow/Kj_ow_adm';
+					attribute<Eur_yr>	Kj_ow_productie	(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen productiekosten bij WKO
+					attribute<Eur_yr>	Kj_ow_elek		(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen extra elektriciteitsverbruik bij WKO
+					attribute<Eur_yr>	Kj_ow_gas		(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen gasverbruik bij WKO
+					attribute<Eur_yr>	Kj_ow_oh		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/OenM/Kj_ow_oh		')+') + VorigePeriode/jaarlijks/ow/Kj_ow_oh';
+					attribute<Eur_yr>	Oji_ow_EIA		(PlanRegio)		:=	Eenmalig/Oi_ow_EIA * NCW/ow28/AnnualisationFactor;
+					attribute<Eur_yr>	Omi_ow_EIA		(PlanRegio)		:=	Eenmalig/Oi_ow_EIA * NCW/mr28/AnnualisationFactor;
+					attribute<Eur_yr>	Oj_ow_EEA		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Oj_ow_EEA	')+') + VorigePeriode/jaarlijks/ow/Oj_ow_EEA';
+					attribute<Eur_yr>	Oj_ow_SDE		(PlanRegio)		:=	const(0[Eur_yr], PlanRegio); // geen aparte SDE voor opwekker
+				}
+				
+				container lv
+				{
+					attribute<Eur_yr>	Oj_lv_SDE		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Oj_SDE ')+')+ VorigePeriode/jaarlijks/lv/Oj_lv_SDE';
+					attribute<Eur_yr>	Oji_lv_aansl	(PlanRegio)		:=	Eenmalig/Oi_lv_aansl * (NCW/id28/StartDiscountFactor * NCW/id28/AnnualisationFactor) + VorigePeriode/jaarlijks/lv/Oji_lv_aansl;
+					attribute<Eur_yr>	Omi_lv_aansl	(PlanRegio)		:=	Eenmalig/Oi_lv_aansl * (NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor) + VorigePeriode/jaarlijks/lv/Omi_lv_aansl;
+					attribute<Eur_yr>	Oj_lv_vastrecht	(PlanRegio)		:=	='add('+AsItemList('Oj_Vastrecht/'+WkoComponent/Name)+')';
+					attribute<Eur_yr>	Oj_lv_verbruik	(PlanRegio)		:=	='add('+AsItemList('Oj_Verbruik/'+WkoComponent/Name)+')';
+				}
+			}
+			
+			container Verbruik
+			{
+				attribute<Gj_yr>	V_id_gas		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen gasverbruik bij LT netten
+				attribute<Gj_yr>	V_wd_gas		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen gasverbruik bij LT netten
+				attribute<Gj_yr>	V_ow_gas		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen gasverbruik bij LT netten
+				
+				attribute<Gj_yr>	V_id_elek		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Totaal/V_id_elek	')+')';
+				attribute<Gj_yr>	V_wd_elek		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Totaal/V_wd_elek	')+')';
+				attribute<Gj_yr>	V_ow_elek		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen elektriciteitsverbruik bij LT bronnen TODO: controle met FO
+				
+				attribute<Gj_yr>	V_id_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // niet specifiek benoemd, alles in WD, TODO: specifiek maken
+				attribute<Gj_yr>	V_wd_verlies	(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Totaal/V_wd_verlies	')+')';
+				attribute<Gj_yr>	V_pt_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen primair transport bij LT netten
+				
+				attribute<Gj_yr>	V_warmte		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Totaal/V_warmte	')+')';
+				attribute<Gj_yr>	V_koude			(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Totaal/V_koude	')+')';
+//				attribute<Gj_yr>	V_WKO			(PlanRegio)		:=	V_warmte - V_koude;	// TODO: checken wat hier mee gebeurt.
+				
+				// generieke netto warmte onttrekking:
+				attribute<Gj_yr> V_id_warmte(PlanRegio):= V_warmte    - (V_id_gas + V_id_elek - V_id_verlies);
+				attribute<Gj_yr> V_wd_warmte(PlanRegio):= V_id_warmte - (V_wd_gas + V_wd_elek - V_wd_verlies);
+				attribute<Gj_yr> V_ow_warmte(PlanRegio):= V_wd_warmte - (V_ow_gas + V_ow_elek - V_pt_verlies);				
+				attribute<Gj_yr> V_ow_koude (PlanRegio):= V_Koude;
+			}
+			
+			container Uitstoot
+			{
+				attribute<KG_yr> CO2_id_gas (PlanRegio) := const(0[KG_yr], PlanRegio); // geen gasverbruik bij WKO
+				attribute<KG_yr> CO2_wd_gas (PlanRegio) := const(0[KG_yr], PlanRegio); // geen gasverbruik bij WKO
+				attribute<KG_yr> CO2_ow_gas (PlanRegio) := const(0[KG_yr], PlanRegio); // geen gasverbruik bij WKO
+				
+				attribute<KG_yr> CO2_id_elek(PlanRegio) := verbruik/V_id_elek * prijzen/Elektriciteit/CO2_GJ;
+				attribute<KG_yr> CO2_wd_elek(PlanRegio) := verbruik/V_wd_elek * prijzen/Elektriciteit/CO2_GJ;
+				attribute<KG_yr> CO2_ow_elek(PlanRegio) := verbruik/V_ow_elek * prijzen/Elektriciteit/CO2_GJ;
+			}
+		}
+	}
+}

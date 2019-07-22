@@ -1,0 +1,179 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+template WKOIter
+{
+	// begin case parameters
+	unit <uint32> Candidates;
+	unit <uint32> UnitedCandidates;
+	// end case parameters
+
+	unit <uint32> ClusterSet := Unique(Candidates/Point) // dit moet omdat connect_points anders weigert.
+	,	DialogType = "Map"
+	,	DialogData = "Point"
+	{
+		attribute<.> RelPartitioning (Candidates)       := rlookup(Candidates/Point, Values);
+		attribute<.> Partitioning    (UnitedCandidates) := RelPartitioning[Candidates/Partitioning];
+
+		attribute<rdc_meter> Point       := Values;
+		attribute<string>    Label       := AsItemList(Candidates/Label, RelPartitioning), DialogType = "LabelText";
+
+		attribute<Eur_yr>    Contributiemarge:= sum(Candidates/Contributiemarge, RelPartitioning);
+		attribute<Eur_yr>    Oj_verbruik := sum(Candidates/Oj_verbruik , RelPartitioning);
+//		attribute<kW>        P_Warmte    := sum(Candidates/P_Warmte    , RelPartitioning);
+//		attribute<kW>        P_Koude     := sum(Candidates/P_Koude     , RelPartitioning);
+
+		attribute<float64>   n           := sum(Candidates/n, RelPartitioning);
+		attribute<float64>   MEAN_x      := sum(Candidates/n * Candidates/MEAN_x, RelPartitioning) / n;
+		attribute<float64>   MEAN_y      := sum(Candidates/n * Candidates/MEAN_y, RelPartitioning) / n;
+		attribute<float64>   SSD_xx      := sum(Candidates/SSD_xx, RelPartitioning);
+		attribute<float64>   SSD_xy      := sum(Candidates/SSD_xy, RelPartitioning);
+		attribute<float64>   SSD_yy      := sum(Candidates/SSD_yy, RelPartitioning);
+		
+		attribute<float64>   SqrtDetSSD  := MakeDefined(Sqrt(SSD_xx*SSD_yy-SSD_xy*SSD_xy), 0.0);
+		attribute<m2>        AreaProxy   := (PI() * SqrtDetSSD / n)[m2];
+
+		attribute<Eur>       Ki_wd       := AreaProxy * KostenKentallen/Ki_distr;
+		
+		attribute<Eur_yr>    Oji_netto   := Contributiemarge - 
+			Ki_wd * ((NCW/wd28/AnnualisationFactor * (1.0 - SpecifiekeInstellingen/Beleid/EIA/wd ) 
+				+ Leercurves/OenM/Curve * (Kengetallen/Onderhoud/R_wd_onderhoud + Kengetallen/Onderhoud/R_wd_admin) * (1.0 - SpecifiekeInstellingen/Beleid/EEA/wd )));
+
+		//attribute<Eur_yr> Oj_ABC:= Oj_totaal;
+
+		// Rentabiliteitsafweging:
+		// max(Ki_ABC, 400000) <= Oj_Netto * DurationFactor
+		// samenvoegen verhoogt rhs additief, lhs minder dan additief als Ki_ABC onder de 400.000 ligt en Ki_Distr niet te veel stijgt, anders ligt het aan de ontwikkeling van Ki_Distr
+		// het door samenvoegen behalen van een positieve afweging wordt verondersteld alleen mogelijk te zijn als  de onderdelen nog onder de 400000 opleveren, maar meer dan de ongerestricteerde Ki_ABC.
+
+//		attribute<bool> MarginaleAfweging := Oji_netto > 0[Eur_yr];
+//		attribute<bool> ClusterAfweging   := Oj_verbruik < 400000[Eur] * NCW/ow28/AnnualisationFactor;
+//		attribute<bool> CombiAfweging     := MarginaleAfweging &&  ClusterAfweging; // er moet verder geclusterd worden om aan het minimum te gaan voldoen.
+		
+//		attribute<bool> SelectAfweging    := MarginaleAfweging && (!ClusterAfweging || ClusterSet/DontCluster[invert(ClusterSet/nr_OrgEntity)]);
+
+		attribute<.>          Neighbour    := connect_neighbour(Point);
+		attribute<bool>       InCluster    := Neighbour[Neighbour] == id(.);
+		attribute<bool>       CanCluster   := Neighbour > id(.) && InCluster;
+		attribute<bool>       NotInCluster := Not(InCluster);
+		attribute<bool>       DontCluster  := InCluster && (CanCluster ? JoinedClusters/src1_OK[invert(JoinedClusters/src1)] : JoinedClusters/src2_OK[invert(JoinedClusters/src2)]);
+		
+		attribute<bool> SelectAfweging    := DontCluster;
+	}
+
+	unit<uint32> Selected := Subset(ClusterSet/SelectAfweging), DialogType = "Map", DialogData = "Point"
+	{
+		attribute<rdc_meter> Point                           := ClusterSet/Point[nr_OrgEntity];
+		attribute<string>    Label                           := ClusterSet/Label[nr_OrgEntity], DialogType = "LabelText";
+		attribute<.>         Partitioning (UnitedCandidates) := invert(nr_OrgEntity)[ClusterSet/Partitioning];
+//		attribute<Eur>       Ki_ow                           := ClusterSet/Ki_ow[nr_OrgEntity];
+		attribute<Eur>       Ki_wd                           := ClusterSet/Ki_wd[nr_OrgEntity];
+	}
+
+	unit <uint32> JoinedClusters := Subset(ClusterSet/CanCluster), DialogType = "Map", DialogData = "Point"
+	{
+		unit<uint32> Candidates := ClusterSet;
+
+		attribute<Candidates> src1    := nr_OrgEntity;
+		attribute<Candidates> src2    := ClusterSet/Neighbour[nr_OrgEntity];
+
+		attribute<.> Partitioning (UnitedCandidates) := MakeDefined(invert(src1)[Candidates/Partitioning], invert(src2)[Candidates/Partitioning]);
+
+		attribute<string> Label       := '['+Candidates/Label  [src1] + ';' + Candidates/Label[src2]+']', DialogType = "LabelText";
+		attribute<Eur_yr> Oj_verbruik := Candidates/Oj_verbruik[src1] + Candidates/Oj_verbruik[src2];
+		attribute<Eur_yr> Contributiemarge    := Candidates/Contributiemarge   [src1] + Candidates/Contributiemarge   [src2];
+//		attribute<kW>     P_Warmte    := Candidates/P_Warmte   [src1] + Candidates/P_Warmte   [src2];
+//		attribute<kW>     P_Koude     := Candidates/P_Koude    [src1] + Candidates/P_Koude    [src2];
+
+		attribute<float64> n1         := Candidates/n[src1];
+		attribute<float64> n2         := Candidates/n[src2];
+		attribute<float64> n          := n1 + n2;
+		attribute<float64> MEAN_x     := (n1*Candidates/MEAN_x[src1] + n2*Candidates/MEAN_x[src2]) / n;
+		attribute<float64> MEAN_y     := (n1*Candidates/MEAN_y[src1] + n2*Candidates/MEAN_y[src2]) / n;
+		attribute<float64> DIFF_x     := Candidates/MEAN_x[src1] - Candidates/MEAN_x[src2];
+		attribute<float64> DIFF_y     := Candidates/MEAN_y[src1] - Candidates/MEAN_y[src2];
+		attribute<float64> SSD_xx     := Candidates/SSD_xx[src1] + Candidates/SSD_xx[src2] + (n1*n2 / n) * DIFF_x * DIFF_x;
+		attribute<float64> SSD_xy     := Candidates/SSD_xy[src1] + Candidates/SSD_xy[src2] + (n1*n2 / n) * DIFF_x * DIFF_y;
+		attribute<float64> SSD_yy     := Candidates/SSD_yy[src1] + Candidates/SSD_yy[src2] + (n1*n2 / n) * DIFF_y * DIFF_y;
+		
+		attribute<float64>   SqrtDetSSD  := MakeDefined(Sqrt(SSD_xx*SSD_yy-SSD_xy*SSD_xy), 0.0);
+		attribute<m2>        AreaProxy   := (PI() * SqrtDetSSD / n)[m2];
+		attribute<Eur>       Ki_wd       := AreaProxy * Kostenkentallen/Ki_distr;
+		attribute<Eur>       Ki_wd_extra := Ki_wd - Candidates/Ki_wd[src1] - Candidates/Ki_wd[src2];
+		
+		attribute<bool>      src1_OK     := Candidates/Oji_netto[src1] > Ki_wd_extra;
+		attribute<bool>      src2_OK     := Candidates/Oji_netto[src2] > Ki_wd_extra;
+		
+//		attribute<Eur_yr>    Oji_netto   := Contributiemarge - Ki_wd * (NCW/wd28/AnnualisationFactor * (1.0 - SpecifiekeInstellingen/Beleid/EIA/wd ) * (1.0 - SpecifiekeInstellingen/Beleid/EEA/wd ));
+//		attribute<Eur_yr>    Oji_marge   := Oji_netto - max_elem(Candidates/Oji_netto[src1], Candidates/Oji_netto[src2]);
+
+		attribute<rdc_meter> point    := point(MEAN_y, MEAN_x, rdc_meter);
+	}
+	unit <uint32> UsefulClusters := subset(JoinedClusters/src1_OK && JoinedClusters/src2_OK)
+	{
+		attribute<.>       Partitioning (UnitedCandidates) := invert(nr_OrgEntity)[JoinedClusters/Partitioning];
+
+		attribute<string>  Label       := JoinedClusters/Label[nr_OrgEntity], DialogType = "LabelText";
+		attribute<Eur_yr>  Oj_verbruik := JoinedClusters/Oj_verbruik[nr_OrgEntity];
+		attribute<Eur_yr>  Contributiemarge    := JoinedClusters/Contributiemarge[nr_OrgEntity];
+//		attribute<kW>      P_Warmte    := JoinedClusters/P_Warmte[nr_OrgEntity];
+//		attribute<kW>      P_Koude     := JoinedClusters/P_Koude[nr_OrgEntity];
+
+		attribute<float64> n           := JoinedClusters/n[nr_OrgEntity];
+		attribute<float64> MEAN_x      := JoinedClusters/MEAN_x[nr_OrgEntity];
+		attribute<float64> MEAN_y      := JoinedClusters/MEAN_y[nr_OrgEntity];
+		attribute<float64> SSD_xx      := JoinedClusters/SSD_xx[nr_OrgEntity];
+		attribute<float64> SSD_xy      := JoinedClusters/SSD_xy[nr_OrgEntity];
+		attribute<float64> SSD_yy      := JoinedClusters/SSD_yy[nr_OrgEntity];
+
+		attribute<rdc_meter> point     := JoinedClusters/point[nr_OrgEntity];
+		attribute<Eur>       Ki_wd     := JoinedClusters/Ki_wd[nr_OrgEntity];
+	}
+
+	unit <uint32> InheritedClusters := Subset(ClusterSet/NotInCluster), DialogType = "Map", DialogData = "Point"
+	{
+		unit<uint32>          Candidates := ClusterSet;
+		attribute<Candidates> src1       := nr_OrgEntity;
+		attribute<.>          Partitioning (UnitedCandidates) := invert(src1)[Candidates/Partitioning];
+		
+		attribute<string>  Label       := Candidates/Label    [src1], DialogType = "LabelText";
+		attribute<Eur_yr>  Oj_verbruik := Candidates/Oj_verbruik[src1];
+		attribute<Eur_yr>  Contributiemarge    := Candidates/Contributiemarge[src1];
+//		attribute<kW>      P_Warmte    := Candidates/P_Warmte [src1];
+//		attribute<kW>      P_Koude     := Candidates/P_Koude  [src1];
+
+		attribute<float64> n           := Candidates/n     [src1];
+		attribute<float64> MEAN_x      := Candidates/MEAN_x[src1];
+		attribute<float64> MEAN_y      := Candidates/MEAN_y[src1];
+		attribute<float64> SSD_xx      := Candidates/SSD_xx[src1];
+		attribute<float64> SSD_xy      := Candidates/SSD_xy[src1];
+		attribute<float64> SSD_yy      := Candidates/SSD_yy[src1];
+
+		attribute<rdc_meter> point     := Candidates/point[src1];
+		attribute<Eur>       Ki_wd     := Candidates/Ki_wd[src1];
+	}
+
+	unit <uint32> SelectedClusters := union_unit(InheritedClusters, UsefulClusters), DialogType = "Map", DialogData = "Point"
+	{
+		attribute<.>      Partitioning (UnitedCandidates) := MakeDefined(InheritedClusters/Partitioning, UsefulClusters/Partitioning + #InheritedClusters)[.];
+
+		attribute<string>  Label       := union_data(., InheritedClusters/Label      , UsefulClusters/Label), DialogType = "LabelText";
+		attribute<Eur_yr>  Oj_verbruik := union_data(., InheritedClusters/Oj_verbruik, UsefulClusters/Oj_verbruik);
+		attribute<Eur_yr>  Contributiemarge    := union_data(., InheritedClusters/Contributiemarge   , UsefulClusters/Contributiemarge);
+//		attribute<kW>      P_Warmte    := union_data(., InheritedClusters/P_Warmte   , UsefulClusters/P_Warmte);
+//		attribute<kW>      P_Koude     := union_data(., InheritedClusters/P_Koude    , UsefulClusters/P_Koude);
+
+		attribute<float64> n           := union_data(., InheritedClusters/n          , UsefulClusters/n);
+		attribute<float64> MEAN_x      := union_data(., InheritedClusters/MEAN_x     , UsefulClusters/MEAN_x);
+		attribute<float64> MEAN_y      := union_data(., InheritedClusters/MEAN_y     , UsefulClusters/MEAN_y);
+		attribute<float64> SSD_xx      := union_data(., InheritedClusters/SSD_xx     , UsefulClusters/SSD_xx);
+		attribute<float64> SSD_xy      := union_data(., InheritedClusters/SSD_xy     , UsefulClusters/SSD_xy);
+		attribute<float64> SSD_yy      := union_data(., InheritedClusters/SSD_yy     , UsefulClusters/SSD_yy);
+
+		attribute<rdc_meter> point     := union_data(., InheritedClusters/point      , UsefulClusters/point);
+		attribute<Eur>       Ki_wd     := union_data(., InheritedClusters/Ki_wd      , UsefulClusters/Ki_wd);
+	}
+}

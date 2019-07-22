@@ -1,0 +1,75 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container NieuwbouwGlTbOperaties
+{
+	template MaakMutatieNieuwbouw
+	{
+		// begin case parameters
+		attribute<bool>            bij (Geography/rdc_grids/m100);
+		attribute<bool>            af  (Geography/rdc_grids/m100);
+		parameter<units/yr_uint16> zichtjaar;
+
+		unit<uint32> bron := Bebouwing/impl/BestaandeGlTb;
+		// einde case parameters
+
+		container impl: IsHidden = "True"
+		{
+			unit<uint32> lokatiesBij := Subset(bij)
+			{
+				attribute<Geography/rdc_meter>                point        := Geography/rdc_grids/m100/point[nr_OrgEntity];
+				attribute<Geography/RegioIndelingen/blok500m> blok500m_rel := Geography/rdc_grids/m100/blok500m_rel[nr_OrgEntity];
+				attribute<Geography/RegioIndelingen/blok1km>  blok1km_rel  := Geography/rdc_grids/m100/blok1km_rel [nr_OrgEntity];
+				attribute<Geography/RegioIndelingen/blok2km>  blok2km_rel  := Geography/rdc_grids/m100/blok2km_rel [nr_OrgEntity];
+				attribute<Invoer/RuimtelijkeData/StudieGebied/buurt>                 buurt_rel    := Geography/rdc_grids/m100/buurt_rel   [nr_OrgEntity];
+			}
+		}
+		unit<uint32>  results := combine(impl/lokatiesBij, Classifications/GLTB)
+		,	DialogType ="Map"
+		,	DialogData ="Point"
+		{
+			// units en attributen van BebouwingsComponent
+			attribute<string>                             Code               := string(ModelObjectKey) + string(Bouwjaar) + string(Point);
+			attribute<string>                             Label              := Code, DialogType = "LabelText";
+
+			unit<uint8> BebouwingsTypeDomein := Classifications/GLTB;
+
+			attribute<Geography/rdc_meter>                point              := impl/lokatiesBij/point[nr_1];
+			attribute<Geography/RegioIndelingen/blok500m> blok500m_rel       := impl/lokatiesBij/blok500m_rel[nr_1];
+			attribute<Geography/RegioIndelingen/blok1km>  blok1km_rel        := impl/lokatiesBij/blok1km_rel [nr_1];
+			attribute<Geography/RegioIndelingen/blok2km>  blok2km_rel        := impl/lokatiesBij/blok2km_rel [nr_1];
+			attribute<Invoer/RuimtelijkeData/StudieGebied/buurt>                 buurt_rel          := impl/lokatiesBij/buurt_rel   [nr_1];
+			attribute<BebouwingsTypeDomein>               BebouwingsType     := GLTB_Code;
+			attribute<Classifications/bouwjaar>           bouwjaarOrg        := const(classify(value(zichtjaar, units/Yr) - 0.5[units/Yr],  classifications/bouwjaar/ClassBreak), .);
+			attribute<Classifications/bouwjaar>           bouwjaar           := (bouwjaarOrg < Classifications/BouwJaar/V/n2020) ? Classifications/BouwJaar/V/Onbekend : bouwjaarOrg;
+			attribute<uint8>                              ModelObjectKey     := BebouwingsType * uint8(NrOfRows(Classifications/BouwJaar)) + BouwJaar;
+			attribute<m2>                                 NrJoinedunits      := Oppervlakte;
+			attribute<m2>                                 nrOppUnits_i       := Oppervlakte;
+			attribute<float64>                            pand_aandeel       := const(1d, .);
+
+
+			attribute<nrAansl>                            nrAansluitingen_i  := const(1[nrAansl   ], .), FreeData = "True";
+			attribute<nrWoningen>                         nrWoonunits_i      := const(0[nrWoningen], .), FreeData = "True";
+
+			// overige attributen
+			attribute<Classifications/GLTB>               GLTB_code          := nr_2;
+			attribute<units/ratio>                        Verdeling          := RuimtelijkeData/GlasTuinBouw/Verdeling/nl/GLTB[GLTB_code];
+			attribute<m2>                                 Oppervlakte        := Verdeling * 10000[units/m2];
+			attribute<float64>                            AandeelWarmteVraag := const(1.0, .); // geen AandeelWarmteVraag in de nieuwe glastuinbouw
+
+			container Criteria;
+			container Gebied: FreeData = "True" // noodzakelijk voor Bebouwingscomponent interfact, hoewel gtb niet gebruikt wordt voor WKO.
+			{
+				attribute<float64> n      (..) := const(0.0, ..);
+				attribute<float64> MEAN_x (..) := const(0.0, ..);
+				attribute<float64> MEAN_y (..) := const(0.0, ..);
+				attribute<float64> SSD_xx (..) := const(0.0, ..);
+				attribute<float64> SSD_xy (..) := const(0.0, ..);
+				attribute<float64> SSD_yy (..) := const(0.0, ..);
+			}
+		}
+	}
+}

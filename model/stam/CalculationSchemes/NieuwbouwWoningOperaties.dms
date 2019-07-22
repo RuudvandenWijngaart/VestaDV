@@ -1,0 +1,95 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container NieuwbouwWoningOperaties
+{
+	template Select
+	{
+		// begin case parameters
+		attribute<Units/nrWoningen>                    NrWoningenGrid (Geography/rdc_grids/m100);
+		parameter<Classifications/WoningtypeNieuwbouw> type;
+		parameter<units/yr_uint16>                     zichtjaar;
+		// einde case parameters
+
+		unit<uint32> BebouwingsObject := Subset(NrWoningenGrid > 0[Units/nrWoningen] && Invoer/RuimtelijkeData/StudieGebied/selected_per_m100),
+			DialogType = "Map",
+			DialogData = "Point"
+		{
+			attribute<Units/nrWoningen>                    NrWoningen         := NrWoningenGrid[BebouwingsObject/nr_OrgEntity];
+
+			attribute<Geography/RegioIndelingen/blok500m>  blok500m_rel       := Geography/rdc_grids/m100/blok500m_rel[BebouwingsObject/nr_OrgEntity];
+			attribute<Geography/RegioIndelingen/blok1km>   blok1km_rel        := Geography/rdc_grids/m100/blok1km_rel [BebouwingsObject/nr_OrgEntity];
+			attribute<Geography/RegioIndelingen/blok2km>   blok2km_rel        := Geography/rdc_grids/m100/blok2km_rel [BebouwingsObject/nr_OrgEntity];
+			attribute<Invoer/RuimtelijkeData/StudieGebied/buurt>                  buurt_rel          := Geography/rdc_grids/m100/buurt_rel   [BebouwingsObject/nr_OrgEntity];
+
+			attribute<Geography/rdc_meter>                 Point              := Geography/rdc_grids/m100/Point  [BebouwingsObject/nr_OrgEntity];
+			attribute<Classifications/WoningtypeNieuwbouw> BebouwingsType     := const(type, BebouwingsObject, Classifications/WoningtypeNieuwbouw);
+			attribute<Classifications/BouwJaar>            Bouwjaar           := const(classify(value(zichtjaar, Units/Yr)-value(0.5, Units/Yr),  classifications/bouwjaar/ClassBreak),BebouwingsObject);
+			attribute<bool>                                KanBesparen        := const(true, BebouwingsObject); // woning Nieuwbouw wordt al optimaal gebouwd
+			attribute<float64>                             AandeelWarmteVraag := const(1.0, BebouwingsObject); // alle woning Nieuwbouw is geschikt voor WarmteOpties
+			attribute<float64>                             pand_aandeel       := const(Classifications/WoningtypeNieuwbouw/pand_aandeel[type], BebouwingsObject);
+			attribute<m2>                                  nrOppunits_i       := const(80[m2], BebouwingsObject);
+			
+			container Gebied
+			{
+				attribute<float64> n      (..) := float64(NrWoningen);
+				attribute<float64> MEAN_x (..) := float64(PointCol(Point));
+				attribute<float64> MEAN_y (..) := float64(PointRow(Point));
+				attribute<float64> SSD_xx (..) := const(10000.0 / 12.0, BebouwingsObject);
+				attribute<float64> SSD_xy (..) := const(    0.0 / 12.0, BebouwingsObject);
+				attribute<float64> SSD_yy (..) := const(10000.0 / 12.0, BebouwingsObject);
+			}
+		}
+	}
+	template Unite
+	{
+		// begin case parameters
+		container bron;
+		// einde case parameters
+
+		unit<uint8> WoningType := Classifications/WoningtypeNieuwbouw;
+		
+		unit<uint32> results := ='Union_Unit(' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject') + ')'
+			,	DialogType = "Map"
+			,	DialogData = "Point"
+		{
+
+			attribute<string> Code     := Label;
+			attribute<String> TypeName := ='union_data(., ' + asItemList('const(' + Quote(WoningType/Name) + ',bron/' + WoningType/Name + '/BebouwingsObject)') + ')';
+			attribute<String> Label    := TypeName+String(BouwJaar)+String(Point), DialogType = "LabelText";
+			// parameter<m>      SymbolWorldSize: [ 50 ], DialogType = "SymbolWorldSize";
+
+			unit<uint8> BebouwingsTypeDomein := WoningType;
+
+			attribute<Units/nrWoningen>                   NrJoinedUnits      := ='union_data(., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/NrWoningen') + ')';
+			attribute<Geography/RegioIndelingen/blok500m> blok500m_rel       := ='union_data(., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/blok500m_rel') + ')';
+			attribute<Geography/RegioIndelingen/blok1km>  blok1km_rel        := ='union_data(., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/blok1km_rel') + ')';
+			attribute<Geography/RegioIndelingen/blok2km>  blok2km_rel        := ='union_data(., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/blok2km_rel') + ')';
+			attribute<Invoer/RuimtelijkeData/StudieGebied/buurt>                 buurt_rel          := ='union_data(., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/buurt_rel') + ')';
+			attribute<Geography/rdc_meter>                Point              := ='union_data(., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/Point') + ')';
+			attribute<BebouwingsTypeDomein>               BebouwingsType     := ='union_data(., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/BebouwingsType') + ')';
+			attribute<Classifications/BouwJaar>           Bouwjaar           := ='union_data(., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/Bouwjaar') + ')';
+			attribute<Classifications/BouwJaar>           ModelObjectKey     := BebouwingsType * uint8(#Classifications/BouwJaar) + BouwJaar;
+			attribute<nrAansl>                            nrAansluitingen_i  := NrJoinedUnits * 1.0[nrAansl / NrWoningen];
+			attribute<nrWoningen>                         nrWoonUnits_i      := nrJoinedUnits;
+
+			attribute<float64>                            AandeelWarmteVraag := ='union_data(., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/AandeelWarmteVraag') + ')';
+			attribute<float64>                            pand_aandeel       := ='union_data(., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/pand_aandeel') + ')';
+			attribute<m2>                                 nrOppunits_i       := ='union_data(., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/nrOppunits_i') + ')';
+
+			container Gebied
+			{
+				attribute<float64> n      (..) := ='union_data(.., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/Gebied/n'     ) + ')';
+				attribute<float64> MEAN_x (..) := ='union_data(.., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/Gebied/MEAN_X') + ')';
+				attribute<float64> MEAN_y (..) := ='union_data(.., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/Gebied/MEAN_y') + ')';
+				attribute<float64> SSD_xx (..) := ='union_data(.., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/Gebied/SSD_xx') + ')';
+				attribute<float64> SSD_xy (..) := ='union_data(.., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/Gebied/SSD_xy') + ')';
+				attribute<float64> SSD_yy (..) := ='union_data(.., ' + asItemList('bron/' + WoningType/Name + '/BebouwingsObject/Gebied/SSD_yy') + ')';
+			}
+			container Criteria;
+		}
+	}
+}

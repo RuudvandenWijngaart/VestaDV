@@ -1,0 +1,174 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//       In deze configuratiefile wordt de regio indeling buurt met eigendommen etc.    //
+//       geconfigureerd                                                                 //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+unit<uint32> buurt:
+	StorageName     = "%SourceDataProjDir%/hulpbestanden/buurt/20190425_CBS_buurt_2019.dbf",
+	DialogData      = "geometry",
+	DialogType      = "Map",
+	StorageReadOnly = "True",
+	url             = "%sourceDataProjDir%/hulpbestanden/buurt/20190118_update_buurtkaart_FvdM.txt"
+{
+	attribute<rdc_meter> geometry (poly):
+		label           = "De CBS buurtkaart 2019",
+		StorageName     = "%SourceDataProjDir%/hulpbestanden/buurt/20190425_CBS_buurt_2019.shp",
+		StorageReadOnly = "True";
+
+	attribute<string>    BU_CODE;
+	attribute<uint32>    code          := uint32(substr(BU_CODE,2,8));
+
+	// bepalen centroide en oppervlakte o.b.v. buurtpolygoon
+	attribute<rdc_meter> Point         := centroid_or_mid(geometry);
+	attribute<m2>        Area          := Area(geometry, m2);
+	attribute<km2>       AreaInKm2     := Area / value(1000000, m2 / km2);
+
+	// ruimtelijke niveau's nationaal, provincie, gemeente en wijk worden afgeleid uit de buurtkaart
+	attribute<NL>        NL_rel        := const(0[NL],.);
+	attribute<Provincie> Provincie_rel := rlookup(PROV_CODE, Provincie/Values);
+	attribute<Energieregio>	Energieregio_rel	:=	rlookup(ER_NAAM, Energieregio/Values);
+	attribute<Gemeente>  Gemeente_rel  := rlookup(GM_CODE, Gemeente/Values);
+	attribute<Wijk>      Wijk_rel      := rlookup(WK_CODE, Wijk/Values);
+	
+	// jaar waar vanaf BMC in een planregio is toegestaan
+	attribute<yr_uint16> BioWKK_Start  := const(2020[yr_uint16], .); 
+	
+	// diverse kenmerken op buurtniveau, afgeleid uit de kerncijfers wijken en buurten van het CBS
+	container Eigendom: Using = Invoer/RuimtelijkeData/CBSWijkEnBuurt {
+		
+		// Koopwoningen
+		attribute<Units/Percent> p_koopw(..) := MakeDefined(
+			rjoin(BU_CODE, j2018/gwb_code_10, j2018/p_koopw[Units/Percent])
+		,	rjoin(BU_CODE, j2017/gwb_code_10, j2017/p_koopw[Units/Percent])
+		,	rjoin(BU_CODE, j2016/gwb_code_10, j2016/p_koopw[Units/Percent])
+		,	rjoin(BU_CODE, j2015/gwb_code_10, j2015/p_koopw[Units/Percent])
+		,	rjoin(BU_CODE, j2014/gwb_code_10, j2014/p_koopw[Units/Percent])
+		,	rjoin(BU_CODE, j2013/gwb_code_10, j2013/p_koopw[Units/Percent])
+		);
+		// Huurwoningen totaal
+		attribute<Units/Percent> p_huurw(..) := MakeDefined(
+			rjoin(BU_CODE, j2018/GWB_CODE_10, j2018/p_huurw[Units/Percent])
+		,	rjoin(BU_CODE, j2017/GWB_CODE_10, j2017/p_huurw[Units/Percent])
+		,	rjoin(BU_CODE, j2016/GWB_CODE_10, j2016/p_huurw[Units/Percent])
+		,	rjoin(BU_CODE, j2015/GWB_CODE_10, j2015/p_huurw[Units/Percent])
+		,	rjoin(BU_CODE, j2014/GWB_CODE_10, j2014/p_huurw[Units/Percent])
+		,	rjoin(BU_CODE, j2013/GWB_CODE_10, j2013/p_huurw[Units/Percent])
+		);
+		// In bezit woningcorporatie
+		attribute<Units/Percent> p_wcorpw(..) := MakeDefined(
+			rjoin(BU_CODE, j2018/GWB_CODE_10, j2018/p_wcorpw[Units/Percent])
+		,	rjoin(BU_CODE, j2017/GWB_CODE_10, j2017/p_wcorpw[Units/Percent])
+		,	rjoin(BU_CODE, j2016/GWB_CODE_10, j2016/p_wcorpw[Units/Percent])
+		,	rjoin(BU_CODE, j2015/GWB_CODE_10, j2015/p_wcorpw[Units/Percent])
+		,	rjoin(BU_CODE, j2014/GWB_CODE_10, j2014/p_wcorpw[Units/Percent])
+		,	rjoin(BU_CODE, j2013/GWB_CODE_10, j2013/p_wcorpw[Units/Percent])
+		);
+		// In bezit overige verhuurders
+		attribute<Units/Percent> p_ov_hw(..) := MakeDefined(
+			rjoin(BU_CODE, j2018/GWB_CODE_10, j2018/p_ov_hw[Units/Percent])
+		,	rjoin(BU_CODE, j2017/GWB_CODE_10, j2017/p_ov_hw[Units/Percent])
+		,	rjoin(BU_CODE, j2016/GWB_CODE_10, j2016/p_ov_hw[Units/Percent])
+		,	rjoin(BU_CODE, j2015/GWB_CODE_10, j2015/p_ov_hw[Units/Percent])
+		,	rjoin(BU_CODE, j2014/GWB_CODE_10, j2014/p_ov_hw[Units/Percent])
+		,	rjoin(BU_CODE, j2013/GWB_CODE_10, j2013/p_ov_hw[Units/Percent])
+		);
+		// Eigendom onbekend
+		attribute<Units/Percent> p_e_o_w(..) := MakeDefined(
+			rjoin(BU_CODE, j2018/GWB_CODE_10, j2018/p_e_o_w[Units/Percent])
+		,	rjoin(BU_CODE, j2017/GWB_CODE_10, j2017/p_e_o_w[Units/Percent])
+		,	rjoin(BU_CODE, j2016/GWB_CODE_10, j2016/p_e_o_w[Units/Percent])
+		,	rjoin(BU_CODE, j2015/GWB_CODE_10, j2015/p_e_o_w[Units/Percent])
+		,	rjoin(BU_CODE, j2014/GWB_CODE_10, j2014/p_e_o_w[Units/Percent])
+		,	rjoin(BU_CODE, j2013/GWB_CODE_10, j2013/p_e_o_w[Units/Percent])
+		);
+		
+		attribute<Units/Percent> p_checksum(..) := p_koopw + p_wcorpw + p_ov_hw + p_e_o_w;
+	}
+	
+	container Inkomen : Using = Invoer/RuimtelijkeData/CBSWijkEnBuurt {
+		
+		// lage inkomens
+		attribute<Units/Percent> p_hh_li(..) := MakeDefined(
+			rjoin(BU_CODE, j2018/GWB_CODE_10, j2018/p_hh_li[Units/Percent])
+		,	rjoin(BU_CODE, j2017/GWB_CODE_10, j2017/p_hh_li[Units/Percent])
+		,	rjoin(BU_CODE, j2016/GWB_CODE_10, j2016/p_hh_li[Units/Percent])
+		,	rjoin(BU_CODE, j2015/GWB_CODE_10, j2015/p_hh_li[Units/Percent])
+		,	rjoin(BU_CODE, j2014/GWB_CODE_10, j2014/p_hh_li[Units/Percent])
+		,	rjoin(BU_CODE, j2013/GWB_CODE_10, j2013/p_hh_li[Units/Percent])
+		);
+		// hoge inkomens
+				attribute<Units/Percent> p_hh_hi(..) := MakeDefined(
+			rjoin(BU_CODE, j2018/GWB_CODE_10, j2018/p_hh_hi[Units/Percent])
+		,	rjoin(BU_CODE, j2017/GWB_CODE_10, j2017/p_hh_hi[Units/Percent])
+		,	rjoin(BU_CODE, j2016/GWB_CODE_10, j2016/p_hh_hi[Units/Percent])
+		,	rjoin(BU_CODE, j2015/GWB_CODE_10, j2015/p_hh_hi[Units/Percent])
+		,	rjoin(BU_CODE, j2014/GWB_CODE_10, j2014/p_hh_hi[Units/Percent])
+		,	rjoin(BU_CODE, j2013/GWB_CODE_10, j2013/p_hh_hi[Units/Percent])
+		);
+		// middeninkomens
+		attribute<Units/Percent> p_hh_mi(..) := 100[Units/Percent] - (p_hh_li + p_hh_hi);
+		
+		attribute<Units/Percent> p_checksum(..) := p_hh_li + p_hh_mi + p_hh_hi;
+	}
+	
+	// overige kenmerken die van belang zijn voor de modelberekening
+	container Overigen : Using = Invoer/RuimtelijkeData/CBSWijkEnBuurt {
+		
+		// aandeel huidige aansluiting stadsverwarming
+		attribute<Units/Percent> p_stadsv(..) := MakeDefined(
+			rjoin(BU_CODE, j2018/GWB_CODE_10, j2018/p_stadsv[Units/Percent])
+		,	rjoin(BU_CODE, j2017/GWB_CODE_10, j2017/p_stadsv[Units/Percent])
+		,	rjoin(BU_CODE, j2016/GWB_CODE_10, j2016/p_stadsv[Units/Percent])
+		,	rjoin(BU_CODE, j2015/GWB_CODE_10, j2015/p_stadsv[Units/Percent])
+		,	rjoin(BU_CODE, j2014/GWB_CODE_10, j2014/p_stadsv[Units/Percent])
+		,	rjoin(BU_CODE, j2013/GWB_CODE_10, j2013/p_stadsv[Units/Percent])
+		);
+		
+		// aandeel huidige aansluiting aardgas
+		attribute<Units/Percent> p_aardgas(..) := 100[Units/Percent] - (p_stadsv);
+		
+		// totaal oppervlak buurt
+		attribute<Units/ha> a_opp_ha(..) := MakeDefined(
+			rjoin(BU_CODE, j2018/GWB_CODE_10, float64(j2018/a_opp_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2017/GWB_CODE_10, float64(j2017/a_opp_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2016/GWB_CODE_10, float64(j2016/a_opp_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2015/GWB_CODE_10, float64(j2015/a_opp_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2014/GWB_CODE_10, float64(j2014/a_opp_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2013/GWB_CODE_10, float64(j2013/a_opp_ha)[Units/ha])
+		);
+		
+		// landoppervlak buurt
+		attribute<Units/ha> a_lan_ha(..) := MakeDefined(
+			rjoin(BU_CODE, j2018/GWB_CODE_10, float64(j2018/a_lan_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2017/GWB_CODE_10, float64(j2017/a_lan_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2016/GWB_CODE_10, float64(j2016/a_lan_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2015/GWB_CODE_10, float64(j2015/a_lan_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2014/GWB_CODE_10, float64(j2014/a_lan_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2013/GWB_CODE_10, float64(j2013/a_lan_ha)[Units/ha])
+		);
+		
+		// wateroppervlak buurt
+		attribute<Units/ha> a_wat_ha(..) := MakeDefined(
+			rjoin(BU_CODE, j2018/GWB_CODE_10, float64(j2018/a_wat_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2017/GWB_CODE_10, float64(j2017/a_wat_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2016/GWB_CODE_10, float64(j2016/a_wat_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2015/GWB_CODE_10, float64(j2015/a_wat_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2014/GWB_CODE_10, float64(j2014/a_wat_ha)[Units/ha])
+		,	rjoin(BU_CODE, j2013/GWB_CODE_10, float64(j2013/a_wat_ha)[Units/ha])
+		);
+		
+		//oppervlakte als aandeel
+		attribute<float64> p_land_com(..) := MakeDefined(p_land, 100d);
+		attribute<float64> p_land(..)     := 100d / a_opp_ha*a_lan_ha;
+		attribute<float64> p_water(..)    := (100d / a_opp_ha)*a_wat_ha;
+		attribute<float64> p_checksum(..) := p_land + p_water;
+	}
+}

@@ -1,0 +1,84 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+
+container EnergieProducent: isHidden = "true"
+	{
+		container impl: IsHidden = "True"
+		{
+			attribute<String> FlowExpr (Classifications/GebiedsOptie)	:= 
+				replace(
+					'	
+						  StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/ge/Kj_ge_hv
+						- StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/lv/Oj_lv_verbruik
+						- StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/lv/Oj_lv_vastrecht
+						- StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/lv/Oj_lv_SDE
+					
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/id/Kj_id_gas
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/id/Kj_id_elek
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/id/Kj_id_oh
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/id/Kj_id_adm
+						- StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/id/Oj_id_SDE
+						- StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/id/Oj_id_EEA
+						
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/wd/Kj_wd_gas
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/wd/Kj_wd_elek
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/wd/Kj_wd_oh
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/wd/Kj_wd_adm
+						- StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/wd/Oj_wd_SDE
+						- StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/wd/Oj_wd_EEA
+						
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/pt/Kj_pt_oh
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/pt/Kj_pt_adm
+						- StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/pt/Oj_pt_EEA
+						
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/ow/Kj_ow_gas
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/ow/Kj_ow_elek
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/ow/Kj_ow_oh
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/ow/Kj_ow_adm
+						- StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/ow/Oj_ow_SDE
+						- StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/ow/Oj_ow_EEA
+						+ StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/ow/Kj_ow_productie
+						
+					',	'@RO@', Classifications/GebiedsOptie/Name);		
+
+			attribute<String> StockExpr(Classifications/GebiedsOptie)	:=
+				replace(
+					'	
+						  StateNaAllocatie/Cumulaties/@RO@/Eenmalig/Ki_id			
+						+ StateNaAllocatie/Cumulaties/@RO@/Eenmalig/Ki_wd
+						+ StateNaAllocatie/Cumulaties/@RO@/Eenmalig/Ki_pt
+						+ StateNaAllocatie/Cumulaties/@RO@/Eenmalig/Ki_ow
+						+ StateNaAllocatie/Cumulaties/@RO@/Eenmalig/Ki_ge_pm
+						+ StateNaAllocatie/Cumulaties/@RO@/Eenmalig/Ki_ge_ov
+						
+						- StateNaAllocatie/Cumulaties/@RO@/Eenmalig/Oi_lv_aansl
+						- StateNaAllocatie/Cumulaties/@RO@/Eenmalig/Oi_ge_EIA
+						- StateNaAllocatie/Cumulaties/@RO@/Eenmalig/Oi_id_EIA
+						- StateNaAllocatie/Cumulaties/@RO@/Eenmalig/Oi_wd_EIA
+						- StateNaAllocatie/Cumulaties/@RO@/Eenmalig/Oi_pt_EIA
+						- StateNaAllocatie/Cumulaties/@RO@/Eenmalig/Oi_ow_EIA
+						
+					',	'@RO@', Classifications/GebiedsOptie/Name);
+		}
+
+		container CashFlow := for_each_nedv(Classifications/GebiedsOptie/Name
+			,	IsDefined(invert(Voorkeuren/ActieveGebiedsOptie/GebiedsOptie_rel)) ? impl/FlowExpr : 'const(0[Eur_yr], PlanRegio)'
+			,	PlanRegio, Eur_yr)
+		{
+			attribute<Eur_yr> Kj_Totaal  (PlanRegio) := ='add('+AsItemList(Classifications/GebiedsOptie/Name)+')';
+		}
+
+		attribute<Eur_yr> Kj_Totaal (PlanRegio):= CashFlow/Kj_Totaal;
+
+		container Eenmalig := for_each_nedv(Classifications/GebiedsOptie/Name
+			,	IsDefined(invert(Voorkeuren/ActieveGebiedsOptie/GebiedsOptie_rel)) ? impl/StockExpr : 'const(0[Eur], PlanRegio)'
+			,	PlanRegio, Eur)
+		{
+			attribute<Eur> Ki_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/GebiedsOptie/Name)+')';
+		}
+		attribute<Eur> Ki_Totaal(PlanRegio) := Eenmalig/Ki_Totaal; // totale investeringen zonder aftrek van de te ontvangen aansluitbijdrage.
+	}

@@ -1,0 +1,226 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container BeginSituatie : Using = "Units;geography;model;invoer"
+{
+	unit<uint32> PlanRegio := Invoer/SpecifiekeInstellingen/PlanRegio;
+	
+	parameter<bool> IsBeginSituatie := true;
+	
+	container Bebouwing := 
+		for_each_ne(Classifications/BebouwingsComponent/name, 
+			'CalculationSchemes/StartingStateComponent('+
+				'RuimtelijkeData/Bebouwing/StartJaar/'+Classifications/BebouwingsComponent/Name+
+				','+ 'Kengetallen/Bebouwing/'+Classifications/BebouwingsComponent/Name+'/results
+				, '+ string(id(Classifications/BebouwingsComponent))+'[Classifications/BebouwingsComponent]'+
+			')'
+		);
+/*
+	container MiniStock {
+			attribute<Eur_yr> Om_ComfortT(PlanRegio) := const(0[EUR_Yr], PlanRegio);		
+	}
+*/		
+	container Infra_per_buurt := Invoer/RuimtelijkeData/infra/per_buurt, using = "Invoer/RuimtelijkeData/infra/kentallen"
+	{
+		attribute<nrAansl>  aant_g_aansl_util            (PlanRegio)    := sum(Invoer/RuimtelijkeData/Bebouwing/impl/BestaandeUtil/nrAansluitingen_i, /Invoer/RuimtelijkeData/Bebouwing/impl/BestaandeUtil/buurt_rel);
+		attribute<nrAansl>  aant_g_aansl_woning          (PlanRegio)    := sum(Invoer/RuimtelijkeData/Bebouwing/impl/BestaandeWoning/nrAansluitingen_i, /Invoer/RuimtelijkeData/Bebouwing/impl/BestaandeWoning/buurt_rel);
+		attribute<nrAansl>  aant_g_aansl_woning_hoogb    (PlanRegio)    := sum(Invoer/RuimtelijkeData/Bebouwing/impl/BestaandeWoning/BebouwingsType == Classifications/WoningtypeBestaand/V/meergezinspand_hoog ? Invoer/RuimtelijkeData/Bebouwing/impl/BestaandeWoning/nrAansluitingen_i : 0[nrAansl], /Invoer/RuimtelijkeData/Bebouwing/impl/BestaandeWoning/buurt_rel);
+		attribute<nrAansl>  aant_g_aansl_woning_laagb    (PlanRegio)    := sum(Invoer/RuimtelijkeData/Bebouwing/impl/BestaandeWoning/BebouwingsType != Classifications/WoningtypeBestaand/V/meergezinspand_hoog ? Invoer/RuimtelijkeData/Bebouwing/impl/BestaandeWoning/nrAansluitingen_i : 0[nrAansl], /Invoer/RuimtelijkeData/Bebouwing/impl/BestaandeWoning/buurt_rel);
+		
+		attribute<kW>       capaciteit_buurt             (PlanRegio)    := vermogensvraag_woningen + vermogensvraag_util + vermogensvraag_gltb;
+
+		attribute<kW>       vermogensvraag_woningen      (PlanRegio)    := /TussenResultaten/StartJaar/StateNaAllocatie/Infra_per_buurt/vermogensvraag_woningen;
+		attribute<kW>       vermogensvraag_util          (PlanRegio)    := /TussenResultaten/StartJaar/StateNaAllocatie/Infra_per_buurt/vermogensvraag_util;
+		attribute<kW>       vermogensvraag_gltb          (PlanRegio)    := /TussenResultaten/StartJaar/StateNaAllocatie/Infra_per_buurt/vermogensvraag_gltb;
+		
+		container kosten
+		{
+			attribute<Eur>                 kosten_verv_LD_net        (PlanRegio)  := const(0[Eur], Planregio);
+			attribute<Eur>                 kosten_verw_g_aansl_laagb (PlanRegio)  := const(0[Eur], Planregio);
+			attribute<Eur>                 kosten_verw_g_aansl_hoogb (PlanRegio)  := const(0[Eur], Planregio);
+			attribute<Eur>                 kosten_verw_g_aansl_util  (PlanRegio)  := const(0[Eur], Planregio);
+			attribute<Eur>                 kosten_verw_g_aansl       (PlanRegio)  := const(0[Eur], Planregio);
+			attribute<Eur>                 kosten_verw_LD_net        (PlanRegio)  := const(0[Eur], Planregio);
+			attribute<Eur>                 kosten_verzw_e_aansl      (PlanRegio)  := const(0[Eur], Planregio);
+			attribute<Eur>                 kosten_verzw_MSR          (PlanRegio)  := const(0[Eur], Planregio);
+			attribute<Eur>                 kosten_verzw_LS           (PlanRegio)  := const(0[Eur], Planregio);
+
+			container cumulatief
+			{
+				attribute<Eur>                 kosten_verv_LD_net        (PlanRegio)  := const(0[Eur], Planregio);
+				attribute<Eur>                 kosten_verw_g_aansl_laagb (PlanRegio)  := const(0[Eur], Planregio);
+				attribute<Eur>                 kosten_verw_g_aansl_hoogb (PlanRegio)  := const(0[Eur], Planregio);
+				attribute<Eur>                 kosten_verw_g_aansl_util  (PlanRegio)  := const(0[Eur], Planregio);
+				attribute<Eur>                 kosten_verw_g_aansl       (PlanRegio)  := const(0[Eur], Planregio);
+				attribute<Eur>                 kosten_verw_LD_net        (PlanRegio)  := const(0[Eur], Planregio);
+				attribute<Eur>                 kosten_verzw_e_aansl      (PlanRegio)  := const(0[Eur], Planregio);
+				attribute<Eur>                 kosten_verzw_MSR          (PlanRegio)  := const(0[Eur], Planregio);
+				attribute<Eur>                 kosten_verzw_LS           (PlanRegio)  := const(0[Eur], Planregio);
+			}
+		}
+	
+	}
+
+	container LegeGebiedsOptie {
+		container	Oi_Aansl		:= for_each_nedv(Classifications/WkoComponent/Name, 'const(0[Eur]   , PlanRegio)', PlanRegio, Eur);
+//		container	Oj_Verbruik		:= for_each_nedv(Classifications/WkoComponent/Name, 'const(0[Eur_yr], PlanRegio)', PlanRegio, Eur_yr);
+//		container	Oj_Vastrecht	:= for_each_nedv(Classifications/WkoComponent/Name, 'const(0[Eur_yr], PlanRegio)', PlanRegio, Eur_yr);
+//		container	Om_comfort		:= for_each_nedv(Classifications/WkoComponent/Name, 'const(0[Eur_yr], PlanRegio)', PlanRegio, Eur_yr);
+		
+		container Jaarlijks:= for_each_nedv(classifications/gebiedsoptie_jaarlijks/full_name, 'const(0[EUR_yr], PlanRegio)', PlanRegio, EUR_yr);
+		container Eenmalig := for_each_nedv(classifications/gebiedsoptie_eenmalig/name, 'const(0[EUR], PlanRegio)', PlanRegio, EUR);		
+		container Verbruik := for_each_nedv(classifications/gebiedsoptie_verbruik/name, 'const(0[GJ_yr], PlanRegio)', PlanRegio, GJ_yr);
+		container Uitstoot := for_each_nedv(classifications/gebiedsoptie_uitstoot/name, 'const(0[kg_yr], PlanRegio)', PlanRegio, kg_yr);
+	}
+	container Cumulaties := for_each_ne(Classifications/GebiedsOptie/Name, 'LegeGebiedsOptie');
+
+	container Wko := LegeGebiedsOptie
+	{
+
+		unit<uint32> Cluster: NrOfRows = 0 // TODO MTA: adapt to fix of issue 1233, available with GeoDMS 7.200
+		{
+			attribute<Eur>       Ki_A  := const(0[Eur], .);
+			attribute<Eur>       Ki_B  := const(0[Eur], .);
+			attribute<string>    Label := const('', .);
+			attribute<rdc_meter> Point := const(Point(0.0, 0.0, rdc_meter), .);
+		}
+	}
+	container Lt15_30 := LegeGebiedsOptie;
+	container Lt15_50 := LegeGebiedsOptie;
+	container Lt15_70 := LegeGebiedsOptie;
+	container Lt30_30 := LegeGebiedsOptie;
+	container Lt30_50 := LegeGebiedsOptie;
+	container Lt30_70 := LegeGebiedsOptie;
+	container TEO     := LegeGebiedsOptie;
+
+	container LtWarmte {
+		unit<uint32> bron := Invoer/RuimtelijkeData/WarmteBronnen/LtWarmte/bron {
+			attribute<Bool> Toegewezen := const(false, .);
+			unit<uint32> CumulativeClusterSet : nrofrows = 0 {
+				attribute<.> per_bron(..) := const(0[.], ..); // TODO MTA: adapt to fix of issue 1233, available with GeoDMS 7.200
+				
+				// TODO MTA: adapt to fix of issue 1233, available with GeoDMS 7.200
+				attribute<Classifications/WarmteOptie> WarmteOptie_rel := const(0[Classifications/WarmteOptie], .);
+				attribute<Classifications/Rekenstap  > Rekenstap_rel   := const(0[Classifications/Rekenstap], .);
+				attribute<Classifications/Zichtjaar  > ZichtJaar_rel   := const(0[Classifications/Zichtjaar], .);
+				
+				unit<uint32> Feature : nrofrows = 0
+				{
+					attribute<rdc_meter> Geometry(arc) := points2sequence(const(point(0d, 0d, rdc_meter), .), const(0[.], .)); // TODO: vervang door [ ]  met GeoDMS 7.199, issue 1233
+					attribute<..> Cluster_rel := const(0, .); // TODO: vervang door [ ]  met GeoDMS 7.199, issue 1233
+					
+				}
+			}
+			unit<uint32> CumulativeNetwork : nrofrows = 0
+			, DialogType = "Map", DialogData = "Geometry"
+			{
+				// TODO MTA: adapt to fix of issue 1233, available with GeoDMS 7.200
+				attribute<rdc_meter> Geometry(arc) := points2sequence(const(point(0d, 0d, rdc_meter), .), const(0[.], .));
+//					attribute<..> Cluster_rel := value(union_data(., PrevNetwork/Feature/MST_rel, RendabelCluster/Feature/MST_rel + #PrevClusterSet/Feature), ..);										
+				// TODO MTA: adapt to fix of issue 1233, available with GeoDMS 7.200
+				attribute<Classifications/WarmteOptie> WarmteOptie_rel := const(0[Classifications/WarmteOptie], .);
+				attribute<Classifications/Rekenstap  > Rekenstap_rel   := const(0[Classifications/Rekenstap], .);
+				attribute<Classifications/Zichtjaar  > ZichtJaar_rel   := const(0[Classifications/Zichtjaar], .);
+			}
+			
+		}
+	}
+	
+	container Geothermie := LegeGebiedsOptie;
+	container BioWKK     := LegeGebiedsOptie;
+	container WijkWKK    := LegeGebiedsOptie;	
+	container RestWarmte := LegeGebiedsOptie
+	{
+		attribute<CumulatedArcSet> CumulatedArcSet_rel (PlanRegio) := invert(CumulatedArcSet/planregio_rel);
+		attribute<bool>            GebruikRestWarmte   (PlanRegio) := IsDefined(CumulatedArcSet_rel);
+
+		unit<uint32> WarmteBronnen := Invoer/RuimtelijkeData/WarmteBronnen/RestWarmte/BronSelecties/StartJaar/BronElementen
+		{
+			attribute<rdc_meter> Point        := Invoer/RuimtelijkeData/WarmteBronnen/RestWarmte/BronSelecties/StartJaar/BronElementen/Point;
+			attribute<string>    bron_naam    := Invoer/RuimtelijkeData/WarmteBronnen/RestWarmte/BronSelecties/StartJaar/BronElementen/bron_naam;
+		}
+		
+		// inlezen bestaande warmtenetten met indicatie van huidige bron en doorkoppelingen
+		unit<uint32> linkset:= Invoer/RuimtelijkeData/WarmteBronnen/RestWarmte/linkset/selected 
+		{
+			attribute<planregio>     BU_rel    := rlookup(BU_Code,    Invoer/RuimtelijkeData/StudieGebied/buurt/BU_code);
+			attribute<planregio>     BU_DK_rel := rlookup(BU_Code_dk, Invoer/RuimtelijkeData/StudieGebied/buurt/BU_code);
+
+			attribute<.>             up_rel    := rlookup(BU_DK_rel, BU_rel);
+			attribute<rdc_meter>     Point     := PlanRegio/Point[BU_rel];
+			attribute<WarmteBronnen> bron_rel  := rlookup(bronnaam, WarmteBronnen/bron_naam);
+			attribute<nodeset>       F1        := MakeDefined(value(bron_rel+#linkset, nodeset), value(up_rel, nodeset)), // source, a WarmteBronnen or alternatively the up_rel Planregio
+						IntegrityCheck = "isNull(Point) || (IsDefined(point) && (IsDefined(bron_rel) != IsDefined(up_rel)))";
+
+			attribute<nodeset>       F2        := value(id(.), nodeset); // serviced Planregio
+		}
+
+		unit<uint32> nodeset := union_unit(linkset, WarmteBronnen)
+		{
+			attribute<rdc_meter> Point := union_data(., linkset/Point, WarmteBronnen/Point);
+			
+			unit<uint32> e_dijkstra :=
+				dijkstra_m(
+					'directed;startPoint(Node_rel);cut(OrgZone_max_imp);od:impedance,OrgZone_rel,DstZone_rel'
+					,const(1.0f, linkset)
+					,linkset/f1
+					,linkset/f2
+					,value(id(WarmteBronnen)+#linkset, nodeset)
+					,1000.0f
+				)
+				{
+					attribute<uint32> DstZone_rel;
+					attribute<uint32> OrgZone_rel;
+				}
+			unit<uint32> e_nr_warmtebronnen_0 : nrofrows = 0
+			{
+				attribute<uint32> DstZone_rel := const(0 / 0, .);
+				attribute<uint32> OrgZone_rel := const(0 / 0, .);
+			}
+			unit<uint32> e := = #warmtebronnen == 0 ? 'e_nr_warmtebronnen_0' : 'e_dijkstra';
+
+			
+//			attribute<nodeset> d := dijkstra_s('directed;startPoint(Node_rel);node:TraceBack', const(1.0f, linkset), linkset/f1, linkset/f2, value(id(WarmteBronnen)+#linkset, nodeset) );
+		}
+
+		unit<uint32> GivenStartArcSet := linkset //: StorageName = "%projdir%/data/RestWarmteStart/CumulatedArcSet.dbf", StorageReadOnly = "True"
+		{
+			attribute</Invoer/RuimtelijkeData/StudieGebied/buurt> PlanRegio_rel := linkset/BU_rel;
+			attribute<rdc_meter>                       PrevPoint     := nodeset/Point[linkset/F1];
+//					attribute<Eur>                             Ki_Netto;
+			attribute<WarmteBronnen>                   Bron_rel      := value(rjoin(value(id(linkset), nodeset), nodeset/e/DstZone_rel, nodeset/e/OrgZone_rel), WarmteBronnen);
+			attribute<rdc_meter>                       BronPoint     := WarmteBronnen/Point[Bron_rel];
+
+			parameter<bool> HasArcs := true; // avoid reading the dbf to find this out.
+		}
+
+		unit<uint32> EmptySequenceSetSource := Range(uint32, 0,0)
+		{
+			attribute<rdc_meter> Point      := const(Point(0.0, 0.0, rdc_meter), .);
+			attribute<.>         SequenceNr := const(value(0, .), .);
+			attribute<uint32>    Ordinal    := const(value(0, uint32), .);
+		}
+
+		unit<uint32> EmptyArcSet: = EmptySequenceSetSource
+		{
+			attribute<rdc_meter> PrevPoint     : = Point;
+			attribute<rdc_meter> BronPoint     : = Point;
+			attribute<PlanRegio> PlanRegio_rel : = const(0[PlanRegio], .);
+			attribute<Eur>       Ki_Netto      : = const(value(0, Eur), .);
+	
+			parameter<bool> HasArcs := false; // avoid reading the dbf to find this out.
+		}
+
+		unit<uint32> CumulatedArcSet := = SpecifiekeInstellingen/HasStartingArcSet ? 'GivenStartArcSet' : 'EmptyArcSet';
+
+		attribute<rdc_meter> CumulatedArcs(CumulatedArcSet, arc)
+			:= points2sequence_ps(
+				union_data(union_unit(CumulatedArcSet, CumulatedArcSet), CumulatedArcSet/PrevPoint, PlanRegio/Point[CumulatedArcSet/PlanRegio_rel]),
+				union_data(union_unit(CumulatedArcSet, CumulatedArcSet), id(CumulatedArcSet), id(CumulatedArcSet))
+			);
+	}
+	attribute<Classifications/GebiedsOptie> PlanRegioWarmteAllocatie_REMOVE (PlanRegio) := Restwarmte/GebruikRestWarmte ? Classifications/GebiedsOptie/V/RestWarmte : value(0 / 0, Classifications/GebiedsOptie);
+}

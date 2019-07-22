@@ -1,0 +1,101 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//       Deze DMS-file wordt aangeroepen door stam.dms                                  //
+//       In deze configuratiefile worden items voor de boekhouding geconfigureerd       //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container Eenmalig: Using = "Units;Geography", KeepData = "True", isHidden = "True"
+{
+	unit<uint32> mutatieSchema: nrofrows = 12
+	{
+		parameter<uint32> nrAttr := 5;
+		unit<uint32> Elements := Range(uint32, 0, nrAttr * #.)
+		{
+			// Factors
+			parameter<string> PRR := 'BebouwingsComponenten/@BC@/PlanRegio_rel';
+			parameter<string> ROSEL   := 'float64(StateNaAllocatie/PlanRegioWarmteAllocatie_REMOVE == classifications/GebiedsOptie/V/@RO@)';
+			parameter<string> VAT_F   := '(SpecifiekeInstellingen/VAT / 100[Percent])';
+
+			attribute<string> Text := union_data(.
+				// name //leverancier //afnemer  
+					// item 
+					// factor 
+					//left-entity-rel // right-entity-rel
+
+		// ===== Gas en Electriciteitsleveringen aan eindgebruikers
+
+			// TODO: infra aanpassingen hier ook invullen?
+			
+		// ===== Lokale opwekking: eigenaar investeringen
+		
+			// TODO: check of cumulatief, herberekend of incrementele investeringen hier geboekt (zouden) moeten worden.
+				// NB: de boekingen uit Classifications/GebiedsOptie_Eenmalig worden geboekt als xxx obv StateNaAllocatie/Cumulaties/@RO@/Eenmalig/xxx
+			// TODO: check hoe om te gaan met investeringen voor verschillende gebruiksduur, met name 15 jaar versus 30 jaar.
+			
+			,	'ZonneBoiler', 'LokaleOpwekking', '@BC@/Eigenaar', 
+					'BebouwingsComponenten/@BC@/kosten/Ki_ZonneBoiler', PRR
+
+			,	'Zon_PV', 'LokaleOpwekking', '@BC@/Eigenaar', 
+					'BebouwingsComponenten/@BC@/kosten/Ki_Zon_PV', PRR
+
+			,	'EWV', 'LokaleOpwekking', '@BC@/Eigenaar', 
+					'BebouwingsComponenten/@BC@/kosten/Ki_EWV', PRR
+
+			,	'mWKK', 'LokaleOpwekking', '@BC@/Eigenaar', 
+					'BebouwingsComponenten/@BC@/kosten/Ki_mWKK', PRR
+
+			,	'eWP', 'LokaleOpwekking', '@BC@/Eigenaar', 
+					'BebouwingsComponenten/@BC@/kosten/Ki_eWP', PRR
+
+			,	'hWP', 'LokaleOpwekking', '@BC@/Eigenaar', 
+					'BebouwingsComponenten/@BC@/kosten/Ki_hWP', PRR
+
+			,	'LokaleOpwekking', 'BTW', '@BTW@/Eigenaar', 
+					'BebouwingsComponenten/@BTW@/kosten/Ki_LokaleOpwekking * '+VAT_F, 'BebouwingsComponenten/@BTW@/PlanRegio_rel'
+
+		// ===== Gebouwverbeteringen
+			,	'Gebouwverbetering', 'Gebouw', '@BC@/Eigenaar', 
+					'BebouwingsComponenten/@BC@/kosten/Ki_GebouwVerbetering', PRR
+
+			,	'Gebouwverbetering_BTW', 'BTW', '@BTW@/Eigenaar', 
+					'BebouwingsComponenten/@BTW@/kosten/Ki_GebouwVerbetering * (SpecifiekeInstellingen/VAT_gv / 100[Percent])', 'BebouwingsComponenten/@BTW@/PlanRegio_rel'
+
+		// ===== subsidie
+			,	'EIA30', '@BC@/Eigenaar', 'Subsidie',
+					'BebouwingsComponenten/@BC@/sprongen/subsidie/EIA30', PRR
+
+			,	'EIA15', '@BC@/Eigenaar', 'Subsidie',
+					'BebouwingsComponenten/@BC@/sprongen/subsidie/EIA15', PRR
+
+		// ===== vergoedingen van Aansluitbijdrage aan Leverancier geannualiseerd obv discontovoet WijkDistributie
+			,	'Oi_lv_Aansl_@RO@_BTW', 'BTW', 'BestaandeWoning/Eigenaar', // TODO: check of dit niet deels door andere BC's moet worden betaald/
+					'StateNaAllocatie/@RO@/Eenmalig/Oi_lv_Aansl * '+VAT_F, ''
+					
+//			,	'Aansluitbijdrage_@RO@', 'Leverancier', '@BC@/Eigenaar',
+//					'BebouwingsComponenten/@BC@/Opbrengsten/AansluitbijdrageD * Allocatie/@BC@/Aandelen/@RO@',  // TODO: Niet voor WKO of LT? Op te lossen door Oi_lv_Aansl per BC te definieren.
+//					PRR
+			);
+		}
+
+		attribute<string> Name         := Elements/Text[value(id(.)* nrAttr + 0, Elements)];
+		attribute<string> Leverancier  := Elements/Text[value(id(.)* nrAttr + 1, Elements)];
+		attribute<string> Afnemer      := Elements/Text[value(id(.)* nrAttr + 2, Elements)];
+		attribute<string> Expr         := Elements/Text[value(id(.)* nrAttr + 3, Elements)];
+		attribute<string> PlanRegioRel := Elements/Text[value(id(.)* nrAttr + 4, Elements)];
+		attribute<string> FullDescr    := 
+				Name + ': ' + Leverancier + ' -> ' + Afnemer +
+				' = ' + Expr 
+				+ iif(PlanRegioRel == '', '', ' per '+PlanRegioRel);
+	}
+
+	// TODO: Checken dat amounts wel opgesplitst zijn per BTW component
+	container applyBTW := CalculationSchemes/Payments/substitute(mutatieSchema, '@BTW@', Classifications/BtwComponent); 
+	unit<uint32> mutatie := applyBTW/result;
+}

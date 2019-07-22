@@ -1,0 +1,72 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+template DataDumpExportsBebouwingsComponent
+{
+	//begin of case parameters
+	parameter<String> ComponentName;
+	container AllocatieComponent;    //voorbeeld TussenResultaten/R1_2020/AllocatieResultaten/BestaandeWoning 
+	container BebouwingsComponenten; //voorbeeld TussenResultaten/R1_2020/BebouwingsComponenten/BestaandeWoning 
+	//end of case parameters
+
+	container BCdata                    := AllocatieComponent/BCdata;
+	container RuimtelijkeVraagComponent := AllocatieComponent/RuimtelijkeVraagComponent;
+
+	unit<UInt32>  table := AllocatieComponent/BebouwingsObject
+	//,   StorageName= "= FolderInfo/OutputFolder+'/'+ComponentName+'.fss'"
+	{
+		attribute<string> id                                	:= code;
+		attribute<Geography/rdc_grids/m100> gridm100_rel    	:= BebouwingsComponenten/RuimtelijkeVraagComponent/gridm100_rel;
+		attribute<rdc_meter> geometry                       	:=Geography/rdc_grids/m100/point[gridm100_rel];
+
+		//attribute<Geography/RegioIndelingen/buurt> buurt_rel := /Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel;
+		attribute<string> BU_CODE                           	:= Invoer/RuimtelijkeData/StudieGebied/buurt/BU_CODE[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel];//buurtcode
+
+		attribute<float64> PointRowXY := PointRow(geometry);
+		attribute<float64> PointColXY := PointCol(geometry);
+
+		attribute<nrAansl> nrAansluitingen := RuimtelijkeVraagComponent/nrAansluitingen;									//aantal woningequivalenten
+
+		attribute<Classifications/WarmteOptie>  Warmteoptie 	:= AllocatieComponent/WarmteAllocatie;
+		
+		attribute<classifications/EnergieLabel> Elabel      	:= BCdata/energielabel/CurrValue;
+
+		attribute<GJ_yr> MV_totaal                          	:= AllocatieComponent/Metervraag/totaal;					//metervraag warmte totaal
+		attribute<GJ_yr> MV_WarmteMT                        	:= AllocatieComponent/Metervraag/WarmteMT;					//metervraag MT warmtelevering
+		attribute<GJ_yr> MV_WarmteLT                        	:= AllocatieComponent/Metervraag/WarmteLT;					// metervraag LT warmtelevering
+		attribute<GJ_yr> MV_eWP                             	:= AllocatieComponent/Metervraag/eWP;						//metervraag elektriciteit eWP
+		attribute<GJ_yr> MV_Aardgas                         	:= AllocatieComponent/Metervraag/Aardgas;					//metervraag aardgas
+
+																															//metervraag groengas
+																															//metervraag elektriciteit APP + metervraag elektriciteit eWP
+		//onduidelijk welke
+		attribute<GJ_yr> FV_Koude                           	:= BebouwingsComponenten/Functioneel/Koude;
+		attribute<GJ_yr> FV_Koude2                          	:= RuimtelijkeVraagComponent/Functioneel/Koude;
+
+		attribute<KG_yr> CO2_GAS                            	:= AllocatieComponent/CO2/AardGas;
+		attribute<KG_yr> CO2_ELEK                           	:= AllocatieComponent/CO2/Elektriciteit;
+		attribute<KG_yr> CO2                                	:= CO2_GAS + CO2_ELEK;
+
+// 		attribute<Eur>    		CumulInvest_Gebouw          	:= BebouwingsComponenten/Kosten/Ki_GebouwVerbetering;
+
+// 		attribute<Eur>    		AansluitBijdrage_Gas        	:= AllocatieComponent/AardGas/AansluitBijdrage;
+// 		attribute<Eur>    		AansluitBijdrage_Elek       	:= AllocatieComponent/Elektriciteit/AansluitBijdrage;
+// //		attribute<Eur>    		AansluitBijdrage_Warmte     	:= AllocatieComponent/Warmte/AansluitBijdrage;
+// 		
+// 		attribute<Eur_yr> 		Eindgebruik_ex_Gas          	:= AllocatieComponent/AardGas/eindgebruik_excl;
+// 		attribute<Eur_yr> 		Eindgebruik_ex_Elek         	:= AllocatieComponent/Elektriciteit/eindgebruik_excl;
+// //		attribute<Eur_yr> 		Eindgebruik_ex_Warmte       	:= AllocatieComponent/Warmte/eindgebruik_excl;
+// 		
+// 		attribute<Eur_yr> 		Vastrecht_Gas               	:= AllocatieComponent/AardGas/eindgebruik_excl;
+// 		attribute<Eur_yr> 		Vastrecht_Elek              	:= AllocatieComponent/Elektriciteit/eindgebruik_excl;
+// //		attribute<Eur_yr> 		Vastrecht_Warmte            	:= AllocatieComponent/Warmte/Vastrecht;
+// 		
+// 		attribute<Eur_yr> 		CO2prijs_Gas                	:= AllocatieComponent/AardGas/CO2heffing;
+// 		attribute<Eur_yr> 		CO2prijs_Elek               	:= AllocatieComponent/Elektriciteit/CO2heffing;
+
+	}
+	container export_csv := Rapportage/WriteTableToCSV(table, SubItem_PropValues(table,'name'), FolderInfo/OutputFolder+'/'+ComponentName+'.csv');
+	//container export_fss := Rapportage/WriteTableToCSV(table, SubItem_PropValues(table,'name'), FolderInfo/OutputFolder+'/'+ComponentName+'.fss');
+}

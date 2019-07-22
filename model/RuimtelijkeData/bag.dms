@@ -1,0 +1,313 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//       Deze DMS-file wordt aangeroepen door brondata.dms                              //
+//                                                                                      //
+//       In deze configuratiefile wordt een shapshot uit de BAG geconfigureerd          //
+//       De snapshot kan gemaakt worden met de OV Bag Tools                             //
+//       die gebruikt wordt voor de bebouwingscomponenten                               //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
+{
+	parameter<string>   SnapShotDate := '20190101';
+	parameter<units/Yr> SnapShotYear := left(SnapShotDate,4)[units/Yr];
+	parameter<string>   SourceDir    := '%SourceDataProjDir%/BAG/' + SnapShotDate;
+
+	container typeringen
+	{
+		unit<uint8> gebruiksdoel: nrofrows = 11
+		{
+			attribute<string> label:
+			[
+				'bijeenkomstfunctie','celfunctie','gezondheidszorgfunctie','industriefunctie','kantoorfunctie','logiesfunctie'
+				,'onderwijsfunctie','overige gebruiksfunctie','sportfunctie','winkelfunctie','woonfunctie'
+			];
+			attribute<uint32> BrushColor:
+			[
+				 rgb(230,204,255), rgb(100,100,100), rgb(150,  0,  0), rgb(100,100,100),rgb(179, 51,255),rgb(200,200,  0)
+				,rgb(  0,  0,200), rgb(200,200,200), rgb(  0,255,  0), rgb(  0,128,  0),rgb(255,100,100)
+			]
+			,	DialogType = "BrushColor";
+			attribute<uint32> PenColor := BrushColor, DialogType = "PenColor";
+			attribute<string> name     := replace(label,' ','_', 'functie','');
+			container impl: IsHidden = "True"
+			{
+				attribute<uint16> BitValue (gebruiksdoel) := ='union_data(..,'+AsItemList('1w'+repeat(' * 2w',uint32(id(gebruiksdoel))))+')';
+			}
+		}
+		unit<uint8> WoningtypeSnapshot : nrofrows = 6 // zie ook: HouseTypeCombi, dat oook in RSL gebruikt wordt.
+		{
+			attribute<string> name : ['geen_woonpand','vrijstaand','twee_onder_1_kap','hoekwoning','tussenwoning','meergezinspand'];
+			attribute<string> label := name, DialogType = "LabelText";
+	
+			attribute<uint32> BrushColor: DialogType = "BrushColor",
+			[
+				 rgb(255,255,255)
+				,rgb( 26,152, 80)
+				,rgb(166,217,106)
+				,rgb(100,100,255)
+				,rgb(255,255,  0)
+				,rgb(255, 50, 50)
+			];
+			attribute<uint32> PenColor := rgb((bitand(BrushColor / 16384, 255) / 2), (bitand(BrushColor / 256, 255) / 2), (bitand(BrushColor, 255) / 2))
+			,	DialogType = "PenColor";
+
+			container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+		}
+	}
+
+	container import
+	{
+		unit<uint32> vbo
+		:	StorageName     = "= SourceDir + '/vbo.fss'"
+		,	StorageReadOnly = "True"
+		,	DialogType      = "Map"
+		,	DialogData      = "geometry"
+		{
+			attribute<geography/rdc_mm>    geometry_mm;
+			attribute<geography/rdc_meter> geometry := geometry_mm[geography/rdc_meter];
+			attribute<string>              identificatie;
+			attribute<string>              nummeraanduiding_id;
+			attribute<int32>               oppervlakte;
+
+			container oppervlak_filters
+			{
+				attribute<bool> rare_waarden  (vbo) := Oppervlakte = 1i || Oppervlakte = 999999i || Oppervlakte = 99999i || Oppervlakte = 9999i;
+
+				attribute<Units/m2> wonen     (vbo) := (rare_waarden || (Oppervlakte > 10000i && pand_bouwlagen_fictief > 10f))
+					? (0 / 0)[Units/m2]
+					: Oppervlakte[Units/m2]
+				,	FreeData = "False"
+				,	Descr =
+					"Correctie van oppervlaktes deels op basis van document: http://www.cbs.nl/nl-NL/menu/themas/bouwen-wonen/methoden/dataverzameling/korte-onderzoeksbeschrijvingen/2015-kenmerken-woningen-kob.htm"
+					"Aanvulling van OV op oppervlakte in relatie tot pand footprint (verdacht groot) en op 99999";
+
+				attribute<Units/m2> utiliteit (vbo) := (rare_waarden || (Oppervlakte > 160000i && pand_bouwlagen_fictief > 45f))
+						? (0 / 0)[Units/m2]
+						: Oppervlakte[Units/m2]
+				,	FreeData = "False"
+				,	Descr    = "Grootste kantoorgebouw van Nederland bedraagt 160.000m2 Rotterdam Kop van Zuid, aantal bouwlagen in Nederland maximaal 44";
+			}
+
+			container gebruiksdoelen :=
+				for_each_ndv(
+					typeringen/gebruiksdoel/name
+					, vbo
+					, bool
+				);
+			attribute<uint16> gebruiksdoelcombinatie   := =AsList(string(typeringen/gebruiksdoel/impl/BitValue)+ 'w * uint16(gebruiksdoelen/' + typeringen/gebruiksdoel/name + ')',' + '), IsHidden = "True";
+
+			// pand gerelateerde data
+			attribute<string>  pand_id_geom;
+			attribute<string>  pand_id                := pand_id_geom;
+			attribute<pand>    pand_rel               := rlookup(pand_id, pand/identificatie);
+			attribute<float32> pand_bouwlagen_fictief := pand/bouwlagen_fictief[pand_rel];
+			
+			// relatie naar buurt voor o.a. ruimtelijke selectie
+			attribute<RegioIndelingen/buurt>    buurt_rel    := point_in_polygon(geometry, RegioIndelingen/buurt/geometry);
+			attribute<RegioIndelingen/gemeente> gemeente_rel := RegioIndelingen/buurt/gemeente_rel[buurt_rel];
+		}
+
+		unit<uint32> pand
+		:	StorageName     = "= SourceDir + '/pand.fss'"
+		,	DialogType      = "Map"
+		,	DialogData      = "geometry"
+		,	StorageReadOnly = "True"
+		{
+			attribute<geography/rdc_mm>    geometry_mm (poly);
+			attribute<geography/rdc_meter> geometry    (poly) := geometry_mm[geography/rdc_meter];
+			attribute<string>              identificatie;
+			
+			attribute<uint16>             AHN_hoogte;
+			parameter<uint16>             verdiepinghoogte_cm := 280w;
+			attribute<float32>            verdiepingen_float : = float32(AHN_hoogte) / float32(verdiepinghoogte_cm);
+			attribute<uint32> vbo_count             := pcount(vbo/pand_rel);
+			
+			attribute<uint16>              bouwjaar;
+			attribute<units/Yr>            bouwjaar_gecorrigeerd :=
+				(bouwjaar <= 1000w || bouwjaar[units/Yr] > SnapShotYear)
+					? (0 / 0)[Units/Yr]
+					: bouwjaar[Units/Yr]
+			,	Descr = "Correctie van bouwjaren op basis van document"
+			,	url   = "http://www.cbs.nl/nl-NL/menu/themas/bouwen-wonen/methoden/dataverzameling/korte-onderzoeksbeschrijvingen/2015-kenmerken-woningen-kob.htm";
+
+			attribute<uint8>                         nr_verdiepingen   := uint8(round(verdiepingen_float));
+			attribute<typeringen/WoningtypeSnapshot> woonpand_type;
+			attribute<units/m2>                      footprint         := area(geometry, m2);
+			attribute<units/m2>                      vbo_oppervlak     := sum(vbo/Oppervlakte, vbo/pand_rel)[units/m2];
+			attribute<float32>                       bouwlagen_fictief := float32(vbo_oppervlak / footprint);
+			attribute<uint32> nr_woningen := pcount(vbo_woonfunctie_studiegebied/pand_rel);
+		}
+
+		unit<uint32> nummeraanduiding
+		:	StorageName     = "= SourceDir + '/nummeraanduiding.fss'"
+		,	StorageReadOnly = "True"
+		{
+			attribute<string> identificatie;
+			attribute<string> openbareruimte_id;
+			attribute<int32>  huisnummer;
+			attribute<string> huisletter;
+			attribute<string> toevoeging;
+			attribute<string> postcode;
+
+			attribute<string> toev      := MakeDefined(huisletter,'') + MakeDefined(toevoeging,'');
+			attribute<string> adres_key :=
+				postcode + '_' + string(huisnummer) + 
+				(strlen(toev) > 0
+					? '_' + toev
+					: ''
+				);
+			attribute<Classifications/energielabel> energielabel_rel := rjoin(adres_key, Energielabel/data/Values, Energielabel/data/energielabel_rel);
+		}
+	}
+
+	unit<uint32> vbo_woonfunctie_studiegebied := Subset(
+			import/vbo/gebruiksdoelen/woon
+		&&	Studiegebied/selected_per_gemeente[import/vbo/gemeente_rel]
+		&&	IsDefined(import/vbo/pand_rel)
+		&&	import/vbo/oppervlak_filters/wonen >=  10[Units/m2]
+		&&	import/vbo/oppervlak_filters/wonen < 1000[Units/m2]
+		)
+	,	DialogType = "Map"
+	,	DialogData = "geometry"
+	,	FreeData   = "False"
+	,	KeepData   = "True"
+	{
+		attribute<string>                                 identificatie              := import/vbo/identificatie[nr_OrgEntity];
+		attribute<string>                                 Label                      := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/adres_key);
+
+		attribute<rdc_meter>                              geometry                   := import/vbo/geometry[nr_OrgEntity];
+		attribute<string>                                 postcode                   := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/postcode);
+		attribute<Classifications/energielabel>           energielabel_rel           := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/energielabel_rel);
+
+		attribute<Units/m2>                               oppervlakte                := import/vbo/oppervlak_filters/wonen[nr_OrgEntity];
+		attribute<string>                                 pand_id                    := import/vbo/pand_id[nr_OrgEntity];
+		attribute<import/pand>                            pand_rel                   := import/vbo/pand_rel[nr_OrgEntity];
+		attribute<Float64>                                pand_aandeel               := 1.0 / float64(import/pand/nr_woningen[pand_rel]);
+ 
+		attribute<Studiegebied/buurt>                     buurt_rel                  := point_in_polygon(geometry, Studiegebied/buurt/geometry);
+
+		attribute<Units/Yr>                               bouwjaar                   := rjoin(pand_id, import/pand/identificatie, import/pand/bouwjaar_gecorrigeerd);
+		attribute<Classifications/BouwjaarWoningBestaand> BouwjaarWoningBestaand_rel := isNull(bouwjaar) ? Classifications/BouwjaarWoningBestaand/onbekend : classify(bouwjaar,Classifications/BouwjaarWoningBestaand/ClassBreak);
+
+		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := rjoin(pand_id, import/pand/identificatie, import/pand/woonpand_type);
+
+		attribute<classifications/WoningtypeBestaand>     WoningtypeBestaand_rel     :=
+			(WoningtypeSnapshot_rel == typeringen/WoningtypeSnapshot/V/meergezinspand && nr_verdiepingen > 4b)
+				? classifications/WoningtypeBestaand/V/meergezinspand_hoog
+				: WoningtypeSnapshot_rel[classifications/WoningtypeBestaand]
+		;
+
+		attribute<uint8>                                  nr_verdiepingen             := rjoin(pand_id, import/pand/identificatie, import/pand/nr_verdiepingen);
+		
+		container labelsprong_opgelegd := for_each_nedv(classifications/zichtjaar/name
+		,	'rjoin(identificatie, energielabel/opgelegd/identificatie, energielabel/opgelegd/'+classifications/zichtjaar/name+')'
+		,	., string);
+	}
+	
+	unit<uint32> vbo_woonfunctie_studiegebied_export := Subset(
+			import/vbo/gebruiksdoelen/woon
+		&&	Studiegebied/selected_per_gemeente[import/vbo/gemeente_rel]
+		&&	IsDefined(import/vbo/pand_rel)
+		&&	import/vbo/oppervlak_filters/wonen >= 10[Units/m2]
+		&&	import/vbo/oppervlak_filters/wonen < 1000[Units/m2]
+		)
+	,	DialogType = "Map"
+	,	DialogData = "locatie"
+	,	FreeData = "False", KeepData = "True"
+	{
+		attribute<string>                                identificatie           := import/vbo/identificatie[nr_OrgEntity];
+		attribute<rdc_meter>                             locatie                 := value(import/vbo/geometry[nr_OrgEntity],rdc_meter);
+	}
+
+	parameter<string> vbo_utiliteit_industrie_sub_expr := SpecifiekeInstellingen/BAG/IndustrieDoetMee == 0b ? '!import/vbo/gebruiksdoelen/Industrie' : SpecifiekeInstellingen/BAG/IndustrieDoetMee == 1b ? 'import/vbo/gebruiksdoelcombinatie <> 8w' : ''
+	,	isHidden = "True";
+
+	unit<uint32> vbo_utiliteit_studiegebied:= ='Subset (
+			!import/vbo/gebruiksdoelen/woon 
+		&&	Studiegebied/selected_per_gemeente[import/vbo/gemeente_rel]
+		&&	IsDefined(import/vbo/pand_rel)
+		&&	isDefined(import/vbo/oppervlak_filters/utiliteit)
+		&&	' + vbo_utiliteit_industrie_sub_expr + 
+		+')'
+	,	DialogType = "Map"
+	,	DialogData = "locatie"
+	{
+		attribute<string>                               identificatie            := import/vbo/identificatie[nr_OrgEntity];
+		attribute<string>                               Label                    := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/adres_key);
+
+		attribute<rdc_meter>                            locatie                  := value(import/vbo/geometry[nr_OrgEntity],rdc_meter);
+		attribute<rdc_meter>                            geometry                 := locatie;
+		attribute<string>                               postcode                 := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/postcode);
+
+		attribute<Units/m2>                             oppervlakte              := import/vbo/oppervlak_filters/utiliteit[nr_OrgEntity];
+		attribute<string>                               pand_id                  := import/vbo/pand_id[nr_OrgEntity];
+		attribute<import/pand>                          pand_rel                 := import/vbo/pand_rel[nr_OrgEntity];
+		
+		attribute<Studiegebied/buurt>                   buurt_rel                := point_in_polygon(geometry, Studiegebied/buurt/geometry);
+
+		attribute<units/Yr>                             bouwjaar                 := rjoin(pand_id, import/pand/identificatie, import/pand/bouwjaar_gecorrigeerd);
+		attribute<Classifications/BouwjaarUtilBestaand> BouwjaarUtilBestaand_rel := isNull(bouwjaar) ? Classifications/BouwjaarUtilBestaand/V/onbekend :classify(bouwjaar,Classifications/BouwjaarUtilBestaand/ClassBreak);
+
+		container gebruiksdoelen :=
+			for_each_nedv(
+				Classifications/UtilTypeBestaand/name
+				,'import/vbo/gebruiksdoelen/' + Classifications/UtilTypeBestaand/name + '[Nr_OrgEntity]'
+				, vbo_utiliteit_studiegebied
+				, bool
+			);
+
+		container gebruiksdoel_impl: IsHidden = "True" // op basis van de gemiddeld grootste utiliteit
+		{
+			container Oppervlaktes_gemiddeld_per_vbo :=
+				for_each_nedv(
+					Classifications/UtilTypeBestaand/name
+					,'MakeDefined(sum(gebruiksdoelen/' + Classifications/UtilTypeBestaand/name + ' ? oppervlakte[m2] : 0 [m2]) / sum(float64(gebruiksdoelen/' + Classifications/UtilTypeBestaand/name + ')), 0[m2])' 
+					, void
+					, m2
+				);
+
+			attribute<m2>    oppervlakte_gemiddeld_per_vbo (Classifications/UtilTypeBestaand):= ='union_data(Classifications/UtilTypeBestaand, '+  AsItemList('Oppervlaktes_gemiddeld_per_vbo/' + Classifications/UtilTypeBestaand/name) + ')';
+			attribute<uint8> gebruiksdoel_index_calc       (Classifications/UtilTypeBestaand) := index(-oppervlakte_gemiddeld_per_vbo) // 0: index van hoogste oppervlakte, 1: index van een na hoogste oppervlakte, etc.
+			{
+				attribute<string> name (Classifications/UtilTypeBestaand) := Classifications/UtilTypeBestaand/name[gebruiksdoel_index];
+			}
+			attribute<uint8> gebruiksdoel_index            (Classifications/UtilTypeBestaand):// 0: index van hoogste oppervlakte, 1: index van een na hoogste oppervlakte, etc. Berekende index is losgekoppeld
+				[9,4,5,7,2,0,6,1,3,8];
+			attribute<string> name                         (Classifications/UtilTypeBestaand) := Classifications/UtilTypeBestaand/name[gebruiksdoel_index];
+		}
+
+		attribute<Classifications/UtilTypeBestaand> gebruiksdoel (vbo_utiliteit_studiegebied) := ='gebruiksdoel_impl/gebruiksdoel_index[argmax('+ AsItemList('gebruiksdoelen/' + gebruiksdoel_impl/name) + ')[Classifications/UtilTypeBestaand]]';
+	}
+	
+	unit<uint32> vbo_utiliteit_studiegebied_export:= Subset
+		(
+			!import/vbo/gebruiksdoelen/woon 
+		&&	Studiegebied/selected_per_gemeente[import/vbo/gemeente_rel]
+		&&	IsDefined(import/vbo/pand_rel)
+		&&	isDefined(import/vbo/oppervlak_filters/utiliteit)
+	//	&&	!import/vbo/gebruiksdoelen/Industrie    // Deze regel aanzetten als in Utiliteit alle industrie niet meedoet (dus ook alle vbo die industrie in combinatie met een andere gebruikdoel hebben)
+		&&	import/vbo/gebruiksdoelcombinatie <> 8w // Deze regel aanzetten als in Utiliteit vbo's niet meedoen die alleen een industriefunctie hebben.
+		)
+	,	DialogType = "Map"
+	,	DialogData = "locatie"
+	{
+		attribute<string>                                identificatie           := import/vbo/identificatie[nr_OrgEntity];
+		attribute<string>                                id                      := import/vbo/identificatie[nr_OrgEntity];
+		attribute<rdc_meter>                             locatie                 := value(import/vbo/geometry[nr_OrgEntity],rdc_meter);
+	}
+
+	unit<uint32> gebruiksdoelcombinatie := unique(import/vbo/gebruiksdoelcombinatie), IsHidden = "True"
+	{
+		attribute<string>   Label       := =AsList('(bitand(Values, uint16('+string(typeringen/gebruiksdoel/impl/BitValue)+')) != 0w ? '''+typeringen/gebruiksdoel/Name+'''+''_'' : '''')','+');
+		attribute<uint32>   count       := pcount(rlookup(import/vbo/gebruiksdoelcombinatie, values));
+		attribute<units/m2> oppervlakte := sum(import/vbo/oppervlak_filters/wonen ,rlookup(import/vbo/gebruiksdoelcombinatie, values));
+	}
+}

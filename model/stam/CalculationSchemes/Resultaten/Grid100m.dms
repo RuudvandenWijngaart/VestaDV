@@ -1,0 +1,58 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container Grid100m :=
+		for_each_ne(Classifications/BebouwingsComponent/name, 
+			'CalculationSchemes/Naar100mgrid(
+				Allocatie/'+Classifications/BebouwingsComponent/name+
+				', '+(Classifications/BebouwingsComponent/KanWKO && IsDefined(rlookup(Classifications/GebiedsOptie/V/WKO, Voorkeuren/ActieveGebiedsOptie/GebiedsOptie_rel))
+					? Quote('GebiedsAllocatie/WKO/ObjectResults/'+Classifications/BebouwingsComponent/name) 
+					: Quote(''))+
+			')'
+		)
+{
+	container Totaal
+	{
+		container Vraag
+		{
+			attribute<GJ_yr> AardGas       (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/Vraag/AardGas')+')';
+			attribute<GJ_yr> RestWarmte    (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/Vraag/RestWarmte')+')';
+			attribute<GJ_yr> GeoThermie    (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/Vraag/GeoThermie')+')';
+			attribute<GJ_yr> WijkWKK       (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/Vraag/WijkWKK')+')';
+			attribute<GJ_yr> WKO           (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/Vraag/WKO')+')';
+			attribute<GJ_yr> Warmte        (Geography/rdc_grids/m100) := AardGas + RestWarmte + GeoThermie + WijkWKK + WKO;
+			attribute<GJ_yr> Elektriciteit (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/Vraag/Elektriciteit')+')';
+			attribute<GJ_yr> Totaal        (Geography/rdc_grids/m100) := Warmte + Elektriciteit;
+
+			container Potentiaal
+			{
+				unit<spoint> Kernel := Geography/DistMatrices/pot1000m/KernelDomain;
+
+				attribute<Units/GJ_yr> AardGas       (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/AardGas),       Kernel/Cilindrical));
+				attribute<Units/GJ_yr> RestWarmte    (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/RestWarmte),    Kernel/Cilindrical));
+				attribute<Units/GJ_yr> GeoThermie    (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/GeoThermie),    Kernel/Cilindrical));
+				attribute<Units/GJ_yr> WijkWKK       (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/WijkWKK),       Kernel/Cilindrical));
+				attribute<Units/GJ_yr> WKO           (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/WKO),           Kernel/Cilindrical));
+				attribute<Units/GJ_yr> Elektriciteit (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/Elektriciteit), Kernel/Cilindrical));
+				attribute<Units/GJ_yr> Totaal        (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/Totaal),        Kernel/Cilindrical));
+			}
+		}
+		container AansluitCapaciteit
+		{
+			attribute<kW> Totaal           (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/AansluitCapaciteit/Totaal')+')';
+			attribute<kW> AardGas          (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/AansluitCapaciteit/AardGas')+')';
+			attribute<kW> Overig           (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/AansluitCapaciteit/Overig')+')';
+		}
+		container WKO
+		{
+			attribute<GJ_yr> V_Warmte      (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/WKO/V_Warmte')+')';
+			attribute<GJ_yr> V_Koude       (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/WKO/V_Koude')+')';
+			attribute<GJ_yr> V_Elek        (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/WKO/V_Elek')+')';
+			attribute<GJ_yr> Onttrekking   (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/WKO/Onttrekking')+')';
+			attribute<kW>    Capaciteit    (Geography/rdc_grids/m100) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name+'/WKO/Capaciteit')+')';
+		}
+	}
+}

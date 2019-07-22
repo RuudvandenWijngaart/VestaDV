@@ -1,0 +1,202 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//       In deze configuratiefile wordt de Geography gedefinieerd:                      //
+//       - geografische basis eenheden en grid domeinen voor brondata                   //
+//       - regioindelingen (polygonen)                                                  //
+//                                                                                      //
+// ///////////////////////////////////////////////////////////////////////////////////////
+
+container Geography: Using = "Units", IsHidden = "True"
+{
+	unit<dpoint> rdc_meter_base : DialogData = "ngr_layer"
+	,	Format   = "EPSG:28992"
+	,	IsHidden = "True"
+	{
+		// parameter<m> SymbolWorldSize := 2000[m], DialogType = "SymbolWorldSize";
+	}
+	unit<dpoint> rdc_meter     := range(rdc_meter_base, point(300000.0, 0.0), point(625000.0, 280000.0));
+	unit<fpoint> rdc_meter_f32 := gridset(rdc_meter, point(1.0, 1.0), point(0.0, 0.0), fpoint)   , IsHidden = "True";
+	unit<ipoint> rdc_mm        := gridset(rdc_meter, point(0.001, 0.001), point(0.0,0.0), ipoint), IsHidden = "True";
+
+	#include <ngr_layer.dms>
+
+	container rdc_grids: IsHidden = "True"
+	{
+		unit<wpoint> m100 :=
+			range(
+				  gridset(rdc_meter, point( - 100.0, 100.0), point(625000.0, 10000.0), wpoint)
+				, point(0w, 0w)
+				, point(3250w, 2700w)
+			)
+			,	Descr = "rdCoords/100m van NW naar SE (2700 cols)"
+		{
+			attribute<rdc_meter>             point                 := id(.)[rdc_meter] + point(-50.0, 50.0, rdc_meter);
+			attribute</Invoer/RuimtelijkeData/StudieGebied/buurt>    buurt_rel_org         := point_in_polygon(point, Invoer/RuimtelijkeData/StudieGebied/Buurt/Geometry);
+			attribute<bool>                  buurt_rel_org_defined := IsDefined(buurt_rel_org);
+
+			unit<uint32> NearBuurt := Subset(potential(float32(buurt_rel_org_defined), DistMatrices/pot1000m/KernelDomain/Cilindrical) >= 0.000001f && !buurt_rel_org_defined);
+
+			container connect := connect_info( Invoer/RuimtelijkeData/StudieGebied/Buurt/Geometry, point[NearBuurt/nr_OrgEntity]);
+
+			attribute<RegioIndelingen/blok500m> blok500m_rel := RegioIndelingen/blok500m/BaseGrid[ ID(.)[m500] ];
+			attribute<RegioIndelingen/blok1km>  blok1km_rel  := RegioIndelingen/blok1km/BaseGrid[ ID(.)[km1] ];
+			attribute<RegioIndelingen/blok2km>  blok2km_rel  := RegioIndelingen/blok2km/BaseGrid[ ID(.)[km2 ] ];
+
+			attribute<Invoer/RuimtelijkeData/StudieGebied/Buurt>       Buurt_rel       := MakeDefined(buurt_rel_org, connect/ArcID[invert(NearBuurt/nr_OrgEntity)]), FreeData = "False";
+		}
+
+		unit<wpoint> m500 := gridset(rdc_grids/m100, point( 5w, 5w, m100), point(0w,0w, m100), wpoint)
+		{
+			attribute<RegioIndelingen/buurt> buurt_rel := poly2grid(RegioIndelingen/buurt/geometry,   .);
+			attribute<rdc_meter>             point     := id(.)[rdc_meter] + point(-250.0, 250.0, rdc_meter);
+			attribute<bool>                  IsNL      := IsDefined(buurt_rel);
+		}
+
+		unit<wpoint> km1 := gridset(rdc_grids/m100, point(10w, 10w, m100), point(0w,0w, m100), wpoint)
+		{
+			attribute<RegioIndelingen/buurt> buurt_rel := poly2grid(RegioIndelingen/buurt/geometry,   .);
+			attribute<rdc_meter>             point     := id(.)[rdc_meter] + point(-500.0, 500.0, rdc_meter);
+			attribute<bool>                  IsNL      := IsDefined(buurt_rel);
+		}
+
+		unit<wpoint> km2 := gridset(rdc_grids/m100, point(20w, 20w, m100), point(0w, 0w, m100), wpoint)
+		{
+			attribute<RegioIndelingen/buurt> buurt_rel := poly2grid(RegioIndelingen/buurt/geometry,   .);
+			attribute<rdc_meter>             point     := id(.)[rdc_meter] + point(-1000.0, 1000.0, rdc_meter);
+			attribute<bool>                  IsNL      := IsDefined(buurt_rel);
+		}
+	}
+
+	container RegioIndelingen // Let op, voor planregio's moeten dit uint32 domeinen zijn.
+	{
+		unit<uint32> NL: nrofrows = 1
+		{
+			attribute<string> Name      := const('NL', .);
+			parameter<string> RegioNaam := 'NL';
+		}
+
+		unit<uint32> Provincie := unique(buurt/PROV_CODE)
+		{
+			attribute<string> label     := rjoin(values, buurt/PROV_CODE, buurt/PROV_NAAM);
+			attribute<string> Name      := replace_value(Replace(Label, '-', ''), '', 'Elders');
+			parameter<string> RegioNaam := 'Provincie';
+		}
+		
+		unit<uint32> Energieregio := unique(buurt/ER_NAAM)
+		,	DialogType = "Map"
+		,	DialogData = "geometry"
+		{
+			attribute<string> label        := 'RES '+string(Values);
+			attribute<string> Name         := replace_value(Replace(Label, '-', '', '/', '_', ' ', '', '(', '', ')', ''), '', 'Elders');
+			parameter<string> RegioNaam    := 'Energieregio';
+			attribute<string> GM_code_list := AsItemList(Gemeente/GM_code, Gemeente/Energieregio_rel);
+
+			attribute<rdc_meter> geometry (poly) := partitioned_union_polygon(ipolygon(Gemeente/Geometry), Gemeente/Energieregio_rel)[rdc_meter], FreeData = "False";
+
+		}
+
+		unit<uint32> Gemeente := unique(buurt/GM_CODE)
+		,	DialogType = "Map"
+		,	DialogData = "geometry"
+		{
+			attribute<rdc_meter> geometry (poly) := partitioned_union_polygon(ipolygon(buurt/Geometry), buurt/gemeente_rel)[rdc_meter], FreeData = "False";
+
+			attribute<string> GM_code   := values;
+			attribute<string> Name      := GM_Code;
+			attribute<string> label     := rjoin(values, buurt/GM_CODE, buurt/GM_NAAM);
+			parameter<string> RegioNaam := 'Gemeente';
+			
+			attribute<Energieregio> Energieregio_rel := modus(buurt/energieregio_rel, buurt/gemeente_rel);
+			
+			attribute<.> per_m100 (Geography/rdc_grids/m100) := poly2grid(geometry, Geography/rdc_grids/m100);
+		}
+
+		unit<uint32> Wijk := unique(buurt/WK_CODE)
+		{
+			attribute<string> name      := string(Values);
+			attribute<string> label     := rjoin(values, buurt/WK_CODE, buurt/WK_NAAM);
+			parameter<string> RegioNaam := 'Wijk';
+		}
+
+		#include<buurt.dms>
+
+		unit<uint32> blok2km := Subset(const(true,rdc_grids/km2)), DialogType = "Map", DialogData = "BaseGrid" // guarantee that all objects are in a plan-region
+		{
+			attribute<.>         BaseGrid (rdc_grids/km2) := invert(nr_OrgEntity);
+
+			attribute<rdc_meter> point         := rdc_grids/km2/point[nr_OrgEntity];
+			attribute<km2>       AreaInKm2     := const(4.0[km2], .);
+
+			// Report Regio relations
+			attribute<NL>        NL_rel        := const(0[NL],.);
+			attribute<Gemeente>  Gemeente_rel  := RegioIndelingen/buurt/Gemeente_rel [rdc_grids/km2/buurt_rel[nr_OrgEntity]];
+			attribute<Provincie> Provincie_rel := RegioIndelingen/buurt/Provincie_rel[rdc_grids/km2/buurt_rel[nr_OrgEntity]];
+
+			attribute<yr_uint16> BioWKK_Start  := const(2020[yr_uint16], .); // jaar waar vanaf BMC in een planregio is toegestaan. gebruik 9999 of ieder getal hoger dan laatste zichtjaar om geheel te verbieden.
+		}
+
+		unit<uint32> blok1km := Subset(const(true,rdc_grids/km1)), DialogType = "Map", DialogData = "BaseGrid" // guarantee that all objects are in a plan-region
+		{
+			attribute<.>         BaseGrid (rdc_grids/km1) := invert(nr_OrgEntity);
+
+			attribute<rdc_meter> point         := rdc_grids/km1/point[nr_OrgEntity];
+			attribute<km2>       AreaInKm2     := const(1.0[km2], .);
+
+			// Report Regio relations
+			attribute<NL>        NL_rel        := const(0[NL],.);
+			attribute<Gemeente>  Gemeente_rel  := RegioIndelingen/buurt/Gemeente_rel [rdc_grids/km1/buurt_rel[nr_OrgEntity]];
+			attribute<Provincie> Provincie_rel := RegioIndelingen/buurt/Provincie_rel[rdc_grids/km1/buurt_rel[nr_OrgEntity]];
+
+			attribute<yr_uint16> BioWKK_Start  := const(2020[yr_uint16], .); // jaar waar vanaf BMC in een planregio is toegestaan. gebruik 9999 of ieder getal hoger dan laatste zichtjaar om geheel te verbieden.
+		}
+
+		unit<uint32> blok500m := Subset(const(true, rdc_grids/m500)), DialogType = "Map", DialogData = "BaseGrid" // guarantee that all objects are in a plan-region
+		{
+			attribute<.>         BaseGrid (rdc_grids/m500) := invert(nr_OrgEntity);
+
+			attribute<rdc_meter> point         := rdc_grids/m500/point[nr_OrgEntity];
+			attribute<km2>       AreaInKm2     := const(0.25[km2], .);
+
+			// Report Regio relations
+			attribute<NL>        NL_rel        := const(0[NL],.);
+			attribute<Gemeente>  Gemeente_rel  := RegioIndelingen/Buurt/Gemeente_rel [rdc_grids/m500/Buurt_rel[nr_OrgEntity]];
+			attribute<Provincie> Provincie_rel := RegioIndelingen/buurt/Provincie_rel[rdc_grids/m500/Buurt_rel[nr_OrgEntity]];
+
+			attribute<yr_uint16> BioWKK_Start  := const(2020[yr_uint16], .); // jaar waar vanaf BMC in een planregio is toegestaan. gebruik 9999 of ieder getal hoger dan laatste zichtjaar om geheel te verbieden.
+		}
+	}
+
+	// for potential calculations
+	container DistMatrices : IsHidden = "True"
+	{
+		unit<uint32> Dist2Range;
+
+		template makeKernel
+		{
+			// Begin Case Parameters
+			parameter<m> gridsize;
+			parameter<m> radius_max;
+			// End Case Parameters
+
+			parameter<float64> radius       := radius_max / gridsize;
+			unit<spoint>       KernelDomain := range(spoint, point(-int16(radius), -int16(radius)), point(int16(radius) + 1s, int16(radius) + 1s))
+			{
+				attribute<Dist2Range> distMatr      := dist2(point(0s, 0s, .), Dist2Range);
+				attribute<float64>    DecayedWeight := iif(distMatr <= uint32(radius * radius), 1.0 / (float64(distMatr) + 0.08), 0.0);
+
+				attribute<float32>    Reciprocal    := float32(scalesum(Sqrt(DecayedWeight), 1.0 ));
+				attribute<float32>    Cilindrical   := float32(scalesum(float64(distMatr <= uint32(radius * radius)), 1.0 ));
+			}
+		}
+
+		container pot1000m  := makeKernel(100[m],  1000[m]);
+		container pot5000m  := makeKernel(100[m],  5000[m]);
+		container pot10000m := makeKernel(100[m], 10000[m]);
+	}
+}

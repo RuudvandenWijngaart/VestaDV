@@ -1,0 +1,198 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//       Deze DMS-file wordt aangeroepen door stam.dms                                  //
+//       In deze configuratiefile worden de bebouwingscomponenten geconfigureerd.       //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container Bebouwing :=
+	for_each_ne( Classifications/Zichtjaar/Name,
+		'CalculationSchemes/BebouwingsOperaties/Samenstelling('
+			'  impl/BestaandeWoning, impl/Nieuwbouw/woning/'      + Classifications/Zichtjaar/Name + '/results, ' + string(Classifications/Zichtjaar/HasMutations) +
+			', '+(Classifications/Zichtjaar/HasMutations ? 'Sloop/WoningResterendFactors/' + Classifications/Zichtjaar/Name : 'RuimtelijkeData') +
+			', impl/BestaandeUtil,  impl/Nieuwbouw/Utiliteit/'   + Classifications/Zichtjaar/Name + '/results, ' + string(Classifications/Zichtjaar/HasMutations) +
+			', '+(Classifications/Zichtjaar/HasMutations ? 'Sloop/UtilResterendFactors/'+Classifications/Zichtjaar/Name : 'RuimtelijkeData') +
+			', impl/BestaandeGlTb, impl/Nieuwbouw/Glastuinbouw/'+ Classifications/Zichtjaar/Name+'/results, false, RuimtelijkeData'
+			')'
+		),
+	Descr = "zie FO $2, Blok 1"
+{
+	container impl: isHidden = "True"
+	{
+		unit<uint32> BestaandeWoning := BAG/vbo_woonfunctie_studiegebied, DialogData = "point", DialogType = "Map"
+		{
+			unit<uint8>  BebouwingsTypeDomein  := Classifications/WoningtypeBestaand;
+			unit<uint8>  BouwjaarDomein        := Classifications/BouwjaarWoningBestaand;
+			unit<uint8>  ModelObjectKeyDomein  := Classifications/combines/WoningtypeBouwjaarBestaand;
+
+			attribute<string>                   code               := BAG/vbo_woonfunctie_studiegebied/identificatie;
+			attribute<RegioIndelingen/blok500m> blok500m_rel       := RegioIndelingen/blok500m/BaseGrid[point[rdc_grids/m500]];
+			attribute<RegioIndelingen/blok1km>  blok1km_rel        := RegioIndelingen/blok1km/BaseGrid[point[rdc_grids/km1]];
+			attribute<RegioIndelingen/blok2km>  blok2km_rel        := RegioIndelingen/blok2km/BaseGrid[point[rdc_grids/km2]];
+			attribute<Invoer/RuimtelijkeData/StudieGebied/buurt>       buurt_rel          := BAG/vbo_woonfunctie_studiegebied/buurt_rel;
+
+			attribute<nrAansl>                  nrAansluitingen_i  := Impl/nrWon * 1[ nrAansl / nrWoningen];
+			attribute<nrWoningen>               nrWoonUnits_i      := Impl/nrWon;
+			attribute<m2>                       nrOppUnits_i       := BAG/vbo_woonfunctie_studiegebied/oppervlakte[m2];
+			attribute<nrWoningen>               nrJoinedUnits      := Impl/nrWon, isHidden = "True";
+
+
+			attribute<BebouwingsTypeDomein>     BebouwingsType     := Impl/WoningType, isHidden = "True";
+			attribute<uint8>                    ModelObjectKey     := value(BebouwingsType *  uint8(#(Classifications/BouwjaarWoningBestaand)) + Impl/BouwjaarWoningBestaand_rel, classifications/combines/WoningtypeBouwjaarBestaand);
+			attribute<BouwjaarDomein>           BouwJaar:           = classify(BAG/vbo_woonfunctie_studiegebied/bouwjaar, Classifications/BouwjaarWoningBestaand/ClassBreak), isHidden = "True";
+
+			attribute<float64>                  AandeelWarmteVraag := MakeDefined(SpecifiekeInstellingen/VraagKentallen/BestaandeWoning/Deelname[BebouwingsType], 0.0), FreeData = "True";
+
+			attribute<rdc_meter>                point              := BAG/vbo_woonfunctie_studiegebied/geometry
+			{
+				// parameter<float64> SymbolSize      := 14.0,  DialogType = "SymbolSize";
+				// parameter<m>       SymbolWorldSize := 30[m], DialogType = "SymbolWorldSize";
+			}
+
+			container Gebied: IsHidden = "True"
+			{
+				attribute<float64> n      (..) := const(1.0,..);
+				attribute<float64> MEAN_x (..) := float64(PointCol(point));
+				attribute<float64> MEAN_y (..) := float64(PointRow(point));
+				attribute<float64> SSD_xx (..) := const(0.0, ..);
+				attribute<float64> SSD_xy (..) := const(0.0, ..);
+				attribute<float64> SSD_yy (..) := const(0.0, ..);
+			}
+
+			unit<uint32> EnergieLabelData := RuimtelijkeData/EnergieLabel/Data;
+			attribute<Classifications/energielabel> EnergieLabelData_rel := rjoin(code, EnergieLabelData/VBO_id, EnergieLabelData/energielabel_rel), isHidden = "True"
+			{
+				attribute<uint32>                       totaal    (..) := uint32(isDefined(EnergieLabelData_rel));
+				attribute<uint32>                       TotWeight (..) := MakeDefined(uint32(AvgLabel), 0);
+				attribute<Classifications/energielabel> AvgLabel  (..) := EnergieLabelData_rel;
+			}
+
+			container Criteria
+			{
+			}
+
+			container Impl : isHidden = "True"
+			{
+				attribute<nrWoningen>                             nrWon                      (..) := const(1,..,nrWoningen);
+
+				attribute<Classifications/BouwjaarWoningBestaand> BouwjaarWoningBestaand_rel (..) := BAG/vbo_woonfunctie_studiegebied/BouwjaarWoningBestaand_rel;
+				attribute<string>                                 BouwJaarExcel              (..) := Classifications/BouwjaarWoningBestaand/excel_code[BouwjaarWoningBestaand_rel];
+
+				attribute<classifications/WoningtypeBestaand>     WoningType                 (..) := BAG/vbo_woonfunctie_studiegebied/WoningtypeBestaand_rel;
+				attribute<BebouwingsTypeDomein>                   BebouwingsType             (..) := WoningType;
+			}
+		}
+
+		unit<uint32> BestaandeUtil := BAG/vbo_utiliteit_studiegebied
+		{
+			unit<uint8>  BebouwingsTypeDomein := Classifications/UtilTypeBestaand ,isHidden = "True";
+
+			attribute<string>                   code              := BAG/vbo_utiliteit_studiegebied/identificatie;
+			attribute<string>                   postcode          := BAG/vbo_utiliteit_studiegebied/postcode;
+
+			attribute<Invoer/RuimtelijkeData/StudieGebied/buurt>    buurt_rel         := BAG/vbo_utiliteit_studiegebied/buurt_rel, isHidden = "True";
+
+			attribute<rdc_meter>                point             := BAG/vbo_utiliteit_studiegebied/locatie, isHidden = "True";
+			attribute<RegioIndelingen/blok500m> blok500m_rel      := RegioIndelingen/blok500m/BaseGrid[point[rdc_grids/m500]], isHidden = "True";
+			attribute<RegioIndelingen/blok1km>  blok1km_rel       := RegioIndelingen/blok1km/BaseGrid[point[rdc_grids/km1]], isHidden = "True";
+			attribute<RegioIndelingen/blok2km>  blok2km_rel       := RegioIndelingen/blok2km/BaseGrid[point[rdc_grids/km2]], isHidden = "True";
+
+			attribute<Classifications/BouwJaar> BouwJaar          := classify(BAG/vbo_utiliteit_studiegebied/bouwjaar, Classifications/BouwJaar/ClassBreak), isHidden = "True";
+
+			attribute<nrAansl>                  nrAansluitingen_i := const(1[nrAansl], .);
+			attribute<nrWoningen>               nrWoonUnits_i     := nrJoinedUnits / 100[m2/ nrWoningen];
+			attribute<m2>                       nrJoinedUnits     := BAG/vbo_utiliteit_studiegebied/oppervlakte[m2];
+			attribute<m2>                       nrOppUnits_i      := nrJoinedUnits;
+			container Gebied: IsHidden = "True"
+			{
+				attribute<float64> n      (..) := const(1.0, ..);
+				attribute<float64> MEAN_x (..) := PointCol(point);
+				attribute<float64> MEAN_y (..) := PointRow(point);
+				attribute<float64> SSD_xx (..) := const(0.0, ..);
+				attribute<float64> SSD_xy (..) := const(0.0, ..);
+				attribute<float64> SSD_yy (..) := const(0.0, ..);
+			}
+
+			// foreign key to model data
+			attribute<Classifications/BouwjaarUtilBestaand> BouwjaarUtilBestaand_rel := BAG/vbo_utiliteit_studiegebied/BouwjaarUtilBestaand_rel, isHidden = "True";
+			attribute<BebouwingsTypeDomein>                 BebouwingsType           := BAG/vbo_utiliteit_studiegebied/gebruiksdoel, isHidden = "True";
+			attribute<uint8>                                ModelObjectKey           := BebouwingsType *  uint8(NrOfRows(Classifications/BouwjaarUtilBestaand)) + BouwjaarUtilBestaand_rel;
+			attribute<int16>                                SymbolIndex              := BebouwingsTypeDomein/SymbolIndex[BebouwingsType], DialogType = "SymbolIndex", isHidden = "True";
+
+			//AandeelWarmteVraag voor elk bebouwingsobject aanzetten: activeer dan de onderste regel en deactiveer de bovenste regel
+			attribute<float64>                              AandeelWarmteVraag       := MakeDefined(SpecifiekeInstellingen/VraagKentallen/BestaandeUtil/Deelname[BebouwingsType], 0.0), FreeData = "True";
+
+			container Criteria
+			{
+			}
+		}
+
+		container Util_Nieuwbouw_Inbreiding :=
+			for_each_nedv(
+				RuimtelijkeData/Nieuwbouw/ZU/HasMutations ? RuimtelijkeData/Nieuwbouw/ZU/Name : ''
+				,	RuimtelijkeData/Nieuwbouw/ZU/Zichtjaar_jaar > 2010w && strlen(RuimtelijkeData/Nieuwbouw/ZU/wlo_filename_Nieuwbouw) > 0 
+				?	'int32(sum( '
+						'BestaandeUtil/NrJoinedUnits * ' +
+						'float64(BestaandeUtil/BebouwingsTypeDomein/UtilTypeNieuwbouw_rel[BestaandeUtil/BebouwingsType] == '+string(RuimtelijkeData/Nieuwbouw/ZU/nr_2)+'[uint8])'
+					+	', BestaandeUtil/point[rdc_grids/m100]'
+					')'
+					'*max_elem(float64(RuimtelijkeData/Nieuwbouw/InbreidingUtilFactor/'+RuimtelijkeData/Nieuwbouw/ZU/Name+') - 1.0 , 0.0)'
+					')'
+				:	'const(0i, Geography/rdc_grids/m100)'
+				,	Geography/rdc_grids/m100, int32
+			);
+
+		container Util_Nieuwbouw_Nieuwbouw :=
+			for_each_nedv(
+				RuimtelijkeData/Nieuwbouw/ZU/HasMutations ? RuimtelijkeData/Nieuwbouw/ZU/Name : ''
+				,	RuimtelijkeData/Nieuwbouw/ZU/Zichtjaar_jaar > 2010w && strlen(RuimtelijkeData/Nieuwbouw/ZU/wlo_filename_Nieuwbouw) > 0 
+					?	'int32(RuimtelijkeData/Nieuwbouw/UtilOppervlak/'+RuimtelijkeData/Nieuwbouw/ZU/Name +')'
+						''
+					:	'const(0i, Geography/rdc_grids/m100)'
+				,	Geography/rdc_grids/m100, int32
+			);
+
+		container NieuwbouwUtil :=
+			for_each_nedv(
+				RuimtelijkeData/Nieuwbouw/ZU/HasMutations ? RuimtelijkeData/Nieuwbouw/ZU/Name : ''
+				,	'Util_Nieuwbouw_Nieuwbouw/'+RuimtelijkeData/Nieuwbouw/ZU/Name + ' + Util_Nieuwbouw_Inbreiding/'+RuimtelijkeData/Nieuwbouw/ZU/Name
+				,	Geography/rdc_grids/m100, int32
+			);
+
+		unit<uint32> BestaandeGlTb := RuimtelijkeData/Glastuinbouw/bestaand_studiegebied, url = "%sourceDataProjDir%/vraag/glastuinbouw/Werkwijze_aanmaak_huidige_glastuinbouw_tbv_Vesta33.pdf",FreeData = "True"
+		{
+			unit<uint8>   BebouwingsTypeDomein := Classifications/GLTB ,isHidden = "True";
+
+			attribute<string>                   code              := string(id(.));
+			
+			attribute<Studiegebied/buurt>    buurt_rel         :=  RuimtelijkeData/Glastuinbouw/bestaand_studiegebied/buurt_rel, isHidden = "True";
+
+			attribute<RegioIndelingen/blok500m> blok500m_rel      := RegioIndelingen/blok500m/BaseGrid[point[rdc_grids/m500]], isHidden = "True";
+			attribute<RegioIndelingen/blok1km>  blok1km_rel       := RegioIndelingen/blok1km/BaseGrid[point[rdc_grids/km1]], isHidden = "True";
+			attribute<RegioIndelingen/blok2km>  blok2km_rel       := RegioIndelingen/blok2km/BaseGrid[point[rdc_grids/km2]], isHidden = "True";
+
+			attribute<nrAansl>                  nrAansluitingen_i := const(1[nrAansl   ], .), isHidden = "True";
+			attribute<nrWoningen>               nrWoonUnits_i     := const(0[nrWoningen], .), isHidden = "True";
+			attribute<m2>                       NrJoinedUnits     := Opp_M2;
+			attribute<m2>                       nrOppUnits_i      := nrJoinedUnits;
+			
+			// foreign key to model data
+			attribute<Classifications/BouwJaar> BouwJaar           := const(Classifications/Bouwjaar/V/Onbekend, .), isHidden = "True";
+			attribute<BebouwingsTypeDomein>     BebouwingsType     := GLTB_Code, isHidden = "True";
+			attribute<uint8>                    ModelObjectKey     := GLTB_Code *  uint8(NrOfRows(Classifications/BouwJaar)) + BouwJaar;
+
+			attribute<float64>                  AandeelWarmteVraag := MakeDefined(SpecifiekeInstellingen/VraagKentallen/BestaandeGlTb/Deelname[BebouwingsType], 0.0);
+			container Criteria
+			{
+			//	attribute<Bool>     KanBesparen := const(false, BebouwingsObject); // Vul  hier iets anders in als je in RuimtelijkeVraagMetBesparing wel besparingen voor glastuinbouw wilt
+			}
+		}
+		#include<Nieuwbouw.dms>
+	}
+}

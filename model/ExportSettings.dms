@@ -1,0 +1,71 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//       In deze configuratiefile worden Export settings gedefinieerd                   //
+//       die nodig zijn voor het exporteren van bitmaps vanuit de GUI                   //
+//       en voor het schrijven van xml metadata bij overige exports                     //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container ExportSettings: url = "='#'+ExportSettings/Docdata +'/ExportSettings.adms'", IsHidden = "True"
+{
+	parameter<string> FileNameBase         := 'results/result';
+
+	parameter<string>  DocData             := expand(.,'%projdir%/html');
+	parameter<float64> width               :[null];
+	parameter<float64> height              :[null];
+	parameter<dpoint>  PaperSize           := point(width / 100.0 , height / 100.0);
+	parameter<float64> ScaleDenom          :[null];
+	parameter<float64> Scale               := 1.0 / ScaleDenom;
+	parameter<float64> dwsc                :[null];
+	parameter<dpoint>  DotWorldSize        := point(dwsc,dwsc);
+	parameter<uint32>  NrSubDotsPerDot     :[2];
+	parameter<float64> dpi                 :[200];
+	parameter<dpoint>  DotSize             := point(0.0254/dpi,0.0254/dpi);
+	parameter<float64> ViewFactor          :[1];
+	parameter<ipoint>  MaxNrSubDotsPerTile :[{8192, 8192}];
+
+	container GitImpl {
+		parameter<string> PD             := expand(., '%projDir%');
+		parameter<string> DOS_PD         := replace(PD, '/', '\\');
+
+		parameter<string> SwitchDriveCmd := substr(DOS_PD, 0, 2);
+		parameter<string> CdCmd          := 'cd '+DOS_PD;
+		parameter<string> DescrCmd       := 'git describe --all > git.txt';
+		parameter<string> StatusCmd      := 'git status >> git.txt';
+		parameter<string> Cmds           := SwitchDriveCmd + ' && ' + CdCmd + ' && ' + DescrCmd + ' && ' + StatusCmd;
+		container Writer := exec(Expand(., '%env:ComSpec%'), '/c ' + Cmds, PD);
+	}
+
+	container MetaInfo {
+		parameter<string> FileName : ='%storageBaseName%.xml';
+		parameter<string> FileType : ='xml'; // default is 'ini' but ini files cannot be used well to store multi-line properties such as error messages of inproperly configured properties
+		container Contents
+		{
+			container Software
+			{
+				parameter<string> GeoDmsVersion: [ '=string(GeoDmsVersion())' ];
+			}
+			container Config
+			{
+				parameter<string> FullName := '=PropValue(this, '+Quote('FullName')+')';
+				parameter<string> Expr     := '=PropValue(this, '+Quote('Expr'    )+')';
+			}
+			container Environment
+			{
+				parameter<string> Processor    := expand(., '%env:PROCESSOR_IDENTIFIER%');
+				parameter<string> User         := expand(., '%env:USERNAME%');
+				parameter<string> ComputerName := expand(., '%env:COMPUTERNAME%');
+			}
+			container Git
+			{
+				parameter<string> RevisionInfo : Storagename = "%projDir%/git.txt", StorageType = "str", ExplicitSuppliers = "GitImpl/Writer";
+			}
+		}
+	}
+}

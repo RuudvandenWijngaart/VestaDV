@@ -1,0 +1,73 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//       Deze DMS-file wordt aangeroepen door brondata.dms                              //
+//       In deze configuratiefile wordt de sloop geconfigureerd                         //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container Sloop
+{
+	container WoningResterend :=
+		for_each_ndva(Nieuwbouw/ZW/HasMutations ? Nieuwbouw/ZW/Name : ''
+			, Geography/rdc_grids/m100, float32
+			, SpecifiekeInstellingen/WloScenarioFolder+'/'+Nieuwbouw/ZW/period_name+'/Wonen/Resterend/'
+			+ Nieuwbouw/ZW/wonen_wlo_filename+ '.tif'
+		);
+
+	container WoningResterendFactors :=
+		for_each_nedv(  Nieuwbouw/ZW/HasMutations ? Nieuwbouw/ZW/Name : ''
+			, 'median(0.0, Float64(WoningResterend/'+Nieuwbouw/ZW/Name +'), '
+				+ (Nieuwbouw/ZW/Zichtjaar_jaar > 2020w ? Nieuwbouw/ZW/prev_name : '1.0')+')' 
+			, Geography/rdc_grids/m100, Float64
+		);
+
+	container UtilDeltaFactor :=
+		for_each_ndva(  Nieuwbouw/ZU/HasMutations && strlen(Nieuwbouw/ZU/wlo_filename_Nieuwbouw) > 0  ? Nieuwbouw/ZU/Name : ''
+			, Geography/rdc_grids/m100, Float32
+			, SpecifiekeInstellingen/WloScenarioFolder+'/'+Nieuwbouw/ZU/period_name+'/Util/Resterend/'
+			+ Nieuwbouw/ZU/wlo_filename_Nieuwbouw + '.tif'
+		);
+		
+
+
+	container UtilResterendFactors :=
+		for_each_nedv(  Nieuwbouw/ZU/HasMutations ? Nieuwbouw/ZU/Name : ''
+			, Nieuwbouw/ZU/Zichtjaar_jaar > 2010w && strlen(Nieuwbouw/ZU/wlo_filename_Nieuwbouw) > 0  
+				? 'median(0.0, Float64(UtilDeltaFactor/'+Nieuwbouw/ZU/Name +'), '
+					+ (Nieuwbouw/ZU/Zichtjaar_jaar > 2020w ? Nieuwbouw/ZU/prev_name : '1.0')+')' 
+				: 'const(1.0, Geography/rdc_grids/m100)'
+			, Geography/rdc_grids/m100, float64
+		);
+
+//begin of: activeer lege ruimtelijke ontwikkeling voor sloop, alternatief voor lege ruimtelijke ontwikkeling met bestanden
+// comment out: WoningResterend,UtilDeltaFactor
+
+// 	container WoningResterend :=
+// 		for_each_nedv(Nieuwbouw/ZW/HasMutations ? Nieuwbouw/ZW/Name : ''
+// 			,'const(1f,Geography/rdc_grids/m100)'
+// 			, Geography/rdc_grids/m100, float32
+// 		);
+
+// 	container UtilDeltaFactor :=
+// 		for_each_nedv(  Nieuwbouw/ZU/HasMutations && strlen(Nieuwbouw/ZU/wlo_filename_Nieuwbouw) > 0  ? Nieuwbouw/ZU/Name : ''
+// 			,'const(1f,Geography/rdc_grids/m100)'
+// 			, Geography/rdc_grids/m100, Float32
+// 		);
+
+// end of activate
+
+	container Totalen 
+	{
+		attribute<float32> WoningResterend     (Nieuwbouw/ZW) := ='union_data(Nieuwbouw/ZW,'+AsItemList(Nieuwbouw/ZW/HasMutations ? 'sum(Sloop/WoningResterend/' + Nieuwbouw/ZW/Name + ')' : '0f / 0f')+')';
+		attribute<string>  YearTypeW           (Nieuwbouw/ZW) := Nieuwbouw/ZW/Name;
+		attribute<float32> UtilDeltaFactorSum  (Nieuwbouw/ZU) := ='union_data(Nieuwbouw/ZU,'+AsItemList(Nieuwbouw/ZU/HasMutations && strlen(Nieuwbouw/ZU/wlo_filename_Nieuwbouw) > 0 ?  'sum(UtilDeltaFactor/' + Nieuwbouw/ZU/Name + ')' : '0f / 0f')+')';
+		attribute<float32> UtilDeltaFactorMean (Nieuwbouw/ZU) := ='union_data(Nieuwbouw/ZU,'+AsItemList(Nieuwbouw/ZU/HasMutations && strlen(Nieuwbouw/ZU/wlo_filename_Nieuwbouw) > 0 ? 'mean(UtilDeltaFactor/' + Nieuwbouw/ZU/Name + ')' : '0f / 0f')+')';
+		attribute<string>  YearTypeU           (Nieuwbouw/ZU) := Nieuwbouw/ZU/Name;
+	}
+}

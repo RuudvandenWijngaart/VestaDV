@@ -1,0 +1,96 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+template Resultaten
+{
+	// begin case parameters
+	parameter<String> RekenstapName:	isHidden = "true";
+	parameter<String> ZichtjaarName:	isHidden = "true";
+	// optional case parameter
+
+	container TussenResultaten := ='/TussenResultaten/' + RekenstapName				, isHidden = "true";
+	unit<uint32> PlanRegio     := Invoer/SpecifiekeInstellingen/PlanRegio			, isHidden = "true";
+	container Prijzen               := TussenResultaten/Prijzen						, isHidden = "true";
+	container BebouwingsComponenten := TussenResultaten/BebouwingsComponenten		, isHidden = "true";
+	container NCW                   := TussenResultaten/NCW							, isHidden = "true";
+	container GebiedsAllocatie      := TussenResultaten/GebiedsAllocatie			, isHidden = "true";
+	container StateVoorAllocatie    := TussenResultaten/StateVoorAllocatie			, isHidden = "true";
+	container StateNaAllocatie      := TussenResultaten/StateNaAllocatie			, isHidden = "true";
+	container Voorkeuren            := TussenResultaten/Voorkeuren					, isHidden = "true";
+
+	container Allocatie             := TussenResultaten/AllocatieResultaten			, isHidden = "true";
+	parameter<Classifications/zichtjaar> ZichtJaar_rel  := rlookup(ZichtJaarName, Classifications/zichtjaar/name)	, isHidden = "true";
+	parameter<units/yr_uint16>           ZichtJaar_jaar := Classifications/zichtjaar/jaar[zichtjaar_rel]			, isHidden = "true";
+
+	container Generate: isHidden = "false"
+	{
+		parameter<String> All := 'Ready',
+			ExplicitSuppliers =
+				"= ';' + AsList('InputOutput/'+SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
+				"+ (SpecifiekeInstellingen/Rapportage/Regio/Name != 'NL' ? ';InputOutput/Totaal/GenerateAll': '')"
+				"+ ';' + AsList('MaatregelenRapportage/BestaandeWoning/'+SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
+				"+ ';' + AsList('MaatregelenRapportage/NieuwbouwWoning/'+SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
+				"+ ';' + AsList('MaatregelenRapportage/BestaandeUtil/'  +SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
+				"+ ';' + AsList('MaatregelenRapportage/NieuwbouwUtil/'  +SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
+				"+ ';' + AsList('MaatregelenRapportage/BestaandeGlTb/'  +SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
+				"+ ';' + AsList('MaatregelenRapportage/NieuwbouwGlTb/'  +SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
+	//			"+ ';' + 'AllocExports/GenerateThisToo'" // comment-out if you want to skip all exports
+			;
+	}
+	container InputOutput :=
+		for_each_ne(
+			 SpecifiekeInstellingen/Rapportage/Regio/Name
+		,	'Rapportage/Flow('
+				'SpecifiekeInstellingen/Rapportage/Regio'
+				','+Quote(SpecifiekeInstellingen/Rapportage/Regio/Name)+
+				', value('+ string(id(SpecifiekeInstellingen/Rapportage/Regio)) + ',SpecifiekeInstellingen/Rapportage/Regio)'
+			')'
+		)
+	{
+		container Totaal := =(SpecifiekeInstellingen/Rapportage/Regio/Name != 'NL')
+			? 'Rapportage/Flow(geography/RegioIndelingen/NL, ''NL'', value(0, geography/RegioIndelingen/NL) )'
+			: '.';
+	}
+	
+	
+	
+	container Eindgebruiker :=
+			for_each_ne(Classifications/BebouwingsComponent/name,
+				replace(
+					'Rapportage/EindgebruikerComponent(
+						 Allocatie/@BC@
+						,NCW/@NC@15
+						,NCW/@NC@30
+						,NCW/@NC@50
+						,sum(Allocatie/@BC@/AardGas/Vastrecht,              BebouwingsComponenten/@BC@/PlanRegio_rel)
+						,sum(Allocatie/@BC@/AardGas/AansluitBijdrage,       BebouwingsComponenten/@BC@/PlanRegio_rel)
+						,sum(Allocatie/@BC@/Elektriciteit/Vastrecht,        BebouwingsComponenten/@BC@/PlanRegio_rel)
+						,sum(Allocatie/@BC@/Elektriciteit/AansluitBijdrage, BebouwingsComponenten/@BC@/PlanRegio_rel)
+						,StateNaAllocatie/KostenBaten/PlanRegioKaarten/@BC@
+					)'
+				,	'@BC@', Classifications/BebouwingsComponent/name
+				,	'@NC@', Classifications/BebouwingsComponent/NcwRefBase
+				)
+			)
+		,	Source = "FO v7a C6", isHidden = "true";
+	
+	#include <Maatschappelijk.dms>
+	#include <EnergyResults.dms>
+	#include <MaatregelenRapportage.dms>
+	#include <Netwerken.dms>
+	#include <EnergieProducent.dms>
+	#include <AllocExports.dms>
+	#include <DataDumpExports.dms>
+	#include <PlanregioResults.dms>
+//	#include <Grid100m.dms>  TODO: Grid100m gebiedsopties dynamisch maken en corrigeren nieuwe StateNaAllocatie
+
+
+	container FolderInfo: isHidden = "True"
+	{
+		parameter<string> RunName      := Expand(., '%configName%');
+		parameter<string> OutputFolder := '%localDataProjDir%/Results/'+ RunName +'/'+ RekenstapName;
+	}	
+}

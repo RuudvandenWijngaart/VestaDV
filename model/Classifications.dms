@@ -1,0 +1,1031 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//       In deze configuratiefile worden de klassificaties geconfigureerd.              //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
+{
+	unit<uint8> BebouwingsComponent: nrofrows = 6
+	{
+		attribute<string> Name:
+		[
+			 'BestaandeWoning'
+			,'NieuwbouwWoning'
+			,'BestaandeUtil'
+			,'NieuwbouwUtil'
+			,'BestaandeGlTb'
+			,'NieuwbouwGlTb'
+		];
+
+		attribute<string> Code             := string(id(.));
+		attribute<string> Label            := Name, DialogType = "LabelText";
+
+		attribute<bool>   IsBestaand       : [ true,  false,  true, false,  true, false ];
+		attribute<bool>   IsGlastuinbouw   : [ false, false, false, false,  true,  true ];
+		attribute<bool>   IsNieuwbouw      := !IsBestaand;
+		attribute<bool>   DraagtBTW        : [ true,  true, false, false, false, false ];
+		attribute<bool>   KanWKO           := not(IsGlastuinbouw);
+		attribute<bool>   Warmtewet        : [ true, false, false, false, false, false ]; // prijsberekening warmte volgens ACM berekening ?
+		attribute<.>      Warmtewet_BC_rel : [ 0, 0, 2, 2, 4, 4 ]; /// warmtewet prijs voor Nieuwbouw obv bestaande objecten
+
+		attribute<string> BronExpr:
+		[
+			 'Bebouwing/BagWoning',    'BebouwingsComponenten/Nieuwbouw/woning/@BRON@/@JAAR@/results'
+			,'Bebouwing/BagUtil',      'BebouwingsComponenten/Nieuwbouw/Utiliteit/@BRON@/@JAAR@/results'
+			,'Bebouwing/Glastuinbouw', 'BebouwingsComponenten/Glastuinbouw/@BRON@/@JAAR@/Nieuwbouw'
+		];
+		attribute<string> entity := 'BebouwingsComponenten/'+ name +'/BebouwingsObject';
+
+		attribute<string> NcwRefBase   : ['bw', 'nw','bu', 'nu','bt', 'nt'];
+		attribute<string> NameBestaand := IsBestaand ? Name : '';
+		attribute<string> NameNieuw    := IsBestaand ? '' : Name;
+
+		container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+	}
+	unit<uint8> BtwComponent := subset(BebouwingsComponent/DraagtBTW)
+	{
+		attribute<string> name := BebouwingsComponent/name[nr_OrgEntity];
+	}
+
+// =========  Classificaties voor Bebouwingscomponenten
+	unit<uint8> WoningtypeBestaand : nrofrows = 7
+	{
+		attribute<string> label                : ['geen woonpand','vrijstaand','2 onder 1 kap'   ,'rijwoning hoek','rijwoning tussen','meergezins: laag en midden','meergezins: hoog'] , DialogType = "LabelText";
+		attribute<string> name                 : ['geen_woonpand','vrijstaand','twee_onder_1_kap','hoekwoning'    ,'tussenwoning'    ,'meergezinspand_laag_midden','meergezinspand_hoog'];
+		attribute<string> resterendFactorName  : [     'onbekend','vrijstaand', 'TweeOnderEenKap','Rijtjeshuis'   ,'Rijtjeshuis'     , 'FlatTot4'                 ,'Flat5'];
+
+		attribute<bool>   IsMeergezins         : [ false, false, false, false, false, true, true ];
+		attribute<Units/Bouwlaag> StapelFactor : [ 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 6.0 ];
+
+		attribute<uint32> BrushColor: DialogType = "BrushColor",
+		[
+			 rgb(255,255,255)
+			,rgb( 26,152, 80)
+			,rgb(166,217,106)
+			,rgb(100,100,255)
+			,rgb(255,255,  0)
+			,rgb(255, 50, 50)
+			,rgb(255,  0,  0)
+		];
+		attribute<uint32> PenColor   := rgb((bitand(BrushColor / 16384, 255) / 2), (bitand(BrushColor / 256, 255) / 2), (bitand(BrushColor, 255) / 2))
+		,	DialogType = "PenColor";
+		attribute<string> excel_code := label;
+
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+
+	unit<uint8> WoningtypeNieuwbouw: nrofrows = 15
+	{
+		attribute<bool>  IsMeergezins: [ false, false, false, false, true, true, true, true, false, true, false, true, false, false, false ];
+		attribute<string> Label := excel_code, DialogType = "LabelText";
+
+		attribute<string> name: [
+			'onbekend', 'vrijstaand', 'TweeOnderEenKap',
+			'rijtjeshuis', 'FlatTot4', 'Flat5',
+			'EtageWoning', 'Appartement', 'Herenhuis',
+			'BejaardenWoning', 'Boerderij', 'StudentenWoning',
+			'Woonboot', 'Woonwagen', 'Divers'
+		];
+		attribute<Units/Bouwlaag> StapelFactor: [ 1.0, 1.0, 1.0, 1.0, 2.0, 6.0, 3.0, 3.0, 3.0, 2.0, 1.0, 6.0, 1.0, 1.0, 1.0 ];
+		attribute<Float64> pand_aandeel := IsMeergezins ? 1.0 / Float64(StapelFactor / 1[units/bouwlaag]) : 1.0;
+
+		attribute<string> excel_code: [
+			'onbekend', 'vrijstaand/bungalows', 'twee onder een kap', 
+			'rijtjeshuizen/eengezins', 'flats 4 of minder verdiepingen', 'flats meer dan 4 verdiepingen',
+			'etagewoning/maisonnette', 'etage/flats grachtenpand', 'herenhuis grachtenpand',
+			'zelfstandige bejaardenwoning', 'boerderij/tuinderij', 'studentenwoning/flat',
+			'woonboten', 'woonwagens', 'divers'
+		];
+		attribute<string> wlo_FileName: [
+			'onbekend', 'vrijstaand_bungalows', 'twee_onder_een_kap',
+			'rijtjeshuizen_eengezins','flats_tot_vijf', 'flats_vijf_of_meer',
+			'etagewoning_maisonnette', 'etageflats_grachtenpand', 'herenhuis_grachtenpand',
+			'bejaardenwoning', 'boerderij_tuinderij', 'studentenwoning_flat',
+			'woonboten', 'woonwagens', 'divers'
+		];
+		attribute<string> resterendFactorName := name;
+
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+
+	unit<uint8> UtilTypeBestaand: nrofrows = 10
+	{
+		attribute<string>            Label                 := Label_key == 'Overig' ? 'overige_gebruiks' : Label_key, DialogType = "LabelText";
+		attribute<string>            Label_key             : ['Kantoor', 'Winkel', 'Gezondheidszorg', 'Logies', 'Onderwijs', 'Industrie','Bijeenkomst','Sport','Overig','Cel'];
+		attribute<string>            excel_code            := Label_key;
+		attribute<int16>             SymbolIndex           : [41,54,241,49,67,213,107,246,171,150], DialogType = "SymbolIndex";
+		attribute<string>            Name                  := Label;
+		attribute<string>            resterendFactorName   : ['kantoor', 'winkel', 'verzorging_verpleging', 'horeca', 'onderwijs', 'overig', 'overig', 'overig', 'overig', 'overig'];
+		attribute<UtilTypeNieuwbouw> UtilTypeNieuwbouw_rel := rlookup(resterendFactorName, UtilTypeNieuwbouw/Label);
+
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+
+	unit<uint8> UtilTypeNieuwbouw: nrofrows = 9
+	{
+		attribute<string>       Label                  : ['kantoor' , 'winkel' , 'groothandel', 'autohandel_reperatie'    , 'verzorging_verpleging'   , 'ziekenhuis'  , 'onderwijs', 'horeca' , 'overig'                 ], DialogType = "LabelText";
+		attribute<string>       Label_key              : ['kantoren', 'winkels', 'Groothandel', 'Autohandel en reparatie' , 'Verpleging en verzorging', 'Ziekenhuizen', 'Onderwijs', 'Horeca' , 'Overige dienstverlening'], isHidden = "True";
+		attribute<string>       filename_Nieuwbouw     : ['kantoren', 'winkels', 'groothandel', 'autohandel'              , 'verpleging'              , 'ziekenhuis'  , 'onderwijs', 'horeca' , 'overig'                 ], isHidden = "True";
+		attribute<string>       wlo_filename_Nieuwbouw : ['kantoor' , 'winkel' , ''           , ''                        , 'verpleging_verzorging'   , ''            , 'onderwijs', 'horeca' , 'overig_dienstverlening' ], isHidden = "True";
+		attribute<string>       excel_code             := Label_key, isHidden = "True";
+		attribute<int16>        SymbolIndex            : [41,54,241,49,67,213,107,246,171], DialogType = "SymbolIndex", isHidden = "True";
+		attribute<string>       Name                   := Label, isHidden = "True";
+		attribute<string>       resterendFactorName    := name;
+
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+
+	unit<uint8> GLTB : nrofrows = 13
+	{
+		attribute<string> Label := csv_output, DialogType = "LabelText";
+		attribute<string> Name  := Label;
+		attribute<string> excel_code: 
+		[
+			 'onbekend'
+			,'Glastuinbouw, groente, verwarmd'
+			,'Glastuinbouw, groente, onverwarmd'
+			,'Glastuinbouw, groente, belicht'
+			,'Glastuinbouw, groente, onbelicht'
+			,'Glastuinbouw, bloemen, verwarmd'
+			,'Glastuinbouw, bloemen, onverwarmd'
+			,'Glastuinbouw, bloemen, belicht'
+			,'Glastuinbouw, bloemen, onbelicht'
+			,'Glastuinbouw, overig, verwarmd'
+			,'Glastuinbouw, overig, onverwarmd'
+			,'Glastuinbouw, overig, belicht'
+			,'Glastuinbouw, overig, onbelicht'
+		];
+
+		attribute<string> resterendFactorName := name;
+		attribute<string> csv_output          := replace(excel_code, ', ', '_'); // no comma's in output to csv as Excel will treat them as seperate columns
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+
+// =========  Classificaties voor bouw/zichtjaren
+	unit<uint8> BouwjaarWoningBestaand: nrofrows = 6
+	{
+		attribute<units/Yr> ClassBreak : [ -9998 ,  1946 ,  1965 ,  1975 ,  1992 ,  2006];
+		attribute<string>   name       : ['v1946','v1965','v1974','v1991','v2005','v2014'];
+
+		attribute<string> Excel_code:
+		[
+			 'voor 1946'
+			,'1946 - 1964'
+			,'1965 - 1974'
+			,'1975 - 1991'
+			,'1992 - 2005'
+			,'2006 - 2014'
+		];
+
+		attribute<string> Label:
+		[
+			 'voor 1946 '
+			,'tussen 1946 en 1965 '
+			,'tussen 1965 en 1974 '
+			,'tussen 1975 en 1991 '
+			,'tussen 1992 en 2005 '
+			,'tussen 2006 en 2014 '
+		];
+
+		attribute<uint32> SymbolColor: DialogType = "SymbolColor",
+		[
+			 rgb(255,  0,  0)
+			,rgb(255,128,  0)
+			,rgb(255,255,  0)
+			,rgb(128,128,128)
+			,rgb( 72, 72, 73)
+			,rgb(  0,  0,100)
+		];
+
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+		parameter<.> onbekend := V/v1946;
+	}
+
+	unit<uint8> BouwjaarUtilBestaand: nrofrows = 6
+	{
+		attribute<units/Yr> ClassBreak : [     0 ,  1920 ,  1975 ,  1990 ,  1995 , null];
+		attribute<string>   name       : ['v1920','v1975','v1990','v1995','n1995','onbekend'];
+
+		attribute<string> Excel_code:
+		[
+			'0<=1920',
+			'1920<=1975',
+			'1975<=1990',
+			'1990<=1995',
+			'1995<=2015',
+			'onbekend'
+		];
+
+		attribute<string> Label:
+		[
+			'voor 1920',
+			'tussen 1920 en 1975',
+			'tussen 1975 en 1990',
+			'tussen 1990 en 1995',
+			'na 1995',
+			'onbekend'
+		];
+
+		attribute<uint32> SymbolColor: DialogType = "SymbolColor",
+		[
+			rgb(255,  0,  0)
+		,	rgb(255,128,  0)
+		,	rgb(255,255,  0)
+		,	rgb(128,128,128)
+		,	rgb(  0,  0,100)
+		,	rgb(128,128,128)
+		];
+
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+
+	unit<uint8> bouwjaar: nrofrows = 16
+	{
+		attribute<units/Yr> ClassBreak : [      null,  -9998,  1800 ,  1900 ,  1920 ,  1940 , 1960 ,   1970,   1980 ,  1990 ,  1995 ,  2000 ,  2010 ,  2020 ,  2030 ,  2040 ];
+		attribute<string>   name       : ['onbekend','v1800','v1900','v1920','v1940','v1960','v1970','v1980','v1990','v1995','v2000','v2010','n2010','n2020','n2030','n2040'];
+
+		attribute<string> Excel_code:
+		[
+			 "onbekend"
+			,"voor 1800"
+			,"1800<=1900"
+			,"1900<=1920"
+			,"1920<=1940"
+			,"1940<=1960"
+			,"1960<=1970"
+			,"1970<=1980"
+			,"1980<=1990"
+			,"1990<=1995"
+			,"1995<=2000"
+			,"2000<=2010"
+			,"2010<=2020"
+			,"2020<=2030"
+			,"2030<=2040"
+			,"2040<=2050"
+		];
+		attribute<string> Label:
+		[
+			 'onbekend'
+			,'voor 1800 '
+			,'tussen 1800 en 1899 '
+			,'tussen 1900 en 1919 '
+			,'tussen 1920 en 1939 '
+			,'tussen 1940 en 1959 '
+			,'tussen 1960 en 1969 '
+			,'tussen 1970 en 1979 '
+			,'tussen 1980 en 1989 '
+			,'tussen 1990 en 1994 '
+			,'tussen 1995 en 1999 '
+			,'later dan 2000 '
+			,'vanaf 2010 '
+			,'vanaf 2020 '
+			,'vanaf 2030 '
+			,'vanaf 2040 '
+		];
+		attribute<uint32> SymbolColor: DialogType = "SymbolColor",
+		[
+			 rgb(128,128,128)
+			,rgb(255,  0,  0)
+			,rgb(255, 36,  0)
+			,rgb(255, 72,  0)
+			,rgb(255,109,  0)
+			,rgb(255,146,  0)
+			,rgb(255,182,  0)
+			,rgb(255,219,  0)
+			,rgb(255,255,  0)
+			,rgb(219,219, 15)
+			,rgb(182,182, 29)
+			,rgb(128,128,128)
+			,rgb(109,109, 58)
+			,rgb( 72, 72, 73)
+			,rgb( 36, 36, 87)
+			,rgb(  0,  0,100)
+		];
+
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+
+	unit<uint8> zichtjaar: nrofrows = 5 
+	{
+		attribute<units/yr_uint16> Jaar         : [2010, 2020, 2030, 2040, 2050 ];
+		attribute<bool>            HasMutations := Jaar > 2010[units/yr_uint16];
+		attribute<string>          Label        := string(Jaar);
+		attribute<string>          Name         := id(.) == 0b ? 'StartJaar' : 'J' + Label; // eerste zichtjaar wordt startjaar genoemd omdat de gebruikte data betrekking heeft op verschillende jaren.
+		attribute<string>          period_name  := 'Y' + Label[id(.)-1[.]] + '_Y' + Label;
+
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+	
+	// Hier kun je meer of minder rekenstappen per jaar gaan definieren. Pas dan ook de onderstaande attribuutdata aan.
+	// Waarschijnlijk moet de eerste rekenstap wel verwijzen naar het eerste zichtjaar en moeten volgende rekenstappen niet naar eerdere jaren verwijzen.
+	
+	unit<uint8> rekenstap: nrofrows = 5 
+	{
+		attribute<units/yr_uint16> Jaar         : [2010, 2020, 2030, 2040, 2050 ];
+		attribute<zichtjaar>       zichtjaar_rel := classify(Jaar, zichtjaar/Jaar);
+		
+		attribute<bool>            HasMutations := Jaar > 2010[units/yr_uint16];
+		// bij label en name kun je eigen rekenstappen opgeven. Deze namen moeten overeen komen met:
+		// - namen van subitems van in Invoer/SpecifiekeInstellingen
+		// - 
+		attribute<string>          Label        := string(ID(.))+'_'+string(Jaar);
+		attribute<string>          Name         := id(.) == 0b ? 'StartJaar' : 'R' + Label; 
+		
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+
+// =========  Classificaties voor rapgroepen
+	// let op: de set van mogelijke RapGroeperingen is afhankelijk van de gekozen BebouwingsComponenten.
+	unit<uint8> WoningBestaandRapGroep: nrofrows = 16 // Eigendom (4) en inkomensklasse (8) zijn nu niet beschikbaar voor woningBAG
+	{
+		attribute<string> Label: DialogType = "LabelText",
+		[
+			'0=geen onderverdeling',
+			'1=woningtype',
+			'2=bouwkjaarklasse',
+			'3=woningtype & bouwjaarklasse',
+			'4=Eigendom(koop/huur/onbekend)',
+			'', '', '', 
+			'8=inkomensklasse(obv: ???)',
+			'', '', '', '', '', '', ''
+		];
+		attribute<string> ExportLabel: // GEEN SPATIES of SLASHES E.D. GEBRUIKEN
+		[
+			'geen_onderverdeling',
+			'woningtype',
+			'bouwkjaarklasse',
+			'woningtype_bouwjaarklasse',
+			'Eigendom',
+			'', '', '', 
+			'inkomensklasse',
+			'', '', '', '', '', '', ''
+		];
+		attribute<string> ClassRef:
+		[
+			'Classifications/GeenOnderverdeling',
+			'Allocatie/BestaandeWoning/BebouwingsObject/BebouwingsTypeDomein',
+			'Allocatie/BestaandeWoning/BebouwingsObject/BouwjaarDomein',
+			'Allocatie/BestaandeWoning/BebouwingsObject/ModelObjectKeyDomein',
+			'Classifications/WoningEigendom',
+			'', '', '', 
+			'Classifications/InkomensKlasse',
+			'', '', '', '', '', '', ''
+		];
+		attribute<string> AttrRef:
+		[
+			'GeenOnderverdeling',
+			'BebouwingsType',
+			'Bouwjaar',
+			'ModelObjectKey',
+			'BebouwingsObject/Eigendom',
+			'', '', '', 
+			'BebouwingsObject/Inkomen',
+			'', '', '', '', '', '', ''
+		];
+	}
+
+	unit<uint8> UtilRapGroep: nrofrows = 4
+	{
+		attribute<string> Label: DialogType = "LabelText",
+		[
+			'undefined',
+			'1: Ziekenhuis etc',
+			'minder dan 11 werknememers en niet 1',
+			'11 of meer werknemers en niet 1'
+		];
+	}
+
+	unit<uint8> WoningEigendom: nrofrows = 7
+	{
+		attribute<string> label: DialogType = "LabelText",
+		[
+			 'onbekend'
+			,'allemaal huur'
+			,'grootste deel huur'
+			,'evenveel huur en koop'
+			,'grootste deel koop'
+			,'allemaal koop'
+			,'divers'
+		];
+
+		attribute<uint32> SymbolColor: DialogType = "SymbolColor",
+		[
+			 rgb(128,128,128)
+			,rgb(255,  0,  0)
+			,rgb(192, 64,  0)
+			,rgb(128,128,  0)
+			,rgb( 64,182,  0)
+			,rgb(  0,255,  0)
+			,rgb(128,128,128)
+		];
+
+		parameter<.> AllemaalHuur    :  [1];
+		parameter<.> GrootsteDeelHuur : [2];
+		parameter<.> EvenveelHuurKoop : [3];
+		parameter<.> GrootsteDeelKoop : [4];
+		parameter<.> AllemaalKoop     : [5];
+	}
+
+	unit<uint8> GebruiksgrootteKlasse : nrofrows = 5
+	{
+		attribute<string> code           : [ 'TL', 'KG', 'KMG', 'MMG', 'GG' ];
+		attribute<string> label          : [ 'Teruglevering', 'Klein Gebruik', 'Klein Middelgroot Gebruik', 'Midden Middelgroot Gebruik', 'Groot middelgroot en groot gebruik' ];
+		attribute<string> name           : [ 'Teruglevering', 'KleinGebruik', 'KleinMiddelGebruik', 'MiddelMiddelGebruik', 'GrootGebruik' ];
+		attribute<m3_yr>  gas_break_m3   : [-1e+10, 0,  5000, 170000,  1000000 ];
+		attribute<kwh_yr> elek_break_kwh : [-1e+10, 0, 10000,  50000, 10000000 ];
+
+		attribute<GJ_yr>  gas_break      := gas_break_m3 * Invoer/SpecifiekeInstellingen/FysiekeConstanten/GasEnergie;
+		attribute<GJ_yr>  elek_break     := elek_break_kwh [GJ_yr];
+	}
+
+	unit<uint8> InkomensKlasse: nrofrows = 7
+	{
+		attribute<string> Label : DialogType = "LabelText",
+		[
+			 '0 Onbekend'
+			,'1 Hoog'
+			,'2 BovenModaal'
+			,'3 Modaal'
+			,'4 Laag'
+			,'5 Minimum'
+			,'6 Onbekend'
+		];
+		attribute<bool> KanBesparen : [ false, true, true, true, false, false, false ];
+	}
+
+	unit<uint8> WkoComponent := Subset(BebouwingsComponent/KanWKO)
+	{
+		attribute<string> Name := BebouwingsComponent/Name[nr_OrgEntity];
+		attribute<string> Code := BebouwingsComponent/Code[nr_OrgEntity];
+	}
+
+// =========  Classificaties voor Energielabels
+	unit<uint8> energielabel: nrofrows = 10
+	{
+		attribute<string> Name  : ['AeWP', 'EWV', 'Aplus', 'LabelB', 'LabelC', 'LabelD', 'LabelE', 'LabelF', 'LabelG', 'BeWP'];
+		attribute<string> Label : DialogType = "LabelText",  ['AeWP', 'EWV', 'A+', 'B', 'C', 'D', 'E', 'F', 'G', 'BeWP'];
+		
+		attribute<WarmteOptie> WarmteOptie_rel := union_data(., 
+			WarmteOptie/V/eWP, WarmteOptie/V/eWV, 
+			WarmteOptie/V/gas, WarmteOptie/V/gas,
+			WarmteOptie/V/gas, WarmteOptie/V/gas,
+			WarmteOptie/V/gas, WarmteOptie/V/gas,
+			WarmteOptie/V/gas, WarmteOptie/V/eWP
+		);
+		
+		attribute<uint32> Color : DialogType = "BrushColor",
+		[
+			 rgb(000,255,255)
+			,rgb(000,255,000)
+			,rgb(053,152,000)
+			,rgb(114,167,017)
+			,rgb(176,196,001)
+			,rgb(247,230,000)
+			,rgb(251,182,001)
+			,rgb(249,097,014)
+			,rgb(249,026,031)
+			,rgb(114,255,255)
+		];
+		attribute<uint32> SymbColor := Color, DialogType = "SymbolColor";
+
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+
+	unit<uint8> LabelSprong: nrofrows = 17
+	{
+		attribute<string> Label := code + ': '+Descr, DialogType = "LabelText";
+		attribute<string> Descr:
+		[
+			'Van Huidig (E..G) Naar Tussenlabel(C..E)',
+			'Van Huidig (C..G) Naar B',
+			'Van Huidig( A..G) Naar A+',
+			'Van Tussenlabel naar B',
+			'Van Tussenlabel naar A+',
+			'Van B naar A+',
+
+			'Van Huidig(C..G) Naar B met eWP',
+			'Van Tussenlabel naar B met eWP',
+			'Van B naar B met eWP',
+			
+			'Van Huidig(C..G) Naar A+ met eWP',
+			'Van Tussenlabel naar A+ met eWP',
+			'Van B naar A+ met eWP',
+			'Van A+ naar A+ met eWP',
+
+			'Van Huidig(C..G) Naar A+ met EWV',
+			'Van Tussenlabel naar A+ met EWV',
+			'Van B naar A+ met EWV',
+			'Van A+ naar A+ met EWV'
+			
+		];
+
+		attribute<string> code:  DialogType = "LabelText",
+		[
+			'S_H_T', 'S_H_B',  'S_H_AP',
+			'S_T_B', 'S_T_AP', 'S_B_AP',
+
+			'S_H_BeWP', 'S_T_BeWP', 'S_B_BeWP',
+			'S_H_AeWP', 'S_T_AeWP', 'S_B_AeWP', 'S_AP_AeWP',
+			'S_H_EWV', 'S_T_EWV', 'S_B_EWV', 'S_AP_EWV'
+		];
+
+		attribute<string> code_base: // sprongen zoals gegeven met modelwoning
+		[
+			'S_H_T', 'S_H_B',  'S_H_AP',
+			'S_T_B', 'S_T_AP', 'S_B_AP',
+
+			'S_H_B', 'S_T_B', null, // excl LTAS + eWP
+			'S_H_AP', 'S_T_AP', 'S_B_AP', null, // excl LTAS + eWP
+			'S_H_AP', 'S_T_AP', 'S_B_AP', null  // excl EWV
+		];
+
+		attribute<string> code_xtra: // sprongen bovenop zoals gegeven met modelwoning
+		[
+			 null, null, null,
+			 null, null, null,
+
+			'BeWP', 'BeWP', 'BeWP',
+			'AeWP', 'AeWP', 'AeWP', 'AeWP',
+			'EWV', 'EWV', 'EWV', 'EWV'
+		];
+
+		attribute<bool> NaWijziging: [
+			false, false, false,
+			 true,  true,  true,
+
+			false, true, true,
+			false, true, true, true,
+			false, true, true, true
+		];
+	}
+
+	unit<uint32> LabelBasedOnModelAndObservedValue : nrofrows = 33 // alleen voorzover CurrValue anders moet zijn dan ModelValue
+	{
+		attribute<EnergieLabel> ModelValue    : [ 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 5, 4, 4, 4, 4, 3, 3, 3, 2, 2 ];
+		attribute<EnergieLabel> ObservedValue : [ 6, 5, 4, 3, 2, 1, 0, 5, 4, 3, 2, 1, 0, 5, 4, 3, 2, 1, 0, 4, 3, 2, 1, 0, 3, 2, 1, 0, 2, 1, 0, 1, 0 ];
+
+		attribute<LabelSprong>  CurrSprong    : [ 0, 0, 1, 1, 1, 2, 2, 0, 1, 1, 1, 2, 2, 0, 0, 1, 1, 2, 2, 1, 1, 1, 2, 2, 1, 1, 2, 2, 1, 2, 2, 2, 2 ];
+		attribute<EnergieLabel> CurrLabel     : [ 6, 6, 3, 3, 2, 2, 2, 5, 3, 3, 2, 2, 2, 4, 4, 3, 2, 2, 2, 3, 3, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 2 ];
+
+		attribute<uint8> code := ModelValue * uint8(#EnergieLabel) + ObservedValue;
+	}
+
+// =========  Classificaties overig	
+	unit<uint8> LeerCurves : nrofrows = 17
+	{
+		attribute<string> Name:            [ 'Cmin', 'Bpls', 'Verder', 'mWKK', 'ZonB', 'ZonPV', 'eWPlw', 'eWPww', 'hWP', 'EWV', 'LTAS', 'MTnet', 'Inpand', 'Aansl', 'Verl', 'OenM', 'LTnet' ];
+	}
+
+	unit<uint8> GebouwOptie : nrofrows = 5
+	{
+		attribute<string> Name:            [ 'gas', 'mWKK', 'eWP', 'HWP', 'EWV' ];
+		attribute<bool>   kanGebiedsOptie: [ true,   false,  false, false, false ];
+	}
+	unit<uint8> GebiedsOptie : nrofrows = 12 // volgorde niet hier instellen maar in SpecifiekeInstellingen/Voorkeuren/BaseLine/WarmteOpties
+	{
+		attribute<string> Name:
+		[
+			 'RestWarmte'
+			,'GeoThermie'
+			,'WijkWKK'
+			,'BioWKK'
+			,'WKO'
+			,'Lt15_30'
+			,'Lt15_50'
+			,'Lt15_70'
+			,'Lt30_30' // Geen collectieve WP.
+			,'Lt30_50'
+			,'Lt30_70'
+			,'TEO'];
+		attribute<WarmteOptie> WarmteOptie_rel := rlookup(name, WarmteOptie/name);
+
+		attribute<string> code             := string(id(.));
+		attribute<bool>   IsPlanRegioOptie : [ true, true, true, true, false, false, false, false, false, false, false]; //, false ];
+		attribute<string> label            := Name, DialogType = "LabelText";
+		attribute<uint32> Color            : DialogType = "BrushColor",
+		[
+			 rgb(150,  0,  0)
+			,rgb(  0,  0,150)
+			,rgb(128,128,  0)
+			,rgb(  0,255,128)
+			,rgb(  0,150,  0)
+			,rgb(255,130,  0) // oranje
+			,rgb(255,155,  0) // geel
+			,rgb(255,180,  0) // geel
+			,rgb(255,205,  0) // geel
+			,rgb(255,230,  0) // geel
+			,rgb(255,255,  0) // geel
+		];
+		attribute<uint32> SymbolColor := Color, DialogType = "SymbolColor";
+		attribute<uint32> PenColor := Color, DialogType = "PenColor";
+
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+	unit<uint8> WarmteOptie := range(uint8, 0b, uint8(#GebouwOptie + #GebiedsOptie))
+	{
+		attribute<string> name := union_data(., GebouwOptie/name, GebiedsOptie/name);
+		attribute<bool> isGebiedsOptie := union_data(., const(false, GebouwOptie), const(true, GebiedsOptie));
+		attribute<bool> kanGebiedsOptie := union_data(., GebouwOptie/kanGebiedsOptie, const(false, GebiedsOptie));
+		
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+		attribute<string> LabelText := name;
+	}
+
+	unit<uint8> PlanRegioOptie := subset(GebiedsOptie/IsPlanRegioOptie) 
+	{
+		attribute<string> code := GebiedsOptie/code[nr_OrgEntity];
+		attribute<string> name := GebiedsOptie/name[nr_OrgEntity];
+	}
+
+	unit<uint8> ClusterOptie := subset(!GebiedsOptie/IsPlanRegioOptie) 
+	{
+		attribute<string> code := GebiedsOptie/code[nr_OrgEntity];
+		attribute<string> name := GebiedsOptie/name[nr_OrgEntity];
+	}
+// =========  Classificaties voor montaire units
+
+	unit<uint32> Kostensoort : nrofrows = 28
+	{
+		parameter<uint32> nrAttr := 4;
+		unit<uint32> Elements := Range(uint32, 0, nrAttr * #.)
+		{
+			attribute<string> values:
+			[
+				//name                   ,IsMaatschappelijkeKosten ,IsOverheid
+				 'Netwerk'               ,'True'                   ,'False', ''
+				,'GasNet'                ,'False'                  ,'True',  ''
+				,'ElektriciteitsNet'     ,'False'                  ,'True',  ''
+				,'AardGas'               ,'True'                   ,'False',  ''
+				,'Elektriciteit'         ,'True'                   ,'False',  ''
+				,'LokaleOpwekking'       ,'True'                   ,'False',  ''
+				,'Gebouw'                ,'True'                   ,'False',  ''
+				,'Onderhoud'             ,'True'                   ,'False',  ''
+				,'Admin'                 ,'True'                   ,'False',  ''
+				,'Comfort'               ,'True'                   ,'False',  ''
+				,'InpandigeDistributie'  ,'True'                   ,'False',  ''
+				,'WijkDistributie'       ,'True'                   ,'False',  ''
+				,'PrimairTransport'      ,'True'                   ,'False',  ''
+				,'Opwekking'             ,'True'                   ,'False',  ''
+				,'WarmteInkoop'          ,'True'                   ,'False',  ''
+				,'GebouwEigenaar'        ,'False'                  ,'False',  'ge'
+				,'InpandigeDistributeur' ,'False'                  ,'False',  'id'
+				,'WijkDistributeur'      ,'False'                  ,'False',  'wd'
+				,'PrimairTransporteur'   ,'False'                  ,'False',  'pt'
+				,'Opwekker'              ,'False'                  ,'False',  'ow'
+				,'Leverancier'           ,'False'                  ,'False',  ''
+				,'KL_p'                  ,'False'                  ,'False',  ''
+				,'KL_e'                  ,'False'                  ,'False',  ''
+				,'EmissieRechten'        ,'True'                   ,'False',  ''
+				,'BTW'                   ,'False'                  ,'True',   ''
+				,'Precario'              ,'False'                  ,'True',   ''
+				,'EnergieHeffing'        ,'False'                  ,'True',   ''
+				,'Subsidie'              ,'False'                  ,'True',   ''
+			];
+		}
+		attribute<string> name                     :=      Elements/values[value(id(.) * nrAttr + 0,Elements)];
+		attribute<bool>   IsMaatschappelijkeKosten := bool(Elements/values[value(id(.) * nrAttr + 1,Elements)]);
+		attribute<bool>   IsOverheid               := bool(Elements/values[value(id(.) * nrAttr + 2,Elements)]);
+		attribute<string> GebiedsOptieActorCode    :=      Elements/values[value(id(.) * nrAttr + 3,Elements)];
+	}
+	
+	unit<uint32>  Actor := union_unit(Kostensoort, BebouwingsComponent, BebouwingsComponent, GebiedsOptie)
+	{
+		attribute<string> BaseName                 := union_data(., Kostensoort/name, BebouwingsComponent/name, BebouwingsComponent/name,  GebiedsOptie/name);
+		attribute<string> Name                     := union_data(., Kostensoort/name, BebouwingsComponent/name + '/Eigenaar', BebouwingsComponent/name + '/Gebruiker', GebiedsOptie/name);
+		attribute<string> full_name                := replace(name, '/', '_');
+		attribute<bool>   IsMaatschappelijkeKosten := union_data(., Kostensoort/IsMaatschappelijkeKosten, const(false, BebouwingsComponent), const(false, BebouwingsComponent), const(false, GebiedsOptie));
+		attribute<bool>   IsOverheid               := union_data(., Kostensoort/IsOverheid, const(false, BebouwingsComponent), const(false, BebouwingsComponent), const(false, GebiedsOptie));
+		attribute<string> GebiedsOptieActorCode    := union_data(., Kostensoort/GebiedsOptieActorCode, const('', BebouwingsComponent), const('', BebouwingsComponent), const('', GebiedsOptie));
+	}
+	unit<uint32> GebiedsOptieActor := subset(Actor/GebiedsOptieActorCode <> '')
+	{
+		attribute<string> name := Actor/name[nr_OrgEntity];
+		attribute<string> code := Actor/GebiedsOptieActorCode[nr_OrgEntity];
+		attribute<string> label := code;
+		
+		container V := for_each_nedv(code, string(id(.))+'[..]', void, .);
+	}
+	unit<uint8> GebiedsOptie_Jaarlijks : nrofrows = 70
+	{
+		attribute<string> name: ['Kj_ge_hv', 'Kji_ge_ov', 'Kji_ge_pm', 'Kmi_ge_ov', 'Kmi_ge_pm', 'Om_ge_comfort', 'Bji_ge_Aansl', 'Oji_ge_EIA', 'Omi_ge_EIA',
+			'Kj_id_gas', 'Km_id_gas', 'Kj_id_gas_EH', 'Kj_id_gas_CO2', 'Kj_id_elek', 'Km_id_elek', 'Kj_id_elek_EH', 'Kj_id_elek_CO2',
+			'Kj_id_oh', 'Kj_id_adm', 'Kji_id', 'Kmi_id', 'Oji_id_EIA', 'Omi_id_EIA', 'Oj_id_EEA', 'Oj_id_SDE',
+			'Kj_wd_gas', 'Km_wd_gas', 'Kj_wd_gas_EH', 'Kj_wd_gas_CO2', 'Kj_wd_elek', 'Km_wd_elek', 'Kj_wd_elek_EH', 'Kj_wd_elek_CO2',
+			'Kj_wd_oh', 'Kj_wd_adm', 'Kji_wd', 'Kmi_wd', 'Oji_wd_EIA', 'Omi_wd_EIA', 'Oj_wd_EEA', 'Oj_wd_SDE',
+			'Kj_pt_oh', 'Kj_pt_adm', 'Kji_pt', 'Kmi_pt', 'Oji_pt_EIA', 'Omi_pt_EIA', 'Oj_pt_EEA',
+			'Kj_ow_gas', 'Km_ow_gas', 'Kj_ow_gas_EH', 'Kj_ow_gas_CO2', 'Kj_ow_elek', 'Km_ow_elek', 'Kj_ow_elek_EH', 'Kj_ow_elek_CO2', 
+			'Kj_ow_productie', 
+			'Kj_ow_oh', 'Kj_ow_adm', 'Kji_ow', 'Kmi_ow', 'Oji_ow_EIA', 'Omi_ow_EIA', 'Oj_ow_EEA', 'Oj_ow_SDE',
+			'Oji_lv_Aansl', 'Omi_lv_Aansl', 'Oj_lv_verbruik', 'Oj_lv_vastrecht', 'Oj_lv_SDE'
+			];
+		attribute<string> actor_code: [
+			'ge', 'ge', 'ge', 'ge', 'ge', 'ge', 'ge', 'ge', 'ge', 
+			'id', 'id', 'id', 'id', 'id', 'id', 'id', 'id', 
+			'id', 'id', 'id', 'id', 'id', 'id', 'id', 'id', 
+			'wd', 'wd', 'wd', 'wd', 'wd', 'wd', 'wd', 'wd', 
+			'wd', 'wd', 'wd', 'wd', 'wd', 'wd', 'wd', 'wd', 
+			'pt', 'pt', 'pt', 'pt', 'pt', 'pt', 'pt', 'ow', 
+			'ow', 'ow', 'ow', 'ow', 'ow', 'ow', 'ow', 'ow', 
+			'ow', 'ow', 'ow', 'ow', 'ow', 'ow', 'ow', 'ow', 
+			'lv', 'lv', 'lv', 'lv', 'lv'
+		];
+		attribute<GebiedsOptieActor> GebiedsOptieActor_rel := rlookup(actor_code, GebiedsOptieActor/code);
+		attribute<bool> leverancier_vergoed: [ true, true, true, false, false, true, false, true, true,
+			true, false, false, false, true, false, false, false,
+			true, true, true, false, true, false, true, true,
+			true, false, false, false, true, false, false, false,
+			true, true, true, false, true, false, true, true,
+			true, true, true, false, true, false, true, 
+			true, false, false, false, true, false, false, false,
+			true,
+			true, true, true, false, true, false, true, true,
+			false, false, false, false, false
+		];
+		
+		attribute<string> GebiedsOptie_Expr(GebiedsOptieActor) := 'add('+AsItemList(leverancier_vergoed ? 'StateNaAllocatie/Cumulaties/@RO@/Jaarlijks/'+full_name: '' ,GebiedsOptieActor_rel)+')';
+		
+		attribute<string> descr: [
+			'Huurverlaging_@RO@', 'ongeriefsvergoeding_E@RO@', 'projectmanagement_E@RO@', 'ongeriefsvergoeding_M@RO@', 'projectmanagement_M@RO@', 'Koude_@RO@', 'Aansluitbijdrage@RO@', 'Oji_ge_EIA_@RO@', 'Omi_ge_EIA_@RO@',
+			'', '@RO@_bijstook_id', '@RO@_bijstook_id_gas', '@RO@_bijstook_id_gas_CO2', '', '@RO@_bijstook_id', '@RO@_bijstook_id_elek', '@RO@_bijstook_id_elek_CO2',
+			'Kj_id_oh_@RO@', 'Kj_id_adm_@RO@', '@RO@', '@RO@', 'Oji_id_EIA_@RO@', 'Omi_id_EIA_@RO@', 'Oj_EEA_@RO@', 'Oj_id_SDE_@RO@',
+			'', '@RO@_bijstook_wd_gas', '@RO@_bijstook_wd_gas', '@RO@_bijstook_wd_gas_CO2', '', '@RO@_bijstook_wd_elek', '@RO@_bijstook_wd_elek', '@RO@_bijstook_wd_elek_CO2',
+			'Kj_wd_oh_@RO@', 'Kj_wd_adm_@RO@', 'Kji_wd_@RO@', 'Kmi_wd_@RO@', 'Oji_wd_EIA_@RO@', 'Omi_wd_EIA_@RO@', 'Oj_wd_EEA_@RO@', 'Oj_wd_SDE_@RO@',
+			'Kj_pt_oh_@RO@', 'Kj_pt_adm_@RO@', 'Kji_pt_@RO@', 'Kmi_pt_@RO@', 'Oji_pt_EIA_@RO@', 'Omi_pt_EIA_@RO@', 'Oj_pt_EEA_@RO@',
+			'', 'Km_ow_gas', 'Kj_ow_gas_EH', 'Kj_ow_gas_CO2_@RO@', '', 'Km_ow_elek', 'Kj_ow_elek_EH', 'Kj_ow_elek_CO2_@RO@',			
+			'Kj_ow_productie', 
+			'Kj_ow_oh', 'Kj_ow_adm', 'Kji_ow', 'Kmi_ow_@RO@', 'Oji_ow_EIA', 'Omi_ow_EIA_@RO@', 'Oj_ow_EEA', 'Oj_ow_SDE',
+			'Oji_lv_Aansl', 'Omi_lv_Aansl', 'Oj_lv_verbruik_@RO@', 'Oj_lv_vastrecht_@RO@', 'Oj_lv_SDE_@RO@'
+		];
+		attribute<string> full_name := actor_code + '/' + name;
+		attribute<string> leverancier : [
+			'Comfort', 'KL_e', 'KL_e', 'Comfort', 'Admin', 'BestaandeWoning/Gebruiker', 'KL_e', 'BestaandeWoning/Eigenaar', 'KL_e'
+		,	'', 'AardGas', 'EnergieHeffing', 'EmissieRechten', '', 'Elektriciteit', 'EnergieHeffing', 'EmissieRechten'
+		,	'Onderhoud', 'Admin', 'KL_p', 'InpandigeDistributie', 'InpandigeDistributeur', 'KL_p', 'InpandigeDistributeur',  'InpandigeDistributeur'
+		,	'', 'AardGas', 'EnergieHeffing', 'EmissieRechten', '', 'Elektriciteit', 'EnergieHeffing', 'EmissieRechten'
+		,	'Onderhoud', 'Admin', 'KL_p', 'WijkDistributie', 'WijkDistributeur', 'KL_p', 'WijkDistributeur',  'WijkDistributeur'
+		,	'Onderhoud', 'Admin', 'KL_p', 'PrimairTransport', 'PrimairTransporteur', 'KL_p', 'PrimairTransporteur'
+		,	'', 'AardGas', 'EnergieHeffing', 'EmissieRechten', '', 'Elektriciteit', 'EnergieHeffing', 'EmissieRechten'
+		,	'WarmteInkoop'
+		,	'Onderhoud', 'Admin', 'KL_p', 'Opwekking', '@RO@', 'KL_p', '@RO@',  '@RO@'
+		,	'', '', '', '', 'Leverancier'
+		];
+		// TODO: checken dat wat hier aan BestaandeWoning/xxx geleverd zou worden niet aan andere BC geleverd zou moeten worden.
+		attribute<string> afnemer : [
+			'BestaandeWoning/Eigenaar',	'BestaandeWoning/Eigenaar',	'BestaandeWoning/Eigenaar',	'KL_e',	'KL_e', 'Comfort',	'BestaandeWoning/Eigenaar', 'KL_e', 'Subsidie'
+		,	'', 'InpandigeDistributeur', 'InpandigeDistributeur', 'AardGas', '', 'InpandigeDistributeur', 'InpandigeDistributeur', 'Elektriciteit'
+		,	'InpandigeDistributeur', 'InpandigeDistributeur', 'InpandigeDistributeur', 'KL_p', 'KL_p', 'Subsidie', 'Subsidie', 'Subsidie'
+		,	'', 'WijkDistributeur', 'WijkDistributeur', 'AardGas', '', 'WijkDistributeur', 'WijkDistributeur', 'Elektriciteit'
+		,	'WijkDistributeur', 'WijkDistributeur', 'WijkDistributeur', 'KL_p', 'KL_p', 'Subsidie', 'Subsidie', 'Subsidie'
+		,	'PrimairTransporteur', 'PrimairTransporteur', 'PrimairTransporteur', 'KL_p', 'KL_p', 'Subsidie', 'Subsidie'
+		,	'', '@RO@', '@RO@', 'AardGas', '', '@RO@', '@RO@', 'Elektriciteit'
+		,	'@RO@'
+		,	'@RO@', '@RO@', '@RO@', 'KL_p', 'KL_p', 'Subsidie', 'Subsidie', 'Subsidie'
+		,	'', '', '', '', 'Subsidie'
+		];
+		
+	}
+	unit<uint8> GebiedsOptie_Eenmalig : nrofrows = 12
+	{
+		attribute<string> name: [ 
+			'Oi_lv_Aansl', 'Ki_ge_ov', 'Ki_ge_pm', 'Oi_ge_EIA', 
+			'Ki_id', 'Oi_id_EIA', 
+			'Ki_wd', 'Oi_wd_EIA', 
+			'Ki_pt', 'Oi_pt_EIA', 
+			'Ki_ow', 'Oi_ow_EIA' 
+		];
+		
+		attribute<string> actor_code: [ 
+			'lv', 'ge', 'ge', 'ge', 
+			'id', 'id', 
+			'wd', 'wd', 
+			'pt', 'pt', 
+			'ow', 'ow'
+		];
+		
+		attribute<string> descr := name+iif(leverancier == '@RO@' || afnemer == '@RO@', '', '_@RO@');
+		attribute<string> full_name := name;
+		
+		attribute<string> leverancier : [
+			'Leverancier', 'Comfort', 'Admin', 'BestaandeWoning/Eigenaar', 
+			'InpandigeDistributie', 'InpandigeDistributeur', 
+			'WijkDistributie', 'WijkDistributeur',
+			'PrimairTransport', 'PrimairTransporteur',
+			'Opwekking', '@RO@'
+		];
+		attribute<string> afnemer : [
+			'BestaandeWoning/Eigenaar',	'BestaandeWoning/Eigenaar', 'BestaandeWoning/Eigenaar', 'Subsidie', 
+			'InpandigeDistributeur', 'Subsidie', 
+			'WijkDistributeur', 'Subsidie',
+			'PrimairTransporteur', 'Subsidie',
+			'@RO@', 'Subsidie'
+		];
+	}
+	unit<uint8> GebiedsOptie_Verbruik: nrofrows = 11
+	{
+		attribute<string> name: [  
+			'V_id_gas',  'V_wd_gas',  'V_ow_gas', 
+			'V_id_elek', 'V_wd_elek', 'V_ow_elek', 
+			'V_id_verlies', 'V_wd_verlies', 'V_pt_verlies', 
+			'V_warmte', 'V_koude'
+		];
+		attribute<string> actor_code: [ 
+			'id', 'wd', 'ow', 
+			'id', 'wd', 'ow', 
+			'id', 'wd', 'pt', 
+			'', ''
+		];
+/* REMOVE		
+		attribute<string> technology : [
+			'InpandigeDistributeur', 'WijkDistributeur', '@RO@',
+			'InpandigeDistributeur', 'WijkDistributeur', '@RO@',
+			'Omgeving', 'Omgeving', 'Omgeving',
+			'PrimairTransporteur'
+		];
+
+		attribute<string> location : [
+			'AardGas', 'AardGas', 'AardGas',
+			'Elektriciteit', 'Elektriciteit', 'Elektriciteit',
+			'InpandigeDistributeur', 'WijkDistributeur', 'PrimairTransporteur',
+			'@ROC@', '@ROC@'
+		];
+// REMOVE */
+		attribute<string> full_name := name;
+	}
+		
+	unit<uint8> GebiedsOptie_Uitstoot: nrofrows = 6
+	{
+		attribute<string> name: [  'CO2_id_gas', 'CO2_wd_gas', 'CO2_ow_gas', 'CO2_id_elek', 'CO2_wd_elek', 'CO2_ow_elek' ];
+		attribute<string> actor_code: [ 'id', 'wd', 'ow', 'id', 'wd', 'ow'];
+	}
+
+// =========  Classificaties voor montaire units
+	unit<uint8> Eur_M2_15K: nrofrows = 15
+	{
+		attribute<Eur_M2> ClassBreaks: DialogType = "Classification",
+			[	-500,-25, -15
+			,	-5, -0.01, 0.01
+			,	2, 3, 4
+			,	5, 6, 8
+			,	10, 15, 25
+			];
+
+		attribute<uint32> BrushColor: DialogType = "BrushColor",
+			[rgb(  9,  9,145),rgb( 34, 89,194),rgb( 92,163,230),rgb(182,237,240),rgb(196,196,196),
+			 rgb(255,245,  0),rgb(255,216,  0),rgb(255,180,  0),
+			 rgb(255,163,  0),rgb(255,140,  0),rgb(255,132,  0),rgb(255,128,0),rgb(255,51,0),rgb(230,0,0), rgb(153,0,0)];
+
+		attribute<string> Label: DialogType = "LabelText",
+			[' < -25','-25 tot -15','-15 tot -5',' -5 tot 0','     0     ','  0 tot  2','  2 tot  3','  3 tot  4','  4 tot  5',
+			'  5 tot  6','  6 tot  8','  8 tot 10',' 10 tot 15',' 15 tot 25',' > 25'];
+	}
+
+// =========  Classificaties voor Percentages
+	unit<uint8> Percentage13K: nrofrows = 13
+	{
+		attribute<Percent> ClassBreaks: DialogType = "Classification",
+			[0,10,20,30,40,50,60,70,80,90,100,120,150];
+
+		attribute<uint32> BrushColor : DialogType = "BrushColor",
+			[
+				 rgb(255,255,255),rgb(255,229,204),rgb(255,204,153)
+				,rgb(255,178,102),rgb(255,153, 51),rgb(255,128,  0)
+				,rgb(223, 96, 32),rgb(191, 64, 64),rgb(180,  0,  0)
+				,rgb(120,  0,  0),rgb( 60,  0,  0),rgb(120,  0,128),rgb(255,  0,200)
+			];
+
+		attribute<string> Label : DialogType = "LabelText",
+			[' 0 -  10','10 -  20','20 -  30','30 -  40','40 -  50','50 -  60','60 -  70','70 -  80','80 -  90','90 - 100','100- 120','120- 150','150- 200'];
+	}
+
+	unit<uint8> Ratio9K: nrofrows = 9
+	{
+		attribute<Ratio> ClassBreaks: DialogType = "Classification",
+			[0,0.0001,0.15,0.30,0.45,0.60,0.75,0.90,1.05];
+
+		attribute<uint32> BrushColor: DialogType = "BrushColor",
+			[
+				 rgb(218,218,218), rgb(255,255,204),rgb(255,255,128)
+				,rgb(255,230,102), rgb(255,179, 51),rgb(255,128,  0)
+				,rgb(255, 51,  0), rgb(230,  0,  0),rgb(153,  0,  0)
+			];
+
+		attribute<uint32> SymbolColor:= BrushColor, DialogType = "SymbolColor";
+
+		attribute<string> Label : DialogType = "LabelText",
+			[' 0 ', '0    - 0.15', '0.15 - 0.30', '0.30 - 0.45', '0.45 - 0.60', '0.60 - 0.75', '0.75 - 0.90', '0.90 - 1.05', '> 1.05'];
+	}
+
+// =========  Classificatie voor Potentiaal (eenheidsloos)
+	unit<uint8> Potentiaal10K: nrofrows = 10
+	{
+		attribute<Potentiaal> ClassBreaks: DialogType = "Classification",
+			[0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9];
+
+		attribute<uint32> BrushColor: DialogType = "BrushColor",
+			[rgb(192,192,192),rgb(0,0,255),rgb(0,64,192),rgb(0,128,128),rgb(0,192,64),rgb(0,255,0),rgb(64,192,0),rgb(128,128,0),rgb(192,64,0),rgb(255,0,0)];
+
+		attribute<string> Label: DialogType = "LabelText",
+			['0.00 - 0.10','0.10 - 0.20','0.20 - 0.30','0.30 - 0.40','0.40 - 0.50','0.50 - 0.60','0.60 - 0.70','0.70 - 0.80','0.80 - 0.90','0.90 - 1.00'];
+	}
+
+// =========  Classificatie voor afstanden in km
+	unit<uint8> km_7k: nrofrows = 8
+	{
+		attribute<km> ClassBreaks: DialogType = "Classification",
+			[0,5,10,15,30,50,75,100];
+
+		attribute<uint32> BrushColor: DialogType = "BrushColor",
+			[rgb(0,0,255),rgb(85,85,170),rgb(170,170,85),rgb(255,255,0),rgb(255,204,0),rgb(255,153,0),rgb(255,102,0),rgb(192,192,192)];
+
+		attribute<string> Label: DialogType = "LabelText",
+			['0 to 5','5 to 10','10 to 15','15 to 30','30 to 50','50 to 75','75 to 100','Geen'];
+	}
+
+// =========  Classificatie voor de vervangingsstatus van Gasleidingen beheerd door Stedin""
+	unit<uint8> StatusKl: nrofrows = 3
+	{
+		attribute<string> label: DialogType = "LabelText",
+		[
+			 'Te vervangen'
+			,'<= 30 jaar'
+			,'> 30 jaar'
+		];
+		attribute<uint32> SymbolColor: DialogType = "PenColor",
+		[
+			 rgb(  0,  0,  0)
+			,rgb(100,100,100)
+			,rgb(200,200,200)
+		];
+	}
+
+// =========  Classificaties van combinaties (carthesianse producten) van class domains
+	container combines
+	{
+		unit<uint8> WoningtypeBouwjaarBestaand := combine_uint8(WoningtypeBestaand, BouwjaarWoningBestaand)
+		{
+			attribute<string> LabelWoningtype := WoningtypeBestaand/Label[nr_1];
+			attribute<string> LabelBouwjaar   := BouwjaarWoningBestaand/Label[nr_2];
+			attribute<string> Label           := LabelWoningtype + '_' + LabelBouwjaar;
+		}
+
+		unit<uint32> ZichtjaarWonen := combine(Zichtjaar, WoningtypeNieuwbouw) // wordt gebruikt om Nieuwbouw maps en ResterdFactorMaps te lezen.
+		{
+			attribute<bool>                HasMutations            := Zichtjaar/HasMutations[nr_1];
+			attribute<string>              zichtjaar_label         := Zichtjaar/Label[nr_1];
+			attribute<string>              zichtjaar_name          := Zichtjaar/Name[nr_1];
+			attribute<string>              prev_zichtjaar_name     := Zichtjaar/Name[nr_1-1b];
+			attribute<units/yr_uint16>     zichtjaar_jaar          := Zichtjaar/Jaar[nr_1];
+			attribute<string>              period_name             := Zichtjaar/period_name[nr_1];
+			attribute<string>              Wonen_Name              := WoningtypeNieuwbouw/Name[nr_2];
+			attribute<string>              Wonen_wlo_FileName      := WoningtypeNieuwbouw/wlo_FileName[nr_2];
+			attribute<WoningtypeNieuwbouw> WoningtypeNieuwbouw_rel := nr_2;
+			attribute<string>              Name                    := zichtjaar_Name + '/' + Wonen_Name;
+			attribute<string>              prev_name               := prev_zichtjaar_Name + '/' + wonen_Name;
+			attribute<string>              Label                   := Name;
+
+			container V := for_each_nedv(name, 'value('+string(id(.))+', ...)', void, .);
+		}
+
+		unit<uint32> ZichtjaarUtiliteit := combine(Zichtjaar, UtilTypeNieuwbouw)
+		{
+			attribute<bool>            HasMutations            := Zichtjaar/HasMutations[nr_1];
+			attribute<string>          zichtjaar_label         := Zichtjaar/Label[nr_1];
+			attribute<string>          zichtjaar_name          := Zichtjaar/Name[nr_1];
+			attribute<string>          prev_zichtjaar_name     := Zichtjaar/Name[nr_1-1b];
+			attribute<units/yr_uint16> zichtjaar_jaar          := Zichtjaar/Jaar[nr_1];
+			attribute<string>          period_name             := Zichtjaar/period_name[nr_1];
+			attribute<string>          utiliteit_Name          := UtilTypeNieuwbouw/Name[nr_2];
+			attribute<string>          wlo_filename_Nieuwbouw  := UtilTypeNieuwbouw/wlo_filename_Nieuwbouw[nr_2];
+			attribute<string>          Name                    := zichtjaar_Name + '/' + utiliteit_Name;
+			attribute<string>          prev_name               := prev_zichtjaar_Name + '/' + utiliteit_Name;
+			attribute<string>          Label                   := Name;
+		}
+
+		unit<uint32> LabelChange := combine(energielabel, LabelSprong)
+		{
+			attribute<string> Label := LabelSprong/code[nr_2]+': van ' + energieLabel/Label[nr_1] + ' naar ' + energieLabel/Label[Label_na], DialogType = "LabelText";
+	
+			attribute<energielabel> Label_na: [
+			//      org   org   org   new   new   new   org    new   new   new    org    new   new   new
+			//	EG_T  CG_B  BG_AP T_B   T_AP  B_AP  AG_eWP T_eWP B_eWP AP_eWP AG_EWV T_EWV B_EWV AP_EWV'
+				null, null, null, null, null, null, null,  null, null, null,  null,  null, null, null, // sprongen vanaf eWP (0)
+				null, null, null, null, null, null, null,  null, null, null,  null,  null, null, null, // sprongen vanaf EWV (1)
+				null, null, null, null, null, null, 0,     null, null, 0,     1,     null, null, 1,    // sprongen vanaf A+  (2)
+	//NOT			null, null, null, null, null, 2   , null,  null, 0,    null,  null,  null, 1,    null, // sprongen vanaf B   (3)
+				null, null, 2,    null, null, 2   , 0,     null, 0,    null,  1,     null, 1,    null, // sprongen vanaf B   (3) 
+				null, 3,    2,    3,    2,    null, 0,     0,    null, null,  1,     1,    null, null, // sprongen vanaf C (4, evt als zijnde Tussenlabel)
+				null, 3,    2,    3,    2,    null, 0,     0,    null, null,  1,     1,    null, null, // sprongen vanaf D (5, evt als zijnde Tussenlabel)
+				4,    3,    2,    3,    2,    null, 0,     0,    null, null,  1,     1,    null, null, // sprongen vanaf E (6, evt als zijnde Tussenlabel)
+				5,    3,    2,    null, null ,null, 0,     null, null, null,  1,     null, null, null, // sprongen vanaf F (7)
+				6,    3,    2,    null, null ,null, 0,     null, null, null,  1,     null, null, null  // sprongen vanaf G (8)
+			];
+		}
+	}
+}
