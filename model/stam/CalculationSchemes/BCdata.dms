@@ -34,7 +34,7 @@ template BCdata
 	}
 
 	unit<uint8> PrijzenElektriciteit := Prijzen/Elektriciteit/Staffel;
-	
+
 	container union := =IsNieuwbouw ? 'CalculationSchemes/BebouwingsOperaties/union(StartingStateComponent/BebouwingsObject, BebouwingsObjectZonderNieuwbouw)' : '..';
 	
 	unit<uint32> BebouwingsObject := =IsNieuwbouw ? 'union/result' : 'BebouwingsObjectZonderNieuwbouw';
@@ -78,7 +78,6 @@ template BCdata
 			attribute<kW> eWP            (..) := max_elem(RV, WW);
 			attribute<kW> Elektriciteit  (..) := NrModelUnits * EnergieVraagModellen/AansluitCapaciteit/Elektriciteit[Model_rel];
 		}
-//Kengetallen/Constanten/KlimaatKoudeFactor *
 		container Functioneel
 		{
 			container DragerSpecifiekeOpties := SpecifiekeInstellingen/RuimtelijkeVraag/Drager;
@@ -88,10 +87,15 @@ template BCdata
 			attribute<GJ_yr>	WarmWater				(..)	:=	nrModelUnits * EnergieVraagModellen/functioneel/WarmWater				[Model_rel] * DragerSpecifiekeOpties/WarmWater;
 			attribute<GJ_yr>	Koude					(..)	:=	nrOppUnits   * EnergieVraagModellen/functioneel/Koude					[Model_rel] * DragerSpecifiekeOpties/Koude;
 			attribute<GJ_yr>	ElektrischeApparatuur	(..)	:=	nrModelUnits * EnergieVraagModellen/functioneel/ElektrischeApparatuur	[Model_rel] * DragerSpecifiekeOpties/ElektrischeApparatuur;
-			attribute<GJ_yr>	RuimteVerwarming_vast	(..)	:=	nrModelUnits * EnergieVraagModellen/functioneel/RuimteVerwarming_vast	[Model_rel] * DragerSpecifiekeOpties/RuimteVerwarming * Klimaateffect;
-			attribute<GJ_yr>	RuimteVerwarming_var	(..)	:=	nrOppUnits   * EnergieVraagModellen/functioneel/RuimteVerwarming_var	[Model_rel] * DragerSpecifiekeOpties/RuimteVerwarming * Klimaateffect;
-			attribute<GJ_yr>	PompEnergie_min			(..)	:=	nrModelUnits * EnergieVraagModellen/functioneel/Pompenergie_min			[Model_rel] * DragerSpecifiekeOpties/RuimteVerwarming;
-			attribute<GJ_yr>	PompEnergie_max			(..)	:=	nrModelUnits * EnergieVraagModellen/functioneel/Pompenergie_max			[Model_rel] * DragerSpecifiekeOpties/RuimteVerwarming;
+			attribute<GJ_yr>	RuimteVerwarming_vast	(..)	:=	nrModelUnits * EnergieVraagModellen/functioneel/RuimteVerwarming_vast	[Model_rel] * DragerSpecifiekeOpties/RuimteVerwarming 
+																																						* Klimaateffect 
+																																						* (Energielabel/IsSlechter ? EnergieVraagModellen/functioneel/RV_slechterfactor_vast [Model_rel] : 1.0d)
+																																						* (Energielabel/IsOnbLabel ? EnergieVraagModellen/functioneel/RV_onbekendfactor_vast [Model_rel] : 1.0d);
+			attribute<GJ_yr>	RuimteVerwarming_var	(..)	:=	nrOppUnits   * EnergieVraagModellen/functioneel/RuimteVerwarming_var	[Model_rel] * DragerSpecifiekeOpties/RuimteVerwarming 
+																																						* Klimaateffect
+																																						* (Energielabel/IsSlechter ? EnergieVraagModellen/functioneel/RV_slechterfactor_var  [Model_rel] : 1.0d)
+																																						* (Energielabel/IsOnbLabel ? EnergieVraagModellen/functioneel/RV_onbekendfactor_var  [Model_rel] : 1.0d);
+			attribute<GJ_yr>	PompEnergie				(..)	:=	nrOppUnits   * EnergieVraagModellen/functioneel/Pompenergie_m2			[Model_rel] * DragerSpecifiekeOpties/RuimteVerwarming;
 			attribute<GJ_yr>	RuimteVerwarming		(..)	:=	RuimteVerwarming_vast + RuimteVerwarming_var;
 			attribute<GJ_yr>	Ventilatie				(..)	:=	nrOppUnits   * EnergieVraagModellen/functioneel/V_Ventilatie			[Model_rel];
 		}
@@ -157,7 +161,7 @@ template BCdata
 		attribute<GJ_yr>	RuimteVerwarming		(BebouwingsObject)	:=	RuimteVerwarming_vast + RuimteVerwarming_var;
 		attribute<GJ_yr>	Koude					(BebouwingsObject)	:=	RuimtelijkeVraagComponent/Functioneel/Koude;
 		attribute<GJ_yr>	WarmWater				(BebouwingsObject)	:=	RuimtelijkeVraagComponent/Functioneel/WarmWater;
-		attribute<GJ_yr>	PompEnergie				(BebouwingsObject)	:=	Schuiven/OpbrMin * RuimtelijkeVraagComponent/Functioneel/PompEnergie_min + Schuiven/OpbrMax * RuimtelijkeVraagComponent/Functioneel/PompEnergie_max;  // niet afhankelijk van gebouwisolatie ?
+		attribute<GJ_yr>	PompEnergie				(BebouwingsObject)	:=	RuimtelijkeVraagComponent/Functioneel/PompEnergie;
 		attribute<GJ_yr>	Ventilatie				(BebouwingsObject)	:=	RuimtelijkeVraagComponent/Functioneel/Ventilatie;
 		attribute<GJ_yr>	Apparatuur				(BebouwingsObject)	:=	RuimtelijkeVraagComponent/Functioneel/ElektrischeApparatuur;
 	}
@@ -165,11 +169,13 @@ template BCdata
 	container Kentallen_eWP := VraagKentallen/eWP;
 	container EnergieLabel
 	{
-		attribute<Classifications/EnergieLabel> LastValue    (BebouwingsObject) := MakeDefined(StartingStateComponent/EnergieLabel/CurrValue[StartingState_rel], EnergieVraagModellen/Efficiency/EnergieLabel[Model_rel]);
-		attribute<Classifications/EnergieLabel> CurrValue    (BebouwingsObject) := Sprongen/NaarEnergieLabel;
-		attribute<bool>                         WasChanged   (BebouwingsObject) := StartingStateComponent/EnergieLabel/IsChanged[StartingState_rel];
-		attribute<bool>                         IsChangedNow (BebouwingsObject) := LastValue != CurrValue;
-		attribute<bool>                         IsChanged    (BebouwingsObject) := WasChanged || IsChangedNow;
+		attribute<Classifications/EnergieLabel> LastValue    (BebouwingsObject) :=	MakeDefined(StartingStateComponent/EnergieLabel/CurrValue[StartingState_rel], EnergieVraagModellen/Efficiency/EnergieLabel[Model_rel]);
+		attribute<Classifications/EnergieLabel> CurrValue    (BebouwingsObject) :=	Sprongen/NaarEnergieLabel;
+		attribute<bool>                         WasChanged   (BebouwingsObject) :=	StartingStateComponent/EnergieLabel/IsChanged[StartingState_rel];
+		attribute<bool>                         IsChangedNow (BebouwingsObject) :=	LastValue != CurrValue;
+		attribute<bool>                         IsChanged    (BebouwingsObject) :=	WasChanged || IsChangedNow;
+		attribute<bool>                         IsSlechter   (BebouwingsObject) :=	StartingStateComponent/EnergieLabel/IsSlechter[StartingState_rel] && !WasChanged;
+		attribute<bool>                         IsOnbLabel   (BebouwingsObject) :=	StartingStateComponent/EnergieLabel/IsOnbLabel[StartingState_rel] && !WasChanged;
 	}
 	
 	container Efficiency

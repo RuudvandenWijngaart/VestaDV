@@ -24,18 +24,27 @@ template StartingStateComponent
 
 	container EnergieLabel
 	{
-		attribute<Classifications/EnergieLabel> ModelValue (BebouwingsObject) := EnergieVraagModellen/Efficiency/EnergieLabel[ Model_rel];
-
+		attribute<Classifications/EnergieLabel>		ModelValue  (BebouwingsObject) :=	EnergieVraagModellen/Efficiency/EnergieLabel[ Model_rel];
+		attribute<Classifications/EnergieLabel>		DataValue   (BebouwingsObject) :=	= BebouwingsComponent_rel == Classifications/BebouwingsComponent/V/BestaandeWoning ?
+																						'BebouwingsObject/EnergieLabelData_rel'
+																						: 'ModelValue';
+		attribute<bool>								IsSlechter  (BebouwingsObject) :=	DataValue > ModelValue;
+		attribute<bool>								IsOnbLabel  (BebouwingsObject) :=	!isdefined(DataValue);
+		
 		attribute<Classifications/EnergieLabel> CalcValue  (BebouwingsObject) :=
-			=(BebouwingsComponent_rel == Classifications/BebouwingsComponent/V/BestaandeWoning)
-				? 'value((float64(ModelValue) * (max_elem(BebouwingsObject/Gebied/n, float64(BebouwingsObject/EnergieLabelData_rel/Totaal)) -float64(BebouwingsObject/EnergieLabelData_rel/Totaal)) + float64(BebouwingsObject/EnergieLabelData_rel/TotWeight)) 
+			=(BebouwingsComponent_rel == Classifications/BebouwingsComponent/V/BestaandeWoning) ?
+			  'value((float64(ModelValue)
+			* (max_elem(BebouwingsObject/Gebied/n, float64(BebouwingsObject/EnergieLabelData_rel/Totaal))
+			- float64(BebouwingsObject/EnergieLabelData_rel/Totaal))
+			+ float64(BebouwingsObject/EnergieLabelData_rel/TotWeight)) 
 					/ max_elem(BebouwingsObject/Gebied/n, float64(BebouwingsObject/EnergieLabelData_rel/Totaal)) + 0.5,Classifications/EnergieLabel)'
 				: 'ModelValue';
 		attribute<uint8>                        code       (BebouwingsObject) := ModelValue * uint8(#Classifications/EnergieLabel) + CalcValue;
 
 		attribute<Classifications/EnergieLabel> CurrValue  (BebouwingsObject) := MakeDefined(rjoin(code, Classifications/LabelBasedOnModelAndObservedValue/code, Classifications/LabelBasedOnModelAndObservedValue/CurrLabel), ModelValue);
 		attribute<Classifications/LabelSprong>  CurrSprong (BebouwingsObject) := rjoin(code, Classifications/LabelBasedOnModelAndObservedValue/code, Classifications/LabelBasedOnModelAndObservedValue/CurrSprong);
-		attribute<Bool>                         IsChanged  (BebouwingsObject) := CurrValue != ModelValue;
+		attribute<Bool>                         IsChanged  (BebouwingsObject) := const(false, BebouwingsObject);
+		
 	}
 
 	container OpwekkingsOpties
