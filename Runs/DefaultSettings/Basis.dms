@@ -14,22 +14,16 @@
 container Basis: Using = "Units"
 {
 	parameter<string> PlanRegioNaam := // te kiezen uit onderstaande opties, let op, bij blokken moet HasStartingArcSet False zijn en Rapportage/RapportageRegio op NL worden ingesteld
-		'buurt';
-//		'gemeente';
-//		'blok500m';
-//		'blok1km';
-//		'blok2km';
+		'buurt'; // of 'gemeente' 'blok500m' 'blok1km''blok2km'
 
 	unit<uint32> PlanRegio := ='/Invoer/RuimtelijkeData/StudieGebied/'+ Invoer/SpecifiekeInstellingen/PlanRegioNaam, isHidden = "True";
-	// unit<uint32> PlanRegio := ='Geography/RegioIndelingen/'+ Invoer/SpecifiekeInstellingen/PlanRegioNaam, isHidden = "True";
 
 	parameter<bool> HasStartingArcSet := True; // Moet False zijn voor alle blok PlanRegioNaam configuraties
 
 	container Rapportage
 	{
-//		unit<uint32> Regio := Geography/RegioIndelingen/NL; // @USERINPUT 'NL', 'Provincie', 'Gemeente', 'Wijk'  Moet NL zijn voor alle blok PlanRegioNaam configuraties
-		unit<uint32> Regio := =
-			(Invoer/StudieGebied == 'NL')
+		unit<uint32> Regio := = 
+			(Invoer/StudieGebied == 'NL') //'NL', 'Provincie', 'Gemeente', 'Wijk'  Moet NL zijn voor alle blok PlanRegioNaam configuraties
 			? 'Geography/RegioIndelingen/Energieregio' 
 			: (#Invoer/RuimtelijkeData/StudieGebied/Gemeente == 1)
 				? 'Invoer/RuimtelijkeData/StudieGebied/buurt'
@@ -40,33 +34,24 @@ container Basis: Using = "Units"
 
 	parameter<Percent> VAT    := 21[Percent];                 // zie ook: Beleid/EIA/gebouw/E_bw
 	parameter<Percent> VAT_gv := 0.5 * (21.0 + 9.0)[Percent]; // BTW op gebouwverbetering
-
-	// parameter: prijzenbron
-	//
+	
 	// moet verwijzen naar een geldige .csv quartet  in %projdir%/data
 	// dwz: *_Elek.csv, *_Gas.csv, OverigeKosten.csv, TypeInfo.csv
-	//
-	// vooalsnog beschikbaar:
-	//
-	//
-	//
 	parameter<string> prijzenbron := '20190710_Energieprijzen_KEV2019'; 
 
 	container Beleid
 	{
-		parameter<Eur_yr_Aansl> Heffingskorting := 319.04[Eur_yr_Aansl]; // in Euro2018
+		parameter<Eur_yr_Aansl> Heffingskorting := 319.04[Eur_yr_Aansl];
 		unit<uint32> TypeInfoList := invoer/Kengetallen/WarmteBronnen/MetaData/TypeInfoList;
-		container EIA: Descr = "Energie Inversterings aftrek, zoals  MIA/VAMIL etc."
+		container EIA: Descr = "Investeringssubsidie: bepaald percentage van een investering wordt door de overheid betaald"
 		{
-			// Investeringssubsidie: bepaald percentage van een investering wordt door de overheid betaald
-			// in te stellen per actor en per technologie voorzover actor = opwekker en per zichtjaar als percentage van de investering 
 			container EigenarenBasis 
 			{
-				parameter<float64> R_SplitIncentiveFactor := 0.8; // 0.6 = eigenaar krijgt 60% van de door gebruiker vermeden kosten; dit speelt een rol igv SpringMeestRendabel
-				parameter<float64> Rs_LokaleOpwekking     := 0.0; // 
-				parameter<float64> Rs_GebouwVerbetering   := 0.0; // 0.1 = 10% subsidie op gebouwverbetering incl eWP en EWV
-				parameter<float64> Rs_OngeriefsVergoeding := 0.0; // 0.1 = 10% subsidie op ongeriefsvergoeding tbv gebiedsoptie
-				parameter<float64> Rs_ProjectManagement   := 0.0; // 0.1 = 10% subsidie op projectmanagement   tbv gebiedsoptie
+				parameter<float64>	R_SplitIncentiveFactor := 0.8  ,	Descr = "aandeel van vermeden kosten die de gebouweigenaar ontvangt in plaats van de gebruiker";
+				parameter<float64>	Rs_LokaleOpwekking     := 0.0  ,	Descr = "subsidie op hWP, ZonPV, zonneboiler, mWKK";
+				parameter<float64>	Rs_GebouwVerbetering   := 0.0  ,	Descr = "subsidie op gebouwverbetering incl eWP en EWV";
+				parameter<float64>	Rs_OngeriefsVergoeding := 0.0  ,	Descr = "subsidie op ongeriefsvergoeding tbv gebiedsoptie";
+				parameter<float64>	Rs_ProjectManagement   := 0.0  ,	Descr = "subsidie op projectmanagement   tbv gebiedsoptie";
 			}
 			container E_bw := EigenarenBasis;
 			container E_nw := EigenarenBasis;
@@ -75,256 +60,113 @@ container Basis: Using = "Units"
 			container E_bt := EigenarenBasis;
 			container E_nt := EigenarenBasis;
 
-			parameter<float64> id  := 0.0; // 0.1 = 10% subsidie op inpandige di incl eWP en EWV, alleen voor meergezinswoningen die niet in het zichtjaar gebouwd worden.
-			parameter<float64> wd  := 0.0; // wijkdistributie 0.20 = 20% subsidie op wijkdistributie investeringen.
-			parameter<float64> pt  := 0.0; // primair transport
-			parameter<float64> WKO := 0.0; // subsidie op Ki_A (doublet) als fractie van de investering
-			parameter<float64> LT  := 0.0, Descr = "investeringssubsidie opwekking lage temperatuur warmtenetten";
-
-			// voor opwekkings-type specifieke investerings-subsidies
-			attribute<float64> ow (TypeInfoList) := const(0.0, TypeInfoList);
+			parameter<float64>	id                := 0.0,						Descr = "Investeringssubsidie inpandige distributie als fractie van de investering";
+			parameter<float64>	wd                := 0.0,						Descr = "Investeringssubsidie wijkdistributie als fractie van de investering";
+			parameter<float64>	pt                := 0.0,						Descr = "Investeringssubsidie primair transport als fractie van de investering";
+			parameter<float64>	WKO               := 0.0,						Descr = "Investeringssubsidie opwekking met WKO als fractie van de investering";
+			parameter<float64>	LT                := 0.0,						Descr = "investeringssubsidie opwekking voor lage temperatuur warmtenetten met puntbron";
+			attribute<float64>	ow (TypeInfoList) := const(0.0, TypeInfoList),	Descr = "Investeringssubsidie opwekking met MT-bronnen als fractie van de investering";
 		}
 
-		container EEA: Descr = "Energie Exploitatie aftrek"
+		container EEA: Descr = "SDE en  Exploitatiesubsidies: per geleverde GJ of op O&M:.per zichtjaar in te stellen"
 		{
-			//	Exploitatiesubsidies: per geleverde GJ of per verkochte Eur.per zichtjaar in te stellen"
 			container Kosten
 			{
-				// percentage op totale kosten (kapitaallasten + O&M) per actor aan actor
 				container Basis
 				{
-					parameter<float64> Rs_LokaleOpwekking   := 0.0;
-					parameter<float64> Rs_GebouwVerbetering := 0.0;
-					parameter<float64> S_Leverancier        := 0.0;
-					parameter<float64> S_OenM               := 0.0;
+					parameter<float64>	Rs_LokaleOpwekking   := 0.0,	Descr = "percentage op totale kosten voor lokale opwekking";
+					parameter<float64>	Rs_GebouwVerbetering := 0.0,	Descr = "percentage op totale kosten voor gebouwverbetering";
+					parameter<float64>	S_Leverancier        := 0.0,	Descr = "percentage op totale kosten voor warmteleveranciers";
+					parameter<float64>	S_OenM               := 0.0,	Descr = "percentage op totale kosten voor O&M individuele gebouwen";
 				}
 			}
+			parameter<float64>	ge       :=	0.0,			Descr = "exploitatiesubsidie O&M tbv gebouweigenaren";
+			parameter<float64>	id       :=	0.0,			Descr = "exploitatiesubsidie O&M inpandige distributie";
+			parameter<float64>	wd       :=	0.0,			Descr = "exploitatiesubsidie O&M wijkdistributie 0.20 = 20% subsidie op wijkdistributie investeringen";
+			parameter<float64>	pt       :=	0.0,			Descr = "exploitatiesubsidie O&M primaire transportleidingen";
+			parameter<float64>	WKO      :=	0.0,			Descr = "exploitatiesubsidie O&M WKO en TEO systemen";
+			parameter<float64>	LT       :=	0.0,			Descr = "exploitatiesubsidie O&M kosten lage temperatuur warmtenetten";	
+			parameter<Eur_GJ>	SDE_LT   :=	0.0[Eur_GJ],	Descr = "productiesubsidie lage temperatuur warmtenetten met puntbron";	
+			parameter<Eur_GJ>	SDE_WKO  :=	0.0[Eur_GJ],	Descr = "productiesubsidie lage temperatuur warmtenetten met WKO en evt. TEO";	
 
-			parameter<float64> ge     := 0.0; // expoitatiesubsidie tbv gebouweigenaren obv kapitaallaasten investeringen en huurverlaging
-			parameter<float64> id     := 0.0; // inpandige distributie 0.20 = 20% subsidie op kapitaallasten, onderhoud en admin kosten
-			parameter<float64> wd     := 0.0; // wijkdistributie 0.20 = 20% subsidie op wijkdistributie investeringen.
-			parameter<float64> pt     := 0.0; // primair transport
-			parameter<float64> WKO    := 0.0; // exploitatie subsidie op Ki_A (doublet) als fractie van de kapitaallasten
-			parameter<float64> LT     := 0.0, Descr = "exploitatiesubsidie opwekking lage temperatuur warmtenetten";	
-			parameter<Eur_GJ>  SDE_LT := 0.0[Eur_GJ], Descr = "SDE subsidie opwekking lage temperatuur warmtenetten";	
-			parameter<Eur_GJ>  SDE_WKO:= 0.0[Eur_GJ]; // exploitatie subsidie op WKO per GJ.
-
-			attribute<float64> ow (TypeInfoList) := const(0.0, TypeInfoList);
-			// SDE: subsidie [Eur per GJ] per gebiedsoptie technologie (STEG, Geothermie) aan opwekker.
-			attribute<Eur_GJ> SDE (TypeInfoList) := const(0.0[Eur_GJ], TypeInfoList);
+			attribute<float64>	ow  (TypeInfoList) :=	const(0.0, TypeInfoList)         ,	Descr = "exploitatiesubsidie O&M voor MT-warmteopwekking";
+			attribute<Eur_GJ>	SDE (TypeInfoList) :=	const(0.0[Eur_GJ], TypeInfoList) ,	Descr = "productiesubsidie SDE voor MT-warmteopwekking";
 		}
 	}
 	
-	container VraagKentallen : Descr = "Blok 3, zie FO $4.2"
+	container VraagKentallen
 	{
-		container Component
+		container BestaandeWoning
 		{
-			container Zon_PV
+			attribute<Units/Ratio> Deelname (Classifications/WoningtypeBestaand) := const(1[Units/Ratio],Classifications/WoningtypeBestaand); // fractie deelnemers
+			container Opbrengsten
 			{
-				parameter<units/KWh_yr_m2> OpbrengstKWh           : [150.0];
-				parameter<units/GJ_yr_m2>  Opbrengst              := OpbrengstKWh * 3600[Units/s / Units/hr] / 1000000[Units/kJ / Units/GJ];
-				parameter<units/Eur_m2>    InvesteringsKosten_Min : [297.69], Source = "Wensenlijst In euro2018 ";
-				parameter<units/Eur_m2>    InvesteringsKosten_Max : [668.40], Source = "Wensenlijst In euro2018 ";
-			}
-			container ZonneBoiler
-			{
-				parameter<units/GJ_yr_m2> Opbrengst              : [1.5];
-				parameter<units/Eur_m2>   InvesteringsKosten_Min : [ 1067.20], Source = "In euro2018 Rapport Vesta 2.0 Uitbreidingen en dataverificaties Delft juni 2013 CE-Delft pagina 19 onder";
-				parameter<units/Eur_m2>   InvesteringsKosten_Max : [ 1179.53], Source = "In euro2018 Rapport Vesta 2.0 Uitbreidingen en dataverificaties Delft juni 2013 CE-Delft pagina 19 onder";
-			}
-			container mWKK
-			{
-				// huidige investeringskosten van microWKK zijn 7500-10000 Euro. Rekening houdend met alternatief van ketelkosten:
-				// 2000 Euro ketelkosten bij minimale kosten
-				// 1200 Euro ketelkosten bij maximale kosten
-				parameter<Eur_Aansl> InvesteringsKosten_Min : [6178.51], Source = "In euro2018 Rapport Vesta 2.0 Uitbreidingen en dataverificaties Delft augustus 2013 CE-Delft paragraaf 2.2.2";
-				parameter<Eur_Aansl> InvesteringsKosten_Max : [9885.61], Source = "In euro2018 Rapport Vesta 2.0 Uitbreidingen en dataverificaties Delft augustus 2013 CE-Delft paragraaf 2.2.2";
-			}
-			container EWV
-			{
-//				parameter<Ratio>           COP: [1.00];
-				parameter<units/Eur_Aansl> InvesteringsKosten_Min: [11233.65]; //In euro2018 
-				parameter<units/Eur_Aansl> InvesteringsKosten_Max: [22467.29]; //In euro2018 
-			}
-			container hWP: Source = "Rapport Vesta 3.0 F85"
-			{
-				parameter<Ratio>     COP: [4.00]; //COP is aangenomen inclusief pompenergie
-				parameter<Ratio>     DekkingsGraad: [0.80];
-				parameter<Eur_Aansl> InvesteringsKosten_Min: [2808.41];
-				parameter<Eur_Aansl> InvesteringsKosten_Max: [4830.47];
+				parameter<Eur_yr_Aansl>	VastrechtTarief_min := NMDA_Prijzen/Vastrecht/Maximum2019;
+				parameter<Eur_yr_Aansl>	VastrechtTarief_max := VastrechtTarief_min;
+				attribute<Eur_Aansl>	AansluitTarief_min (Classifications/WoningtypeBestaand) := const(NMDA_Prijzen/Aansluitbijdrage/Maximum2019, Classifications/WoningtypeBestaand);
+				attribute<Eur_Aansl>	AansluitTarief_max (Classifications/WoningtypeBestaand) := AansluitTarief_min;
 			}
 		}
 
-		// obv Warmtewet maximumprijs.
-		container Warmtewet := NMDA_Prijzen;
-
-		container BestaandeWoning := Component
+		container NieuwbouwWoning
 		{
-			unit<float64> ModelEenheid := units/nrWoningen;
-			unit<float64> m2_Dak       := units/m2 / (ModelEenheid / units/Bouwlaag);
-			unit<float64> m2_MU        := units/m2 / ModelEenheid;
-
-			attribute<Units/Ratio> Deelname (Classifications/WoningtypeBestaand) := CollectieveOpwekking/BestaandeWoning/Deelname;
-
-			container Zon_PV := Component/Zon_PV
+			attribute<Units/Ratio> Deelname (Classifications/WoningtypeNieuwbouw) := const(1[Units/Ratio],Classifications/WoningtypeNieuwbouw); // fractie deelnemers
+			container Opbrengsten
 			{
-				attribute<m2_MU > Oppervlak (Classifications/WoningtypeBestaand) := LokaleOpwekking/BestaandeWoning/Zon_PV_dakopp / Classifications/WoningtypeBestaand/StapelFactor; // m2 per ModelUnit
-			}
-
-			container ZonneBoiler := Component/ZonneBoiler
-			{
-				attribute<m2_MU > Oppervlak (Classifications/WoningtypeBestaand) := SpecifiekeInstellingen/LokaleOpwekking/BestaandeWoning/ZonneBoiler_Oppervlak;
-			}
-
-			container eWP := Component/eWP/Woning;
-
-			container Opbrengsten : Source = "CE-Delft_3440_Vesta_20_DEF.pdf, $5.2, tabel 36"
-			{
-				parameter<Eur_yr_Aansl> VastrechtTarief_min := Warmtewet/Vastrecht/Maximum2019;
-				parameter<Eur_yr_Aansl> VastrechtTarief_max := Warmtewet/Vastrecht/Maximum2019;
-
-				attribute<Eur_Aansl>    AansluitTarief_min (Classifications/WoningtypeBestaand) := const(Warmtewet/Aansluitbijdrage/Maximum2019, Classifications/WoningtypeBestaand);
-				attribute<Eur_Aansl>    AansluitTarief_max (Classifications/WoningtypeBestaand) := AansluitTarief_min;
+				parameter<Eur_yr_Aansl>	VastrechtTarief_min := NMDA_Prijzen/Vastrecht/Maximum2019;
+				parameter<Eur_yr_Aansl>	VastrechtTarief_max := VastrechtTarief_min;
+				attribute<Eur_Aansl>	AansluitTarief_min (Classifications/WoningtypeNieuwbouw): [4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500];
+				attribute<Eur_Aansl>	AansluitTarief_max (Classifications/WoningtypeNieuwbouw): [5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500];
 			}
 		}
 
-		container NieuwbouwWoning := BestaandeWoning
+		container BestaandeUtil
 		{
-			attribute<Units/Ratio> Deelname (Classifications/WoningtypeNieuwbouw) := CollectieveOpwekking/NieuwbouwWoning/Deelname;
-
-			container Zon_PV := BestaandeWoning/Zon_PV
+			attribute<Units/Ratio> Deelname (Classifications/UtilTypeBestaand):= const(1[Units/Ratio],Classifications/UtilTypeBestaand); // fractie deelnemers
+			container Opbrengsten
 			{
-				attribute<m2_Dak> dakopp    (Classifications/WoningtypeNieuwbouw) : [30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 0, 0, 30]; 
-				attribute<m2_MU > Oppervlak (Classifications/WoningtypeNieuwbouw) := dakopp / Classifications/WoningtypeNieuwbouw/StapelFactor; // m2 per ModelUnit
-			}
-
-			container ZonneBoiler := BestaandeWoning/ZonneBoiler
-			{
-				attribute<m2_MU> Oppervlak (Classifications/WoningtypeNieuwbouw) := LokaleOpwekking/NieuwbouwWoning/ZonneBoiler_Oppervlak;
-			}
-			
-			container Opbrengsten := BestaandeWoning/Opbrengsten, Source = "CE-Delft_3440_Vesta_20_DEF.pdf, $5.2, tabel 36"
-			{
-				attribute<Eur_Aansl> AansluitTarief_min (Classifications/WoningtypeNieuwbouw): [4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500];
-				attribute<Eur_Aansl> AansluitTarief_max (Classifications/WoningtypeNieuwbouw): [5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500, 5500];
-			}
-		}
-
-		container BestaandeUtil := Component
-		{
-			unit<float64> ModelEenheid := units/m2;
-			unit<float64> m2_Dak       := units/m2 / (ModelEenheid / units/Bouwlaag);
-			unit<float64> m2_MU        := units/m2 / ModelEenheid;
-
-			attribute<Units/Ratio> Deelname (Classifications/UtilTypeBestaand):= CollectieveOpwekking/BestaandeUtil/Deelname;
-
-			// 16082013 Aanpassing Stapelfactor op basis van de berekening 302671365m2/182971545m2=1.6541991
-			// 302671365 de oppervlakte bij het oproepen van het item /Output/Y2050/BebouwingsComponenten/BestaandeUtil/Hoeveelheden/capaciteit/Zon_PV op basis van de oude Stapelfactor
-			// 182971545 de oppervlakte indien de oppervlaktes van de BAG-panden wordt gesommeerd op basis van selectie mbv LISA-punten zie:
-			// SourceData\vesta\vraag\BestaandeUtil\pand-BAG_sel_LISA_2008_010611.shp
-
-			attribute<Units/Bouwlaag> StapelFactor (Classifications/UtilTypeBestaand): [4.13549775,2.48129865,4.13549775,3.3083982,2.48129865,1,3.3083982,3.3083982,3.3083982,3.3083982];
-
-			container Zon_PV := Component/Zon_PV
-			{
-				attribute<m2_MU > Oppervlak (Classifications/UtilTypeBestaand) := LokaleOpwekking/BestaandeUtil/Zon_PV_dakopp / StapelFactor; // m2 per ModelUnit
-			}
-
-			container ZonneBoiler := Component/ZonneBoiler
-			{
-				attribute<m2_MU > Oppervlak (Classifications/UtilTypeBestaand) := LokaleOpwekking/BestaandeUtil/ZonneBoiler_Oppervlak;
-			}
-
-			container eWP := Component/eWP/Util;
-
-			container Opbrengsten: Source = "CE-Delft_3440_Vesta_20_DEF.pdf, $5.2, tabel 36"
-			{
+				parameter<Eur_yr_Aansl>	VastrechtTarief_min := NMDA_Prijzen/Vastrecht/Maximum2019;
+				parameter<Eur_yr_Aansl>	VastrechtTarief_max := VastrechtTarief_min;
 				attribute<Eur_kW> AansluitTarief_min (Classifications/UtilTypeBestaand):= const( 56.17[Eur_kW], Classifications/UtilTypeBestaand);
 				attribute<Eur_kW> AansluitTarief_max (Classifications/UtilTypeBestaand):= const(112.34[Eur_kW], Classifications/UtilTypeBestaand);
 			}
 		}
 
-		container NieuwbouwUtil := BestaandeUtil
+		container NieuwbouwUtil
 		{
-			attribute<Units/Ratio> Deelname (Classifications/UtilTypeNieuwbouw) := CollectieveOpwekking/NieuwbouwUtil/Deelname;
-
-			// 16082013 Aanpassing Stapelfactor op basis van de berekening 302671365m2/182971545m2=1.6541991
-			// 302671365 de oppervlakte bij het oproepen van het item /Output/Y2050/BebouwingsComponenten/BestaandeUtil/Hoeveelheden/capaciteit/Zon_PV op basis van de oude Stapelfactor
-			// 182971545 de oppervlakte indien de oppervlaktes van de BAG-panden wordt gesommeerd op basis van selectie mbv LISA-punten zie:
-			// SourceData\vesta\vraag\BestaandeUtil\pand-BAG_sel_LISA_2008_010611.shp
-			attribute<Units/Bouwlaag> StapelFactor (Classifications/UtilTypeNieuwbouw): [ // 4
-				4.13549775,2.48129865,1.6541991,// oude stapelfactor 2.5, 1.5, 1.0, 
-				1.6541991,4.13549775,4.13549775,// oude stapelfactor 1.0, 2.5, 2.5,
-				2.48129865,3.3083982,3.3083982// oude stapelfactor 1.5, 2.0, 2.0
-			];
-
-			container Zon_PV := BestaandeUtil/Zon_PV
+			attribute<Units/Ratio> Deelname (Classifications/UtilTypeNieuwbouw) := const(1[Units/Ratio],Classifications/UtilTypeNieuwbouw); // fractie deelnemers
+			container Opbrengsten
 			{
-				attribute<m2_Dak> dakopp    (Classifications/UtilTypeNieuwbouw) := const(0.8[m2_Dak],Classifications/UtilTypeNieuwbouw); // m2 per (DakObject = ModelEenheid * Bouwlaag)
-				attribute<m2_MU > Oppervlak (Classifications/UtilTypeNieuwbouw) := dakopp / StapelFactor;  // m2 per ModelUnit
-			}
-			container ZonneBoiler := BestaandeUtil/ZonneBoiler
-			{
-				attribute<m2_MU > Oppervlak (Classifications/UtilTypeNieuwbouw) := LokaleOpwekking/NieuwbouwUtil/ZonneBoiler_Oppervlak;
-			}
-			container Opbrengsten := BestaandeUtil/Opbrengsten,  Source = "CE-Delft_3440_Vesta_20_DEF.pdf, $5.2, tabel 36"
-			{
+				parameter<Eur_yr_Aansl>	VastrechtTarief_min := NMDA_Prijzen/Vastrecht/Maximum2019;
+				parameter<Eur_yr_Aansl>	VastrechtTarief_max := VastrechtTarief_min;
 				attribute<Eur_kW> AansluitTarief_min (Classifications/UtilTypeNieuwbouw) := const( 56.17[Eur_kW],Classifications/UtilTypeNieuwbouw);
 				attribute<Eur_kW> AansluitTarief_max (Classifications/UtilTypeNieuwbouw) := const(112.35[Eur_kW],Classifications/UtilTypeNieuwbouw);
 			}
-			container mWKK := BestaandeUtil/mWKK
+		}
+
+		container BestaandeGlTb
+		{
+			attribute<Units/Ratio> Deelname        (Classifications/GLTB) := const(1.0, Classifications/GLTB);
+			container Opbrengsten
 			{
-				parameter<Eur_Aansl> InvesteringsKosten_Min : [134802.37], Source = "memo kostencijfer 20101110, vertaald naar euro2018";
-				parameter<Eur_Aansl> InvesteringsKosten_Max : [134802.37], Source = "memo kostencijfer 20101110, vertaald naar euro2018";
+				parameter<Eur_yr_Aansl> VastrechtTarief_min := NMDA_Prijzen/Vastrecht/Maximum2019;
+				parameter<Eur_yr_Aansl> VastrechtTarief_max := VastrechtTarief_min;
+				attribute<Eur_Aansl> AansluitTarief_min (Classifications/GLTB) := const(0[Eur_Aansl],Classifications/GLTB);
+				attribute<Eur_Aansl> AansluitTarief_max (Classifications/GLTB) := AansluitTarief_min;
 			}
 		}
 
-		container BestaandeGlTb := Component
+		container NieuwbouwGlTb
 		{
-			unit<float64> ModelEenheid := Units/m2;
-			unit<float64> m2_Dak       := units/m2 / (ModelEenheid / units/Bouwlaag);
-			unit<float64> m2_MU        := units/m2 / ModelEenheid;
-
-			attribute<Units/Ratio> Deelname        (Classifications/GLTB) := CollectieveOpwekking/BestaandeGlTb/Deelname;
-
-			attribute<Units/Bouwlaag> StapelFactor (Classifications/GLTB) := const(1.0[Units/Bouwlaag], Classifications/GLTB);
-
-			container Zon_PV := Component/Zon_PV
+			attribute<Units/Ratio> Deelname (Classifications/GLTB) := const(1.0, Classifications/GLTB);
+			container Opbrengsten
 			{
-				attribute<m2_Dak> dakopp    (Classifications/GLTB) := const(0[units/Bouwlaag], Classifications/GLTB); // m2 per (Dak = ModelEenheid Per Bouwlaag)
-				attribute<m2_MU > Oppervlak (Classifications/GLTB) := dakopp / StapelFactor; 
-			}
-
-			container ZonneBoiler := Component/ZonneBoiler
-			{
-				attribute<m2_MU > Oppervlak (Classifications/GLTB) := LokaleOpwekking/BestaandeGlTb/ZonneBoiler_Oppervlak;
+				parameter<Eur_yr_Aansl> VastrechtTarief_min := NMDA_Prijzen/Vastrecht/Maximum2019;
+				parameter<Eur_yr_Aansl> VastrechtTarief_max := VastrechtTarief_min;
+				attribute<Eur_Aansl> AansluitTarief_min (Classifications/GLTB) := const(0[Eur_Aansl],Classifications/GLTB);
+				attribute<Eur_Aansl> AansluitTarief_max (Classifications/GLTB) := AansluitTarief_min;
 			}
 			
-			container eWP := Component/eWP/GlTb;
-
-			container opbrengsten : Source= "http://www.mantis.objectvision.nl/view.php?id=841"
-			{
-				parameter<Eur_yr_Aansl> VastrechtTarief_min := Warmtewet/Vastrecht/Maximum2019; //In euro2018 
-				parameter<Eur_yr_Aansl> VastrechtTarief_max := Warmtewet/Vastrecht/Maximum2019; //In euro2018 
-
-				attribute<Eur_Aansl> AansluitTarief_min (Classifications/GLTB) := const(0[Eur_Aansl],Classifications/GLTB);
-				attribute<Eur_Aansl> AansluitTarief_max (Classifications/GLTB) := const(0[Eur_Aansl],Classifications/GLTB);
-			}
-		}
-
-		container NieuwbouwGlTb := BestaandeGlTb
-		{
-			attribute<Units/Ratio> Deelname (Classifications/GLTB) := CollectieveOpwekking/NieuwbouwGlTb/Deelname;
-			container Opbrengsten := BestaandeGlTb/Opbrengsten,
-				Source = "CE-Delft_3440_Vesta_20_DEF.pdf, $5.2, tabel 36 jo http://www.mantis.objectvision.nl/view.php?id=841"
-			{
-				attribute<Eur_Aansl> AansluitTarief_min (Classifications/GLTB) := const(0[Eur_Aansl],Classifications/GLTB);
-				attribute<Eur_Aansl> AansluitTarief_max (Classifications/GLTB) := const(0[Eur_Aansl],Classifications/GLTB);
-			}
-			container ZonneBoiler := BestaandeGlTb/ZonneBoiler
-			{
-				attribute<m2_MU > Oppervlak(Classifications/GLTB) := LokaleOpwekking/NieuwbouwGlTb/ZonneBoiler_Oppervlak;
-			}
 		}
 	}
 
@@ -336,11 +178,11 @@ container Basis: Using = "Units"
 		container WijkWKK    := VraagKentallen;
 		container WKO        := VraagKentallen
 		{
-			parameter<Bool> BuitenContour: [false]; // zet op true als mWKK mbv WKO wordt geimplementeerd zodat ook buiten de WKO Contour geplaatst mag worden.
+			parameter<Bool> BuitenContour: [false];
 		}
 		container TEO        := VraagKentallen
 		{
-			parameter<Bool> BuitenContour: [false]; // zet op true als mWKK mbv WKO wordt geimplementeerd zodat ook buiten de WKO Contour geplaatst mag worden.
+			parameter<Bool> BuitenContour: [false];
 		}
 		container AardGas := VraagKentallen;
 		container Lt15_30 := VraagKentallen;
@@ -357,12 +199,6 @@ container Basis: Using = "Units"
 		// 0: in Utilitiet doet alle industrie doet niet mee (dus ook alle vbo die industrie in combinatie met een andere gebruikdoel hebben)
 		// 1: in Utiliteit doen vbo's niet mee die alleen een industriefunctie hebben.
 		// 2: in Utilitiet doet alle industrie doet mee
-	}
-
-	container FysiekeConstanten
-	{
-		parameter<GJ_m3> GasEnergie := 31.65[ MJ / m3 ] / 1000[ MJ  / GJ ]; // ondergrens
-//		parameter<GJ_m3> GasEnergie := 35.17[ MJ / m3 ] / 1000[ MJ  / GJ ]; // bovengrens, rekening houdend met eficientere verbranding (o.a. condensatiewarmte van waterdamp)
 	}
 
 	container RuimtelijkeVraag
@@ -383,13 +219,13 @@ container Basis: Using = "Units"
 					parameter<Ratio> Zon_PV:      [0.0];
 					parameter<Ratio> ZonneBoiler: [0.0];
 
-					parameter<Ratio> mWKK:        [0.0]; // niet hier aanzetten als je het alleen voor woningen aan wilt, dan specifiek voor BebouwingsComponent Woning of NieuwbouwWoning instellen bij Basis
-					attribute<Ratio> hWP (Classifications/energielabel) := const(0.0, Classifications/energielabel); // uit in 2010
+					parameter<Ratio> mWKK:        [0.0]; // niet hier aanzetten als je het alleen voor woningen aan wilt, dan specifiek voor BebouwingsComponent
+					attribute<Ratio> hWP (Classifications/energielabel) := const(0.0, Classifications/energielabel); // uit in startjaar
 				}
 				container Verbeteringen
 				{
 					// @USERINPUT: 'Never', 'Always'
-					// Letters verwijzen naar kolomheaders in het "Dataset_woningen2013_200313.xls"-bestand
+					// Letters verwijzen naar kolomheaders in het kentallen-bestand
 					parameter<string> S_H_T:    ['Criteria/Never']; // was: Sprong A
 					parameter<string> S_H_B:    ['Criteria/Never']; // was: Sprong B
 					parameter<string> S_H_AP:   ['Criteria/Never']; // was: Sprong C
@@ -453,40 +289,23 @@ container Basis: Using = "Units"
 		}
 	}
 
-	container Voorkeuren: Descr = "Blok 4"
+	container Voorkeuren
 	{
 		container GebiedsOpties
 		{
 			parameter<uint32> Aantal: [ 0 ]; // @USERINPUT
 		}
 
-		parameter<float64> MinderDanAndersFactor := 1.0; // niet minder dan anders; zet op bijvoorbeeld 0.9 voor 10% korting op de volgens de WarmteWet berekende prijs.
-
-		parameter<bool>    IsVasteWarmtePrijs    := false; // impl vaste warmteprijs in Eur_GJ.?
-		parameter<Eur_GJ>  VasteWarmtePrijs      := 25[Eur_GJ]; // wordt alleen gebruikt indien IsVasteWarmtePrijs
-
-		parameter<float64> GroenGasFactor        := 0.10; // 90% reguier gas en 10% groen gas (zonder Co2 uitstoot).
+		parameter<float64>	MinderDanAndersFactor :=	1.0        ,		Descr = "niet minder dan anders: zet op bijvoorbeeld 0.9 voor 10% korting op de volgens de WarmteWet berekende prijs";
+		parameter<bool>		IsVasteWarmtePrijs    :=	false      ,		Descr = "indien true: er geldt een vaste warmteprijs";
+		parameter<Eur_GJ>	VasteWarmtePrijs      :=	25[Eur_GJ] ,		Descr = "wordt alleen gebruikt indien IsVasteWarmtePrijs";
+		parameter<float64>	GroenGasFactor        :=	0.10       ,		Descr = "aandeel van de aardgasvraag die door groengas wordt ingevuld(zonder Co2 uitstoot)";
 	}
 
-	// parameter: WloScenarioFolder
-	//
-	// moet verwijzen naar een folder met nieuwbouw en sloop projecties t/m 2050
-	//
-	// vooalsnog beschikbaar: van 2 WLO scenario's afgeleide resultaten, te weten
-	// - %SourceDataProjDir%/RO/20151123_RO_WLO_hoog_concentratie
-	// - %SourceDataProjDir%/RO/20151123_RO_WLO_laag_spreiding
-
-	parameter<string> WloScenarioFolder := '%SourceDataProjDir%/RO/20151123_RO_WLO_hoog_concentratie',
-	url="%sourceDataProjDir%/RO/20180802_MutatieRecept.htm";
-
-	container Bijstook
-	{
-		container vermogensaandelen {
-			parameter<float64> Hulpketel := 0.85; // capaciteit hulpketels per eenheid piekvraag
-			parameter<float64> Hoofdbron := 0.30; // capaciteit PrimairNet per eenheid piekvraag
-		}
-	}
-
+	// vooalsnog beschikbaar: van 2 WLO scenario's afgeleide resultaten nieuwbouw en sloop projecties t/m 2050, te weten
+	// - %SourceDataProjDir%/RO/20151123_RO_WLO_hoog_concentratie  &  %SourceDataProjDir%/RO/20151123_RO_WLO_laag_spreiding
+	parameter<string>		WloScenarioFolder     :=	'%SourceDataProjDir%/RO/20151123_RO_WLO_hoog_concentratie',	url="%sourceDataProjDir%/RO/20180802_MutatieRecept.htm";
+	
 	container Investering
 	{
 		parameter<Yr> BeginOpbrengstJaar : [ 2];
@@ -495,99 +314,28 @@ container Basis: Using = "Units"
 
 	container Discontovoet
 	{
-		parameter<Percent_yr>   mr := 4.0[Percent_yr], Descr = "Maatschappelijke discontovoet";
-		parameter<Percent_yr>   ow := 6.0[Percent_yr], Descr = "Discontovoet voor opwekking door energieproducenten; kan per aanbod-technologie worden overruled";
-		parameter<Percent_yr>   wd := 6.0[Percent_yr], Descr = "Discontovoet voor wijkdistributeurs";
-		parameter<Percent_yr>   pt := 6.0[Percent_yr], Descr = "Discontovoet voor primaire transporteurs";
-		parameter<Percent_yr>   id := 6.0[Percent_yr], Descr = "Discontovoet voor inpandige distributeurs";
-		parameter<Percent_yr> E_bw := 5.5[Percent_yr], Descr = "Discontovoet voor eigenaars van bestaande woningen";
-		parameter<Percent_yr> E_nw := 5.5[Percent_yr], Descr = "Discontovoet voor eigenaars van nieuwe woningen";
-		parameter<Percent_yr> E_bu := 8.0[Percent_yr], Descr = "Discontovoet voor eigenaars van bestaande utiliteiten";
-		parameter<Percent_yr> E_nu := 8.0[Percent_yr], Descr = "Discontovoet voor eigenaars van nieuwe utiliteiten";
-		parameter<Percent_yr> E_bt := 8.0[Percent_yr], Descr = "Discontovoet voor eigenaars van bestaande gtb";
-		parameter<Percent_yr> E_nt := 8.0[Percent_yr], Descr = "Discontovoet voor eigenaars van nieuwe gtb";
+		parameter<Percent_yr>   mr :=	4.0[Percent_yr],	Descr = "Maatschappelijke discontovoet";
+		parameter<Percent_yr>   ow :=	6.0[Percent_yr],	Descr = "Discontovoet voor opwekking door energieproducenten; kan per aanbod-technologie worden overruled";
+		parameter<Percent_yr>   wd :=	6.0[Percent_yr],	Descr = "Discontovoet voor wijkdistributeurs";
+		parameter<Percent_yr>   pt :=	6.0[Percent_yr],	Descr = "Discontovoet voor primaire transporteurs";
+		parameter<Percent_yr>   id :=	6.0[Percent_yr],	Descr = "Discontovoet voor inpandige distributeurs";
+		parameter<Percent_yr> E_bw :=	5.5[Percent_yr],	Descr = "Discontovoet voor eigenaars van bestaande woningen";
+		parameter<Percent_yr> E_nw :=	5.5[Percent_yr],	Descr = "Discontovoet voor eigenaars van nieuwe woningen";
+		parameter<Percent_yr> E_bu :=	8.0[Percent_yr],	Descr = "Discontovoet voor eigenaars van bestaande utiliteiten";
+		parameter<Percent_yr> E_nu :=	8.0[Percent_yr],	Descr = "Discontovoet voor eigenaars van nieuwe utiliteiten";
+		parameter<Percent_yr> E_bt :=	8.0[Percent_yr],	Descr = "Discontovoet voor eigenaars van bestaande gtb";
+		parameter<Percent_yr> E_nt :=	8.0[Percent_yr],	Descr = "Discontovoet voor eigenaars van nieuwe gtb";
 	}
 
 	container NMDA_Prijzen
 	{
 		container Aansluitbijdrage
 		{
-			parameter<Eur_Aansl> Maximum2019 := 805.80[Eur_Aansl];// excl BTW in Euro's van 2018 (ACM Warmtebesluit 2019)
+			parameter<Eur_Aansl>	Maximum2019 :=	 805.80 [Eur_Aansl]    ,	Descr = "maximale aansluitbijdrage voor nieuwe warmtenetten(ACM Warmtebesluit 2019)";
 		}
 		container Vastrecht
 		{
-			parameter<Eur_yr_Aansl> Maximum2019 := 267.47[Eur_yr_Aansl];// excl BTW in Euro's van 2018 (ACM Warmtebesluit 2019)
-		}
-	}
-
-	container CollectieveOpwekking
-	{
-		container BestaandeWoning
-		{
-			attribute<Ratio> Deelname (Classifications/WoningtypeBestaand ) := const(1[Units/Ratio],Classifications/WoningtypeBestaand); // fractie deelnemers
-		}
-		container NieuwbouwWoning
-		{
-			attribute<Ratio> Deelname (Classifications/WoningtypeNieuwbouw) := const(1[Units/Ratio],Classifications/WoningtypeNieuwbouw); // fractie deelnemers
-		}
-		container BestaandeUtil
-		{
-			attribute<Ratio> Deelname (Classifications/UtilTypeBestaand)    := const(1[Units/Ratio],Classifications/UtilTypeBestaand); // fractie deelnemers
-		}
-		container NieuwbouwUtil
-		{
-			attribute<Ratio> Deelname (Classifications/UtilTypeNieuwbouw)   := const(1[Units/Ratio],Classifications/UtilTypeNieuwbouw); // fractie deelnemers
-		}
-		container BestaandeGlTb
-		{
-			attribute<Ratio> Deelname (Classifications/GLTB)                := const(1.0, Classifications/GLTB);
-		}
-		container NieuwbouwGlTb
-		{
-			attribute<Ratio> Deelname (Classifications/GLTB)                := const(1.0, Classifications/GLTB);
-		}
-	}
-
-	container LokaleOpwekking
-	{
-		//Descr = "Hoeveelheid beschikbaar dakoppervlak voor de aanleg van PV-panelen";
-		unit<float64> m2_Dak := m2 / (nrWoningen / Bouwlaag);
-		
-		container BestaandeWoning
-		{
-			parameter<KWh_yr_m2>  Zon_PV_opbrengst                                            := 150[KWh_yr_m2];
-			attribute<m2_Dak>     Zon_PV_dakopp         (Classifications/WoningtypeBestaand ) := const(30[m2_Dak],Classifications/WoningtypeBestaand);
-			attribute<m2_woning > ZonneBoiler_Oppervlak (Classifications/WoningtypeBestaand ) := const(3.0[m2_woning],Classifications/WoningtypeBestaand);
-		}
-		container NieuwbouwWoning
-		{
-			attribute<m2_woning> ZonneBoiler_Oppervlak (Classifications/WoningtypeNieuwbouw) := const(3.0[m2_Woning],Classifications/WoningtypeNieuwbouw);
-		}
-		container BestaandeUtil
-		{
-			attribute<Bouwlaag> Zon_PV_dakopp      (Classifications/UtilTypeBestaand ) := const(0.8[Bouwlaag],Classifications/UtilTypeBestaand);
-			attribute<Ratio> ZonneBoiler_Oppervlak (Classifications/UtilTypeBestaand): [
-				0.001421186,0.001421186,0.014425039,
-				0.014093429,0.001737005,0.001421186,
-				0.012601184,0.001421186,0.001421186,
-				0.001421186
-			];
-		}
-		container NieuwbouwUtil
-		{
-			attribute<Ratio> ZonneBoiler_Oppervlak (Classifications/UtilTypeNieuwbouw): [
-				0.001413423, 0.001413423, 0.001413423,
-				0.001413423, 0.009422819, 0.03533557,
-				0.001727517, 0.015312081, 0.001413423
-			];
-		}
-		container BestaandeGlTb
-		{
-			attribute<Ratio> ZonneBoiler_Oppervlak (Classifications/GLTB) := const(0[Ratio], Classifications/GLTB); // m2 per ModelUnit
-		}
-		container NieuwbouwGlTb
-		{
-			attribute<Ratio> ZonneBoiler_Oppervlak (Classifications/GLTB) := const(0[Ratio], Classifications/GLTB); // m2 per ModelUnit
+			parameter<Eur_yr_Aansl>	Maximum2019 :=	 267.47 [Eur_yr_Aansl] ,	Descr = "maximaal vastrecht voor warmtelevering(ACM Warmtebesluit 2019)";
 		}
 	}
 }
