@@ -26,29 +26,29 @@ template WijkTempl
 	
 	container Kosten
 	{
-		attribute<Eur> Ki_ow_nu (PlanRegio) := 
-			(TypeInfo/Ki_kW_min * Schuiven/KostenMin + TypeInfo/Ki_kW_max * Schuiven/KostenMax) 
-			* max_elem(KostenBaten/CapaciteitsVraagD, TypeInfo/MWth_min) 
-			* 1000[kW / MW];
+		parameter<Eur_GJ>	K_GJ    :=	='TypeInfo/K_GJ'+string(Jaar-2000w); 
+		parameter<KG_GJ>	CO2g_GJ :=	TypeInfo/RekenType/Factoren/Aardgas       * Prijzen/AardGas/CO2_GJ;
+		parameter<KG_GJ>	CO2e_GJ :=	TypeInfo/RekenType/Factoren/Elektriciteit * Prijzen/Elektriciteit/CO2_GJ;
+		parameter<KG_GJ>	CO2_GJ  :=	CO2g_GJ + CO2e_GJ, Source = "FO v7a C.5 WijkWKK";
+		parameter<Eur_GJ>	Km_GJ   :=	K_GJ;
+		parameter<_yr>		R_OenM  :=	0.5 * TypeInfo/Rj_Onderhoud;
+		
+		attribute<Eur>		Ki_ow_nu           (PlanRegio) :=	(TypeInfo/Ki_kW_min * Schuiven/KostenMin + TypeInfo/Ki_kW_max * Schuiven/KostenMax) 
+																* max_elem(KostenBaten/CapaciteitsVraagD, TypeInfo/MWth_min) * 1000[kW / MW];
 
-		attribute<Eur>    Ki_ow     (PlanRegio) := Ki_ow_nu * LeerCurves/MTnet/curve;                                            attribute<Eur_yr> Kji_ow    (PlanRegio) := Ki_ow     * NCW/ow28/AnnualisationFactor;
-		attribute<Eur>    Oi_ow_EIA (PlanRegio) := Ki_ow * SpecifiekeInstellingen/Beleid/EIA/ow[TypeInfo/TypeInfoList_rel]; attribute<Eur_yr> Oji_ow_EIA(PlanRegio) := Oi_ow_EIA * NCW/ow28/AnnualisationFactor;
+		attribute<Eur>		Ki_ow              (PlanRegio) :=	Ki_ow_nu * LeerCurves/MTnet/curve;
+		attribute<Eur_yr>	Kji_ow             (PlanRegio) :=	Ki_ow * NCW/ow28/AnnualisationFactor;
+		attribute<Eur>		Oi_ow_EIA          (PlanRegio) :=	Ki_ow * SpecifiekeInstellingen/Beleid/EIA/ow[TypeInfo/TypeInfoList_rel];
+		attribute<Eur_yr>	Oji_ow_EIA         (PlanRegio) :=	Oi_ow_EIA * NCW/ow28/AnnualisationFactor;
 
-		parameter<Eur_GJ> K_GJ    := ='TypeInfo/K_GJ'+string(Jaar-2000w); 
-		parameter<KG_GJ>  CO2g_GJ := TypeInfo/RekenType/Factoren/Aardgas       * Prijzen/AardGas/CO2_GJ;
-		parameter<KG_GJ>  CO2e_GJ := TypeInfo/RekenType/Factoren/Elektriciteit * Prijzen/Elektriciteit/CO2_GJ;
-		parameter<KG_GJ>  CO2_GJ  := CO2g_GJ + CO2e_GJ, Source = "FO v7a C.5 WijkWKK";
-
-		parameter<Eur_GJ> Km_GJ   := K_GJ;
-
-		attribute<Eur_yr>	Kj_ow_adm          (PlanRegio)	:=	Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_ow_admin     * Ki_ow;
-		attribute<Eur_yr>	Kj_ow_oh           (PlanRegio)	:=	Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_ow_onderhoud * Ki_ow;
-		attribute<Eur_yr>	Kj_ow_WarmteWaarde (PlanRegio)	:=	K_GJ  * KostenBaten/Vj_WarmtePrimairD;
-		attribute<Eur_yr>	Km_ow_WarmteWaarde (PlanRegio)	:=	Km_GJ * KostenBaten/Vj_WarmtePrimairD;
-		attribute<Eur_yr>	Kj_ow              (PlanRegio)	:=	Kj_ow_adm + Kj_ow_oh + Kj_ow_WarmteWaarde;
-		attribute<Eur_yr>	Oj_ow_EEA          (PlanRegio)	:=	Kj_ow * SpecifiekeInstellingen/Beleid/EEA/ow[TypeInfo/TypeInfoList_rel];
-		attribute<Eur_yr>	Km_ow              (PlanRegio)	:=	Kj_ow_adm + Kj_ow_oh + Km_ow_WarmteWaarde;
-		attribute<Eur_yr>	Oj_lv_SDE          (PlanRegio)	:=	KostenBaten/Vj_WarmtePrimairD * SpecifiekeInstellingen/Beleid/EEA/SDE[TypeInfo/TypeInfoList_rel];
+		attribute<Eur_yr>	Kj_ow_adm          (PlanRegio) :=	Leercurves/OenM/Curve * R_OenM * Ki_ow;
+		attribute<Eur_yr>	Kj_ow_oh           (PlanRegio) :=	Leercurves/OenM/Curve * R_OenM * Ki_ow;
+		attribute<Eur_yr>	Kj_ow_WarmteWaarde (PlanRegio) :=	KostenBaten/Vj_WarmtePrimairD * K_GJ;
+		attribute<Eur_yr>	Km_ow_WarmteWaarde (PlanRegio) :=	KostenBaten/Vj_WarmtePrimairD * Km_GJ;
+		attribute<Eur_yr>	Kj_ow              (PlanRegio) :=	Kj_ow_adm + Kj_ow_oh + Kj_ow_WarmteWaarde;
+		attribute<Eur_yr>	Oj_ow_EEA          (PlanRegio) :=	Kj_ow * SpecifiekeInstellingen/Beleid/EEA/ow[TypeInfo/TypeInfoList_rel];
+		attribute<Eur_yr>	Km_ow              (PlanRegio) :=	Kj_ow_adm + Kj_ow_oh + Km_ow_WarmteWaarde;
+		attribute<Eur_yr>	Oj_lv_SDE          (PlanRegio) :=	KostenBaten/Vj_WarmtePrimairD * SpecifiekeInstellingen/Beleid/EEA/SDE[TypeInfo/TypeInfoList_rel];
 	}
 
 	attribute<Eur   > Oi_Totaal  (PlanRegio) := KostenBaten/Oi_Aansluitbijdrage ;
@@ -152,32 +152,30 @@ template WijkTempl
 				}
 				
 				container pt {
-					attribute<Eur_yr> Kj_pt_oh        (PlanRegio) := const(0[EUR_yr], PlanRegio);
-					attribute<Eur_yr> Kj_pt_adm       (PlanRegio) := const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_pt_oh        (PlanRegio) :=		const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_pt_adm       (PlanRegio) :=		const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Kji_pt          (PlanRegio) :=		const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Kmi_pt          (PlanRegio) :=		const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Oji_pt_EIA      (PlanRegio) :=		const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Omi_pt_EIA      (PlanRegio) :=		const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Oj_pt_EEA       (PlanRegio) :=		const(0[EUR_yr], PlanRegio);
 					
-					attribute<Eur_yr> Kji_pt          (PlanRegio) := const(0[EUR_yr], PlanRegio);
-					attribute<Eur_yr> Kmi_pt          (PlanRegio) := const(0[EUR_yr], PlanRegio);
-					
-					attribute<Eur_yr> Oji_pt_EIA      (PlanRegio) := const(0[EUR_yr], PlanRegio);
-					attribute<Eur_yr> Omi_pt_EIA      (PlanRegio) := const(0[EUR_yr], PlanRegio);
-					
-					attribute<Eur_yr> Oj_pt_EEA       (PlanRegio) := const(0[EUR_yr], PlanRegio);
 				}
 				container ow {
-					attribute<Eur_yr> Kj_ow_gas       (PlanRegio) := Verbruik/V_ow_gas * last(prijzen/AardGas/Staffel/KGJ_eindgebruik_excl);
-					attribute<Eur_yr> Km_ow_gas       (PlanRegio) := Verbruik/V_ow_gas * last(prijzen/AardGas/Staffel/KGJ_maatschappelijk ); 
-					attribute<Eur_yr> Kj_ow_gas_EH    (PlanRegio) := Verbruik/V_ow_gas * last(prijzen/AardGas/Staffel/KGJ_EnergieHeffing  ); // TODO: CHECK dat dit echt betaalt moet worden; was nog niet in Vesta 3.3
-					attribute<Eur_yr> Kj_ow_gas_CO2   (PlanRegio) := Verbruik/V_ow_gas * last(prijzen/AardGas/Staffel/KGJ_CO2Heffing      ); // TODO: CHECK dat dit echt betaalt moet worden; was nog niet in Vesta 3.3
+					attribute<Eur_yr>	Kj_ow_gas       (PlanRegio) :=		Verbruik/V_ow_gas * last(prijzen/AardGas/Staffel/KGJ_eindgebruik_excl );
+					attribute<Eur_yr>	Km_ow_gas       (PlanRegio) :=		Verbruik/V_ow_gas * last(prijzen/AardGas/Staffel/KGJ_maatschappelijk  );
+					attribute<Eur_yr>	Kj_ow_gas_EH    (PlanRegio) :=		Verbruik/V_ow_gas * last(prijzen/AardGas/Staffel/KGJ_EnergieHeffing   );
+					attribute<Eur_yr>	Kj_ow_gas_CO2   (PlanRegio) :=		Verbruik/V_ow_gas * last(prijzen/AardGas/Staffel/KGJ_CO2Heffing       );
 					
-					attribute<Eur_yr> Kj_ow_elek      (PlanRegio) := Verbruik/V_ow_elek * last(prijzen/Elektriciteit/Staffel/KGJ_Commodity);
-					attribute<Eur_yr> Km_ow_elek      (PlanRegio) := kj_ow_elek;
-					attribute<Eur_yr> Kj_ow_elek_EH   (PlanRegio) := const(0[EUR_yr], PlanRegio); // wordt betaald door de consument, niet door de procucent.
-					attribute<Eur_yr> Kj_ow_elek_CO2  (PlanRegio) :=  Verbruik/V_ow_elek * last(prijzen/Elektriciteit/Staffel/KGJ_CO2Heffing); // TODO: CHECK dat dit echt ontvangen mag worden; zou toch wel redelijk zijn; was nog niet in Vesta 3.3
+					attribute<Eur_yr>	Kj_ow_elek      (PlanRegio) :=		Verbruik/V_ow_elek * last(prijzen/Elektriciteit/Staffel/KGJ_Commodity       );
+					attribute<Eur_yr>	Km_ow_elek      (PlanRegio) :=		Verbruik/V_ow_gas  * last(prijzen/Elektriciteit/Staffel/KGJ_maatschappelijk );
+					attribute<Eur_yr>	Kj_ow_elek_EH   (PlanRegio) :=		Verbruik/V_ow_gas  * last(prijzen/Elektriciteit/Staffel/KGJ_EnergieHeffing  );
+					attribute<Eur_yr>	Kj_ow_elek_CO2  (PlanRegio) :=		Verbruik/V_ow_elek * last(prijzen/Elektriciteit/Staffel/KGJ_CO2Heffing      );
 					
 					attribute<Eur_yr> Kj_ow_productie (PlanRegio) := GebruikOptie ? Kosten/Kj_ow_warmtewaarde : 0[Eur_yr];
 					
-					attribute<Eur_yr> Kj_ow_oh        (PlanRegio) := (NewGebruik ? Kosten/Kj_ow_oh        : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kj_ow_oh;
-					attribute<Eur_yr> Kj_ow_adm       (PlanRegio) := (NewGebruik ? Kosten/Kj_ow_adm       : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kj_ow_adm;
+					attribute<Eur_yr> Kj_ow_oh        (PlanRegio) := (NewGebruik ? Kosten/Kj_ow_oh  : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kj_ow_oh;
+					attribute<Eur_yr> Kj_ow_adm       (PlanRegio) := (NewGebruik ? Kosten/Kj_ow_adm : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kj_ow_adm;
 					
 					attribute<Eur_yr> Kji_ow          (PlanRegio) := (NewGebruik ? Kosten/Kji_ow : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kji_ow;
 					attribute<Eur_yr> Kmi_ow          (PlanRegio) := (NewGebruik ? Kosten/Ki_ow * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kmi_ow;
