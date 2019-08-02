@@ -43,12 +43,13 @@ template GeoThermie
 	container Kosten
 	{
 		attribute<Eur>		Ki_ow           (PlanRegio)	:=	(TypeInfo/Ki_kW_min * Schuiven/KostenMin + TypeInfo/Ki_kW_max * Schuiven/KostenMax)
-															* max_elem(KostenBaten/CapaciteitsVraagD, TypeInfo/MWth_min) * 1000[kW / MW]
+															* max_elem(TypeInfo/P_cap * KostenBaten/CapaciteitsVraagD, TypeInfo/MWth_min) * 1000[kW / MW]
 															* LeerCurves/MTnet/Curve;
 		attribute<Eur_yr>	Kji_ow          (PlanRegio)	:=	Ki_ow * NCW/ow28/AnnualisationFactor;
 		attribute<Eur_yr>	Kmi_ow          (PlanRegio)	:=	Ki_ow * NCW/mr28/AnnualisationFactor;
 
-		attribute<Eur>		Ki_pt           (PlanRegio)	:=	KostenBaten/KostenD/PrimairNet/LeidingKosten/aK_m * bron/dist;
+		container			LeidingKosten				:=	BuisKosten(PlanRegio, TypeInfo/P_cap * KostenBaten/CapaciteitsVraagD);
+		attribute<Eur>		Ki_pt           (PlanRegio)	:=	LeidingKosten/aK_m * bron/dist;
 		attribute<Eur_yr>	Kji_pt          (PlanRegio)	:=	Ki_pt * NCW/pt28/AnnualisationFactor;
 		attribute<Eur_yr>	Kmi_pt          (PlanRegio)	:=	Ki_pt * NCW/mr28/AnnualisationFactor;
 		attribute<Eur>		Ki_Totaal       (PlanRegio)	:=	Ki_ow + ki_pt;
@@ -75,9 +76,9 @@ template GeoThermie
 		attribute<Eur_yr>	Oj_pt_EEA       (PlanRegio)	:=	SpecifiekeInstellingen/Beleid/EEA/pt * (Kj_pt_adm + Kj_pt_oh);
 		attribute<Eur_yr>	Oj_ow_EEA       (PlanRegio)	:=	MakeDefined(SpecifiekeInstellingen/Beleid/EEA/ow[TypeInfo/TypeInfoList_rel], 0.0) * (Kj_ow_adm + Kj_ow_oh);
 		
-		attribute<Eur_yr>	Kj_WarmteWaarde (PlanRegio)	:=	K_GJ  * KostenBaten/Vj_WarmtePrimairD;
-		attribute<Eur_yr>	Km_WarmteWaarde (PlanRegio)	:=	Km_GJ * KostenBaten/Vj_WarmtePrimairD;
-		attribute<Eur_yr>	Oj_SDE          (PlanRegio)	:=	KostenBaten/Vj_WarmtePrimairD * SpecifiekeInstellingen/Beleid/EEA/SDE[TypeInfo/TypeInfoList_rel];
+		attribute<Eur_yr>	Kj_WarmteWaarde (PlanRegio)	:=	TypeInfo/P_vol * KostenBaten/Vj_WarmtePrimairD * K_GJ;
+		attribute<Eur_yr>	Km_WarmteWaarde (PlanRegio)	:=	TypeInfo/P_vol * KostenBaten/Vj_WarmtePrimairD * Km_GJ;
+		attribute<Eur_yr>	Oj_SDE          (PlanRegio)	:=	TypeInfo/P_vol * KostenBaten/Vj_WarmtePrimairD * SpecifiekeInstellingen/Beleid/EEA/SDE[TypeInfo/TypeInfoList_rel];
 	}
 
 	attribute<Eur   > Oi_Totaal            (PlanRegio) := KostenBaten/Oi_Aansluitbijdrage;
@@ -172,15 +173,15 @@ template GeoThermie
 				}
 				
 				container wd {
-					attribute<Eur_yr> Kj_wd_gas       (PlanRegio) := (NewGebruik ? KostenBaten/KostenD/Bijstook/Kj_wd_gas			: 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kj_wd_gas;
-					attribute<Eur_yr> Kj_wd_gas_EH    (PlanRegio) := (NewGebruik ? KostenBaten/KostenD/Bijstook/Kj_wd_gas_EH		: 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kj_wd_gas_EH;
-					attribute<Eur_yr> Kj_wd_gas_CO2   (PlanRegio) := (NewGebruik ? KostenBaten/KostenD/Bijstook/Kj_wd_gas_CO2		: 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kj_wd_gas_CO2;
-					attribute<Eur_yr> Km_wd_gas       (PlanRegio) := (NewGebruik ? KostenBaten/KostenD/Bijstook/Km_wd_gas			: 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Km_wd_gas;
+					attribute<Eur_yr> Kj_wd_gas       (PlanRegio) := GebruikOptie ? TypeInfo/P_vol * KostenBaten/KostenD/Bijstook/Kj_wd_gas		: 0[Eur_yr];
+					attribute<Eur_yr> Kj_wd_gas_EH    (PlanRegio) := GebruikOptie ? TypeInfo/P_vol * KostenBaten/KostenD/Bijstook/Kj_wd_gas_EH	: 0[Eur_yr];
+					attribute<Eur_yr> Kj_wd_gas_CO2   (PlanRegio) := GebruikOptie ? TypeInfo/P_vol * KostenBaten/KostenD/Bijstook/Kj_wd_gas_CO2	: 0[Eur_yr];
+					attribute<Eur_yr> Km_wd_gas       (PlanRegio) := GebruikOptie ? TypeInfo/P_vol * KostenBaten/KostenD/Bijstook/Km_wd_gas		: 0[Eur_yr];
 					
-					attribute<Eur_yr> Kj_wd_elek      (PlanRegio) := (NewGebruik ? KostenBaten/KostenD/SecundairNet/Kj_wd_elek		: 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kj_wd_elek;
-					attribute<Eur_yr> Kj_wd_elek_EH   (PlanRegio) := (NewGebruik ? KostenBaten/KostenD/SecundairNet/Kj_wd_elek_eh	: 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kj_wd_elek_eh;
-					attribute<Eur_yr> Kj_wd_elek_CO2  (PlanRegio) := (NewGebruik ? KostenBaten/KostenD/SecundairNet/Kj_wd_elek_co2	: 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kj_wd_elek_co2;
-					attribute<Eur_yr> Km_wd_elek      (PlanRegio) := (NewGebruik ? KostenBaten/KostenD/SecundairNet/Km_wd_elek		: 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Km_wd_elek;
+					attribute<Eur_yr> Kj_wd_elek      (PlanRegio) := GebruikOptie ? KostenBaten/KostenD/SecundairNet/Kj_wd_elek		: 0[Eur_yr];
+					attribute<Eur_yr> Kj_wd_elek_EH   (PlanRegio) := GebruikOptie ? KostenBaten/KostenD/SecundairNet/Kj_wd_elek_eh	: 0[Eur_yr];
+					attribute<Eur_yr> Kj_wd_elek_CO2  (PlanRegio) := GebruikOptie ? KostenBaten/KostenD/SecundairNet/Kj_wd_elek_co2	: 0[Eur_yr];
+					attribute<Eur_yr> Km_wd_elek      (PlanRegio) := GebruikOptie ? KostenBaten/KostenD/SecundairNet/Km_wd_elek		: 0[Eur_yr];
 					
 					attribute<Eur_yr> Kj_wd_oh        (PlanRegio) := (NewGebruik ? KostenBaten/KostenD/Kj_wd_oh        : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kj_wd_oh;
 					attribute<Eur_yr> Kj_wd_adm       (PlanRegio) := (NewGebruik ? KostenBaten/KostenD/Kj_wd_adm       : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kj_wd_adm;
@@ -267,11 +268,11 @@ template GeoThermie
 			container Verbruik
 			{
 				attribute<Gj_yr>	V_id_gas		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
-				attribute<Gj_yr>	V_wd_gas		(PlanRegio)		:=	NewGebruik ? KostenBaten/KostenD/Bijstook/Vj_Bijstook : 0[GJ_Yr];
+				attribute<Gj_yr>	V_wd_gas		(PlanRegio)		:=	GebruikOptie ? (1d - TypeInfo/P_vol) * KostenBaten/KostenD/Bijstook/Vj_Bijstook : 0[GJ_Yr];
 				attribute<Gj_yr>	V_ow_gas		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
 				
 				attribute<Gj_yr>	V_id_elek		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
-				attribute<Gj_yr>	V_wd_elek		(PlanRegio)		:=	NewGebruik ? KostenBaten/KostenD/SecundairNet/V_wd_elek : 0[GJ_Yr];
+				attribute<Gj_yr>	V_wd_elek		(PlanRegio)		:=	GebruikOptie ? KostenBaten/KostenD/SecundairNet/V_wd_elek : 0[GJ_Yr];
 				
 				// TODO: gebruik /Invoer/Kengetallen/WarmteBronnen/MetaData/RekenTypes/GeoThermie/Elektriciteit_Factor en EH, en CO2 van elektriciteit
 				attribute<Gj_yr>	V_ow_elek		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen elektriciteitsverbruik bij LT bronnen TODO: controle met FO
@@ -280,7 +281,7 @@ template GeoThermie
 				attribute<Gj_yr>	V_wd_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
 				attribute<Gj_yr>	V_pt_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen primair transport bij LT netten
 				
-				attribute<Gj_yr>	V_warmte		(PlanRegio)		:=	NewGebruik ? KostenBaten/KostenD/Vj_Warmte : 0[GJ_yr];
+				attribute<Gj_yr>	V_warmte		(PlanRegio)		:=	GebruikOptie ? KostenBaten/KostenD/Vj_Warmte : 0[GJ_yr];
 				attribute<Gj_yr>	V_koude			(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen koude bij RW.
 				
 				// generieke netto warmte onttrekking:
@@ -293,8 +294,8 @@ template GeoThermie
 			container Uitstoot
 			{
 				attribute<KG_yr>	CO2_id_gas		(PlanRegio)		:=	const(0[KG_yr], PlanRegio); // geen gasverbruik bij LT netten
-				attribute<KG_yr>	CO2_wd_gas		(PlanRegio)		:=	const(0[KG_yr], PlanRegio); // geen gasverbruik bij LT netten
-				attribute<KG_yr>	CO2_ow_gas		(PlanRegio)		:=	KostenBaten/Vj_WarmtePrimairD * MakeDefined(CO2_GJb, 0[KG_GJ]);
+				attribute<KG_yr>	CO2_wd_gas		(PlanRegio)		:=	GebruikOptie ? (1d - TypeInfo/P_vol) * KostenBaten/CO2_BijstookD : 0[kg_yr]; // geen gasverbruik bij LT netten
+				attribute<KG_yr>	CO2_ow_gas		(PlanRegio)		:=	GebruikOptie ? TypeInfo/P_vol * KostenBaten/Vj_WarmtePrimairD * MakeDefined(CO2_GJb, 0[KG_GJ]) : 0[kg_yr];
 				
 				attribute<KG_yr>	CO2_id_elek		(PlanRegio)		:=	Verbruik/V_id_elek * prijzen/Elektriciteit/CO2_GJ;
 				attribute<KG_yr>	CO2_wd_elek		(PlanRegio)		:=	Verbruik/V_wd_elek * prijzen/Elektriciteit/CO2_GJ;

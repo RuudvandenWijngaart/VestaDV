@@ -27,12 +27,13 @@ template RestWarmte
 	{
 		unit<uint32> BronConnections := ../Bronnen;
 
-		attribute<BronConnections>  CurrBron        (PlanRegio)       := rlookup(CumulatedArcSet/BronPoint, BronConnections/Point)[invert(CumulatedArcSet/PlanRegio_rel)];
-		attribute<BronConnections>  CurrConnection  (PlanRegio)       := CurrBron;
-		attribute<bool>             GebruikRestwarmte(PlanRegio)      := OldGebruikOptie;
+		attribute<BronConnections>  CurrBron          (PlanRegio)     :=	rlookup(CumulatedArcSet/BronPoint, BronConnections/Point)[invert(CumulatedArcSet/PlanRegio_rel)];
+		attribute<BronConnections>  CurrConnection    (PlanRegio)     :=	CurrBron;
+		attribute<bool>             GebruikRestwarmte (PlanRegio)     :=	OldGebruikOptie;
+		attribute<MW>               MWth_vraag        (PlanRegio)     :=	KostenBaten/KostenD/PrimairNet/P_ASW / Kengetallen/Aansluitwaarde/Pfactor * 0.001[ MW / kW];
 
-		attribute<MW>               MWth_used       (BronConnections) := sum(KostenBaten/CapaciteitsVraagD * float64(OldGebruikOptie) , CurrBron);
-		attribute<MW>               MWth_capaciteit (BronConnections) := Bronnen/MWth_max  - MWth_used;
+		attribute<MW>               MWth_used       (BronConnections) :=	BronConnections/P_cap * sum(MWth_vraag, CurrBron);
+		attribute<MW>               MWth_capaciteit (BronConnections) :=	Bronnen/MWth_max  - MWth_used;
 	}
 	attribute<Bool> HasWarmteVraag (PlanRegio) := not(IsDefined(BeginStatus/PlanRegioWarmteAllocatie_REMOVE));
 
@@ -78,8 +79,8 @@ template RestWarmte
 	attribute<G_GJ>   SO2_GJb            (PlanRegio) := Bronnen/SO2_GJ[LastIter/NextState/CurrBron];
 	attribute<G_GJ>   VOS_GJb            (PlanRegio) := Bronnen/VOS_GJ[LastIter/NextState/CurrBron];
 	attribute<G_GJ>   TS_GJb             (PlanRegio) := Bronnen/TS_GJ [LastIter/NextState/CurrBron];
-	attribute<KG_yr>  CO2_Primair        (PlanRegio) := KostenBaten/Vj_WarmtePrimairD * MakeDefined(CO2_GJb, 0[KG_GJ]);
-	attribute<KG_yr>  CO2                (PlanRegio) := KostenBaten/CO2_BijstookD + CO2_Primair;
+//	attribute<KG_yr>  CO2_Primair        (PlanRegio) := KostenBaten/Vj_WarmtePrimairD * MakeDefined(CO2_GJb, 0[KG_GJ]);
+//	attribute<KG_yr>  CO2                (PlanRegio) := KostenBaten/CO2_BijstookD + CO2_Primair;
 	attribute<GJ_yr>  GJe_Totaal         (PlanRegio) := const(0[GJ_yr], PlanRegio);
 //	attribute<KG_yr>  CO2_e              (PlanRegio) := const(0[KG_yr], PlanRegio);
 
@@ -103,11 +104,11 @@ template RestWarmte
 			parameter<float64> Opwekking     := 1.0;
 			parameter<float64> Elektriciteit := 0.0; // TODO
 		}
-				
+		
 		container RestWarmte: FreeData = "False"
 		{
 			container VorigePeriode := BeginStatus/RestWarmte;
-			
+			attribute<ratio> P_vol (PlanRegio):= NieuwGebruik ? bronnen/p_vol[LastIter/NextState/CurrBron] : VorigePeriode/P_vol;
 			container jaarlijks
 			{
 				container ge {
@@ -150,10 +151,11 @@ template RestWarmte
 				}
 				
 				container wd {
-					attribute<Eur_yr> Kj_wd_gas       (PlanRegio) := GebruikRestWarmte ? KostenBaten/KostenD/Bijstook/Kj_wd_gas    : 0[Eur_yr];
-					attribute<Eur_yr> Kj_wd_gas_EH    (PlanRegio) := GebruikRestWarmte ? KostenBaten/KostenD/Bijstook/Kj_wd_gas_EH : 0[Eur_yr];
-					attribute<Eur_yr> Kj_wd_gas_CO2   (PlanRegio) := GebruikRestWarmte ? KostenBaten/KostenD/Bijstook/Kj_wd_gas_CO2: 0[Eur_yr];
-					attribute<Eur_yr> Km_wd_gas       (PlanRegio) := GebruikRestWarmte ? KostenBaten/KostenD/Bijstook/Km_wd_gas    : 0[Eur_yr];
+					
+					attribute<Eur_yr> Kj_wd_gas       (PlanRegio) := GebruikRestWarmte ? P_vol * KostenBaten/KostenD/Bijstook/Kj_wd_gas    : 0[Eur_yr];
+					attribute<Eur_yr> Kj_wd_gas_EH    (PlanRegio) := GebruikRestWarmte ? P_vol * KostenBaten/KostenD/Bijstook/Kj_wd_gas_EH : 0[Eur_yr];
+					attribute<Eur_yr> Kj_wd_gas_CO2   (PlanRegio) := GebruikRestWarmte ? P_vol * KostenBaten/KostenD/Bijstook/Kj_wd_gas_CO2: 0[Eur_yr];
+					attribute<Eur_yr> Km_wd_gas       (PlanRegio) := GebruikRestWarmte ? P_vol * KostenBaten/KostenD/Bijstook/Km_wd_gas    : 0[Eur_yr];
 					
 					attribute<Eur_yr> Kj_wd_elek      (PlanRegio) := GebruikRestWarmte ? KostenBaten/KostenD/SecundairNet/Kj_wd_elek		: 0[Eur_yr];
 					attribute<Eur_yr> Kj_wd_elek_EH   (PlanRegio) := GebruikRestWarmte ? KostenBaten/KostenD/SecundairNet/Kj_wd_elek_eh		: 0[Eur_yr];
@@ -245,18 +247,18 @@ template RestWarmte
 			container Verbruik
 			{
 				attribute<Gj_yr>	V_id_gas		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
-				attribute<Gj_yr>	V_wd_gas		(PlanRegio)		:=	EersteGebruik ? KostenBaten/KostenD/Bijstook/Vj_Bijstook : 0[GJ_Yr];
+				attribute<Gj_yr>	V_wd_gas		(PlanRegio)		:=	GebruikRestWarmte ? (1d - P_vol) * KostenBaten/KostenD/Bijstook/Vj_Bijstook : 0[GJ_yr];
 				attribute<Gj_yr>	V_ow_gas		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
 				
 				attribute<Gj_yr>	V_id_elek		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
-				attribute<Gj_yr>	V_wd_elek		(PlanRegio)		:=	EersteGebruik ? KostenBaten/KostenD/SecundairNet/V_wd_elek : 0[GJ_Yr];
+				attribute<Gj_yr>	V_wd_elek		(PlanRegio)		:=	GebruikRestWarmte ? KostenBaten/KostenD/SecundairNet/V_wd_elek : 0[GJ_Yr];
 				attribute<Gj_yr>	V_ow_elek		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen elektriciteitsverbruik bij LT bronnen TODO: controle met FO
 				
 				attribute<Gj_yr>	V_id_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // niet specifiek benoemd, alles in WD, TODO: specifiek maken
 				attribute<Gj_yr>	V_wd_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
 				attribute<Gj_yr>	V_pt_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen primair transport bij LT netten
 				
-				attribute<Gj_yr>	V_warmte		(PlanRegio)		:=	EersteGebruik ? KostenBaten/KostenD/Vj_Warmte : 0[GJ_Yr];
+				attribute<Gj_yr>	V_warmte		(PlanRegio)		:=	GebruikRestWarmte ? KostenBaten/KostenD/Vj_Warmte : 0[GJ_Yr];
 				attribute<Gj_yr>	V_koude			(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen koude bij RW.
 				
 				// generieke netto warmte onttrekking:
@@ -264,13 +266,14 @@ template RestWarmte
 				attribute<Gj_yr> V_wd_warmte(PlanRegio):= V_id_warmte - (V_wd_gas + V_wd_elek - V_wd_verlies);
 				attribute<Gj_yr> V_ow_warmte(PlanRegio):= V_wd_warmte - (V_ow_gas + V_ow_elek - V_pt_verlies);				
 				attribute<Gj_yr> V_ow_koude (PlanRegio):= V_Koude;
+				
 			}
 			
 			container Uitstoot
 			{
 				attribute<KG_yr>	CO2_id_gas		(PlanRegio)		:=	const(0[KG_yr], PlanRegio); // geen gasverbruik bij LT netten
-				attribute<KG_yr>	CO2_wd_gas		(PlanRegio)		:=	const(0[KG_yr], PlanRegio); // geen gasverbruik bij LT netten
-				attribute<KG_yr>	CO2_ow_gas		(PlanRegio)		:=	EersteGebruik ? KostenBaten/Vj_WarmtePrimairD * MakeDefined(CO2_GJb, 0[KG_GJ]) : 0[KG_yr];
+				attribute<KG_yr>	CO2_wd_gas		(PlanRegio)		:=	GebruikRestWarmte ? (1d - P_vol) * KostenBaten/CO2_BijstookD : 0[kg_yr]; // geen gasverbruik bij LT netten
+				attribute<KG_yr>	CO2_ow_gas		(PlanRegio)		:=	GebruikRestWarmte ? P_vol * verbruik/V_ow_warmte * MakeDefined(CO2_GJb, 0[KG_GJ]) : 0[KG_yr];
 				
 				attribute<KG_yr>	CO2_id_elek		(PlanRegio)		:=	Verbruik/V_id_elek * prijzen/Elektriciteit/CO2_GJ;
 				attribute<KG_yr>	CO2_wd_elek		(PlanRegio)		:=	Verbruik/V_wd_elek * prijzen/Elektriciteit/CO2_GJ;

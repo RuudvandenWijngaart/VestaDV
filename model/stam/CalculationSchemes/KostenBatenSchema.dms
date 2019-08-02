@@ -140,7 +140,12 @@ template KostenBaten
 															* float64(Not(Classifications/WarmteOptie/isGebiedsOptie[BebouwingsComponenten/NieuwbouwUtil/WarmteAllocatie]))
 															* float64(BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/deelnemers/AansluitCapaciteit > afkapgrens_klein) 
 															, BebouwingsComponenten/NieuwbouwUtil/PlanRegio_rel));
-															
+				attribute<kW> P_ASW		(PlanRegio)	:=	sum(Kengetallen/Aansluitwaarde/GTF_util_w  * 
+															BebouwingsComponenten/BestaandeUtil/WarmteVraag/deelnemers/AansluitCapaciteit ,
+															BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +
+															sum(Kengetallen/Aansluitwaarde/GTF_util_w  * 
+															BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/deelnemers/AansluitCapaciteit ,
+															BebouwingsComponenten/NieuwbouwUtil/PlanRegio_rel);											
 				attribute<kW> Totaal(PlanRegio) := Klein + Groot;
 			}
 
@@ -195,6 +200,8 @@ template KostenBaten
 						sum(  BebouwingsComponenten/BestaandeGlTb/WarmteVraag/deelnemers/AansluitCapaciteit
 						* float64(Not(Classifications/WarmteOptie/isGebiedsOptie[BebouwingsComponenten/BestaandeGlTb/WarmteAllocatie]))
 						, BebouwingsComponenten/BestaandeGlTb/PlanRegio_rel);
+				attribute<kW> P_ASW(PlanRegio) :=
+						sum(  BebouwingsComponenten/BestaandeGlTb/WarmteVraag/deelnemers/AansluitCapaciteit, BebouwingsComponenten/BestaandeGlTb/PlanRegio_rel);
 
 				attribute<Eur>		Ki_OnderStation		(PlanRegio)	:=	CapaciteitsVraag * Kostenkentallen/K_OS,				Source = "validatiesessies startanalyse 2019"; //TODO bron = FO 4.0
 				attribute<Eur> K_dienstleidingen (PlanRegio) : Source = "F 47b" ,= sum(BebouwingsComponenten/BestaandeGlTb/WarmteVraag/deelnemers/NrModelUnits * K_dienstleiding_m2[BebouwingsComponenten/BestaandeGlTb/BebouwingsType], PlanRegioKaarten/BestaandeGlTb/impl/PlanRegio_rel);
@@ -220,10 +227,13 @@ template KostenBaten
 				attribute<nrAansl> NrAansluitingen(PlanRegio) :=
 						sum(  BebouwingsComponenten/NieuwbouwGlTb/WarmteVraag/deelnemers/nrAansluitingen * float64(Not(Classifications/WarmteOptie/isGebiedsOptie[BebouwingsComponenten/NieuwbouwGlTb/WarmteAllocatie]))
 						, PlanRegioKaarten/NieuwbouwGlTb/impl/PlanRegio_rel  );
+						
 				attribute<kW> CapaciteitsVraag(PlanRegio) :=
-						sum(  BebouwingsComponenten/NieuwbouwGlTb/WarmteVraag/deelnemers/AansluitCapaciteit * float64(Not(Classifications/WarmteOptie/isGebiedsOptie[BebouwingsComponenten/NieuwbouwGlTb/WarmteAllocatie]))
+						sum(  BebouwingsComponenten/NieuwbouwGlTb/WarmteVraag/deelnemers/AansluitCapaciteit
+						* float64(Not(Classifications/WarmteOptie/isGebiedsOptie[BebouwingsComponenten/NieuwbouwGlTb/WarmteAllocatie]))
 						, BebouwingsComponenten/NieuwbouwGlTb/PlanRegio_rel);
-
+				attribute<kW> P_ASW(PlanRegio) :=
+						sum(  BebouwingsComponenten/NieuwbouwGlTb/WarmteVraag/deelnemers/AansluitCapaciteit, BebouwingsComponenten/NieuwbouwGlTb/PlanRegio_rel);
 				attribute<Eur>		Ki_OnderStation		(PlanRegio)	:=	CapaciteitsVraag * Kostenkentallen/K_OS,				Source = "validatiesessies startanalyse 2019"; //TODO bron = FO 4.0
 
 				attribute<Eur> K_dienstleidingen (PlanRegio): Source = "F 47b",
@@ -287,17 +297,19 @@ template KostenBaten
 		container PrimairNet
 		{
 			container			LeidingKosten				:=	BuisKosten(PlanRegio, P_transport * 0.001[ MW / kW]);
-			attribute<kw>		P_transport    (PlanRegio)	:=	Kengetallen/Efficiency/HoofdbronVermogensaandeel * SecundairNet/P_sec;
+			attribute<kw>		P_transport    (PlanRegio)	:=	SecundairNet/P_sec;
+			attribute<kw>		P_ASW          (PlanRegio)	:=	Wonen/bw/P_ASW + Wonen/nw/P_ASW + Utiliteit/CapaciteitsVraag/P_ASW
+																+ GlasTuinbouw/bestaand/P_ASW + GlasTuinbouw/nieuw/P_ASW;
 		}
 
 		attribute<GJ_yr>	Vj_WarmteVraag    (PlanRegio) :=	V_Warmte_w + V_Warmte_u + V_Warmte_gltb;
 		attribute<GJ_yr>	Vj_Warmte         (PlanRegio) :=	Vj_WarmteVraag / (1d - Kengetallen/Efficiency/Leidingverlies_LT * Leercurves/Verl/Curve);
 		attribute<GJ_yr>	Vj_LeidingVerlies (PlanRegio) :=	Vj_Warmte - Vj_WarmteVraag;
-		attribute<GJ_yr>	Vj_WarmtePrimair  (PlanRegio) :=	Kengetallen/Efficiency/W_zonder_bijstook * Vj_Warmte;
+		attribute<GJ_yr>	Vj_WarmtePrimair  (PlanRegio) :=	Vj_Warmte;
 
 		container Bijstook
 		{
-			attribute<GJ_yr>	Vj_Vraag      (PlanRegio) :=	Vj_Warmte - Vj_WarmtePrimair,								Descr = "volumevraag naar warmte die jaarlijks wordt geleverd uit de hulpketel";
+			attribute<GJ_yr>	Vj_Vraag      (PlanRegio) :=	Vj_Warmte,													Descr = "volumevraag naar warmte die jaarlijks wordt geleverd uit de hulpketel";
 			attribute<GJ_yr>	Vj_Bijstook   (PlanRegio) :=	Vj_Vraag /Kengetallen/Efficiency/Efficiency_piekketel,		Descr = "volumevraag naar warmte uit hulpketel na correctie voor efficientiefactor", Source = "FO v7a F 35";
 			attribute<GJ_yr>	Vj_Verlies    (PlanRegio) :=	Vj_Bijstook - Vj_Vraag,										Descr = "gedeelte van de benodigde energie in de hulpketel dat verloren gaat in de omzetting naar warmte";
 			attribute<Eur_yr>	Kj_wd_gas     (PlanRegio) :=	AardGasPrijs                                * Vj_Bijstook,	Descr = "eindgebruikerskosten voor inkoop aardgas voor bijstook ik hulpketels";
@@ -314,8 +326,8 @@ template KostenBaten
 		attribute<Eur_yr> Kj_Onderhoud    (PlanRegio) := Kj_wd_oh + Kj_id_oh;
 		attribute<Eur_yr> Kj_wd_elek      (PlanRegio) := SecundairNet/Kj_wd_elek;
 		attribute<Eur_yr> Km_wd_elek      (PlanRegio) := SecundairNet/Km_wd_elek;
-		attribute<Eur_yr> Kj_wd_gas       (PlanRegio) := Bijstook/Kj_wd_gas;
-		attribute<Eur_yr> Km_wd_gas       (PlanRegio) := Bijstook/Km_wd_gas;
+		attribute<Eur_yr> Kj_wd_gas       (PlanRegio) := (1d - Kengetallen/efficiency/W_zonder_bijstook) * Bijstook/Kj_wd_gas;
+		attribute<Eur_yr> Km_wd_gas       (PlanRegio) := (1d - Kengetallen/efficiency/W_zonder_bijstook) * Bijstook/Km_wd_gas;
 		attribute<Eur_yr> Kj_lv_adm       (PlanRegio) := Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_lv_Admin * (opbrengsten/JaarlijksD/Oj_VastRecht * 1[yr]);
 		attribute<Eur_yr> Kj_wd_adm       (PlanRegio) := Leercurves/OenM/Curve * (Wonen/Kj_wd_adm + Utiliteit/Kj_Admin + Glastuinbouw/Kj_Admin + SecundairNet/Kj_Admin);
 
