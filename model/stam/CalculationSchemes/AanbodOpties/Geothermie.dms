@@ -37,6 +37,7 @@ template GeoThermie
 			attribute<rdc_meter> Drill_point := PointSet/Point[Connections];
 			attribute<m>         Dist        := value(dist(Usage_Point, Drill_Point), m);
 		}
+//		attribute<m> Dist := const(0[m], planregio);
 		attribute<m> Dist := InContour ? 0[m] : OutsideContourSet/Dist[invert(OutsideContourSet/nr_OrgEntity)];
 	}
 
@@ -97,10 +98,12 @@ template GeoThermie
 		- Kosten/Kji_pt * ((1.0 - SpecifiekeInstellingen/Beleid/EIA/pt))
 		+ KostenBaten/KostenD/Bijstook/Kj_wd_gas - Kosten/Kj_wd_gas;
 	attribute<bool> RentabiliteitsAfweging (PlanRegio) := Oj_Afweging > 0[Eur_yr];
+//	attribute<bool> RentabiliteitsAfweging (PlanRegio) := const(true, PlanRegio);
 
 	attribute<bool> OldGebruik             (PlanRegio) := IsDefined(BeginStatus/PlanRegioWarmteAllocatie_REMOVE);                                  // een optie (deze of andere) was al in gebruik
 	attribute<bool> GebruiktOptie          (PlanRegio) := BeginStatus/PlanRegioWarmteAllocatie_REMOVE == Classifications/GebiedsOptie/V/Geothermie; // deze optie was al in gebruik;
 	attribute<bool> NewGebruik             (PlanRegio) := RentabiliteitsAfweging && bron/InContour && not(OldGebruik);
+//	attribute<bool> NewGebruik             (PlanRegio) := RentabiliteitsAfweging && not(OldGebruik);
 	attribute<bool> GebruikOptie           (PlanRegio) := NewGebruik || GebruiktOptie;
 
 	attribute<Eur_yr> Kj_Netto             (PlanRegio) := Ki_Netto * NCW/ow28/AnnualisationFactor - Oji_Netto; // Rentabiliteit: jaarlijkse opbrengsten voor de energieproducent
@@ -109,7 +112,7 @@ template GeoThermie
 	{
 		container BebouwingMutatie :=
 			for_each_ne(Classifications/BebouwingsComponent/Name
-				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name+', Classifications/GebiedsOptie/V/GeoThermie, .../GebruiktOptie)'
+				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name+', Classifications/GebiedsOptie/V/GeoThermie, .../GebruikOptie)'
 			);
 		container Bebouwing :=
 			for_each_ne(Classifications/BebouwingsComponent/Name
@@ -136,17 +139,17 @@ template GeoThermie
 			container jaarlijks
 			{
 				container ge {
-					attribute<Eur_yr> Kj_ge_hv        (PlanRegio) := (NewGebruik ? KostenBaten/Kj_ge_hv  : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Kj_ge_hv;
-					attribute<Eur_yr> Kji_ge_ov       (PlanRegio) := (NewGebruik ? KostenBaten/Kji_ge_ov : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Kji_ge_ov;
-					attribute<Eur_yr> Kji_ge_pm       (PlanRegio) := (NewGebruik ? KostenBaten/Kji_ge_pm : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Kji_ge_pm;
+					attribute<Eur_yr> Kj_ge_hv        (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Kj_ge_hv  : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Kj_ge_hv;
+					attribute<Eur_yr> Kji_ge_ov       (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Kji_ge_ov : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Kji_ge_ov;
+					attribute<Eur_yr> Kji_ge_pm       (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Kji_ge_pm : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Kji_ge_pm;
 					
-					attribute<Eur_yr> Kmi_ge_ov       (PlanRegio) := (NewGebruik ? KostenBaten/Kmi_ge_ov : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Kmi_ge_ov;
-					attribute<Eur_yr> Kmi_ge_pm       (PlanRegio) := (NewGebruik ? KostenBaten/Kmi_ge_pm : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Kmi_ge_pm;
+					attribute<Eur_yr> Kmi_ge_ov       (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Kmi_ge_ov : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Kmi_ge_ov;
+					attribute<Eur_yr> Kmi_ge_pm       (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Kmi_ge_pm : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Kmi_ge_pm;
 					attribute<Eur_yr> Om_ge_comfort   (PlanRegio) := const(0[EUR_yr], PlanRegio);
 					
 					attribute<Eur_yr> Bji_ge_Aansl    (PlanRegio) := Eenmalig/Oi_lv_Aansl * NCW/bw28/AnnualisationFactor;
-					attribute<Eur_yr> Oji_ge_EIA      (PlanRegio) := (NewGebruik ? Eenmalig/Oi_ge_EIA * NCW/bw28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Oji_ge_EIA;
-					attribute<Eur_yr> Omi_ge_EIA      (PlanRegio) := (NewGebruik ? Eenmalig/Oi_ge_EIA * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Omi_ge_EIA;
+					attribute<Eur_yr> Oji_ge_EIA      (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Eenmalig/Oi_ge_EIA * NCW/bw28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Oji_ge_EIA;
+					attribute<Eur_yr> Omi_ge_EIA      (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Eenmalig/Oi_ge_EIA * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/ge/Omi_ge_EIA;
 				}
 				
 				container id {
@@ -160,14 +163,14 @@ template GeoThermie
 					attribute<Eur_yr> Kj_id_elek_CO2  (PlanRegio) := const(0[EUR_yr], PlanRegio);
 					attribute<Eur_yr> Km_id_elek      (PlanRegio) := const(0[EUR_yr], PlanRegio);
 					
-					attribute<Eur_yr> Kj_id_oh        (PlanRegio) := (NewGebruik ? KostenBaten/KostenD/Kj_id_oh : 0[Eur_yr]) + VorigePeriode/jaarlijks/id/Kj_id_oh;
+					attribute<Eur_yr> Kj_id_oh        (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/KostenD/Kj_id_oh : 0[Eur_yr]) + VorigePeriode/jaarlijks/id/Kj_id_oh;
 					attribute<Eur_yr> Kj_id_adm       (PlanRegio) := const(0[EUR_yr], PlanRegio);
 					
-					attribute<Eur_yr> Kji_id          (PlanRegio) := (NewGebruik ? KostenBaten/Kji_id : 0[Eur_yr]) + VorigePeriode/jaarlijks/id/Kji_id;
-					attribute<Eur_yr> Kmi_id          (PlanRegio) := (NewGebruik ? KostenBaten/Kmi_id : 0[Eur_yr]) + VorigePeriode/jaarlijks/id/Kmi_id;
+					attribute<Eur_yr> Kji_id          (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Kji_id : 0[Eur_yr]) + VorigePeriode/jaarlijks/id/Kji_id;
+					attribute<Eur_yr> Kmi_id          (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Kmi_id : 0[Eur_yr]) + VorigePeriode/jaarlijks/id/Kmi_id;
 					
-					attribute<Eur_yr> Oji_id_EIA      (PlanRegio) := (NewGebruik ? Eenmalig/Oi_id_EIA * NCW/id28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/id/Oji_id_EIA;
-					attribute<Eur_yr> Omi_id_EIA      (PlanRegio) := (NewGebruik ? Eenmalig/Oi_id_EIA * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/id/Omi_id_EIA;
+					attribute<Eur_yr> Oji_id_EIA      (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Eenmalig/Oi_id_EIA * NCW/id28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/id/Oji_id_EIA;
+					attribute<Eur_yr> Omi_id_EIA      (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Eenmalig/Oi_id_EIA * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/id/Omi_id_EIA;
 					
 					/// TODO: ook aanpassen in rentabiliteitsafwegingen 
 					attribute<Eur_yr> Oj_id_EEA       (PlanRegio) := (NewGebruik ? (Kj_id_oh + Kj_id_adm + Kj_id_gas + Kj_id_Elek) * SpecifiekeInstellingen/Beleid/EEA/wd : 0[Eur_yr]) + VorigePeriode/jaarlijks/id/Oj_id_EEA;
@@ -185,29 +188,29 @@ template GeoThermie
 					attribute<Eur_yr> Kj_wd_elek_CO2  (PlanRegio) := GebruikOptie ? KostenBaten/KostenD/SecundairNet/Kj_wd_elek_co2	: 0[Eur_yr];
 					attribute<Eur_yr> Km_wd_elek      (PlanRegio) := GebruikOptie ? KostenBaten/KostenD/SecundairNet/Km_wd_elek		: 0[Eur_yr];
 					
-					attribute<Eur_yr> Kj_wd_oh        (PlanRegio) := (NewGebruik ? KostenBaten/KostenD/Kj_wd_oh        : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kj_wd_oh;
-					attribute<Eur_yr> Kj_wd_adm       (PlanRegio) := (NewGebruik ? KostenBaten/KostenD/Kj_wd_adm       : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kj_wd_adm;
-					attribute<Eur_yr> Kji_wd          (PlanRegio) := (NewGebruik ? KostenBaten/Kji_wd : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kji_wd;
-					attribute<Eur_yr> Kmi_wd          (PlanRegio) := (NewGebruik ? KostenBaten/Kmi_wd : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kmi_wd;
+					attribute<Eur_yr> Kj_wd_oh        (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/KostenD/Kj_wd_oh        : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kj_wd_oh;
+					attribute<Eur_yr> Kj_wd_adm       (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/KostenD/Kj_wd_adm       : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kj_wd_adm;
+					attribute<Eur_yr> Kji_wd          (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Kji_wd : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kji_wd;
+					attribute<Eur_yr> Kmi_wd          (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Kmi_wd : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Kmi_wd;
 					
-					attribute<Eur_yr> Oji_wd_EIA      (PlanRegio) := (NewGebruik ? Eenmalig/Oi_wd_EIA * NCW/wd28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Oji_wd_EIA;
-					attribute<Eur_yr> Omi_wd_EIA      (PlanRegio) := (NewGebruik ? Eenmalig/Oi_wd_EIA * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Omi_wd_EIA;
+					attribute<Eur_yr> Oji_wd_EIA      (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Eenmalig/Oi_wd_EIA * NCW/wd28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Oji_wd_EIA;
+					attribute<Eur_yr> Omi_wd_EIA      (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Eenmalig/Oi_wd_EIA * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Omi_wd_EIA;
 					
 					/// TODO: ook aanpassen in rentabiliteitsafwegingen 
 					attribute<Eur_yr> Oj_wd_EEA      (PlanRegio) := (NewGebruik ? (Kj_wd_oh + Kj_wd_adm + Kj_wd_gas + Kj_wd_Elek) * SpecifiekeInstellingen/Beleid/EEA/wd : 0[Eur_yr]) + VorigePeriode/jaarlijks/wd/Oj_wd_EEA;
 					attribute<Eur_yr> Oj_wd_SDE       (PlanRegio) := const(0[EUR_yr], PlanRegio);
 				}
 				container pt {				
-					attribute<Eur_yr> Kj_pt_oh        (PlanRegio) := (NewGebruik ? Kosten/Kj_pt_oh        : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Kj_pt_oh;
-					attribute<Eur_yr> Kj_pt_adm       (PlanRegio) := (NewGebruik ? Kosten/Kj_pt_adm       : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Kj_pt_adm;
+					attribute<Eur_yr> Kj_pt_oh        (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Kosten/Kj_pt_oh        : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Kj_pt_oh;
+					attribute<Eur_yr> Kj_pt_adm       (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Kosten/Kj_pt_adm       : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Kj_pt_adm;
 					
-					attribute<Eur_yr> Kji_pt          (PlanRegio) := (NewGebruik ? Kosten/Kji_pt : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Kji_pt;
-					attribute<Eur_yr> Kmi_pt          (PlanRegio) := (NewGebruik ? Kosten/Ki_pt * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Kmi_pt;
+					attribute<Eur_yr> Kji_pt          (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Kosten/Kji_pt : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Kji_pt;
+					attribute<Eur_yr> Kmi_pt          (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Kosten/Ki_pt * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Kmi_pt;
 					
-					attribute<Eur_yr> Oji_pt_EIA      (PlanRegio) := (NewGebruik ? Eenmalig/Oi_pt_EIA * NCW/ow28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Oji_pt_EIA;
-					attribute<Eur_yr> Omi_pt_EIA      (PlanRegio) := (NewGebruik ? Eenmalig/Oi_pt_EIA * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Omi_pt_EIA;
+					attribute<Eur_yr> Oji_pt_EIA      (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Eenmalig/Oi_pt_EIA * NCW/ow28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Oji_pt_EIA;
+					attribute<Eur_yr> Omi_pt_EIA      (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Eenmalig/Oi_pt_EIA * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Omi_pt_EIA;
 					
-					attribute<Eur_yr> Oj_pt_EEA       (PlanRegio) := (NewGebruik  ? Kosten/Oj_pt_EEA : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Oj_pt_EEA;
+					attribute<Eur_yr> Oj_pt_EEA       (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik  ? Kosten/Oj_pt_EEA : 0[Eur_yr]) + VorigePeriode/jaarlijks/pt/Oj_pt_EEA;
 				}
 				container ow {
 					attribute<Eur_yr> Kj_ow_gas       (PlanRegio) := const(0[EUR_yr], PlanRegio);
@@ -223,16 +226,16 @@ template GeoThermie
 					
 					attribute<Eur_yr> Kj_ow_productie (PlanRegio) := GebruikOptie ? Kosten/Kj_WarmteWaarde : 0[Eur_yr]; // geen opsplitsing naar EH, CO2 etc.
 					
-					attribute<Eur_yr> Kj_ow_oh        (PlanRegio) := (NewGebruik ? Kosten/Kj_ow_oh        : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kj_ow_oh;
-					attribute<Eur_yr> Kj_ow_adm       (PlanRegio) := (NewGebruik ? Kosten/Kj_ow_adm       : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kj_ow_adm;
+					attribute<Eur_yr> Kj_ow_oh        (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Kosten/Kj_ow_oh        : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kj_ow_oh;
+					attribute<Eur_yr> Kj_ow_adm       (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Kosten/Kj_ow_adm       : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kj_ow_adm;
 					
-					attribute<Eur_yr> Kji_ow          (PlanRegio) := (NewGebruik ? Kosten/Kji_ow : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kji_ow;
-					attribute<Eur_yr> Kmi_ow          (PlanRegio) := (NewGebruik ? Kosten/Ki_ow * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kmi_ow;
+					attribute<Eur_yr> Kji_ow          (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Kosten/Kji_ow : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kji_ow;
+					attribute<Eur_yr> Kmi_ow          (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Kosten/Ki_ow * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Kmi_ow;
 					
-					attribute<Eur_yr> Oji_ow_EIA      (PlanRegio) := (NewGebruik ? Eenmalig/Oi_ow_EIA * NCW/ow28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Oji_ow_EIA;
-					attribute<Eur_yr> Omi_ow_EIA      (PlanRegio) := (NewGebruik ? Eenmalig/Oi_ow_EIA * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Omi_ow_EIA;
+					attribute<Eur_yr> Oji_ow_EIA      (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Eenmalig/Oi_ow_EIA * NCW/ow28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Oji_ow_EIA;
+					attribute<Eur_yr> Omi_ow_EIA      (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Eenmalig/Oi_ow_EIA * NCW/mr28/AnnualisationFactor : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Omi_ow_EIA;
 					
-					attribute<Eur_yr> Oj_ow_EEA       (PlanRegio) := (NewGebruik ? Kosten/Oj_ow_EEA : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Oj_ow_EEA;						
+					attribute<Eur_yr> Oj_ow_EEA       (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? Kosten/Oj_ow_EEA : 0[Eur_yr]) + VorigePeriode/jaarlijks/ow/Oj_ow_EEA;						
 					attribute<Eur_yr> Oj_ow_SDE       (PlanRegio) := const(0[EUR_yr], PlanRegio);
 				}
 				container lv
@@ -242,29 +245,29 @@ template GeoThermie
 					
 					attribute<Eur_yr> Oj_lv_verbruik  (PlanRegio) := GebruikOptie ? KostenBaten/Opbrengsten/JaarlijksD/Warmtevraag  : 0[Eur_yr];
 					attribute<Eur_yr> Oj_lv_vastrecht (PlanRegio) := GebruikOptie ? KostenBaten/Opbrengsten/JaarlijksD/Oj_vastrecht : 0[Eur_yr];
-					attribute<Eur_yr> Oj_lv_SDE       (PlanRegio) := (NewGebruik ? kosten/Oj_SDE    : 0[Eur_yr])+VorigePeriode/jaarlijks/lv/Oj_lv_SDE;
+					attribute<Eur_yr> Oj_lv_SDE       (PlanRegio) := (GebiedsAllocatie/Geothermie/NewGebruik ? kosten/Oj_SDE    : 0[Eur_yr])+VorigePeriode/jaarlijks/lv/Oj_lv_SDE;
 				}
 			}
 
 			container eenmalig
 			{				
-				attribute<Eur> Oi_lv_Aansl    (PlanRegio) := NewGebruik ? KostenBaten/Opbrengsten/EenmaligD/Oi_Totaal : 0[Eur];
+				attribute<Eur> Oi_lv_Aansl    (PlanRegio) := GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Opbrengsten/EenmaligD/Oi_Totaal : 0[Eur];
 				
-				attribute<Eur> Ki_ge_ov       (PlanRegio) := NewGebruik ? KostenBaten/Ki_ge_ov : 0[Eur];
-				attribute<Eur> Ki_ge_pm       (PlanRegio) := NewGebruik ? KostenBaten/Ki_ge_pm : 0[Eur];
-				attribute<Eur> Oi_ge_EIA      (PlanRegio) := NewGebruik ? KostenBaten/Oi_ge_subsidie: 0[Eur];
+				attribute<Eur> Ki_ge_ov       (PlanRegio) := GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Ki_ge_ov : 0[Eur];
+				attribute<Eur> Ki_ge_pm       (PlanRegio) := GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Ki_ge_pm : 0[Eur];
+				attribute<Eur> Oi_ge_EIA      (PlanRegio) := GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Oi_ge_subsidie: 0[Eur];
 				
-				attribute<Eur> Ki_id          (PlanRegio) := NewGebruik ? KostenBaten/Ki_id_Bruto : 0[Eur];
-				attribute<Eur> Oi_id_EIA      (PlanRegio) := NewGebruik ? KostenBaten/Ki_id_Bruto * SpecifiekeInstellingen/Beleid/EIA/id : 0[Eur];
+				attribute<Eur> Ki_id          (PlanRegio) := GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Ki_id_Bruto : 0[Eur];
+				attribute<Eur> Oi_id_EIA      (PlanRegio) := GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Ki_id_Bruto * SpecifiekeInstellingen/Beleid/EIA/id : 0[Eur];
 				
-				attribute<Eur> Ki_wd          (PlanRegio) := NewGebruik ? KostenBaten/Ki_wd_Bruto : 0[Eur];
-				attribute<Eur> Oi_wd_EIA      (PlanRegio) := NewGebruik ? KostenBaten/Ki_wd_Bruto * SpecifiekeInstellingen/Beleid/EIA/wd : 0[Eur];
+				attribute<Eur> Ki_wd          (PlanRegio) := GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Ki_wd_Bruto : 0[Eur];
+				attribute<Eur> Oi_wd_EIA      (PlanRegio) := GebiedsAllocatie/Geothermie/NewGebruik ? KostenBaten/Ki_wd_Bruto * SpecifiekeInstellingen/Beleid/EIA/wd : 0[Eur];
 				
-				attribute<Eur> Ki_pt          (PlanRegio) := NewGebruik ? Kosten/Ki_pt : 0[Eur];
-				attribute<Eur> Oi_pt_EIA      (PlanRegio) := NewGebruik ? Kosten/Ki_pt * SpecifiekeInstellingen/Beleid/EIA/pt : 0[Eur];
+				attribute<Eur> Ki_pt          (PlanRegio) := GebiedsAllocatie/Geothermie/NewGebruik ? Kosten/Ki_pt : 0[Eur];
+				attribute<Eur> Oi_pt_EIA      (PlanRegio) := GebiedsAllocatie/Geothermie/NewGebruik ? Kosten/Ki_pt * SpecifiekeInstellingen/Beleid/EIA/pt : 0[Eur];
 				
-				attribute<Eur> Ki_ow          (PlanRegio) := NewGebruik ? Kosten/Ki_ow : 0[Eur];
-				attribute<Eur> Oi_ow_EIA      (PlanRegio) := NewGebruik ? Kosten/Ki_ow * SpecifiekeInstellingen/Beleid/EIA/ow[TypeInfo/TypeInfoList_rel] : 0[Eur];
+				attribute<Eur> Ki_ow          (PlanRegio) := GebiedsAllocatie/Geothermie/NewGebruik ? Kosten/Ki_ow : 0[Eur];
+				attribute<Eur> Oi_ow_EIA      (PlanRegio) := GebiedsAllocatie/Geothermie/NewGebruik ? Kosten/Ki_ow * SpecifiekeInstellingen/Beleid/EIA/ow[TypeInfo/TypeInfoList_rel] : 0[Eur];
 			}
 			
 			container Verbruik
