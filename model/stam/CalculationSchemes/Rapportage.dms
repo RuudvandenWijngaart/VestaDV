@@ -168,11 +168,10 @@ container Rapportage
 			- Oj_Subsidie;
 	}
 
-	template WriteTableWithMetricToCSV
+	template WriteTable8ToCSV
 	{
 		// begin case parameters
-		container context;
-		unit<uint8> RapGroep;
+		unit<uint8> table;
 		parameter<string> fieldlist;
 		parameter<string> filename;
 		// end case parameters
@@ -185,41 +184,50 @@ container Rapportage
 				attribute<UInt32> SepPos      := strpos(FieldDescr, ':');
 				attribute<string> Name        := IsDefined(SepPos) ? substr(FieldDescr, 0, SepPos): FieldDescr;
 				attribute<string> NameInTable := IsDefined(SepPos) ? substr(FieldDescr, SepPos+1, strlen(FieldDescr)) : FieldDescr;
+				attribute<string> Metric := 
+					='union_data(.,'+
+						AsList('+PropValue(ValuesUnit(table/' + impl/Field/NameInTable +'),' + quote('metric') + ')', ',')+
+					')';
 			}
-			parameter<string> NewLine := '\n';
 		}
 
-		parameter<string> Header := AsList(impl/Field/Name, ';');
+		parameter<string> Header := AsList(Quote(impl/Field/Name +(impl/Field/Metric=='' ? '' : ' [' + impl/Field/Metric +']')), ';');
 
-		parameter<string> Metric := 
-			=asList(
-				Quote('[')+'+PropValue(ValuesUnit(context/' + impl/Field/NameInTable +'),' + quote('metric') + ')+'+Quote(']')
-				, '+'+Quote(';')+'+'
-			);
+		parameter<string> Body_expr := AsList('AsExprList(table/' + impl/Field/NameInTable + ', id(table))',' +'';''+ ');
+		attribute<string> Body (table) := =Body_expr;
 
-		attribute<string> Body (RapGroep) := 
-			='union_data(RapGroep, '
-				+AsList('string(context/'+impl/Field/NameInTable+')'
-					,'+' + quote(';') + '+'
-				)
-			+')';
-
-		parameter<string> Result := Header + impl/NewLine + Metric + impl/NewLine + AsList(Body+impl/NewLine,'')
+		parameter<string> Result := Header + '\n' + AsList(Body+'\n', '')
 		,	StorageName = "=filename"
 		,	StorageType = "str";
 	}
 
-	template WriteTableToCSV
+	template WriteTable32ToCSV
 	{
 		// begin case parameters
 		unit<uint32> table;
-		unit<uint32> variabele;
+		parameter<string> fieldlist;
 		parameter<string> filename;
 		// end   case parameters
 
-		parameter<string> result_expr        := AsList('MakeDefined(string(table/' + variabele/name + '),'''')',' +'';''+ ');
-		attribute<string> result_att (table) := =result_expr;
-		parameter<string> result             := AsList(variabele/name, ';')+'\n'+AsList(result_att, '\n')
+		container impl: isHidden = "True"
+		{
+			unit<uint32> Field := range(uint32,0,strcount(fieldlist,';')+1)
+			{
+				attribute<string> FieldDescr  := ReadArray(fieldlist,.,string,0);
+				attribute<UInt32> SepPos      := strpos(FieldDescr, ':');
+				attribute<string> Name        := IsDefined(SepPos) ? substr(FieldDescr, 0, SepPos): FieldDescr;
+				attribute<string> NameInTable := IsDefined(SepPos) ? substr(FieldDescr, SepPos+1, strlen(FieldDescr)) : FieldDescr;
+				attribute<string> Metric := 
+					='union_data(.,'+
+						AsList('+PropValue(ValuesUnit(table/' + impl/Field/NameInTable +'),' + quote('metric') + ')', ',')+
+					')';
+			}
+		}
+		parameter<string> Header := AsList(Quote(impl/Field/Name +(impl/Field/Metric=='' ? '' : ' [' + impl/Field/Metric +']')), ';');
+			
+		parameter<string> Body_expr := AsList('AsExprList(table/' + impl/Field/NameInTable + ', id(table))',' +'';''+ ');
+		attribute<string> Body (table) := =Body_expr;
+		parameter<string> Result := Header + '\n' + AsList(Body+'\n', '')
 		,	Storagename = "=filename"
 		,	StorageType = "str";
 	}
