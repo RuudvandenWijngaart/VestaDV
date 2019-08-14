@@ -36,96 +36,102 @@ container PlanregioResults : isHidden = "True"
 		//dynamische indicatoren op hoofdlijnen
 		container Hoofdindicatoren
 		{
-			attribute<String>		BU_CODE						(Planregio)	:=	Statisch/I01_buurtcode;
-			attribute<GJ_yr_WEQ>	H01_warmtetotaal			(Planregio)	:=	add(H02_Vraag_aardgas, H03_Vraag_groengas, H05_Vraag_MTwarmte, H06_Vraag_LTwarmte, H04_Vraag_elekwarmte);
+			Unit<UInt32>  table := Invoer/DefaultInstellingen/Basis/PlanRegio
+			{
+				attribute<String>		BU_CODE						(Planregio)	:=	Statisch/I01_buurtcode;
+				attribute<GJ_yr_WEQ>	H01_warmtetotaal			(Planregio)	:=	add(H02_Vraag_aardgas, H03_Vraag_groengas, H05_Vraag_MTwarmte, H06_Vraag_LTwarmte, H04_Vraag_elekwarmte);
+				
+				attribute<GJ_yr_WEQ>	H02_Vraag_aardgas			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? p_stadsv * makedefined((
+																					Groengas ? 0 [GJ_yr] : (
+																					  sum(Allocatie/BestaandeWoning/Metervraag/Aardgas,		BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/Aardgas,		BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
+																					+ max_elem(
+																					((1d - P_stadsv) * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol ) * StateNaAllocatie/HerKostenBaten/KostenD/Bijstook/Vj_Bijstook),
+																					( StateNaAllocatie/totaal/Verbruik/V_wd_gas
+																					+ StateNaAllocatie/totaal/Verbruik/V_ow_gas
+																					+ StateNaAllocatie/totaal/Verbruik/V_id_gas))))
+																					/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
+																					
+				attribute<GJ_yr_WEQ>	H03_Vraag_groengas			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? p_stadsv * makedefined((
+																					Groengas ? (
+																					  sum(Allocatie/BestaandeWoning/Metervraag/Aardgas,		BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/Aardgas,		BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)	
+																					+ max_elem(
+																					((1d - P_stadsv) * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol) * StateNaAllocatie/HerKostenBaten/KostenD/Bijstook/Vj_Bijstook),
+																					( StateNaAllocatie/totaal/Verbruik/V_wd_gas
+																					+ StateNaAllocatie/totaal/Verbruik/V_ow_gas
+																					+ StateNaAllocatie/totaal/Verbruik/V_id_gas)))
+																					: 0 [GJ_yr])
+																					/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
+		
+				
+				attribute<GJ_yr_WEQ>	H04_Vraag_elekwarmte		(Planregio)	:=	float64(round(!statisch/Uitgesloten ? p_stadsv * makedefined((
+																					  sum(Allocatie/BestaandeWoning/Metervraag/eWP,			BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/eWP,			BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeWoning/Metervraag/hWP,			BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/hWP,			BebouwingsComponenten/BestaandeUtil/PlanRegio_rel))
+																					/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
+																					
+				attribute<GJ_yr_WEQ>	H05_Vraag_MTwarmte			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined(max_elem(
+																					  ((1d - p_stadsv)
+																					* (StateNaAllocatie/HerKostenBaten/PlanRegioKaarten/BestaandeWoning/Verbruik/alle_totaal
+																					+ StateNaAllocatie/HerKostenBaten/PlanRegioKaarten/BestaandeUtil/Verbruik/alle_totaal)),
+																					  (sum(Allocatie/BestaandeWoning/Metervraag/WarmteMT,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/WarmteMT,		BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)))
+																					/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
+																					
+				attribute<GJ_yr_WEQ>	H06_Vraag_LTwarmte			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? p_stadsv * makedefined((
+																					  sum(Allocatie/BestaandeWoning/Metervraag/WarmteLT,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/WarmteLT,		BebouwingsComponenten/BestaandeUtil/PlanRegio_rel))
+																					/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
+				
+				attribute<GJ_yr_ha>		H07_Warmte_hectare			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined((H01_warmtetotaal * nrWEQ) / 
+																					  ((/Invoer/RuimtelijkeData/StudieGebied/buurt/AreaInKm2
+																					* (Invoer/RuimtelijkeData/StudieGebied/buurt/Overigen_p_land_com / 100d))
+																					* 100 [ha / km2]), 0.0[GJ_yr_ha]) : 0.0[GJ_yr_ha]));
+																					
+				attribute<GJ_yr_WEQ>	H08_Vraag_elektotaal		(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined(
+																					  (max_elem((StateNaAllocatie/totaal/verbruik/V_id_elek
+																					+ StateNaAllocatie/totaal/verbruik/V_wd_elek
+																					+ StateNaAllocatie/totaal/verbruik/V_ow_elek),
+																					((1d - P_stadsv) * StateNaAllocatie/HerKostenBaten/KostenD/SecundairNet/V_wd_elek))
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/elektriciteit,				BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeWoning/Metervraag/elektriciteit,			BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					- ((1d - P_stadsv) * sum(Allocatie/BestaandeUtil/Metervraag/eWP,	BebouwingsComponenten/BestaandeUtil/PlanRegio_rel))
+																					- ((1d - P_stadsv) * sum(Allocatie/BestaandeWoning/Metervraag/eWP,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel))
+																					- ((1d - P_stadsv) * sum(Allocatie/BestaandeUtil/Metervraag/hWP,	BebouwingsComponenten/BestaandeUtil/PlanRegio_rel))
+																					- ((1d - P_stadsv) * sum(Allocatie/BestaandeWoning/Metervraag/hWP,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)))
+																					/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
+																					
+				attribute<GJ_yr_WEQ>	H09_Vraag_koude				(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined((
+																					  sum(BebouwingsComponenten/BestaandeUtil/Functioneel/Koude,	BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
+																					+ sum(BebouwingsComponenten/BestaandeWoning/Functioneel/Koude,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel))
+																					/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
+				
+				attribute<KG_yr_WEQ>	H10_CO2_reductie			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined((
+																					  StartJaar/AllocExports/PlanRegioResults/Table/CO2_totaal
+																					- AllocExports/PlanRegioResults/Table/CO2_totaal)
+																					/ nrWEQ, 0.0[KG_yr_WEQ]) : 0.0[KG_yr_WEQ]));
+				
+				attribute<Eur_yr>		H11_Nat_abskosten			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined(
+																					NationaleKosten/TotaalUitstoot/Natkosten_abs
+																					, 0.0[Eur_yr]) : 0.0[Eur_yr]));						// absolute nationale kosten
+																					
+				attribute<Eur_yr>		H12_Nat_meerkosten			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined(
+																					NationaleKosten/TotaalUitstoot/Delta_nat_kosten
+																					, 0.0[Eur_yr]) : 0.0[Eur_yr]));						// nationale meerkosten
+																					
+				attribute<Eur_yr_WEQ>	H13_Nat_meerkost_WEQ		(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined(
+																					(NationaleKosten/TotaalUitstoot/Delta_nat_kosten / nrWEQ)
+																					, 0.0[Eur_yr_WEQ]) : 0.0[Eur_yr_WEQ]));				// nationale meerkosten per woningequivalen
+																					
+				attribute<Eur_ton>		H14_Nat_meerkost_CO2		(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined(
+																					(NationaleKosten/TotaalUitstoot/Delta_nat_kosten / NationaleKosten/TotaalUitstoot/Delta_CO2_ton)
+																					, 0.0[EUR_ton]) : 0.0[Eur_ton]));						// nationale meerkosten per vermeden ton CO2
+			}																
 			
-			attribute<GJ_yr_WEQ>	H02_Vraag_aardgas			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? p_stadsv * makedefined((
-																				Groengas ? 0 [GJ_yr] : (
-																				  sum(Allocatie/BestaandeWoning/Metervraag/Aardgas,		BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
-																				+ sum(Allocatie/BestaandeUtil/Metervraag/Aardgas,		BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
-																				+ max_elem(
-																				((1d - P_stadsv) * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol ) * StateNaAllocatie/HerKostenBaten/KostenD/Bijstook/Vj_Bijstook),
-																				( StateNaAllocatie/totaal/Verbruik/V_wd_gas
-																				+ StateNaAllocatie/totaal/Verbruik/V_ow_gas
-																				+ StateNaAllocatie/totaal/Verbruik/V_id_gas))))
-																				/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
-																				
-			attribute<GJ_yr_WEQ>	H03_Vraag_groengas			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? p_stadsv * makedefined((
-																				Groengas ? (
-																				  sum(Allocatie/BestaandeWoning/Metervraag/Aardgas,		BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
-																				+ sum(Allocatie/BestaandeUtil/Metervraag/Aardgas,		BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)	
-																				+ max_elem(
-																				((1d - P_stadsv) * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol) * StateNaAllocatie/HerKostenBaten/KostenD/Bijstook/Vj_Bijstook),
-																				( StateNaAllocatie/totaal/Verbruik/V_wd_gas
-																				+ StateNaAllocatie/totaal/Verbruik/V_ow_gas
-																				+ StateNaAllocatie/totaal/Verbruik/V_id_gas)))
-																				: 0 [GJ_yr])
-																				/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
-	
-			
-			attribute<GJ_yr_WEQ>	H04_Vraag_elekwarmte		(Planregio)	:=	float64(round(!statisch/Uitgesloten ? p_stadsv * makedefined((
-																				  sum(Allocatie/BestaandeWoning/Metervraag/eWP,			BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
-																				+ sum(Allocatie/BestaandeUtil/Metervraag/eWP,			BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
-																				+ sum(Allocatie/BestaandeWoning/Metervraag/hWP,			BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
-																				+ sum(Allocatie/BestaandeUtil/Metervraag/hWP,			BebouwingsComponenten/BestaandeUtil/PlanRegio_rel))
-																				/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
-																				
-			attribute<GJ_yr_WEQ>	H05_Vraag_MTwarmte			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined(max_elem(
-																				  ((1d - p_stadsv)
-																				* (StateNaAllocatie/HerKostenBaten/PlanRegioKaarten/BestaandeWoning/Verbruik/alle_totaal
-																				+ StateNaAllocatie/HerKostenBaten/PlanRegioKaarten/BestaandeUtil/Verbruik/alle_totaal)),
-																				  (sum(Allocatie/BestaandeWoning/Metervraag/WarmteMT,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
-																				+ sum(Allocatie/BestaandeUtil/Metervraag/WarmteMT,		BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)))
-																				/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
-																				
-			attribute<GJ_yr_WEQ>	H06_Vraag_LTwarmte			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? p_stadsv * makedefined((
-																				  sum(Allocatie/BestaandeWoning/Metervraag/WarmteLT,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
-																				+ sum(Allocatie/BestaandeUtil/Metervraag/WarmteLT,		BebouwingsComponenten/BestaandeUtil/PlanRegio_rel))
-																				/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
-			
-			attribute<GJ_yr_ha>		H07_Warmte_hectare			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined((H01_warmtetotaal * nrWEQ) / 
-																				  ((/Invoer/RuimtelijkeData/StudieGebied/buurt/AreaInKm2
-																				* (Invoer/RuimtelijkeData/StudieGebied/buurt/Overigen_p_land_com / 100d))
-																				* 100 [ha / km2]), 0.0[GJ_yr_ha]) : 0.0[GJ_yr_ha]));
-																				
-			attribute<GJ_yr_WEQ>	H08_Vraag_elektotaal		(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined(
-																				  (max_elem((StateNaAllocatie/totaal/verbruik/V_id_elek
-																				+ StateNaAllocatie/totaal/verbruik/V_wd_elek
-																				+ StateNaAllocatie/totaal/verbruik/V_ow_elek),
-																				((1d - P_stadsv) * StateNaAllocatie/HerKostenBaten/KostenD/SecundairNet/V_wd_elek))
-																				+ sum(Allocatie/BestaandeUtil/Metervraag/elektriciteit,				BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
-																				+ sum(Allocatie/BestaandeWoning/Metervraag/elektriciteit,			BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
-																				- ((1d - P_stadsv) * sum(Allocatie/BestaandeUtil/Metervraag/eWP,	BebouwingsComponenten/BestaandeUtil/PlanRegio_rel))
-																				- ((1d - P_stadsv) * sum(Allocatie/BestaandeWoning/Metervraag/eWP,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel))
-																				- ((1d - P_stadsv) * sum(Allocatie/BestaandeUtil/Metervraag/hWP,	BebouwingsComponenten/BestaandeUtil/PlanRegio_rel))
-																				- ((1d - P_stadsv) * sum(Allocatie/BestaandeWoning/Metervraag/hWP,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)))
-																				/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
-																				
-			attribute<GJ_yr_WEQ>	H09_Vraag_koude				(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined((
-																				  sum(BebouwingsComponenten/BestaandeUtil/Functioneel/Koude,	BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
-																				+ sum(BebouwingsComponenten/BestaandeWoning/Functioneel/Koude,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel))
-																				/ nrWEQ, 0.0[GJ_yr_WEQ]) : 0.0[GJ_yr_WEQ]));
-			
-			attribute<KG_yr_WEQ>	H10_CO2_reductie			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined((
-																				  StartJaar/AllocExports/PlanRegioResults/Table/CO2_totaal
-																				- AllocExports/PlanRegioResults/Table/CO2_totaal)
-																				/ nrWEQ, 0.0[KG_yr_WEQ]) : 0.0[KG_yr_WEQ]));
-			
-			attribute<Eur_yr>		H11_Nat_abskosten			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined(
-																				NationaleKosten/TotaalUitstoot/Natkosten_abs
-																				, 0.0[Eur_yr]) : 0.0[Eur_yr]));						// absolute nationale kosten
-																				
-			attribute<Eur_yr>		H12_Nat_meerkosten			(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined(
-																				NationaleKosten/TotaalUitstoot/Delta_nat_kosten
-																				, 0.0[Eur_yr]) : 0.0[Eur_yr]));						// nationale meerkosten
-																				
-			attribute<Eur_yr_WEQ>	H13_Nat_meerkost_WEQ		(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined(
-																				(NationaleKosten/TotaalUitstoot/Delta_nat_kosten / nrWEQ)
-																				, 0.0[Eur_yr_WEQ]) : 0.0[Eur_yr_WEQ]));				// nationale meerkosten per woningequivalen
-																				
-			attribute<Eur_ton>		H14_Nat_meerkost_CO2		(Planregio)	:=	float64(round(!statisch/Uitgesloten ? makedefined(
-																				(NationaleKosten/TotaalUitstoot/Delta_nat_kosten / NationaleKosten/TotaalUitstoot/Delta_CO2_ton)
-																				, 0.0[EUR_ton]) : 0.0[Eur_ton]));						// nationale meerkosten per vermeden ton CO2
+			unit<uint32> variable := SubItem_PropValues(table,'name');
+			container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Hoofdindicatoren.csv');
 		}
 		
 		//nationale kosten absoluut en CO2 uitstoot
