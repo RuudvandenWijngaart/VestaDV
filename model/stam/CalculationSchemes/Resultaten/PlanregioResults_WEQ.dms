@@ -1,0 +1,333 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container PlanregioResults_WEQ : isHidden = "True"
+	{
+		attribute<nrWoningen>	nrWEQ    (Planregio)  :=	netwerken/nrWoonunits;
+		attribute<Ratio>		p_stadsv (Planregio)  :=	1[Ratio] - (makedefined((/Invoer/RuimtelijkeData/StudieGebied/buurt/Overigen_p_stadsv / 100[percent]), 0.0[Ratio]));
+		attribute<string>		IsWater  (Planregio)  :=	/Invoer/RuimtelijkeData/StudieGebied/buurt/IsWater;
+//		parameter<bool>			Groengas              :=	false;
+		parameter<bool>			Groengas              :=	Invoer/SpecifiekeInstellingen/Voorkeuren/Afweging/IsGroenGas;
+		
+		//statische indicatoren per buurt
+		container Statisch
+		{
+			attribute<String>		BU_CODE						(Planregio)	:=	I01_buurtcode;
+			attribute<String>		I01_buurtcode				(Planregio)	:=	/Invoer/RuimtelijkeData/StudieGebied/buurt/BU_CODE;
+			attribute<String>		I02_buurtnaam				(Planregio)	:=	Uitgesloten ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/BU_NAAM, ',' , '');
+			attribute<String>		I03_wijkcode				(Planregio)	:=	/Invoer/RuimtelijkeData/StudieGebied/buurt/WK_CODE;
+			attribute<String>		I04_wijknaam				(Planregio)	:=	Uitgesloten ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/WK_NAAM, ',' , '');
+			attribute<String>		I05_gemeentecode			(Planregio)	:=	/Invoer/RuimtelijkeData/StudieGebied/buurt/GM_CODE;
+			attribute<String>		I06_gemeentenaam			(Planregio)	:=	Uitgesloten ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/GM_NAAM, ',' , '');
+			attribute<String>		I07_energieregionaam		(Planregio)	:=	Uitgesloten ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/ER_NAAM, ',' , '');
+			attribute<String>		I08_provincienaam			(Planregio)	:=	Uitgesloten ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/PROV_NAAM, ',' , '');
+			attribute<nrAansl>		I09_aantal_woningen			(Planregio)	:=	Uitgesloten ? 0.0[nraansl]    : float64(round(0.49 + sum(BebouwingsComponenten/BestaandeWoning/RuimtelijkeVraagComponent/nrAansluitingen,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)));
+			attribute<nrAansl>		I10_aantal_utiliteit		(Planregio)	:=	Uitgesloten ? 0.0[nraansl]    : float64(round(0.49 + sum(BebouwingsComponenten/BestaandeUtil/RuimtelijkeVraagComponent/nrAansluitingen,	BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)));
+			attribute<nrWoningen>	I11_woningequivalenten		(Planregio)	:=	Uitgesloten ? 0.0[nrwoningen] : float64(round(0.49 + nrWEQ));	//100m2 utiliteit = 1 WEQ
+			
+			attribute<bool>	Uitgesloten (Planregio) :=	I01_buurtcode == 'BU07650101' || I01_buurtcode == 'BU07650100' || I01_buurtcode == 'BU07650109' || 
+														I01_buurtcode == 'BU07370501' || I01_buurtcode == 'BU04390201' || I01_buurtcode == 'BU05020995' || 
+														I01_buurtcode == 'BU05020996' || I01_buurtcode == 'BU05020997' || I01_buurtcode == 'BU05020998' ||
+														IsWater == 'JA';
+		}		
+		//dynamische indicatoren op hoofdlijnen
+		container Hoofdindicatoren
+		{
+			Unit<UInt32>  table := Invoer/DefaultInstellingen/Basis/PlanRegio
+			{
+				attribute<String>		BU_CODE						(Planregio)	:=	Statisch/I01_buurtcode;
+				attribute<GJ_yr>	H01_warmtetotaal			(Planregio)	:=	add(H02_Vraag_aardgas, H03_Vraag_groengas, H05_Vraag_MTwarmte, H06_Vraag_LTwarmte, H04_Vraag_elekwarmte);
+				
+				attribute<GJ_yr>	H02_Vraag_aardgas			(Planregio)	:=	round(!statisch/Uitgesloten ? p_stadsv * makedefined((
+																					Groengas ? 0 [GJ_yr] : (
+																					  sum(Allocatie/BestaandeWoning/Metervraag/Aardgas,		BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/Aardgas,		BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
+																					+ max_elem(
+																					((1d - P_stadsv) * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol ) * StateNaAllocatie/HerKostenBaten/KostenD/Bijstook/Vj_Bijstook),
+																					( StateNaAllocatie/totaal/Verbruik/V_wd_gas
+																					+ StateNaAllocatie/totaal/Verbruik/V_ow_gas
+																					+ StateNaAllocatie/totaal/Verbruik/V_id_gas))))
+																					, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
+																					
+				attribute<GJ_yr>	H03_Vraag_groengas			(Planregio)	:=	round(!statisch/Uitgesloten ? p_stadsv * makedefined((
+																					Groengas ? (
+																					  sum(Allocatie/BestaandeWoning/Metervraag/Aardgas,		BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/Aardgas,		BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)	
+																					+ max_elem(
+																					((1d - P_stadsv) * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol) * StateNaAllocatie/HerKostenBaten/KostenD/Bijstook/Vj_Bijstook),
+																					( StateNaAllocatie/totaal/Verbruik/V_wd_gas
+																					+ StateNaAllocatie/totaal/Verbruik/V_ow_gas
+																					+ StateNaAllocatie/totaal/Verbruik/V_id_gas)))
+																					: 0 [GJ_yr])
+																					, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
+		
+				
+				attribute<GJ_yr>	H04_Vraag_elekwarmte		(Planregio)	:=	round(!statisch/Uitgesloten ? p_stadsv * makedefined((
+																					  sum(Allocatie/BestaandeWoning/Metervraag/eWP,			BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/eWP,			BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeWoning/Metervraag/hWP,			BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/hWP,			BebouwingsComponenten/BestaandeUtil/PlanRegio_rel))
+																					, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
+																					
+				attribute<GJ_yr>	H05_Vraag_MTwarmte			(Planregio)	:=	round(!statisch/Uitgesloten ? makedefined(max_elem(
+																					  ((1d - p_stadsv)
+																					* (StateNaAllocatie/HerKostenBaten/PlanRegioKaarten/BestaandeWoning/Verbruik/alle_totaal
+																					+ StateNaAllocatie/HerKostenBaten/PlanRegioKaarten/BestaandeUtil/Verbruik/alle_totaal)),
+																					  (sum(Allocatie/BestaandeWoning/Metervraag/WarmteMT,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/WarmteMT,		BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)))
+																					, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
+																					
+				attribute<GJ_yr>	H06_Vraag_LTwarmte			(Planregio)	:=	round(!statisch/Uitgesloten ? p_stadsv * makedefined((
+																					  sum(Allocatie/BestaandeWoning/Metervraag/WarmteLT,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/WarmteLT,		BebouwingsComponenten/BestaandeUtil/PlanRegio_rel))
+																					, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
+				
+				attribute<GJ_yr_ha>		H07_Warmte_hectare			(Planregio)	:=	round(!statisch/Uitgesloten ? makedefined((H01_warmtetotaal) / 
+																					  ((/Invoer/RuimtelijkeData/StudieGebied/buurt/AreaInKm2
+																					* (Invoer/RuimtelijkeData/StudieGebied/buurt/Overigen_p_land_com / 100d))
+																					* 100 [ha / km2]), 0.0[GJ_yr_ha]) : 0.0[GJ_yr_ha])[GJ_yr_ha];
+																					
+				attribute<GJ_yr>	H08_Vraag_elektotaal		(Planregio)	:=	round(!statisch/Uitgesloten ? makedefined(
+																					  (max_elem((StateNaAllocatie/totaal/verbruik/V_id_elek
+																					+ StateNaAllocatie/totaal/verbruik/V_wd_elek
+																					+ StateNaAllocatie/totaal/verbruik/V_ow_elek),
+																					((1d - P_stadsv) * StateNaAllocatie/HerKostenBaten/KostenD/SecundairNet/V_wd_elek))
+																					+ sum(Allocatie/BestaandeUtil/Metervraag/elektriciteit,				BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
+																					+ sum(Allocatie/BestaandeWoning/Metervraag/elektriciteit,			BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+																					- ((1d - P_stadsv) * sum(Allocatie/BestaandeUtil/Metervraag/eWP,	BebouwingsComponenten/BestaandeUtil/PlanRegio_rel))
+																					- ((1d - P_stadsv) * sum(Allocatie/BestaandeWoning/Metervraag/eWP,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel))
+																					- ((1d - P_stadsv) * sum(Allocatie/BestaandeUtil/Metervraag/hWP,	BebouwingsComponenten/BestaandeUtil/PlanRegio_rel))
+																					- ((1d - P_stadsv) * sum(Allocatie/BestaandeWoning/Metervraag/hWP,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)))
+																					, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
+																					
+				attribute<GJ_yr>	H09_Vraag_koude				(Planregio)	:=	round(!statisch/Uitgesloten ? makedefined((
+																					  sum(BebouwingsComponenten/BestaandeUtil/Functioneel/Koude,	BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
+																					+ sum(BebouwingsComponenten/BestaandeWoning/Functioneel/Koude,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel))
+																					, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
+				
+				attribute<KG_yr>	H10_CO2_reductie			(Planregio)	:=	round(!statisch/Uitgesloten ? makedefined((
+																					  StartJaar/AllocExports/PlanRegioResults/Table/CO2_totaal
+																					- AllocExports/PlanRegioResults/Table/CO2_totaal)
+																					, 0.0[KG_yr]) : 0.0[KG_yr])[KG_yr];
+				
+				attribute<Eur_yr>		H11_Nat_abskosten			(Planregio)	:=	round(!statisch/Uitgesloten ? makedefined(
+																					NationaleKosten/TotaalUitstoot/Natkosten_abs
+																					, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];						// absolute nationale kosten
+																					
+				attribute<Eur_yr>		H12_Nat_meerkosten			(Planregio)	:=	round(!statisch/Uitgesloten ? makedefined(
+																					NationaleKosten/TotaalUitstoot/Delta_nat_kosten
+																					, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];						// nationale meerkosten
+																					
+				attribute<Eur_yr>	H13_Nat_meerkost		(Planregio)	:=	round(!statisch/Uitgesloten ? makedefined(
+																					(NationaleKosten/TotaalUitstoot/Delta_nat_kosten)
+																					, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];				// nationale meerkosten per woningequivalen
+																					
+				attribute<Eur_ton>		H14_Nat_meerkost_CO2		(Planregio)	:=	round(!statisch/Uitgesloten ? makedefined(
+																					(NationaleKosten/TotaalUitstoot/Delta_nat_kosten / NationaleKosten/TotaalUitstoot/Delta_CO2_ton)
+																					, 0.0[EUR_ton]) : 0.0[Eur_ton])[Eur_ton];						// nationale meerkosten per vermeden ton CO2
+			}																
+			
+			unit<uint32> variable := SubItem_PropValues(table,'name');
+			container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Hoofdindicatoren.csv');
+		}
+		
+		//nationale kosten absoluut en CO2 uitstoot
+		container NationaleKosten
+		{		
+			Unit<UInt32>  table := Invoer/DefaultInstellingen/Basis/PlanRegio
+			{
+				attribute<String>	BU_CODE					(Planregio) :=	Statisch/I01_buurtcode;	
+				attribute<Eur_yr>	K01_Enet_verzwaren     (Planregio) :=	round(!statisch/Uitgesloten ? makedefined(
+																			p_stadsv * Netwerken/Elektriciteit/Kji_verzwaren, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr]; 	// jaarlijkse kapitaallasten verzwaren elektriciteits
+																			
+				attribute<Eur_yr>	K02_Gnet_verwijderen   (Planregio) :=	round(!statisch/Uitgesloten ? makedefined(
+																			Netwerken/Aardgas/Kji_verwijderen, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr]; 					// jaarlijkse kapitaallasten verwijderen gasnetten
+																			
+				attribute<Eur_yr>	K03_Gnet_vervangen     (Planregio) :=	round(!statisch/Uitgesloten ? makedefined(
+																			Netwerken/Aardgas/Kji_vervangen, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr]; 						// jaarlijkse kapitaallasten vervangen gasnetten
+																			
+				attribute<Eur_yr>	K04_Wnet_pand_buurt    (Planregio) :=	round(!statisch/Uitgesloten ? makedefined( p_stadsv * (
+																			  StateNaAllocatie/totaal/jaarlijks/id/Kmi_id
+																			+ StateNaAllocatie/totaal/jaarlijks/ge/Kmi_ge_ov
+																			+ StateNaAllocatie/totaal/jaarlijks/ge/Kmi_ge_pm
+																			+ StateNaAllocatie/totaal/jaarlijks/wd/Kmi_wd
+																			- StateNaAllocatie/totaal/jaarlijks/ge/Om_ge_comfort), 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];	
+																							
+				attribute<Eur_yr>	K05_Wnet_transport     (Planregio) :=	round(!statisch/Uitgesloten ? makedefined( p_stadsv * (
+																			StateNaAllocatie/totaal/jaarlijks/pt/Kmi_pt), 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];			// bestaande netten
+																			
+				attribute<Eur_yr>	K06_Wnet_opwekking     (Planregio) :=	round(!statisch/Uitgesloten ? makedefined( p_stadsv * (
+																			StateNaAllocatie/totaal/jaarlijks/ow/Kmi_ow), 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];			// bestaande netten
+				
+				attribute<Eur_yr>	K07_Gebouw_schil       (Planregio) :=	round(!statisch/Uitgesloten ? makedefined(
+																			maatschappelijk/gebouwen/Kmi_GebouwVerbetering, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];
+																			
+				attribute<Eur_yr>	K08_Gebouw_installatie (Planregio) :=	round(!statisch/Uitgesloten ? makedefined( p_stadsv * (
+																			  Maatschappelijk/LokaleEnergieProductie/Ki_Totaal30 * NCW/mr30/AnnualisationFactor
+																			+ maatschappelijk/LokaleEnergieProductie/Ki_Totaal15 * NCW/mr15/AnnualisationFactor)
+																			, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];	
+																						
+				attribute<Eur_yr>	K09_Inkoop_Warmte      (Planregio) :=	round(!statisch/Uitgesloten ? makedefined( 
+																			max_elem(StateNaAllocatie/totaal/jaarlijks/ow/Kj_ow_productie,
+																			(1d - p_stadsv) * GebiedsAllocatie/RestWarmte/Iterations/I0/Assignment/Km_Warmte_her)
+																			, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];
+																			
+				attribute<Eur_yr>	K10_Inkoop_Gas         (Planregio) :=	round(!statisch/Uitgesloten ? makedefined( 
+																			(max_elem((
+																			  StateNaAllocatie/totaal/jaarlijks/ow/Km_ow_gas
+																			+ StateNaAllocatie/totaal/jaarlijks/id/Km_id_gas
+																			+ StateNaAllocatie/totaal/jaarlijks/wd/Km_wd_gas),
+																			( (1d - P_stadsv) * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol) * StateNaAllocatie/HerKostenBaten/KostenD/Bijstook/Km_wd_gas))
+																			+ P_stadsv * GasKostenGebouwen/Km_totaal)
+																			, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];
+																			
+				attribute<Eur_yr>	K11_Inkoop_Elek        (Planregio) :=	round(!statisch/Uitgesloten ? makedefined( 
+																			max_elem((
+																			  StateNaAllocatie/totaal/jaarlijks/ow/Km_ow_elek
+																			+ StateNaAllocatie/totaal/jaarlijks/id/Km_id_elek
+																			+ StateNaAllocatie/totaal/jaarlijks/wd/Km_wd_elek),
+																			( (1d - P_stadsv) * StateNaAllocatie/HerKostenBaten/KostenD/SecundairNet/Kj_wd_elek))
+																			+ P_stadsv * ElekKostenGebouwen_eWP/Km_totaal
+																			+ ElekKostenGebouwen_APP/Km_totaal
+																			, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];	
+																			
+				attribute<Eur_yr>	K12_Gebouw_OenM        (Planregio) :=	round(!statisch/Uitgesloten ? makedefined(
+																			p_stadsv * (
+																			  maatschappelijk/LokaleEnergieProductie/Kj_Onderhoud
+																			+ maatschappelijk/LokaleEnergieProductie/Kj_Admin)
+																			+ maatschappelijk/gebouwen/Kj_Onderhoud
+																			+ maatschappelijk/gebouwen/Kj_Admin
+																			, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];
+																			
+				attribute<Eur_yr>	K13_Wnet_OenM          (Planregio) :=	round(!statisch/Uitgesloten ? makedefined(
+																			max_elem((
+																			  StateNaAllocatie/totaal/jaarlijks/ow/Kj_ow_oh
+																			+ StateNaAllocatie/totaal/jaarlijks/ow/Kj_ow_adm
+																			+ StateNaAllocatie/totaal/jaarlijks/pt/Kj_pt_oh
+																			+ StateNaAllocatie/totaal/jaarlijks/pt/Kj_pt_adm
+																			+ StateNaAllocatie/totaal/jaarlijks/id/Kj_id_oh
+																			+ StateNaAllocatie/totaal/jaarlijks/id/Kj_id_adm
+																			+ StateNaAllocatie/totaal/jaarlijks/wd/Kj_wd_oh
+																			+ StateNaAllocatie/totaal/jaarlijks/wd/Kj_wd_adm),
+																			( (1d - P_stadsv) * StateNaAllocatie/HerKostenBaten/KostenD/Kj_id_oh
+																			+ (1d - P_stadsv) * StateNaAllocatie/HerKostenBaten/KostenD/Kj_wd_oh
+																			+ (1d - P_stadsv) * StateNaAllocatie/HerKostenBaten/KostenD/Kj_wd_adm
+																			+ (1d - P_stadsv) * StateNaAllocatie/HerKostenBaten/KostenD/Kj_lv_adm
+																			+ (1d - P_stadsv) * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_pt_oh
+																			+ (1d - P_stadsv) * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_pt_adm
+																			+ (1d - P_stadsv) * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_ow_oh
+																			+ (1d - P_stadsv) * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_ow_adm
+																			)), 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];
+																														
+				attribute<Eur_yr>	K14_Enet_Gnet_OenM     (Planregio) :=	round(!statisch/Uitgesloten ? makedefined(
+																			Netwerken/Aardgas/Kj_oh + Netwerken/Elektriciteit/Kj_oh, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];															
+			}																
+	
+			unit<uint32> variable := SubItem_PropValues(table,'name');
+			container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/NationaleKosten.csv');
+		//}			
+													
+			container TotaalUitstoot
+			{															
+				attribute<Eur_yr>	Natkosten_abs      (Planregio) :=	  Table/K01_Enet_verzwaren     + Table/K02_Gnet_verwijderen   + Table/K03_Gnet_vervangen + Table/K14_Enet_Gnet_OenM
+																		+ Table/K04_Wnet_pand_buurt    + Table/K05_Wnet_transport     + Table/K06_Wnet_opwekking + Table/K13_Wnet_OenM
+																		+ Table/K07_Gebouw_schil       + Table/K08_Gebouw_installatie + Table/K12_Gebouw_OenM
+																		+ Table/K09_Inkoop_Warmte      + Table/K10_Inkoop_Gas         + Table/K11_Inkoop_Elek;
+				attribute<kg_yr>	Orig_CO2           (Planregio) :=	StartJaar/AllocExports/PlanRegioResults/Table/CO2_totaal;
+				attribute<kg_yr>	Delta_CO2          (Planregio) :=	Orig_CO2 - AllocExports/PlanRegioResults/Table/CO2_totaal;
+				attribute<ton_yr>	Delta_CO2_ton      (Planregio) :=	Delta_CO2 / 1000.0[kg_yr / ton_yr];
+				attribute<Eur_yr>	Orig_nat_kosten    (Planregio) :=	/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/TotaalUitstoot/Natkosten_abs;
+				attribute<Eur_yr>	Delta_nat_kosten   (Planregio) :=	Natkosten_abs - Orig_nat_kosten;
+			}
+			container ElekKostenGebouwen_APP :=
+				for_each_nedv(Classifications/BebouwingsComponent/Name, 
+					replace(
+						'sum(Allocatie/@BC@/Elektriciteit/Km_elek_APP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
+					,	'@BC@', Classifications/BebouwingsComponent/Name
+					)
+					,PlanRegio
+					,Eur_yr
+					)
+				{
+					attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
+				}
+			container ElekKostenGebouwen_eWP :=
+				for_each_nedv(Classifications/BebouwingsComponent/Name, 
+					replace(
+						'sum(Allocatie/@BC@/Elektriciteit/Km_elek_eWP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
+					,	'@BC@', Classifications/BebouwingsComponent/Name
+					)
+					,PlanRegio
+					,Eur_yr
+					)
+				{
+					attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
+				}
+			container GasKostenGebouwen :=
+				for_each_nedv(Classifications/BebouwingsComponent/Name, 
+					replace(
+						'sum(Allocatie/@BC@/Aardgas/maatschappelijk, BebouwingsComponenten/@BC@/PlanRegio_rel)'
+					,	'@BC@', Classifications/BebouwingsComponent/Name
+					)
+					,PlanRegio
+					,Eur_yr
+					)
+				{
+					attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
+				}
+				
+		}	
+		
+		container Aansluitingen
+		{
+			Unit<UInt32>  table := Invoer/DefaultInstellingen/Basis/PlanRegio
+			{
+				attribute<String>	BU_CODE             (Planregio)   :=	Statisch/I01_buurtcode;
+				attribute<nrAansl>	A01_Aansl_aardgas     (PlanRegio) :=	!statisch/Uitgesloten ? makedefined(
+																			P_stadsv * (GroenGas ? 0.0[nrAansl] : StateNaAllocatie/nrAansluitinging/Gas),
+																			0.0[nrAansl]) : 0.0[nrAansl];
+				
+				attribute<nrAansl>	A02_Aansl_eWP         (PlanRegio) :=	!statisch/Uitgesloten ? makedefined(
+																			P_stadsv * StateNaAllocatie/nrAansluitinging/eWP,
+																			0.0[nrAansl]) : 0.0[nrAansl];
+				
+				attribute<nrAansl>	A03_Aansl_MT          (PlanRegio) :=	!statisch/Uitgesloten ? makedefined(
+																			max_elem((
+																			  StateNaAllocatie/nrAansluitinging/Restwarmte
+																			+ StateNaAllocatie/nrAansluitinging/Geothermie
+																			+ StateNaAllocatie/nrAansluitinging/WijkWKK
+																			+ StateNaAllocatie/nrAansluitinging/BioWKK),
+																			(1d - P_stadsv) *
+																			 (StateNaAllocatie/HerKostenBaten/PlanRegioKaarten/BestaandeWoning/nrAansl_totaal
+																			+ StateNaAllocatie/HerKostenBaten/PlanRegioKaarten/BestaandeUtil/nrAansl_totaal)),
+																			0.0[nrAansl]) : 0.0[nrAansl];
+																			
+				attribute<nrAansl>	A04_Aansl_LT          (PlanRegio) :=	!statisch/Uitgesloten ? makedefined(
+																			P_stadsv * (
+																			  StateNaAllocatie/nrAansluitinging/WKO
+																			+ StateNaAllocatie/nrAansluitinging/LT15_30
+																			+ StateNaAllocatie/nrAansluitinging/LT15_50
+																			+ StateNaAllocatie/nrAansluitinging/LT15_70
+																			+ StateNaAllocatie/nrAansluitinging/LT30_30
+																			+ StateNaAllocatie/nrAansluitinging/LT30_50
+																			+ StateNaAllocatie/nrAansluitinging/LT30_70
+																			+ StateNaAllocatie/nrAansluitinging/TEO),
+																			0.0[nrAansl]) : 0.0[nrAansl];
+																			
+				attribute<nrAansl>	A05_Aansl_hWPgroengas (PlanRegio) :=	!statisch/Uitgesloten ? makedefined(
+																			P_stadsv * StateNaAllocatie/nrAansluitinging/hWP,
+																			0.0[nrAansl]) : 0.0[nrAansl];
+				
+				attribute<nrAansl>	A06_Aansl_HRgroengas  (PlanRegio) :=	!statisch/Uitgesloten ? makedefined(
+																			P_stadsv * (GroenGas ? StateNaAllocatie/nrAansluitinging/Gas : 0.0[nrAansl]),
+																			0.0[nrAansl]) : 0.0[nrAansl];
+			}
+			unit<uint32> variable := SubItem_PropValues(table,'name');
+			container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Aansluitingen.csv');
+		}			
+		
+		//#include <Vergelijking.dms>
+	}
