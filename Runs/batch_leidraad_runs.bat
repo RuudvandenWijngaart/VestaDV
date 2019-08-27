@@ -20,6 +20,8 @@ set SUBFILENAME=%CUR_YYYY%%CUR_MM%%CUR_DD%-%CUR_HH%%CUR_NN%%CUR_SS%
 if not exist %pd_root% goto error
 
 
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Statisch.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Statisch
+
 
 "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_StartJaar_Hoofdindicatoren.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Hoofdindicatoren
 "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_StartJaar_NationaleKosten.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/NationaleKosten
