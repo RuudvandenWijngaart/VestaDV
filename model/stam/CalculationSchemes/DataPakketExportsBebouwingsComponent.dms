@@ -3,8 +3,9 @@
 //                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
-template DataPakketExportsBebouwingsComponent
-{
+
+template DataPakketExportsBebouwingsComponent : isHidden = "True"
+	{
 	//begin of case parameters
 	parameter<String> ComponentName;
 	container AllocatieComponent;    //voorbeeld TussenResultaten/R1_2020/AllocatieResultaten/BestaandeWoning 
@@ -14,41 +15,124 @@ template DataPakketExportsBebouwingsComponent
 	container BCdata                    := AllocatieComponent/BCdata;
 	container RuimtelijkeVraagComponent := AllocatieComponent/RuimtelijkeVraagComponent;
 
-	unit<UInt32>  table := AllocatieComponent/BebouwingsObject
-	{
-		attribute<string> id                                	:= code;
-		attribute<Geography/rdc_grids/m100> gridm100_rel    	:= BebouwingsComponenten/RuimtelijkeVraagComponent/gridm100_rel;
-		attribute<rdc_meter> geometry                       	:=Geography/rdc_grids/m100/point[gridm100_rel];
+		container Hoofdindicatoren
+		{
+			unit<UInt32>  table := AllocatieComponent/BebouwingsObject
+			{
+			attribute<bool>	Uitgesloten_bool := PlanRegioResults/Statisch/Uitgesloten_bool[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel];
+			attribute<Ratio>		p_stadsv :=	PlanRegioResults/p_stadsv[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel];
+			attribute<string>		IsWater  :=	/Invoer/RuimtelijkeData/StudieGebied/buurt/IsWater[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel];
+			parameter<bool>			Groengas              :=	/Invoer/DefaultInstellingen/Basis/Voorkeuren/Afweging/IsGroenGas;
+			
+			//attribute<string> id                                	:= code;
+			//attribute<Geography/rdc_grids/m100> gridm100_rel    	:= BebouwingsComponenten/RuimtelijkeVraagComponent/gridm100_rel;
+			//attribute<rdc_meter> geometry                       	:=Geography/rdc_grids/m100/point[gridm100_rel];
+			
+			//attribute<float64> PointRowXY := PointRow(geometry);
+			//attribute<float64> PointColXY := PointCol(geometry);
+			
+			attribute<String>		I01_BU_CODE										:=	Invoer/RuimtelijkeData/StudieGebied/buurt/BU_CODE[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel];
 
-		//attribute<Geography/RegioIndelingen/buurt> buurt_rel := /Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel;
-		attribute<string> BU_CODE                           	:= Invoer/RuimtelijkeData/StudieGebied/buurt/BU_CODE[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel];//buurtcode
 
-		attribute<float64> PointRowXY := PointRow(geometry);
-		attribute<float64> PointColXY := PointCol(geometry);
+			attribute<nrAansl> I11_nrAansluitingen := RuimtelijkeVraagComponent/nrAansluitingen;									//aantal woningequivalenten
 
-		attribute<nrAansl> nrAansluitingen := RuimtelijkeVraagComponent/nrAansluitingen;									//aantal woningequivalenten
-
-		attribute<Classifications/WarmteOptie>  Warmteoptie 	:= AllocatieComponent/WarmteAllocatie;
-		
-		attribute<classifications/EnergieLabel> Elabel      	:= BCdata/energielabel/CurrValue;
-
-		attribute<GJ_yr> MV_totaal                          	:= AllocatieComponent/Metervraag/totaal;					//metervraag warmte totaal
-		attribute<GJ_yr> MV_Aardgas                         	:= AllocatieComponent/Metervraag/Aardgas;					//metervraag aardgas
-		attribute<GJ_yr> MV_ELEK                            	:= AllocatieComponent/Metervraag/Elektriciteit;				//metervraag aardgas
-		
-		attribute<GJ_yr> MV_WarmteMT                        	:= AllocatieComponent/Metervraag/WarmteMT;					//metervraag MT warmtelevering
-		attribute<GJ_yr> MV_WarmteLT                        	:= AllocatieComponent/Metervraag/WarmteLT;					// metervraag LT warmtelevering
-		attribute<GJ_yr> MV_eWP                             	:= AllocatieComponent/Metervraag/eWP;						//metervraag elektriciteit eWP
-
-		//onduidelijk welke
-		attribute<GJ_yr> FV_Koude                           	:= BebouwingsComponenten/Functioneel/Koude;
-		attribute<GJ_yr> FV_Koude2                          	:= RuimtelijkeVraagComponent/Functioneel/Koude;
-
-		attribute<KG_yr> CO2_GAS                            	:= AllocatieComponent/CO2/AardGas;
-		attribute<KG_yr> CO2_ELEK                           	:= AllocatieComponent/CO2/Elektriciteit;
-		attribute<KG_yr> CO2                                	:= CO2_GAS + CO2_ELEK;
-	}
+			attribute<GJ_yr>	H01_warmtetotaal								:=	add(H02_Vraag_aardgas, H03_Vraag_groengas, H05_Vraag_MTwarmte, H06_Vraag_LTwarmte, H04_Vraag_elekwarmte);
+				
+			attribute<GJ_yr>	H02_Vraag_aardgas								:=	round(!Uitgesloten_bool ? p_stadsv * makedefined((
+																				Groengas ? 0 [GJ_yr] : (
+																				  Allocatie/BestaandeWoning/Metervraag/Aardgas
+																				//+ Allocatie/BestaandeUtil/Metervraag/Aardgas
+																				+ max_elem(
+																				((1d - p_stadsv) * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel] ) * StateNaAllocatie/HerKostenBaten/KostenD/Bijstook/Vj_Bijstook[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel]),
+																				( StateNaAllocatie/totaal/Verbruik/V_wd_gas[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel]
+																				+ StateNaAllocatie/totaal/Verbruik/V_ow_gas[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel]
+																				+ StateNaAllocatie/totaal/Verbruik/V_id_gas[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel]))))
+																				, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
+																				
+			attribute<GJ_yr>	H03_Vraag_groengas								:=	round(!Uitgesloten_bool ? p_stadsv * makedefined((
+																				Groengas ? (
+																				  Allocatie/BestaandeWoning/Metervraag/Aardgas
+																				//+ Allocatie/BestaandeUtil/Metervraag/Aardgas
+																				+ max_elem(
+																				((1d - p_stadsv) * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel]) * StateNaAllocatie/HerKostenBaten/KostenD/Bijstook/Vj_Bijstook[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel]),
+																				( StateNaAllocatie/totaal/Verbruik/V_wd_gas[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel]
+																				+ StateNaAllocatie/totaal/Verbruik/V_ow_gas[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel]
+																				+ StateNaAllocatie/totaal/Verbruik/V_id_gas[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel])))
+																				: 0 [GJ_yr])
+																				, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
 	
-	unit<uint32> variable := SubItem_PropValues(table,'name');
-	container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/'+ComponentName+'.csv');
-}
+			attribute<GJ_yr>	H04_Vraag_elekwarmte							:=	round(!Uitgesloten_bool ? p_stadsv * makedefined((
+																				  Allocatie/BestaandeWoning/Metervraag/eWP
+																				//+ Allocatie/BestaandeUtil/Metervraag/eWP
+																				+ Allocatie/BestaandeWoning/Metervraag/hWP
+																				//+ Allocatie/BestaandeUtil/Metervraag/hWP
+																				)
+																				, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
+
+
+			attribute<GJ_yr>	H05_Vraag_MTwarmte							:=	round(!Uitgesloten_bool ? makedefined(max_elem(
+																				  ((1d - p_stadsv)
+																				* (BCdata/DragerOpties/Warmte/Warmte
+																				)),
+																				  (Allocatie/BestaandeWoning/Metervraag/WarmteMT
+																				//+ Allocatie/BestaandeUtil/Metervraag/WarmteMT
+																				))
+																				, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
+
+
+			attribute<GJ_yr>	H06_Vraag_LTwarmte								:=	round(!Uitgesloten_bool ? p_stadsv * makedefined((
+																				  Allocatie/BestaandeWoning/Metervraag/WarmteLT
+																				//+ Allocatie/BestaandeUtil/Metervraag/WarmteLT
+																				)
+																				, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
+
+
+			attribute<GJ_yr>	H08_Vraag_elektotaal							:=	round(!Uitgesloten_bool ? makedefined(
+																				  (max_elem((StateNaAllocatie/totaal/verbruik/V_id_elek[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel]
+																				+ StateNaAllocatie/totaal/verbruik/V_wd_elek[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel]
+																				+ StateNaAllocatie/totaal/verbruik/V_ow_elek[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel]),
+																				((1d - p_stadsv) * StateNaAllocatie/HerKostenBaten/KostenD/SecundairNet/V_wd_elek[Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel]))
+																				//+ Allocatie/BestaandeUtil/Metervraag/elektriciteit
+																				+ Allocatie/BestaandeWoning/Metervraag/elektriciteit
+																				//- ((1d - p_stadsv) * Allocatie/BestaandeUtil/Metervraag/eWP)
+																				- ((1d - p_stadsv) * Allocatie/BestaandeWoning/Metervraag/eWP)
+																				//- ((1d - p_stadsv) * Allocatie/BestaandeUtil/Metervraag/hWP)
+																				- ((1d - p_stadsv) * Allocatie/BestaandeWoning/Metervraag/hWP)
+																				)
+																				, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
+
+
+			attribute<GJ_yr>	H09_Vraag_koude									:=	round(!Uitgesloten_bool ? makedefined((
+																				  BCdata/Functioneel/Koude
+																				)
+																				, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
+
+// 			attribute<KG_yr>	H10_CO2_reductie								:=	round(!Uitgesloten_bool ? makedefined((
+// 																				  //StartJaar/AllocExports/PlanRegioResults/Table/CO2_totaal
+// 																				  ///TussenResultaten/StartJaar/AllocatieResultaten/BestaandeWoning/CO2/Elektriciteit
+// 																				  AllocatieResultaten/BestaandeWoning/CO2/Elektriciteit
+// 																				- AllocExports/PlanRegioResults/Table/CO2_totaal)
+// 																				, 0.0[KG_yr]) : 0.0[KG_yr])[KG_yr];
+																				
+
+// 			attribute<Eur_yr>		H11_Nat_abskosten							:=	round(!Uitgesloten_bool ? makedefined(
+// 																				PlanRegioResults/NationaleKosten/TotaalUitstoot/Natkosten_abs
+// 																				, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];						// absolute nationale kosten
+// 																				
+// 			attribute<Eur_yr>		H12_Nat_meerkosten							:=	round(!Uitgesloten_bool ? makedefined(
+// 																				PlanRegioResults/NationaleKosten/TotaalUitstoot/Delta_nat_kosten
+// 																				, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];						// nationale meerkosten
+
+// 			attribute<Eur_yr>	H13_Nat_meerkost								:=	round(!Uitgesloten_bool ? makedefined(
+// 																				(PlanRegioResults/NationaleKosten/TotaalUitstoot/Delta_nat_kosten)
+// 																				, 0.0[Eur_yr]) : 0.0[Eur_yr])[Eur_yr];				// nationale meerkosten per woningequivalen
+
+				attribute<Classifications/WarmteOptie>  C08_Warmteoptie					:= AllocatieComponent/WarmteAllocatie;
+				attribute<classifications/EnergieLabel> C09_Elabel						:= BCdata/energielabel/CurrValue;
+				attribute<model/CalculationSchemes/BCdata/ModelObject> C10_Model_rel	:= BCdata/Model_rel;
+			}
+
+			unit<uint32> variable := SubItem_PropValues(table,'name');
+			container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Datapakket.csv');
+		}
+	}
