@@ -234,5 +234,3 @@ REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S5_HR_GG_
 REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S5_HR_GG_R2_2030_NationaleKosten.txt" "%pd_root%\Runs\S5_HR_GG.dms" /Resultaten/R2_2030/NLResults/NationaleKosten
 REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S5_HR_GG_R2_2030_Aansluitingen.txt" "%pd_root%\Runs\S5_HR_GG.dms" /Resultaten/R2_2030/NLResults/Aansluitingen
 
-
-PAUSE

@@ -4,7 +4,7 @@ REM Sluit GUI-variant(GeoDmsGui.exe) af bij aanroepen van GeoDmsRun.exe (indien 
 REM Resultaten worden weggeschreven in: n:/LD/%confignaam%/results/...
 REM Bij nogmaals runnen worden bestanden gewoon overschreven
 
-set pd_root=N:\PD\Runs_Leidraad\Default_Configuratie
+set pd_root=N:\PD\_Bas\Vesta35beta_Bas_190813
 set exe=GeoDms7182
 
 set CUR_YYYY=%date:~10,4%
@@ -235,6 +235,3 @@ REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S5_HR_GG_
 REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S5_HR_GG_R2_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\S5_HR_GG.dms" /Resultaten/R2_2030/PlanRegioResults/Hoofdindicatoren
 REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S5_HR_GG_R2_2030_NationaleKosten.txt" "%pd_root%\Runs\S5_HR_GG.dms" /Resultaten/R2_2030/PlanRegioResults/NationaleKosten
 REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S5_HR_GG_R2_2030_Aansluitingen.txt" "%pd_root%\Runs\S5_HR_GG.dms" /Resultaten/R2_2030/PlanRegioResults/Aansluitingen
-
-
-PAUSE
