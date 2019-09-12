@@ -4,7 +4,7 @@ REM Sluit GUI-variant(GeoDmsGui.exe) af bij aanroepen van GeoDmsRun.exe (indien 
 REM Resultaten worden weggeschreven in: n:/LD/%confignaam%/results/...
 REM Bij nogmaals runnen worden bestanden gewoon overschreven
 
-set pd_root=N:\PD\_Bas\Vesta35beta_Bas_190813
+set pd_root=N:\PD\Runs_Leidraad\Default_Configuratie
 set exe=GeoDms7182
 
 set CUR_YYYY=%date:~10,4%
@@ -42,13 +42,13 @@ REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllEl
 REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_StartJaar_NationaleKosten.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/StartJaar/PlanRegioResults/NationaleKosten
 REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_StartJaar_Aansluitingen.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/StartJaar/PlanRegioResults/Aansluitingen
 
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_R1_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/R1_2030/PlanRegioResults/Hoofdindicatoren
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_R1_2030_NationaleKosten.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/R1_2030/PlanRegioResults/NationaleKosten
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_R1_2030_Aansluitingen.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/R1_2030/PlanRegioResults/Aansluitingen
+REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_R1_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/R1_2030/PlanRegioResults/Hoofdindicatoren
+REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_R1_2030_NationaleKosten.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/R1_2030/PlanRegioResults/NationaleKosten
+REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_R1_2030_Aansluitingen.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/R1_2030/PlanRegioResults/Aansluitingen
 
-REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_R2_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/R2_2030/PlanRegioResults/Hoofdindicatoren
-REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_R2_2030_NationaleKosten.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/R2_2030/PlanRegioResults/NationaleKosten
-REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_R2_2030_Aansluitingen.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/R2_2030/PlanRegioResults/Aansluitingen
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_R2_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/R2_2030/PlanRegioResults/Hoofdindicatoren
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_R2_2030_NationaleKosten.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/R2_2030/PlanRegioResults/NationaleKosten
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1a_AllElectric_lucht_R2_2030_Aansluitingen.txt" "%pd_root%\Runs\S1a_AllElectric_lucht.dms" /Resultaten/R2_2030/PlanRegioResults/Aansluitingen
 
 
 
@@ -57,13 +57,13 @@ REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllEl
 REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_StartJaar_NationaleKosten.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/StartJaar/PlanRegioResults/NationaleKosten
 REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_StartJaar_Aansluitingen.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/StartJaar/PlanRegioResults/Aansluitingen
 
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_R1_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/R1_2030/PlanRegioResults/Hoofdindicatoren
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_R1_2030_NationaleKosten.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/R1_2030/PlanRegioResults/NationaleKosten
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_R1_2030_Aansluitingen.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/R1_2030/PlanRegioResults/Aansluitingen
+REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_R1_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/R1_2030/PlanRegioResults/Hoofdindicatoren
+REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_R1_2030_NationaleKosten.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/R1_2030/PlanRegioResults/NationaleKosten
+REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_R1_2030_Aansluitingen.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/R1_2030/PlanRegioResults/Aansluitingen
 
-REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_R2_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/R2_2030/PlanRegioResults/Hoofdindicatoren
-REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_R2_2030_NationaleKosten.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/R2_2030/PlanRegioResults/NationaleKosten
-REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_R2_2030_Aansluitingen.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/R2_2030/PlanRegioResults/Aansluitingen
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_R2_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/R2_2030/PlanRegioResults/Hoofdindicatoren
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_R2_2030_NationaleKosten.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/R2_2030/PlanRegioResults/NationaleKosten
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_S1b_AllElectric_bodem_R2_2030_Aansluitingen.txt" "%pd_root%\Runs\S1b_AllElectric_bodem.dms" /Resultaten/R2_2030/PlanRegioResults/Aansluitingen
 
 
 
