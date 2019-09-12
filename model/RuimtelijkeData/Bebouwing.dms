@@ -183,18 +183,53 @@ container Bebouwing :=
 			attribute<nrWoningen>               nrWoonUnits_i     := const(0[nrWoningen], .), isHidden = "True";
 			attribute<m2>                       NrJoinedUnits     := Opp_M2;
 			attribute<m2>                       nrOppUnits_i      := nrJoinedUnits;
-			
+
 			// foreign key to model data
 			attribute<Classifications/BouwJaar> BouwJaar           := const(Classifications/Bouwjaar/V/Onbekend, .), isHidden = "True";
 			attribute<BebouwingsTypeDomein>     BebouwingsType     := GLTB_Code, isHidden = "True";
 			attribute<uint8>                    ModelObjectKey     := GLTB_Code *  uint8(NrOfRows(Classifications/BouwJaar)) + BouwJaar;
+
+			attribute<UInt32>                   strpos_space       := strpos(TYPE_GLTB, ' ');
+			attribute<UInt32>                   strlen_TYPE_GLTB   := strlen(TYPE_GLTB);
+			attribute<string>                   Groep              := substr(TYPE_GLTB,0,strpos_space);
+			attribute<string>                   Type               := replace(substr(TYPE_GLTB,strpos_space+1,strlen_TYPE_GLTB - strpos_space)," ","_");
+
+			attribute<Groep_BestaandeGlTb>      Groep_rel          := rlookup(Groep, Groep_BestaandeGlTb/Values);
+			attribute<Type_BestaandeGlTb>       Type_rel           := rlookup(Type, Type_BestaandeGlTb/Values);
 
 			attribute<float64>                  AandeelWarmteVraag := MakeDefined(SpecifiekeInstellingen/VraagKentallen/BestaandeGlTb/Deelname[BebouwingsType], 0.0);
 			container Criteria
 			{
 			//	attribute<Bool>     KanBesparen := const(false, BebouwingsObject); // Vul  hier iets anders in als je in RuimtelijkeVraagMetBesparing wel besparingen voor glastuinbouw wilt
 			}
+		unit<uint32> Groep_BestaandeGlTb := unique(Groep)
+		{
+			attribute<string> Values;
+			attribute<string> label:= Values;
+			attribute<uint32> aantal        := pcount(Groep_rel);
+			//attribute<m2>     NrJoinedUnits := sum(Opp_M2,Groep_rel);
 		}
+
+		unit<uint32> Type_BestaandeGlTb := unique(Type)
+		{
+			attribute<string> Values;
+			attribute<string> label:= Values;
+			attribute<uint32> aantal        := pcount(Type_rel);
+			//attribute<m2>     NrJoinedUnits := sum(Opp_M2,Type_rel);
+		}
+
+		container GlTbTabel_Groep_Type := for_each_nedv(
+				Type_BestaandeGlTb/Values
+			,	'sum(Type_rel == ' + string(id(Type_BestaandeGlTb)) + '[Type_BestaandeGlTb] ?  Opp_M2 : 0[m2]  ,Groep_rel)'
+			,	Groep_BestaandeGlTb
+			,	m2
+		)
+		{
+			attribute<string> label (Groep_BestaandeGlTb) := Groep_BestaandeGlTb/label;
+		}
+		}
+
+
 		#include<Nieuwbouw.dms>
 	}
 }
