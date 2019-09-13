@@ -240,12 +240,46 @@ container Sprongen
 
 		// eWP (S_AP_eWP) is vanaf hier incl LTAS (L); S_AP_eWP en L zijn wel nog langs dezelfde leercurve gelegd.
 		attribute<Eur_ModelUnit> LTAS     (BebouwingsObject) := VerbeterKosten_nu/LTAS    * Leercurves/LTAS/Curve;
-		attribute<Eur_ModelUnit> AeWP     (BebouwingsObject) :=	((BCname == 'BestaandeWoning') || (BCname == 'NieuwbouwWoning') ?
+		
+		container eWPkosten_S1
+		{
+			attribute<string>        Variant_S1       (BebouwingsObject) :=		/Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/S1_naam[planregio_rel];
+			attribute<ratio>         LuchtBodemSchuif (BebouwingsObject) :=		Variant_S1 == 's1a'? 1.0[Ratio] : Variant_S1 == 's1b'? 0.0[Ratio] : 0.5[Ratio];
+			attribute<Ratio>         R_lucht          (BebouwingsObject) :=		LuchtBodemSchuif;
+			attribute<Ratio>         R_bodem          (BebouwingsObject) :=		1.0 - R_lucht;
+			
+			attribute<Eur_aansl>     Ki_w_eWP_vast    (BebouwingsObject) :=		LeerCurves/eWPlw/Curve * (( R_lucht * (Schuiven/KostenMin * Kengetallen/BCkentallen/Ki_w_LWP_vast_min + Schuiven/KostenMax * Kengetallen/BCkentallen/Ki_w_LWP_vast_max))+
+																										 (  R_bodem * (Schuiven/KostenMin * Kengetallen/BCkentallen/Ki_w_BWP_vast_min + Schuiven/KostenMax * Kengetallen/BCkentallen/Ki_w_BWP_vast_max)));
+			attribute<Eur_kw>        Ki_w_eWP_var     (BebouwingsObject) :=		LeerCurves/eWPlw/Curve * (( R_lucht * (Schuiven/KostenMin * Kengetallen/BCkentallen/Ki_w_LWP_var_min  + Schuiven/KostenMax * Kengetallen/BCkentallen/Ki_w_LWP_var_max))+
+																										 (  R_bodem * (Schuiven/KostenMin * Kengetallen/BCkentallen/Ki_w_BWP_var_min  + Schuiven/KostenMax * Kengetallen/BCkentallen/Ki_w_BWP_var_max)));
+			attribute<Eur_aansl>     Ki_u_eWP_vast    (BebouwingsObject) :=		LeerCurves/eWPlw/Curve * (( R_lucht * (Schuiven/KostenMin * Kengetallen/BCkentallen/Ki_u_LWP_vast_min + Schuiven/KostenMax * Kengetallen/BCkentallen/Ki_u_LWP_vast_max))+
+																										 (  R_bodem * (Schuiven/KostenMin * Kengetallen/BCkentallen/Ki_u_BWP_vast_min + Schuiven/KostenMax * Kengetallen/BCkentallen/Ki_u_BWP_vast_max)));
+			attribute<Eur_kw>        Ki_u_eWP_var     (BebouwingsObject) :=		LeerCurves/eWPlw/Curve * (( R_lucht * (Schuiven/KostenMin * Kengetallen/BCkentallen/Ki_u_LWP_var_min  + Schuiven/KostenMax * Kengetallen/BCkentallen/Ki_u_LWP_var_max))+
+																										 (  R_bodem * (Schuiven/KostenMin * Kengetallen/BCkentallen/Ki_u_BWP_var_min  + Schuiven/KostenMax * Kengetallen/BCkentallen/Ki_u_BWP_var_max)));
+		}
+		
+		attribute<Eur_ModelUnit> AewP_org (BebouwingsObject) := ((BCname == 'BestaandeWoning') || (BCname == 'NieuwbouwWoning') ?
 																( BC_kentallen/Ki_w_eWP_vast * RuimtelijkeVraagComponent/nrAansluitingen
 																+ BC_kentallen/Ki_w_eWP_var  * RuimtelijkeVraagComponent/AansluitCapaciteit/eWP) : 
 																( BC_kentallen/Ki_u_eWP_vast * RuimtelijkeVraagComponent/nrAansluitingen
 																+ BC_kentallen/Ki_u_eWP_var  * RuimtelijkeVraagComponent/AansluitCapaciteit/eWP)
 																) / RuimtelijkeVraagComponent/nrModelUnits;
+		attribute<Eur_ModelUnit> AewP_S1  (BebouwingsObject) := ((BCname == 'BestaandeWoning') || (BCname == 'NieuwbouwWoning') ?
+																( eWPkosten_S1/Ki_w_eWP_vast * RuimtelijkeVraagComponent/nrAansluitingen
+																+ eWPkosten_S1/Ki_w_eWP_var  * RuimtelijkeVraagComponent/AansluitCapaciteit/eWP) : 
+																( eWPkosten_S1/Ki_u_eWP_vast * RuimtelijkeVraagComponent/nrAansluitingen
+																+ eWPkosten_S1/Ki_u_eWP_var  * RuimtelijkeVraagComponent/AansluitCapaciteit/eWP)
+																) / RuimtelijkeVraagComponent/nrModelUnits;
+			
+		attribute<Eur_ModelUnit> AeWP     (BebouwingsObject) :=	Schuiven/LuchtBodemAlsS1 ? AewP_S1 : AewP_org;
+		
+// 		attribute<Eur_ModelUnit> AeWP     (BebouwingsObject) := ((BCname == 'BestaandeWoning') || (BCname == 'NieuwbouwWoning') ?
+// 																( BC_kentallen/Ki_w_eWP_vast * RuimtelijkeVraagComponent/nrAansluitingen
+// 																+ BC_kentallen/Ki_w_eWP_var  * RuimtelijkeVraagComponent/AansluitCapaciteit/eWP) : 
+// 																( BC_kentallen/Ki_u_eWP_vast * RuimtelijkeVraagComponent/nrAansluitingen
+// 																+ BC_kentallen/Ki_u_eWP_var  * RuimtelijkeVraagComponent/AansluitCapaciteit/eWP)	
+// 																) / RuimtelijkeVraagComponent/nrModelUnits;
+		
 		attribute<Eur_ModelUnit> BeWP     (BebouwingsObject) := AeWP;
 		attribute<Eur_ModelUnit> EWV      (BebouwingsObject) := VerbeterKosten_nu/EWV     * Leercurves/EWV/Curve;
 
