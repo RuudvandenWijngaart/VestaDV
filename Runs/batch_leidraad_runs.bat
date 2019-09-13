@@ -27,13 +27,13 @@ REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Statisch.
 "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_StartJaar_NationaleKosten.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/NationaleKosten
 "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_StartJaar_Aansluitingen.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Aansluitingen
 
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_R1_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/R1_2030/PlanRegioResults/Hoofdindicatoren
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_R1_2030_NationaleKosten.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/R1_2030/PlanRegioResults/NationaleKosten
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_R1_2030_Aansluitingen.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/R1_2030/PlanRegioResults/Aansluitingen
+REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_R1_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/R1_2030/PlanRegioResults/Hoofdindicatoren
+REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_R1_2030_NationaleKosten.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/R1_2030/PlanRegioResults/NationaleKosten
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_R1_2030_Aansluitingen.txt" "%pd_root%\RunsREM \Referentie.dms" /Resultaten/R1_2030/PlanRegioResults/Aansluitingen
 
-REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_R2_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/R2_2030/PlanRegioResults/Hoofdindicatoren
-REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_R2_2030_NationaleKosten.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/R2_2030/PlanRegioResults/NationaleKosten
-REM "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_R2_2030_Aansluitingen.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/R2_2030/PlanRegioResults/Aansluitingen
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_R2_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/R2_2030/PlanRegioResults/Hoofdindicatoren
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_R2_2030_NationaleKosten.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/R2_2030/PlanRegioResults/NationaleKosten
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log\%SUBFILENAME%_Referentie_R2_2030_Aansluitingen.txt" "%pd_root%\Runs\Referentie.dms" /Resultaten/R2_2030/PlanRegioResults/Aansluitingen
 
 
 
