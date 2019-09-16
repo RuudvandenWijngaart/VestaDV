@@ -6,7 +6,8 @@
 container DataPakketExport: isHidden = "True"
 {
 	parameter<bool>			Groengas              :=	/Invoer/DefaultInstellingen/Basis/Voorkeuren/Afweging/IsGroenGas;
-
+	parameter<string>       emptystring           := '';
+	
 	container Bestaand
 	{
 			unit<uint32> BestaandWoonUtil := union_unit(Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied, Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied)
@@ -20,16 +21,21 @@ container DataPakketExport: isHidden = "True"
 				attribute<Ratio>		p_stadsv                                 := PlanRegioResults/p_stadsv[Buurt_rel];
 				attribute<string>		IsWater                                  := Invoer/RuimtelijkeData/StudieGebied/buurt/IsWater[Buurt_rel];
 				attribute<nrWoningen>	nrWEQ                                    := PlanRegioResults/nrWEQ[Buurt_rel];
+				
+				attribute<string>	    GM_code                                  := 
+					rjoin(BestaandWoonUtil_in_DataPakket/I01_BU_CODE, Invoer/RuimtelijkeData/StudieGebied/buurt/BU_CODE, Invoer/RuimtelijkeData/StudieGebied/buurt/GM_CODE);
+				
+			
 			}
 
 			unit<uint32> BestaandWoonUtil_in_DataPakket := BestaandWoonUtil
 			{
 				attribute<string> identificatie										:= union_data(.,/Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/identificatie,Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/identificatie);
 				// voor codes zie /Classifications/UtilTypeBestaand, woonfunctie =10
-				attribute<uint8> gebruiksdoel										:= union_data(.,/Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/gebruiksdoel,/Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/gebruiksdoel);
+				attribute<string> gebruiksdoel										:= union_data(.,const('wonen',Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied),const('utiliteit',/Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied));
 
-				attribute<float64> RD_X                                             := PointRow(BestaandWoonUtil/geometry);
-				attribute<float64> RD_Y                                             := PointCol(BestaandWoonUtil/geometry);
+				attribute<m> RD_X                                                   := PointRow(BestaandWoonUtil/geometry)[m];
+				attribute<m> RD_Y                                                   := PointCol(BestaandWoonUtil/geometry)[m];
 
 				attribute<String>	I01_BU_CODE										:= Invoer/RuimtelijkeData/StudieGebied/buurt/BU_CODE[BestaandWoonUtil/Buurt_rel];
 				attribute<nrAansl> I11_nrAansluitingen								:= union_data(.,BebouwingsComponenten/BestaandeWoning/RuimtelijkeVraagComponent/nrAansluitingen,BebouwingsComponenten/BestaandeUtil/RuimtelijkeVraagComponent/nrAansluitingen);
@@ -101,13 +107,57 @@ container DataPakketExport: isHidden = "True"
 																					, 0.0[GJ_yr]) : 0.0[GJ_yr])[GJ_yr];
 	
 	
-				attribute<Classifications/WarmteOptie>  C08_Warmteoptie					:= union_data(.,/TussenResultaten/StartJaar/AllocatieResultaten/BestaandeWoning/WarmteAllocatie, /TussenResultaten/StartJaar/AllocatieResultaten/BestaandeUtil/WarmteAllocatie);
-				attribute<classifications/EnergieLabel> C09_Elabel						:= union_data(.,BebouwingsComponenten/BestaandeWoning/energielabel/CurrValue,BebouwingsComponenten/BestaandeUtil/energielabel/CurrValue);
+				attribute<string>  C08_Warmteoptie					:= Classifications/WarmteOptie/name[union_data(.,/TussenResultaten/StartJaar/AllocatieResultaten/BestaandeWoning/WarmteAllocatie, /TussenResultaten/StartJaar/AllocatieResultaten/BestaandeUtil/WarmteAllocatie)];
+				attribute<string>  C09_Elabel						:= Classifications/energielabel/name[union_data(.,BebouwingsComponenten/BestaandeWoning/energielabel/CurrValue,BebouwingsComponenten/BestaandeUtil/energielabel/CurrValue)];
 				attribute<model/CalculationSchemes/BCdata/ModelObject> C10_Model_rel	:= union_data(.,BebouwingsComponenten/BestaandeWoning/Model_rel,BebouwingsComponenten/BestaandeUtil/Model_rel);
 			}
 
 			unit<uint32> variable := SubItem_PropValues(BestaandWoonUtil_in_DataPakket,'name');
-			container export_csv := Rapportage/WriteTable32ToCSV(BestaandWoonUtil_in_DataPakket, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Datapakket.csv');
+			container export_csv_nl := Rapportage/WriteTable32ToCSV(BestaandWoonUtil_in_DataPakket, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Datapakket.csv');
+			
+			parameter<string> generate_all:= 'OK'
+			,	ExplicitSuppliers = "=generate_all_expr";
+			parameter<string> generate_all_expr:= 
+				AsList('Gemeente/' + Geography/RegioIndelingen/Gemeente/GM_code + '/export_csv/result',';');
+			container Gemeente := for_each_ne(
+				Geography/RegioIndelingen/Gemeente/GM_code
+				,'per_gemeente(' + quote(Geography/RegioIndelingen/Gemeente/GM_code) + ')'
+				);
+			template per_gemeente
+			{
+				// begin case parameters
+				parameter<string> GM_code;
+// 				// end case parameters
+				
+				unit<uint32> table:= Subset(BestaandWoonUtil/GM_code == GM_code)
+				{
+					attribute<string>  identificatie									:= BestaandWoonUtil_in_DataPakket/GM_code[Nr_OrgEntity];
+					attribute<string>  gebruiksdoel										:= BestaandWoonUtil_in_DataPakket/gebruiksdoel[Nr_OrgEntity];
+	
+					attribute<m>       RD_X                                             := BestaandWoonUtil_in_DataPakket/RD_X[Nr_OrgEntity];
+					attribute<m>       RD_Y                                             := BestaandWoonUtil_in_DataPakket/RD_Y[Nr_OrgEntity];
+	
+					attribute<String>  I01_BU_CODE										:= BestaandWoonUtil_in_DataPakket/I01_BU_CODE[Nr_OrgEntity];
+					attribute<nrAansl> I11_nrAansluitingen								:= BestaandWoonUtil_in_DataPakket/I11_nrAansluitingen[Nr_OrgEntity];
+					attribute<GJ_yr>   H01_warmtetotaal								    := BestaandWoonUtil_in_DataPakket/H01_warmtetotaal[Nr_OrgEntity];
+	
+					attribute<GJ_yr>   H02_Vraag_aardgas								:= BestaandWoonUtil_in_DataPakket/H02_Vraag_aardgas[Nr_OrgEntity];
+					attribute<GJ_yr>   H03_Vraag_groengas								:= BestaandWoonUtil_in_DataPakket/H03_Vraag_groengas[Nr_OrgEntity];
+					attribute<GJ_yr>   H04_Vraag_elekwarmte							    := BestaandWoonUtil_in_DataPakket/H04_Vraag_elekwarmte[Nr_OrgEntity];
+					attribute<GJ_yr>   H05_Vraag_MTwarmte								:= BestaandWoonUtil_in_DataPakket/H05_Vraag_MTwarmte[Nr_OrgEntity];
+	
+					attribute<GJ_yr>   H06_Vraag_LTwarmte								:= BestaandWoonUtil_in_DataPakket/H06_Vraag_LTwarmte[Nr_OrgEntity];
 
+					attribute<GJ_yr>   H08_Vraag_elektotaal							    := BestaandWoonUtil_in_DataPakket/H08_Vraag_elektotaal[Nr_OrgEntity];
+					attribute<GJ_yr>   H09_Vraag_koude									:= BestaandWoonUtil_in_DataPakket/H09_Vraag_koude[Nr_OrgEntity];
+	
+	
+					attribute<string>  C08_Warmteoptie				 := BestaandWoonUtil_in_DataPakket/C08_Warmteoptie[Nr_OrgEntity];
+					attribute<string>                                      C09_Elabel					 := BestaandWoonUtil_in_DataPakket/C09_Elabel[Nr_OrgEntity];
+					attribute<model/CalculationSchemes/BCdata/ModelObject> C10_Model_rel := BestaandWoonUtil_in_DataPakket/C10_Model_rel[Nr_OrgEntity];
+				}
+							
+			container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/' + GM_CODE + '/Datapakket.csv');
+		}
 	}
 }
