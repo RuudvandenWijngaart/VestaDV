@@ -1,0 +1,225 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//              Configuratie voor project: BAG XML bronfiles > FSS                    //
+//                                                                                    //
+//                              Object Vision 2018                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                            Configuratie van Templates                              //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container Templates: IsHidden = "True"
+{
+	Template meta // Voor het verwerken van de generieke BAG meta attributen
+	{
+		// begin case parameters
+		unit<uint32> domain: DisableStorage = "True";
+		attribute<string> STATUS (domain);
+
+		// end case parameters
+		attribute<int32>  BEGINDATUM     (domain) := MakeDefined(substr(domain/bagtype_begindatumTijdvakGeldigheid,0,8)[int32], 0[int32]);
+		attribute<int32>  EINDDATUM      (domain) := MakeDefined(substr(domain/bagtype_einddatumTijdvakGeldigheid,0,8)[int32] , 0[int32]);
+		attribute<int32>  BEGINTIJD      (domain) := MakeDefined(substr(domain/bagtype_begindatumTijdvakGeldigheid,8,8)[int32], 0[int32]);
+		attribute<int32>  EINDTIJD       (domain) := MakeDefined(substr(domain/bagtype_einddatumTijdvakGeldigheid,8,8)[int32] , 0[int32]);
+
+		attribute<int32>  DOCUMENTDATUM  (domain) := MakeDefined(substr(domain/bagtype_documentdatum,0,8)[int32],0[int32]);
+		attribute<string> DOCUMENTNUMMER (domain) := domain/bagtype_documentnummer;
+
+		attribute<bool>   IS_ONDERZOEK   (domain) := UpperCase(domain/bag_LVC_inOnderzoek) == 'J';
+		attribute<bool>   IS_CORRECTIE   (domain) := UpperCase(domain/bag_LVC_aanduidingRecordCorrectie) == 'J';
+		attribute<bool>   IS_INACTIEF    (domain) := UpperCase(domain/bag_LVC_aanduidingRecordInactief)  == 'J';
+		attribute<bool>   IS_OFFICIEEL   (domain) := UpperCase(domain/bag_LVC_officieel)  == 'J';
+	}
+
+	Template meta_union // Voor het combineren van de generieke BAG attributen uit meerdere bronbestanden
+	{
+		// begin case parameters
+		parameter<string> src:     DisableStorage = "True";
+		unit<uint32>      domain:  DisableStorage = "True";
+		unit<uint32>      fileset: DisableStorage = "True";
+		// end case parameters
+
+		parameter<string> perFileset_ref := 'XML/' + src  +'/perFileSet/fs_', DisableStorage = "True";
+
+		attribute<string> STATUS         (domain) := ='union_data(domain,' + AsItemList(perFileset_ref + string(fileset/values) + '/' + src + '/meta/Status') + ')';
+		attribute<int32>  BEGINDATUM     (domain) := ='union_data(domain,' + AsItemList(perFileset_ref + string(fileset/values) + '/' + src + '/meta/begindatum') + ')';
+		attribute<int32>  EINDDATUM      (domain) := ='union_data(domain,' + AsItemList(perFileset_ref + string(fileset/values) + '/' + src + '/meta/einddatum') + ')';
+		attribute<int32>  BEGINTIJD      (domain) := ='union_data(domain,' + AsItemList(perFileset_ref + string(fileset/values) + '/' + src + '/meta/begintijd') + ')';
+		attribute<int32>  EINDTIJD       (domain) := ='union_data(domain,' + AsItemList(perFileset_ref + string(fileset/values) + '/' + src + '/meta/eindtijd') + ')';
+
+		attribute<int32>  DOCUMENTDATUM  (domain) := ='union_data(domain,' + AsItemList(perFileset_ref + string(fileset/values) + '/' + src + '/meta/documentdatum') + ')';
+		attribute<string> DOCUMENTNUMMER (domain) := ='union_data(domain,' + AsItemList(perFileset_ref + string(fileset/values) + '/' + src + '/meta/documentnummer') + ')';
+
+		attribute<bool>   IS_ONDERZOEK   (domain) := ='union_data(domain,' + AsItemList(perFileset_ref + string(fileset/values) + '/' + src + '/meta/IS_ONDERZOEK') + ')';
+		attribute<bool>   IS_CORRECTIE   (domain) := ='union_data(domain,' + AsItemList(perFileset_ref + string(fileset/values) + '/' + src + '/meta/IS_CORRECTIE') + ')';
+		attribute<bool>   IS_INACTIEF    (domain) := ='union_data(domain,' + AsItemList(perFileset_ref + string(fileset/values) + '/' + src + '/meta/IS_INACTIEF') + ')';
+		attribute<bool>   IS_OFFICIEEL   (domain) := ='union_data(domain,' + AsItemList(perFileset_ref + string(fileset/values) + '/' + src + '/meta/IS_OFFICIEEL') + ')';
+	}
+
+	Template posListProcessor {
+		// begin case parameters
+		unit<uint32> posList;
+		parameter<bool> isExterior;
+		// end case parameters
+
+		unit<uint32> impl := posList
+		{
+//			attribute<string>  count               := parsedXMLsrc/gml_posList/count;
+			attribute<string>  values              := _ValuesTable/Values[value_rel];
+			attribute<string>  str_sequence        := '{'+string(uint32(count) * uint32(srsDimension)) + ':' + values + '}', IntegrityCheck = "srsDimension == '2' || srsDimension == '3'";
+			attribute<float64> f64_sequence (poly) := float64Seq(str_sequence);
+
+			unit<uint32> posListUnit := range(uint32, 0, #posList) // trick to avoid coordinates/SequenceNr having an untraceable values unit.
+			{
+				attribute<uint32> nrCoordPerPoint := union_data(posListUnit, uint32(srsDimension));
+			}
+
+			unit<uint32> coordinates := sequence2points(union_data(posListUnit, f64_sequence));
+
+			unit<uint32> p := subset(coordinates/ordinal % posListUnit/nrCoordPerPoint[coordinates/SequenceNr] == 0)
+			{
+				attribute<float64>     x    := coordinates/point[nr_OrgEntity  ];
+				attribute<float64>     y    := coordinates/point[nr_OrgEntity+1];
+				attribute<rdc_mm>      p_mm := point(Round(y * 1000.0), Round(x * 1000.0), rdc_mm);
+				attribute<posListUnit> s    := coordinates/SequenceNr[nr_OrgEntity];
+				attribute<uint32>      fo   := coordinates/ordinal[nr_OrgEntity] / posListUnit/nrCoordPerPoint[s]; // forward winding
+				attribute<uint32>      ro   := pcount(s)[s] - fo - 1; // reverse winding
+			}
+			attribute<rdc_mm> geometry_mm (poly) := union_data(posList, points2sequence_pso(p/p_mm, p/s, isExterior ? p/ro : p/fo));
+		}
+		attribute<rdc_mm> result (posList, poly) := impl/geometry_mm[rdc_mm];
+	}
+
+	Template union {
+		// begin case parameters
+		unit<uint32>      child;
+		unit<uint32>      parent;
+		attribute<rdc_mm> geometry(child, poly);
+		attribute<parent> parent_rel(child);
+		// end case parameters
+
+		attribute<rdc_mm> result (poly, parent) := partitioned_union_polygon(geometry, parent_rel);
+	}
+
+	Template optimized_union {
+		// begin case parameters
+		unit<uint32>      child;
+		unit<uint32>      parent;
+		attribute<rdc_mm> geometry   (child, poly);
+		attribute<parent> parent_rel (child);
+		// end case parameters
+
+		container impl {
+			attribute<uint32> count (parent) := pcount(parent_rel);
+			unit<uint32> childCopy := range(child, 0, #child)
+			{
+//					attribute<rdc_mm> geometry2(poly) := union_data(., geometry);
+//					attribute<parent> parent_rel2 := union_data(., parent_rel);
+			}
+//				unit<uint32> nonTrivialChild := subset((count != 1)[childCopy/parent_rel2])
+			unit<uint32> nonTrivialChild := subset((count != 1)[union_data(childCopy, parent_rel)])
+			{
+				attribute<child> child_rel := value(nr_OrgEntity, child);
+				attribute<rdc_mm> union (poly,parent) := partitioned_union_polygon(geometry[child_rel], parent_rel[child_rel]);
+			}
+		}
+		attribute<rdc_mm> result (poly,parent) := impl/count <= 1 ? geometry[invert(parent_rel)] : impl/nonTrivialChild/union;
+		attribute<Int32>  area   (parent)      := area(result, Int32); // DEBUG
+	}
+
+	Template one2one_union {
+		// begin case parameters
+		unit<uint32>      child;
+		unit<uint32>      parent;
+		attribute<rdc_mm> geometry(child, poly);
+		attribute<parent> parent_rel(child);
+		// end case parameters
+
+		container impl {
+//			attribute<uint32> count(parent) := pcount(parent_rel);
+			parameter<bool> Check := (#child == #parent) && all(parent_rel == ID(child));
+		}
+		attribute<rdc_mm> result (poly, parent) := union_data(parent, geometry), IntegrityCheck = "impl/Check";
+	}
+
+	Template LinearRing
+	{
+		// begin case parameters
+		unit<uint32>    parsedXMLsrc;
+		parameter<bool> isExterior;
+		// end case parameters
+
+		container impl {
+			container posList := posListProcessor(parsedXMLsrc/gml_posList, isExterior);
+			container union   := one2one_union(parsedXMLsrc/gml_posList, parsedXMLsrc, posList/result, parsedXMLsrc/gml_posList/Parent_rel);
+		}
+		attribute<rdc_mm> geometry_mm (poly,parsedXMLsrc) := impl/union/result;
+	}
+
+	Template Polygon
+	{
+		// begin case parameters
+		unit<uint32>        Exterior;
+		attribute<rdc_mm>   ExtGeometry (Exterior, poly);
+		unit<uint32>        Interior;
+		attribute<rdc_mm>   IntGeometry (Interior, poly);
+		attribute<Exterior> Parent_rel  (Interior);
+		// end case parameters
+
+		container impl
+		{
+			container IntUnion := optimized_union(Interior, Exterior, IntGeometry, Parent_rel);
+			attribute<uint32> count (Exterior) := pcount(parent_rel);
+
+			unit<uint32> ExtCopy := range(Exterior, 0, #Exterior)
+			{
+				attribute<uint32> count2 := union_data(., count);
+			}
+
+			unit<uint32> nonTrivialExterior := subset(ExtCopy/count2 > 0)
+			{
+				attribute<Exterior> Exterior_rel := value(nr_OrgEntity, Exterior);
+				attribute<rdc_mm>   diff (poly)  := ExtGeometry[Exterior_rel] - IntUnion/result[Exterior_rel];
+			}
+
+			attribute<rdc_mm> result (poly,Exterior) := impl/nonTrivialExterior/diff[invert(impl/nonTrivialExterior/Exterior_rel)];
+		}
+		attribute<rdc_mm> result (poly,Exterior) := impl/count == 0 ? ExtGeometry : impl/result;
+		attribute<Int32>  area   (Exterior)      := area(result, Int32); // DEBUG
+	}
+
+	Template ProcessGmlPolygonImpl
+	{
+		// begin case parameters
+		unit<uint32> gmlPolygon;
+		// end case parameters
+
+		container Exterior      := Templates/LinearRing(gmlPolygon, true);
+		container Interior      := Templates/LinearRing(gmlPolygon/gml_Interior, false);
+		container Polygon       := Templates/Polygon(
+			gmlPolygon,              Exterior/geometry_mm,
+			gmlPolygon/gml_Interior, Interior/geometry_mm,
+			gmlPolygon/gml_Interior/Parent_rel
+		);
+	}
+
+	Template ProcessGmlPolygon
+	{
+		// begin case parameters
+		unit<uint32>    gmlContext;
+		parameter<bool> hasMultiplePolygons;
+		// end case parameters
+
+		container impl := ProcessGmlPolygonImpl(gmlContext/gml_Polygon);
+
+		parameter<string> geometry_expr := hasMultiplePolygons
+			? 'Templates/optimized_union(impl/gmlPolygon, gmlContext, impl/Polygon/result, impl/gmlPolygon/Parent_rel)'
+			: 'Templates/one2one_union(impl/gmlPolygon, gmlContext, impl/Polygon/result, impl/gmlPolygon/Parent_rel)';
+
+		container geometry := = geometry_expr;
+		attribute<rdc_mm> result (gmlContext, polygon) := geometry/result;
+	}
+}

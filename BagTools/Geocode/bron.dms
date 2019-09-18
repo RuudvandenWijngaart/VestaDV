@@ -1,0 +1,120 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//                     Configuratie voor BAG Geocodeer Module                         //
+//                                                                                    //
+//                              Object Vision 2015                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//   Configuratiebestande op basis van een beslisboom XY coordinaten met relevante    //
+//   meta informatie te koppelen aan een bronbestand met adresvelden                  //
+//                                                                                    //
+// De koppeling vindt plaats aan de BAG adressen en verschillende aggregaties daarvan //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container bron
+{
+	container TableChopper // Deze wordt gebruikt ipv de gdal.vect storage manager omdat de TableChopper substantieel veel sneller is
+	{
+//		parameter<string> BestandsNaam := 'D:/tmp/noordveluwe.csv';
+		parameter<string> BestandsNaam := '%SourceDataDir%/DUO/02-alle-vestigingen-vo.csv';
+
+		parameter<uint32> nrElems      := strcount(FileData,stringparams/newline)-1;
+		unit<uint32>      Domein       := range(uint32,0,nrElems);
+
+		parameter<string> VeldScheidingsTeken :=';'
+		,	IntegrityCheck = "VeldScheidingsTeken = ',' || VeldScheidingsTeken = ';'";
+
+		parameter<string> FileData
+		:	StorageType = "str"
+		,	StorageName = "=BestandsNaam";
+
+		parameter<string> KopRegel:= readLines(FileData, void, 0);
+		unit<uint32> TemplateDomain: nrofrows = 1, isHidden = "True";
+
+		container KopRegelVervangen := Templates/vervang_ongewenste_scheidingstekens(TemplateDomain, const(KopRegel,TemplateDomain,string));
+
+		unit<uint32> Veld:= Range(UInt32, 0, strcount(KopRegelVervangen/resultaat[0], VeldScheidingsTeken)+1)
+		{
+			attribute<string> RawName:= ReadArray(KopRegelVervangen/resultaat[0], Veld, string, 0);
+			attribute<string> Name := replace(RawName, '-','_');
+		}
+
+		attribute<string> BodyLines (Domein) := readLines(FileData, Domein, KopRegel/ReadPos);
+		container BodyLinesVervangen         := Templates/vervang_ongewenste_scheidingstekens(Domein, BodyLines);
+
+		container Data:=
+			for_each_nedv(
+				Veld/Name
+				,'ReadElems(
+					 BodyLinesVervangen/resultaat
+					,string
+					,'+MakeDefined(
+						 Veld/Name[ID(Veld)-1]+'/ReadPos'
+						,'const(0,Domein)'
+					)+'
+				)'
+				,Domein
+				,string
+			);
+		//, FreeData = "False"; // DEBUG, UITZETTEN BIJ OPLEVEREN;
+		container postcode_org:= Templates/uniformeer_string(TableChopper/Domein, substr(Data/postcode, 0, 6));
+		attribute<bool>   isMissingPC          (TableChopper/Domein):= isDefined(rlookup(postcode_org/resultaat,vervangingen/postcodes_missend/label));
+		attribute<string> postcode             (TableChopper/Domein):= isMissingPC ? string( 0 / 0) : postcode_org/resultaat;
+		attribute<uint32> huisnummer           (TableChopper/Domein):= uint32(data/HUISNUMMER_TOEVOEGING );
+//		attribute<string> woonplaats_vervangen (TableChopper/Domein):= 
+//			MakeDefined(
+//				rjoin(trim(data/woonplaats),vervangingen/woonplaats/table/TeVervangen, vervangingen/woonplaats/table/VervangenDoor)
+//				,data/woonplaats
+//			);
+	}
+
+	// hiermee worden de bronvelden vertaald in de BAG adres veldnamen
+	container straatnaam     :=
+		Templates/uniformeer_string_straatnaam(TableChopper/Domein, const('',TableChopper/Domein));
+		//Templates/uniformeer_string_straatnaam(TableChopper/Domein, adres_splitsen/straatnaam);
+
+	container huisnummer     :=
+		Templates/uniformeer_string(TableChopper/Domein, string(TableChopper/huisnummer));
+		//Templates/uniformeer_string_straatnaam(TableChopper/Domein, adres_splitsen/huisnummer);
+
+	container huistoevoeging :=  Templates/uniformeer_string(TableChopper/Domein, const('',TableChopper/Domein));
+		// Templates/uniformeer_string(TableChopper/Domein, TableChopper/data/HUISLETTER);
+		//Templates/uniformeer_string(TableChopper/Domein, adres_splitsen/huistoevoeging);
+
+	container woonplaatsnaam := Templates/uniformeer_string(TableChopper/Domein, const('',TableChopper/Domein));
+	container postcode
+	{
+		attribute<string> resultaat (TableChopper/Domein) := TableChopper/postcode;
+	}
+	container postcode5
+	{
+		attribute<string> resultaat (TableChopper/Domein) := substr(postcode/resultaat,0,5);
+	}
+	container postcode4
+	{
+		attribute<string> resultaat (TableChopper/Domein) := substr(postcode/resultaat,0,4);
+	}
+	
+	// hiermee wordt een adresveld opgesplitst naar een straatnaam, huisnummer en huistoevoeging
+	container adres_splitsen
+	{
+		parameter<uint32> maxvalue := 9999999;
+
+		attribute<string> adres            (TableChopper/Domein):= TableChopper/Data/adres;
+		attribute<string> adres_vanaf_pos2 (TableChopper/Domein):= substr(adres,2,strlen(adres)-2); // om te voorkomen dat je in de 1e jan steenstraat op zoek gaat naar het eerste numerieke karakter
+		attribute<uint32> huisnr_toev_pos  (TableChopper/Domein):= 
+			min_elem(
+				 MakeDefined(strpos(adres_vanaf_pos2,'0'),maxvalue),MakeDefined(strpos(adres_vanaf_pos2,'1'),maxvalue),MakeDefined(strpos(adres_vanaf_pos2,'2'),maxvalue)
+				,MakeDefined(strpos(adres_vanaf_pos2,'3'),maxvalue),MakeDefined(strpos(adres_vanaf_pos2,'4'),maxvalue),MakeDefined(strpos(adres_vanaf_pos2,'5'),maxvalue)
+				,MakeDefined(strpos(adres_vanaf_pos2,'6'),maxvalue),MakeDefined(strpos(adres_vanaf_pos2,'7'),maxvalue),MakeDefined(strpos(adres_vanaf_pos2,'8'),maxvalue)
+				,MakeDefined(strpos(adres_vanaf_pos2,'9'),maxvalue)
+			);
+		attribute<string> straatnaam     (TableChopper/Domein):= substr(adres,0, huisnr_toev_pos + 2);
+		attribute<string> nummer_toev    (TableChopper/Domein):= substr(adres_vanaf_pos2, huisnr_toev_pos, strlen(adres_vanaf_pos2) - huisnr_toev_pos);
+		attribute<string> huisnummer     (TableChopper/Domein):= string(uint32(nummer_toev));
+		attribute<string> huistoevoeging (TableChopper/Domein):= replace(substr(nummer_toev, strlen(huisnummer), strlen(nummer_toev) - strlen(huisnummer)),'-','');
+	}
+}

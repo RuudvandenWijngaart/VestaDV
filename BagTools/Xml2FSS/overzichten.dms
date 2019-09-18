@@ -1,0 +1,81 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//              Configuratie voor project: BAG XML bronfiles > FSS                    //
+//                                                                                    //
+//                              Object Vision 2018                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+// In deze configuratie worden een overzicht met aantallen gemaakt behorend bij een   //
+// BAG XML set verwerking                                                             //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container overzichten: IsHidden = "True"
+{
+	container impl
+	{
+		parameter<string> tab     := '\t';
+		parameter<string> newline := '\n';
+
+		unit<uint32> rapport_items := SubTree_PropValues(rapport,'fullname')
+		{
+			attribute<string> expr := union_data(.,rapport_items_expr/expr);
+			attribute<string> name := union_data(.,rapport_items_name/name);
+		}
+		unit<uint32> rapport_items_expr := SubTree_PropValues(rapport,'expr');
+		unit<uint32> rapport_items_name := SubTree_PropValues(rapport,'name');
+
+		unit<uint32> rapport_items_sel  := Subset(strcount(rapport_items/FullName,'impl') == 0)
+		{
+			attribute<string> fullname := rapport_items/fullname[nr_OrgEntity];
+			attribute<string> name     := rapport_items/name[nr_OrgEntity];
+			attribute<string> expr     := rapport_items/expr[nr_OrgEntity];
+
+			attribute<uint32> level    := strcount(fullname, '/') - 3;
+
+			attribute<uint32> relpos   := strpos(fullname, 'rapport');
+			attribute<string> relname  := strlen(expr) >= 1 ? substr(fullname, relpos, strlen(fullname) - relpos) : quote(name);
+			attribute<string> label    := repeat(tab,level) + name + ': ';
+		}
+
+		parameter<string> seperator := ' + ' + quote(newline) + ' + ';
+		parameter<string> genereer_rapport_expr :=
+			AsList(
+				quote(rapport_items_sel/label) + ' + ' + 'string(' + rapport_items_sel/relname + ')'
+				, seperator
+			);
+		parameter<string> genereer_rapport := = genereer_rapport_expr
+		,	StorageName = "= FSSDir + '/overzicht.txt'"
+		,	StorageType = "str";
+	}
+
+	container rapport
+	{
+		parameter<string> datum      := date;
+		parameter<string> XML_folder := expand(.,XmlDir);
+		parameter<string> FSS_folder := expand(.,FSSDir);
+
+		container xml_bestanden
+		{
+			parameter<uint32> nr_bestanden_ligplaats        := #XML/folderinfo/bestand_selectie/xml_bestanden/ligplaats;
+			parameter<uint32> nr_bestanden_standplaats      := #XML/folderinfo/bestand_selectie/xml_bestanden/standplaats;
+			parameter<uint32> nr_bestanden_pand             := #XML/folderinfo/bestand_selectie/xml_bestanden/pand;
+			parameter<uint32> nr_bestanden_vbo              := #XML/folderinfo/bestand_selectie/xml_bestanden/vbo;
+			parameter<uint32> nr_bestanden_nummeraanduiding := #XML/folderinfo/bestand_selectie/xml_bestanden/nummeraanduiding;
+			parameter<uint32> nr_bestanden_openbareruimte   := #XML/folderinfo/bestand_selectie/xml_bestanden/openbareruimte;
+			parameter<uint32> nr_bestanden_woonplaats       := #XML/folderinfo/bestand_selectie/xml_bestanden/woonplaats;
+		}
+		container bag_objecten
+		{
+			parameter<uint32> nr_ligplaats_mutaties        := #FSS/ligplaats;
+			parameter<uint32> nr_standplaats_mutaties      := #FSS/standplaats;
+			parameter<uint32> nr_pand_mutaties             := #FSS/pand;
+			parameter<uint32> nr_vbo_mutaties              := #FSS/vbo;
+			parameter<uint32> nr_nummeraanduiding_mutaties := #FSS/nummeraanduiding;
+			parameter<uint32> nr_openbareruimte_mutaties   := #FSS/openbareruimte;
+			parameter<uint32> nr_woonplaats_mutaties       := #FSS/woonplaats;
+		}
+	}
+}

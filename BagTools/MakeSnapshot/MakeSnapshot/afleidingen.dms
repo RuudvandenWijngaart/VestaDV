@@ -1,0 +1,282 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//              Configuratie voor project: BAG FSS Files > Make Snapshot              //
+//                                                                                    //
+//                              Object Vision 2018                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+// In deze configuratie worden afleidingen geconfigureerd voor attributen die         //
+// aan de snapshot worden toegevoegd                                                  //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container afleidingen: Using = "eenheden"
+{
+	container pand_attributen
+	{
+		container hoogte
+		{
+			//unit<float32> meter := baseUnit('m', float32);
+			//parameter<meter> verdiepingshoogte := 2.8[meter];
+
+			unit<uint32> PHN
+			:	StorageName     = "%SourceDataDir%/PHN/PHN_20181001.fss" //, te downloaden via: http://www.objectvision.nl/outgoing/PHN/PHN_20181001_fss.zip, unzip het bestand en plaats het in de %SourceDataDir%/PHN folder
+			,	StorageReadOnly = "true"
+			{
+				attribute<string>    identificatie;
+				attribute<uint16>    AHN_inwinjaar; //uint16
+				attribute<cm_uint16> hoogte;               //uint16
+				attribute<bool>      isAHN2;
+				attribute<bool>      isAHN3;
+			}
+
+			attribute<eenheden/cm_uint16> AHN_hoogte    (pand/results/unique) := rjoin(pand/results/unique/identificatie, PHN/identificatie, PHN/hoogte);
+			attribute<uint16>             AHN_inwinjaar (pand/results/unique) := rjoin(pand/results/unique/identificatie, PHN/identificatie, PHN/AHN_inwinjaar);
+			attribute<bool>               obvAHN3       (pand/results/unique) := rjoin(pand/results/unique/identificatie, PHN/identificatie, PHN/isAHN3);
+		}
+
+		container geometrie
+		{
+			container results
+			{
+				attribute<uint32>        nr_buurpanden     (pand/results/unique) := functioneel_pand/NeighbourCount[invert(functioneel_pand/nr_OrgEntity)]; 
+				attribute<type_woonpand> type_woonpand_rel (pand/results/unique) := functioneel_pand/type_woonpand_rel[invert(functioneel_pand/nr_OrgEntity)];
+			}
+
+			unit<uint8> type_woonpand: nrofrows = 6
+			{
+				attribute<string> label : ['geen woonpand','vrijstaand','twee onder 1 kap','hoekwoning','tussenwoning','meergezinspand'], DialogType = "LabelText";
+				attribute<string> name  := replace(label, ' ', '_');
+				container V := for_each_nedv(name, String(ID(.))+'[..]', void, .);
+			}
+
+			container extents
+			{
+				attribute<geometries/rdc_mm> NW (pand/results/unique) := lower_bound(pand/results/unique/geometry_mm);
+				attribute<geometries/rdc_mm> SE (pand/results/unique) := upper_bound(pand/results/unique/geometry_mm);
+				attribute<int32> X_ext          (pand/results/unique) := PointCol(SE) - PointCol(NW);
+				attribute<int32> Y_ext          (pand/results/unique) := PointRow(SE) - PointRow(NW);
+			}
+
+			unit<uint32> functioneel_pand := subset(pand/results/unique/vbo_count > 0 && extents/X_ext < 10000000i && extents/Y_ext < 10000000i), DialogType = "Map", DialogData = "geometry_mm"
+			{
+				attribute<geometries/rdc_mm> geometry_mm (poly) := pand/results/unique/geometry_mm[nr_OrgEntity];
+				attribute<geometries/rdc_mm> NW                 := lower_bound(geometry_mm);
+				attribute<geometries/rdc_mm> SE                 := upper_bound(geometry_mm);
+
+				// results collection
+				attribute<uint32> NeighbourCount  := pcount(unique_neighbour_pair/F1) + pcount(unique_neighbour_pair/F2);
+				attribute<bool>   HasOneNeighbour := NeighbourCount == 1;
+				attribute<bool>   IsSemiAttached  := HasOneNeighbour &&
+					HasOneNeighbour[
+						MakeDefined(
+							unique_neighbour_pair/F2[invert(unique_neighbour_pair/F1)],
+							unique_neighbour_pair/F1[invert(unique_neighbour_pair/F2)]
+						)
+					];
+
+				attribute<uint32> nr_woning := sum(uint32(vbo/results/unique/gebruiksdoelen/woon), vbo/results/unique/pand_rel)[nr_OrgEntity];
+
+				attribute<type_woonpand> type_woonpand_rel :=
+					  nr_woning == 0      ? type_woonpand/V/geen_woonpand
+					: nr_woning >  1      ? type_woonpand/V/meergezinspand
+					: NeighbourCount == 0 ? type_woonpand/V/vrijstaand
+					: HasOneNeighbour
+					   ? IsSemiAttached
+						   ? type_woonpand/V/twee_onder_1_kap
+						   : type_woonpand/V/hoekwoning
+					: type_woonpand/V/tussenwoning;
+			}
+
+			parameter<uint32>  nr_x         :=   7;
+			parameter<uint32>  nr_y         :=  13;
+			parameter<Float64> inflate_size := 200.0;
+			
+			unit<uint32> rectangle := range(uint32, 0, nr_x * nr_y)
+			{
+				attribute<uint32> seq_y  := id(.) / nr_x;
+				attribute<uint32> seq_x  := id(.) % nr_x;
+				attribute<string> name   := 'R'+string(seq_y)+'_C'+string(seq_x);
+
+				parameter<uint32> size_x := uint32(pointcol(BoundRange(geometries/rdc_mm))) / uint32(nr_x);
+				parameter<uint32> size_y := uint32(pointrow(BoundRange(geometries/rdc_mm))) / uint32(nr_y);
+
+				attribute<uint32> min_x  := uint32(pointcol(lowerbound(geometries/rdc_mm))) + seq_x * size_x;
+				attribute<uint32> max_x  := min_x + size_x;
+				attribute<uint32> min_y  := uint32(pointrow(lowerbound(geometries/rdc_mm))) + seq_y * size_y;
+				attribute<uint32> max_y  := min_y + size_y;
+			}
+			container rectangles := for_each_ne(rectangle/name, 'connect_neighbours('+string(ID(rectangle))+')');
+
+			template connect_neighbours
+			{
+				// begin case parameters
+				parameter<rectangle> rectangle_sel;
+				// end case parameters
+
+				unit<uint32> domain :=
+					subset(
+						uint32(PointCol(functioneel_pand/NW)) <= rectangle/max_x[rectangle_sel]
+					&&	uint32(PointRow(functioneel_pand/NW)) <= rectangle/max_y[rectangle_sel]
+					&&	uint32(PointCol(functioneel_pand/SE)) >= rectangle/min_x[rectangle_sel]
+					&&	uint32(PointRow(functioneel_pand/SE)) >= rectangle/min_y[rectangle_sel]
+					)
+					,	DialogType = "Map", DialogData = "geometry"
+				{
+					attribute<geometries/rdc_mm> geometry_mm (poly) := functioneel_pand/geometry_mm[nr_OrgEntity];
+				}
+//				attribute<geometries/rdc_mm> grens_mm(domain, polygon) := domain/geometry[geometries/rdc_mm];
+				attribute<geometries/rdc_mm> i4HV_mm (domain, polygon) := polygon_I4HV(domain/geometry_mm, inflate_size);
+
+				unit<uint32> neighbours := polygon_connectivity(i4HV_mm)
+				{
+					attribute<upoint> coded_pair := point(domain/nr_OrgEntity[F1], domain/nr_OrgEntity[F2]);
+
+					// nice to see
+					attribute<geometries/rdc_mm> joint(., arc):=
+						points2sequence_ps(
+							union_data(combine(., bool), centroid(domain/geometry_mm)[F1], centroid(domain/geometry_mm)[F2]),
+							union_data(combine(., bool), id(.), id(.))
+						);
+				}
+
+				// results collection
+				unit<uint32> unique_neighbour_pair := unique(neighbours/coded_pair), FreeData = "False", DialogType = "Map", DialogData = "joint"
+				{
+					attribute<functioneel_pand> F1 := pointrow(values)[functioneel_pand];
+					attribute<functioneel_pand> F2 := pointcol(values)[functioneel_pand];
+
+					// nice to see
+					attribute<geometries/rdc_mm> joint (.,arc):=
+						points2sequence_ps(
+							union_data(combine(., bool), centroid(functioneel_pand/geometry_mm)[F1], centroid(functioneel_pand/geometry_mm)[F2]),
+							union_data(combine(., bool), ID(.), ID(.))
+						);
+				}
+				// Additional info for one rectangle, should not be used for final derivations
+				attribute<uint32> NeighbourCount (domain) := (pcount(unique_neighbour_pair/F1) + pcount(unique_neighbour_pair/F2))[domain/nr_OrgEntity];
+				/*
+				attribute<bool>   HasOneNeighbour(domain) := NeighbourCount == 1;
+				attribute<bool>   IsSemiAttached (domain) := HasOneNeighbour &&
+					HasOneNeighbour[
+						MakeDefined(
+							unique_neighbour_pair/F2[invert(unique_neighbour_pair/F1)], 
+							unique_neighbour_pair/F1[invert(unique_neighbour_pair/F2)]
+						)[domain/nr_OrgEntity]
+					];
+				attribute<uint32> nr_woning(domain) := sum(uint32(vbo/results/unique/gebruiksdoelen/woon), vbo/results/unique/pand_rel)[functioneel_pand/nr_OrgEntity][domain/nr_OrgEntity];
+				
+				attribute<woonpand_type> woontype_rel(domain) :=
+				
+					nr_woning == 0          ? woonpand_type/V/geen_woonpand
+				:	nr_woning >  1          ? woonpand_type/V/meergezinspand
+				:	NeighbourCount == 0     ? woonpand_type/V/vrijstaand
+				:	HasOneNeighbour
+					? IsSemiAttached 
+						?	woonpand_type/V/twee_onder_1_kap 
+						:	woonpand_type/V/hoekwoning
+				:	woonpand_type/V/tussenwoning
+				;
+				*/
+			}
+			unit<uint32> neighbour_pair := ='union_unit('+AsItemList('rectangles/'+rectangle/name+'/neighbours')+')'
+			{
+				attribute<upoint> coded_pair := ='union_data(., '+AsItemList('rectangles/'+rectangle/name+'/neighbours/coded_pair')+')';
+			}
+			unit<uint32> unique_neighbour_pair := unique(neighbour_pair/coded_pair), DialogType = "Map", DialogData = "joint"
+			{
+				attribute<functioneel_pand> F1 := pointrow(values)[functioneel_pand];
+				attribute<functioneel_pand> F2 := pointcol(values)[functioneel_pand];
+
+				// nice to see
+				attribute<geometries/rdc_mm> joint(.,arc):=
+					points2sequence_ps(
+						union_data(Combine(., bool), centroid(functioneel_pand/geometry_mm)[F1], centroid(functioneel_pand/geometry_mm)[F2]),
+						union_data(Combine(., bool), id(.), id(.))
+					);
+			}
+		}
+	}
+
+	unit<uint32> adres := impl/nummeraanduiding_met_geom
+	,	StorageName = "=SnapshotDir + '/adres.fss'"
+	{
+		attribute<string>            nummeraanduiding_id := impl/nummeraanduiding_met_geom/nummeraanduiding_id;
+		attribute<string>            straatnaam          := rjoin(nummeraanduiding/results/unique/openbareruimte_id, openbareruimte/results/unique/identificatie, openbareruimte/results/unique/naam);
+		attribute<string>            postcode            := impl/nummeraanduiding_met_geom/postcode;
+		attribute<int32>             huisnummer          := impl/nummeraanduiding_met_geom/huisnummer;
+		attribute<string>            huisletter          := impl/nummeraanduiding_met_geom/huisletter;
+		attribute<string>            toevoeging          := impl/nummeraanduiding_met_geom/toevoeging;
+
+		attribute<geometries/rdc_mm> geometry_mm         := impl/nummeraanduiding_met_geom/geometry_mm, DisableStorage = "True";
+		attribute<geometries/rdc>    geometry            := geometry_mm[geometries/rdc];
+		attribute<float32>           X                   := pointcol(geometry_mm[geometries/rdc]);
+		attribute<float32>           Y                   := pointrow(geometry_mm[geometries/rdc]);
+
+		attribute<string>            woonplaatsnaam      := woonplaats/results/unique/woonplaatsNaam[point_in_polygon(geometry_mm,woonplaats/results/unique/geometry_mm)];
+	}
+	container impl
+	{
+		unit<uint32> nummeraanduiding_met_geom := nummeraanduiding/results/unique, DialogType = "Map", DialogData = "geometry"
+		{
+			attribute<string> nummeraanduiding_id := nummeraanduiding/results/unique/identificatie;
+			attribute<string> postcode            := nummeraanduiding/results/unique/postcode;
+			attribute<int32>  huisnummer          := nummeraanduiding/results/unique/huisnummer;
+			attribute<string> huisletter          := nummeraanduiding/results/unique/huisletter;
+			attribute<string> toevoeging          := nummeraanduiding/results/unique/toevoeging;
+	
+			// Ook locaties van alleen nevenadressen meenemen
+			attribute<geometries/rdc_mm> vbo_point_hoofadres  := rjoin(nummeraanduiding_id, vbo/results/unique/nummeraanduiding_id, vbo/results/unique/geometry_mm);
+			attribute<string>            vbo_id_nevenadres    := rjoin(nummeraanduiding_id, vbo/Results/unique/nevenadres/nummeraanduiding_id, vbo/Results/unique/nevenadres/vbo_id);
+			attribute<geometries/rdc_mm> vbo_point_nevenadres := rjoin(vbo_id_nevenadres,   vbo/Results/unique/identificatie, vbo/results/unique/geometry_mm);
+			attribute<geometries/rdc_mm> vbo_point            := MakeDefined(vbo_point_hoofadres,vbo_point_nevenadres);
+	
+			container lp // ligplaatsen
+			{
+				attribute<geometries/rdc_mm> point_src (nummeraanduiding_met_geom) := rjoin(nummeraanduiding_id, ligplaats/results/unique/nummeraanduiding_id   , centroid(ligplaats/results/unique/geometry_mm));
+				attribute<int32>             X         (nummeraanduiding_met_geom) := PointCol(point_src);
+				attribute<int32>             Y         (nummeraanduiding_met_geom) := PointRow(point_src);
+				attribute<geometries/rdc_mm> point     (nummeraanduiding_met_geom) := 
+					   X >=  -8000000i &&  X <= 300000000i
+					&& Y >= 289000000i &&  Y <= 629000000i
+						? point_src
+						: point(0i/0i, 0i/0i, geometries/rdc_mm);
+			}
+			container sp // standplaatsen
+			{
+				attribute<geometries/rdc_mm> point_src (nummeraanduiding_met_geom) := rjoin(nummeraanduiding_id, standplaats/results/unique/nummeraanduiding_id , centroid(standplaats/results/unique/geometry_mm));
+				attribute<int32> X                     (nummeraanduiding_met_geom) := PointCol(point_src);
+				attribute<int32> Y                     (nummeraanduiding_met_geom) := PointRow(point_src);
+				attribute<geometries/rdc_mm> point     (nummeraanduiding_met_geom) :=
+					   X >=  -8000000i &&  X <= 300000000i
+					&& Y >= 289000000i &&  Y <= 629000000i
+						? point_src
+						: point(0i/0i, 0i/0i, geometries/rdc_mm);
+			}
+
+			attribute<geometries/rdc_mm> geometry_mm := MakeDefined(MakeDefined(MakeDefined(vbo_point,lp/point),sp/point));
+
+			attribute<int32> X                       := PointCol(geometry_mm);
+			attribute<int32> Y                       := PointRow(geometry_mm);
+
+			attribute<string> postcode_huisnr        := postcode + '_' + string(huisnummer);
+			attribute<string> postcode4              := substr(postcode, 0, 4);
+		}
+	
+		unit<uint32> vbo_met_adres := vbo/results/unique
+		{
+			attribute<string>            openbareruimte_id := rjoin(vbo/results/unique/nummeraanduiding_id, nummeraanduiding/results/unique/identificatie, nummeraanduiding/results/unique/openbareruimte_id);
+
+			attribute<string>            straatnaam        := rjoin(openbareruimte_id, openbareruimte/results/unique/identificatie, openbareruimte/results/unique/naam);
+			attribute<int32>             huisnummer        := rjoin(vbo/results/unique/nummeraanduiding_id, nummeraanduiding/results/unique/identificatie, nummeraanduiding/results/unique/huisnummer);
+			attribute<string>            huisletter        := rjoin(vbo/results/unique/nummeraanduiding_id, nummeraanduiding/results/unique/identificatie, nummeraanduiding/results/unique/huisletter);
+			attribute<string>            toevoeging        := rjoin(vbo/results/unique/nummeraanduiding_id, nummeraanduiding/results/unique/identificatie, nummeraanduiding/results/unique/toevoeging);
+			attribute<string>            postcode          := rjoin(vbo/results/unique/nummeraanduiding_id, nummeraanduiding/results/unique/identificatie, nummeraanduiding/results/unique/postcode);
+
+			attribute<string>            woonplaatsnaam    := woonplaats/results/unique/woonplaatsNaam[point_in_polygon(geometry,woonplaats/results/unique/geometry_mm)];
+			attribute<geometries/rdc_mm> geometry          := vbo/results/unique/geometry_mm;
+		}
+	}
+}
