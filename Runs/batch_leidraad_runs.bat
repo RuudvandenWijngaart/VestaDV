@@ -4,7 +4,7 @@ REM Sluit GUI-variant(GeoDmsGui.exe) af bij aanroepen van GeoDmsRun.exe (indien 
 REM Resultaten worden weggeschreven in: n:/LD/%confignaam%/results/...
 REM Bij nogmaals runnen worden bestanden gewoon overschreven
 
-set pd_root=N:\PD\Runs_Leidraad\Default_Configuratie
+set pd_root=N:\PD\Runs_Leidraad\Default_Configuratie_Referentie
 set exe=GeoDms7182
 
 set CUR_YYYY=%date:~10,4%
