@@ -38,16 +38,14 @@ container ExportSettings: url = "='#'+ExportSettings/Docdata +'/ExportSettings.a
 		parameter<string> CdCmd          := 'cd '+DOS_PD;
 		parameter<string> DescrCmd       := 'git describe --all > git.txt';
 		parameter<string> StatusCmd      := 'git status >> git.txt';
-		parameter<string> Cmds           := SwitchDriveCmd + ' && ' + CdCmd + ' && ' + DescrCmd + ' && ' + StatusCmd;
-		container Writer := exec(Expand(., '%env:ComSpec%'), '/c ' + Cmds, PD);
+		parameter<string> RevisionInfoCmds           := SwitchDriveCmd + ' && ' + CdCmd + ' && ' + DescrCmd + ' && ' + StatusCmd;
+		container Writer := exec(Expand(., '%env:ComSpec%'), '/c ' + RevisionInfoCmds, PD);
 	}
 	
-// 	container Impl: IsHidden = "true"
-// 	{
-// 		parameter<string> SLASH:     [ '/' ];
-// 		parameter<string> BACKSLASH: [ '\\' ];
-// 		parameter<string> ComSpec:   Expr = "Expand(., '%env:ComSpec%')";
-// 	}
+ 	container SvnImpl {
+		parameter<String> RevisionInfoCmd := Replace(Expand(., 'SubWCRev %projDir% > %projDir%/SubWCRevData.str'), '/', '\\');
+		container Writer := exec(Expand(., '%env:ComSpec%'), '/c ' + RevisionInfoCmd, Expand(., '%projdir%'));
+ 	}
 
 	container MetaInfo {
 		parameter<string> FileName : ='%storageBaseName%.xml';
@@ -73,12 +71,10 @@ container ExportSettings: url = "='#'+ExportSettings/Docdata +'/ExportSettings.a
 			{
 				parameter<string> RevisionInfo : Storagename = "%projDir%/git.txt", StorageType = "str", ExplicitSuppliers = "GitImpl/Writer";
 			}
-// 			container Svn
-// 			{
-// 				parameter<String> RevisionInfoCmd: Expr = "Replace(Expand(., 'SubWCRev %projDir% > %projDir%/SubWCRevData.str'), Impl/SLASH, Impl/BACKSLASH)";
-// 				container RevisionInfoWriter: Expr = "exec(Impl/ComSpec, '/c ' + RevisionInfoCmd, Expand(., '%projdir%'))";
-// 				parameter<string> RevisionInfo: Storagename = "%projDir%/SubWCRevData.str", ExplicitSuppliers = "RevisionInfoWriter";
-// 			}
+			container Svn
+ 			{
+ 				parameter<string> RevisionInfo: Storagename = "%projDir%/SubWCRevData.str", ExplicitSuppliers = "SvnImpl/Writer";
+ 			}
 		}
 	}
 }
