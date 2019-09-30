@@ -29,7 +29,13 @@ template AllocatieResultatenComponent
 	attribute<kW>                                     Aansl_capaciteit                 (BebouwingsObject) := BCdata/RuimtelijkeVraagComponent/AansluitCapaciteit/Elektriciteit;
 	
 	attribute<ModelUnit>                              ModelUnits_met_WP_inPlanRegio    (PlanRegio)        :=	  sum(Aandelen/eWP[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
-																												+ sum(Aandelen/hWP[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit];
+																												+ sum(Aandelen/hWP[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
+																												+ sum((BCdata/WarmteOptie == 'WKO')[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
+																												+ sum((BCdata/WarmteOptie == 'Lt15_30')[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
+																												+ sum((BCdata/WarmteOptie == 'Lt15_50')[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
+																												+ sum((BCdata/WarmteOptie == 'Lt30_30')[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
+																												+ sum((BCdata/WarmteOptie == 'Lt30_50')[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
+																												+ sum((BCdata/WarmteOptie == 'TEO')[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit];
 																												
 	attribute<ModelUnit>                              ModelUnits_zonder_WP_inPlanRegio (PlanRegio)        := sum(BCdata/RuimtelijkeVraagComponent/nrModelUnits, PlanRegio_BebouwingsObject_rel)[ModelUnit] - ModelUnits_met_WP_inPlanRegio;
 	
@@ -50,7 +56,7 @@ template AllocatieResultatenComponent
 			- BCdata/Aandeel/Electric_mWKK;
 
 		attribute<float64> AardGasInclMicroWKK (BebouwingsObject) := AardGasExclMicroWKK  + mWKK;
-		attribute<float64> AllElectric         (BebouwingsObject) := eWP + EWV + WKO + LT30_30 + LT30_50 + LT15_30 + LT15_50 + TEO;
+		attribute<float64> AllElectric         (BebouwingsObject) := eWP + hwp + EWV + WKO + LT30_30 + LT30_50 + LT15_30 + LT15_50 + TEO;
 	}
 
 	container MeterVraag := for_each_nedv(Classifications/GebiedsOptie/name, 'Aandelen/'+Classifications/GebiedsOptie/name+' * BCdata/DragerOpties/Warmte/Warmte', BebouwingsObject, GJ_yr) 
@@ -75,7 +81,9 @@ template AllocatieResultatenComponent
 		
 		attribute<GJ_yr> mWKK          (BebouwingsObject) := Aandelen/mWKK * BCdata/DragerOpties/Warmte/Warmte; // op basis van 50/50 productie   
 		attribute<GJ_yr> CvPomp        (BebouwingsObject) := BCdata/Functioneel/PompEnergie * (Aandelen/AardGasExclMicroWKK + Aandelen/eWP - Dekking_hWP * Aandelen/hWP);
+		attribute<GJ_yr> CvPomp_exWP   (BebouwingsObject) := BCdata/Functioneel/PompEnergie * (Aandelen/AardGasExclMicroWKK + Aandelen/eWP - Dekking_hWP * Aandelen/hWP);
 		attribute<GJ_yr> Koude         (BebouwingsObject) := BCdata/DragerOpties/Koude/Elektriciteit * (1.0 - Aandelen/WKO); // Efficiency/Koude/Elektriciteit is al toegepast in de DragerOptie; WKO en Koude alleen beiden aan bij NieuwbouwUtil
+		attribute<GJ_yr> Koude_exWKO   (BebouwingsObject) := BCdata/DragerOpties/Koude/Elektriciteit;
 		attribute<GJ_yr>	Ventilatie		(BebouwingsObject)	:=	Aandelen/ventilatie * BCdata/DragerOpties/Apparatuur/Ventilatie;
 		attribute<GJ_yr>	WarmteMT		(BebouwingsObject)	:=	RestWarmte+GeoThermie+WijkWKK+BioWKK,		Descr = "totale volumevraag naar warmte uit gebiedsopties 70 graden of hoger";
 		attribute<GJ_yr>	WarmteLT		(BebouwingsObject)	:=	Lt15_30 + Lt15_50 + Lt15_70 + Lt30_30 + Lt30_50 + Lt30_70 + WKO + TEO;
@@ -122,8 +130,16 @@ template AllocatieResultatenComponent
 		attribute<ggk>    ggk_rel          (BebouwingsObject) := classify(MeterVraag/Elektriciteit, ggk/ClassBreak);
 		attribute<Eur_yr> eindgebruik_excl (BebouwingsObject) := MeterVraag/Elektriciteit * ggk/KGJ_eindgebruik_excl[ggk_rel];
 		
-		attribute<Eur_yr> Km_elek_APP      (BebouwingsObject) := (MeterVraag/Elektriciteit - (MeterVraag/eWP + MeterVraag/hWP)) * ggk/KGJ_maatschappelijk [ggk_rel];
-		attribute<Eur_yr> Km_elek_eWP      (BebouwingsObject) := (MeterVraag/eWP + MeterVraag/hWP) * ggk/KGJ_maatschappelijk [ggk_rel];
+		attribute<ggk>		ggk_rel_exWP        (BebouwingsObject) :=	classify((MeterVraag/Elektriciteit - (MeterVraag/eWP - MeterVraag/Koude_exWKO + MeterVraag/hWP + MeterVraag/CvPomp)), ggk/ClassBreak);
+		attribute<Eur_yr>	Km_elek_APP_exWP    (BebouwingsObject) :=	(MeterVraag/Elektriciteit - (MeterVraag/eWP + MeterVraag/Koude + MeterVraag/hWP + MeterVraag/CvPomp)) * ggk/KGJ_maatschappelijk [ggk_rel_exWP];
+		attribute<Eur_yr>	Km_elek_CVpomp_exWP (BebouwingsObject) :=	MeterVraag/CVpomp * ggk/KGJ_maatschappelijk [ggk_rel_exWP]; //herberekening kosten pompenergie incl. pompenergie voor niet-gebruikers
+		attribute<Eur_yr>	Km_elek_eWP_exWP    (BebouwingsObject) :=	(MeterVraag/eWP + MeterVraag/hWP) * ggk/KGJ_maatschappelijk [ggk_rel_exWP];
+		attribute<Eur_yr>	Km_elek_Koude_exWP  (BebouwingsObject) :=	MeterVraag/Koude_exWKO * ggk/KGJ_maatschappelijk [ggk_rel_exWP];
+		
+		attribute<Eur_yr>	Km_elek_APP         (BebouwingsObject) :=	(MeterVraag/Elektriciteit - (MeterVraag/eWP + MeterVraag/Koude + MeterVraag/hWP + MeterVraag/CvPomp)) * ggk/KGJ_maatschappelijk [ggk_rel];
+		attribute<Eur_yr>	Km_elek_CVpomp      (BebouwingsObject) :=	MeterVraag/CVpomp * ggk/KGJ_maatschappelijk [ggk_rel]; //herberekening kosten pompenergie incl. pompenergie voor niet-gebruikers
+		attribute<Eur_yr>	Km_elek_eWP         (BebouwingsObject) :=	(MeterVraag/eWP + MeterVraag/hWP) * ggk/KGJ_maatschappelijk [ggk_rel];
+		attribute<Eur_yr>	Km_elek_Koude       (BebouwingsObject) :=	MeterVraag/Koude * ggk/KGJ_maatschappelijk [ggk_rel];
 		
 		attribute<Eur_yr> maatschappelijk  (BebouwingsObject) := MeterVraag/Elektriciteit * ggk/KGJ_maatschappelijk [ggk_rel];
 		attribute<Eur_yr> netwerk          (BebouwingsObject) := MeterVraag/Elektriciteit * ggk/KGJ_netwerk         [ggk_rel];

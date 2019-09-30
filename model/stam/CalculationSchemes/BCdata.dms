@@ -235,7 +235,22 @@ template BCdata
 			attribute<units/Ratio> ResultaatWaarde_vast (BebouwingsObject) := max_elem(VerbeterFactor_vast, LaatsteWaarde_vast);
 			attribute<units/Ratio> ResultaatWaarde_var (BebouwingsObject) := max_elem(VerbeterFactor_var, LaatsteWaarde_var);
 		}
-		
+		container SPFeWP_S1
+		{
+			attribute<string>        Variant_S1       (BebouwingsObject) :=		/Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_1/Hoofdindicatoren/Scode[planregio_rel];
+			attribute<ratio>         LuchtBodemSchuif (BebouwingsObject) :=		Variant_S1 == 's1a'? 1.0[Ratio] : Variant_S1 == 's1b'? 0.0[Ratio] : 0.5[Ratio];
+			attribute<Ratio>         R_lucht          (BebouwingsObject) :=		LuchtBodemSchuif;
+			attribute<Ratio>         R_bodem          (BebouwingsObject) :=		1.0 - R_lucht;
+			
+			attribute<Ratio>	SPF_rv_A  (BebouwingsObject) :=	BC_kentallen/Eff_min * (R_lucht * Kengetallen/BCkentallen/SPF_LWP_A_min + R_bodem * Kengetallen/BCkentallen/SPF_BWP_A_min) +
+																BC_kentallen/Eff_max * (R_lucht * Kengetallen/BCkentallen/SPF_LWP_A_max + R_bodem * Kengetallen/BCkentallen/SPF_BWP_A_max);
+			attribute<Ratio>	SPF_rv_B  (BebouwingsObject) :=	BC_kentallen/Eff_min * (R_lucht * Kengetallen/BCkentallen/SPF_LWP_B_min + R_bodem * Kengetallen/BCkentallen/SPF_BWP_B_min) +
+																BC_kentallen/Eff_max * (R_lucht * Kengetallen/BCkentallen/SPF_LWP_B_max + R_bodem * Kengetallen/BCkentallen/SPF_BWP_B_max);
+			attribute<Ratio>	SPF_rv_U  (BebouwingsObject) :=	BC_kentallen/Eff_min * (R_lucht * Kengetallen/BCkentallen/SPF_LWP_U_min + R_bodem * Kengetallen/BCkentallen/SPF_BWP_u_min) +
+																BC_kentallen/Eff_max * (R_lucht * Kengetallen/BCkentallen/SPF_LWP_U_max + R_bodem * Kengetallen/BCkentallen/SPF_BWP_U_max);
+			attribute<Ratio>	SPF_Koude (BebouwingsObject) :=	BC_kentallen/Eff_min * (R_lucht * Kengetallen/BCkentallen/SPF_LWP_Koude_min + R_bodem * Kengetallen/BCkentallen/SPF_BWP_Koude_min) +
+																BC_kentallen/Eff_max * (R_lucht * Kengetallen/BCkentallen/SPF_LWP_Koude_max + R_bodem * Kengetallen/BCkentallen/SPF_BWP_Koude_max);
+		}
 		container RuimteVerwarming
 		{
 			attribute<units/Ratio> AardGas (BebouwingsObject):= // neem een opgegeven fractie van de Verbetering (Sprongen/Ruimteverwarming/Efficiency geen een maximale waarde)
@@ -244,15 +259,26 @@ template BCdata
 					: EnergieVraagModellen/Efficiency/RuimteVerwarming/AardGas[Model_rel];
 			attribute<units/Ratio> Warmte (BebouwingsObject) := const(1.0, BebouwingsObject);
 			
-			attribute<units/Ratio>	BeWP          (BebouwingsObject) :=		(BCname == 'BestaandeWoning') || (BCname == 'NieuwbouwWoning') ? const(BC_kentallen/SPF_RV_B, BebouwingsObject) : const(BC_kentallen/SPF_RV_U, BebouwingsObject);
-			attribute<units/Ratio>	AeWP          (BebouwingsObject) :=		(BCname == 'BestaandeWoning') || (BCname == 'NieuwbouwWoning') ? const(BC_kentallen/SPF_RV_A, BebouwingsObject) : const(BC_kentallen/SPF_RV_U, BebouwingsObject);
+			
+			attribute<units/Ratio>	BeWP_S1       (BebouwingsObject) :=		(BCname == 'BestaandeWoning') || (BCname == 'NieuwbouwWoning') ?
+																			SPFeWP_S1/SPF_rv_B : SPFeWP_S1/SPF_rv_U;
+			attribute<units/Ratio>	BeWP_org      (BebouwingsObject) :=		(BCname == 'BestaandeWoning') || (BCname == 'NieuwbouwWoning') ?
+																			const(BC_kentallen/SPF_RV_B, BebouwingsObject) : const(BC_kentallen/SPF_RV_U, BebouwingsObject);
+			attribute<units/Ratio>	AeWP_S1       (BebouwingsObject) :=		(BCname == 'BestaandeWoning') || (BCname == 'NieuwbouwWoning') ?
+																			SPFeWP_S1/SPF_rv_A : SPFeWP_S1/SPF_rv_U;																
+			attribute<units/Ratio>	AeWP_org      (BebouwingsObject) :=		(BCname == 'BestaandeWoning') || (BCname == 'NieuwbouwWoning') ?
+																			const(BC_kentallen/SPF_RV_A, BebouwingsObject) : const(BC_kentallen/SPF_RV_U, BebouwingsObject);
+			attribute<units/Ratio>	AeWP          (BebouwingsObject) :=		= Schuiven/LuchtBodemAlsS1 ? 'AewP_S1' : 'AewP_org';
+			attribute<units/Ratio>	BeWP          (BebouwingsObject) :=		= Schuiven/LuchtBodemAlsS1 ? 'BewP_S1' : 'BewP_org';
 			attribute<units/Ratio>	EWV           (BebouwingsObject) :=		const(BC_kentallen/SPF_EWV,  BebouwingsObject);
 		}
 
 		container Koude
 		{
 			attribute<units/Ratio>	Elektriciteit (BebouwingsObject) :=		EnergieVraagModellen/Efficiency/Koude/Elektriciteit[Model_rel];
-			attribute<units/Ratio>	eWP           (BebouwingsObject) :=		const(BC_kentallen/SPF_Koude, BebouwingsObject);
+			attribute<units/Ratio>	eWP_S1        (BebouwingsObject) :=		SPFeWP_S1/SPF_Koude;
+			attribute<units/Ratio>	eWP_org       (BebouwingsObject) :=		const(BC_kentallen/SPF_Koude, BebouwingsObject);
+			attribute<units/Ratio>	eWP           (BebouwingsObject) :=		= Schuiven/LuchtBodemAlsS1 ? 'ewP_S1' : 'ewP_org';
 		}
 
 		container WarmWater
@@ -313,8 +339,11 @@ template BCdata
 		attribute<Eur>	Oi_HR           (BebouwingsObject) :=	WarmteAllocatie != 0[Classifications/WarmteOptie] ? 
 																(1[Ratio] - Kengetallen/constanten/afschrijving_resterend) * Sprongen/Ki_HR : 0[eur];
 
-		attribute<Eur> Ki_LokaleOpwekking30 (BebouwingsObject) := Ki_ZonneBoiler + Ki_Zon_PV + Ki_EWV + BC_kentallen/fractie_afschrijftermijn_30jaar * Ki_eWP;
-		attribute<Eur> Ki_LokaleOpwekking15 (BebouwingsObject) := Ki_mWKK + Ki_hWP + BC_kentallen/fractie_afschrijftermijn_15jaar * Ki_eWP - Oi_HR;
+		attribute<Ratio> fractie_afschrijftermijn_15jaar (BebouwingsObject) :=	= Schuiven/LuchtBodemAlsS1 ? 'Sprongen/AnnualisationFactor_S1/fractie_afschrijftermijn_15jaar' : 'const(BC_kentallen/fractie_afschrijftermijn_15jaar, BebouwingsObject)';														
+		attribute<Ratio> fractie_afschrijftermijn_30jaar (BebouwingsObject) :=	= Schuiven/LuchtBodemAlsS1 ? 'Sprongen/AnnualisationFactor_S1/fractie_afschrijftermijn_30jaar' : 'const(BC_kentallen/fractie_afschrijftermijn_30jaar, BebouwingsObject)';
+		
+		attribute<Eur> Ki_LokaleOpwekking30 (BebouwingsObject) := Ki_ZonneBoiler + Ki_Zon_PV + Ki_EWV + fractie_afschrijftermijn_30jaar * Ki_eWP;
+		attribute<Eur> Ki_LokaleOpwekking15 (BebouwingsObject) := Ki_mWKK + Ki_hWP + fractie_afschrijftermijn_15jaar * Ki_eWP - Oi_HR;
 		
 		attribute<Eur> Ki_GebouwVerbetering (BebouwingsObject) := RuimtelijkeVraagComponent/nrModelUnits * Sprongen/Ki_gv; // cumulatief
 		attribute<Eur_yr> Kj_gv_incentive   (BebouwingsObject) := Sprongen/Incentive_eigenaar_excl + StartingStateComponent/Kosten/Kj_gv_incentive[StartingState_rel];
@@ -385,7 +414,7 @@ template BCdata
 	}
 	container Aandeel
 	{
-		attribute<float64>  Ventilatie           (BebouwingsObject) := float64(Energielabel/Currvalue <= /Classifications/energielabel/V/LabelB);
+		attribute<float64>  Ventilatie           (BebouwingsObject) := float64(Energielabel/Currvalue <= /Classifications/energielabel/V/LabelB || Energielabel/Currvalue == /Classifications/energielabel/V/BeWP);
 		attribute<Ratio>    Electric             (BebouwingsObject) := Opwekking/eWP + Opwekking/EWV;
 		attribute<Ratio>    Electric_mWKK        (BebouwingsObject) := Electric + Opwekking/mWKK;
 		attribute<Ratio>    IndividueleOpwekking (BebouwingsObject) := Electric_mWKK + Opwekking/hWP, IntegrityCheck = "this <= 1.0";
