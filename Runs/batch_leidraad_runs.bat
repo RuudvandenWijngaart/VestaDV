@@ -20,16 +20,13 @@ set SUBFILENAME=%CUR_YYYY%%CUR_MM%%CUR_DD%-%CUR_HH%%CUR_NN%%CUR_SS%
 if not exist %pd_root% goto error
 
 
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log_bas\%SUBFILENAME%_Statisch.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Statisch
-
-
 "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log_bas\%SUBFILENAME%_S0_Referentie_StartJaar_Hoofdindicatoren.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Hoofdindicatoren
 "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log_bas\%SUBFILENAME%_S0_Referentie_StartJaar_NationaleKosten.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/NationaleKosten
 "N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log_bas\%SUBFILENAME%_S0_Referentie_StartJaar_Aansluitingen.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Aansluitingen
 
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log_bas\%SUBFILENAME%_S0_Referentie_R1_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/R1_2030/PlanRegioResults/Hoofdindicatoren
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log_bas\%SUBFILENAME%_S0_Referentie_R1_2030_NationaleKosten.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/R1_2030/PlanRegioResults/NationaleKosten
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log_bas\%SUBFILENAME%_S0_Referentie_R1_2030_Aansluitingen.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/R1_2030/PlanRegioResults/Aansluitingen
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log_bas\%SUBFILENAME%_S0_Referentie_R2_2030_Hoofdindicatoren.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/R2_2030/PlanRegioResults/Hoofdindicatoren
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log_bas\%SUBFILENAME%_S0_Referentie_R2_2030_NationaleKosten.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/R2_2030/PlanRegioResults/NationaleKosten
+"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"N:\log_bas\%SUBFILENAME%_S0_Referentie_R2_2030_Aansluitingen.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/R2_2030/PlanRegioResults/Aansluitingen
 
 
 
