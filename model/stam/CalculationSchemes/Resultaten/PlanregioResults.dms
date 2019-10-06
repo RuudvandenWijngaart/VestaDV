@@ -157,7 +157,8 @@ container PlanregioResults : isHidden = "True"
 				attribute<Eur_yr>		H11_Nat_abskosten       (Planregio) :=	round(
 																				 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
 																				 	makedefined(
-																				 	 	NationaleKosten/TotaalUitstoot/Natkosten_abs	//absolute nationale kosten
+																				 	 	NationaleKosten/TotaalUitstoot/Natkosten_abs +	//absolute nationale kosten
+																				 	 	(ZichtjaarName != 'StartJaar' ? /Resultaten/StartJaar/PlanRegioResults/Hoofdindicatoren/Table/H12_Nat_meerkosten : 0.0[eur_yr])
 																				 	,0.0[Eur_yr])
 																				)[Eur_yr];		
 																								
@@ -169,11 +170,18 @@ container PlanregioResults : isHidden = "True"
 																				)[Eur_yr];						
 																					
 				attribute<Eur_ton>		H13_Nat_meerkost_CO2   	(Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool ? 0.0[eur_ton] :
+																				 	statisch/Uitgesloten_bool || ZichtjaarName == 'StartJaar' ? 0.0[eur_ton] :
 																				 	makedefined(
 																				 	 	(NationaleKosten/TotaalUitstoot/Delta_nat_kosten / NationaleKosten/TotaalUitstoot/Delta_CO2)	//nationale meerkosten per vermeden ton CO2
 																				 	,0.0[EUR_ton])
 																				)[Eur_ton];
+																				
+				attribute<Eur_yr_WEQ>	H16_Nat_meerkost_WEQ   	(Planregio) :=	round(
+																				 	statisch/Uitgesloten_bool || ZichtjaarName == 'StartJaar' ? 0.0[Eur_yr_WEQ] :
+																				 	makedefined(
+																				 	 	(NationaleKosten/TotaalUitstoot/Delta_nat_kosten / nrWEQ)	//nationale meerkosten per woningequivalent
+																				 	,0.0[Eur_yr_WEQ])
+																				)[Eur_yr_WEQ];
 			}
 			
 			unit<uint32> variable := SubItem_PropValues(table,'name');
@@ -183,6 +191,16 @@ container PlanregioResults : isHidden = "True"
 		//nationale kosten absoluut en CO2 uitstoot
 		container NationaleKosten
 		{		
+			container OrigKosten
+			{
+				parameter<bool> StartJaar := ZichtjaarName == 'StartJaar';
+				attribute<Eur_yr>	K09_Inkoop_Warmte      (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K09_Inkoop_Warmte';																			
+				attribute<Eur_yr>	K10_Inkoop_Gas         (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K10_Inkoop_Gas';
+				attribute<Eur_yr>	K11_Inkoop_Elek        (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K11_Inkoop_Elek';
+				attribute<Eur_yr>	K12_Gebouw_OenM        (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K12_Gebouw_OenM';
+				attribute<Eur_yr>	K13_Wnet_OenM          (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K13_Wnet_OenM';
+				attribute<Eur_yr>	K14_Enet_Gnet_OenM     (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K14_Enet_Gnet_OenM';	
+			}
 			Unit<UInt32>  table := Invoer/DefaultInstellingen/Basis/PlanRegio
 			{
 				attribute<String>	BU_CODE                (Planregio) :=	Statisch/table/I01_buurtcode;	
@@ -257,7 +275,8 @@ container PlanregioResults : isHidden = "True"
 																			 	statisch/Uitgesloten_bool ? 0.0[Eur_yr] :
 																			 	makedefined( 
 																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Kj_ow_productie + //productie warmte nieuwe warmtenetten
-																			 	 	R_StadV * GebiedsAllocatie/RestWarmte/Iterations/I0/Assignment/Km_WarmteFactor * HerState/Vj_WarmtePrimairD	//productie warmte bestaande warmtenetten
+																			 	 	R_StadV * GebiedsAllocatie/RestWarmte/Iterations/I0/Assignment/Km_WarmteFactor * HerState/Vj_WarmtePrimairD -	//productie warmte bestaande warmtenetten
+																			 	 	OrigKosten/K09_Inkoop_Warmte
 																			 	,0.0[Eur_yr])
 																			)[Eur_yr];
 																			
@@ -267,7 +286,8 @@ container PlanregioResults : isHidden = "True"
 																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Km_ow_gas +	//kosten gas opwekking warmte nieuwe warmtenetten
 																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Km_wd_gas +	//kosten gas hulpketels in nieuwe warmtenetten
 																			 	 	R_StadV * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol) * HerState/KostenD/Bijstook/Km_wd_gas +	//kosten gas hulpketels bestaande warmtenetten
-																			 	 	R_AardG * GasKostenGebouwen/Km_totaal	//kosten gas in gebouwen
+																			 	 	R_AardG * GasKostenGebouwen/Km_totaal -	//kosten gas in gebouwen
+																			 	 	OrigKosten/K10_Inkoop_Gas
 																			 	,0.0[Eur_yr])
 																			)[Eur_yr];
 																			
@@ -283,7 +303,8 @@ container PlanregioResults : isHidden = "True"
 																			 	 	R_StadV * ElekKostenGebouwen_Koude_exWP/Km_totaal +	//elektriciteitskosten Koude
 																			 	 	R_AardG * ElekKostenGebouwen_APP/Km_totaal + 	//elektriciteitskosten gebouwen volgens nieuwe staffel
 																			 	 	R_StadV * ElekKostenGebouwen_APP_exWP/Km_totaal +
-																			 	 	R_AardG * ElekKostenGebouwen_Koude/Km_totaal	//elektriciteitskosten gebouwen volgens staffel in bestaand warmtenet
+																			 	 	R_AardG * ElekKostenGebouwen_Koude/Km_totaal -	//elektriciteitskosten gebouwen volgens staffel in bestaand warmtenet
+																			 	 	OrigKosten/K11_Inkoop_Elek
 																			 	,0.0[Eur_yr])
 																			)[Eur_yr];	
 				
@@ -293,7 +314,8 @@ container PlanregioResults : isHidden = "True"
 																			 	 	R_AardG * maatschappelijk/LokaleEnergieProductie/Kj_Onderhoud +		//onderhoud lodake opwekkingsinstallaties
 																			 	 	R_AardG * maatschappelijk/LokaleEnergieProductie/Kj_Admin +			//administratie lokale opwekkingsinstallaties
 																			 	 	maatschappelijk/gebouwen/Kj_Onderhoud +		//onderhoud schilsprongen
-																			 	 	maatschappelijk/gebouwen/Kj_Admin			//administratie schilsprongen
+																			 	 	maatschappelijk/gebouwen/Kj_Admin -			//administratie schilsprongen
+																			 	 	OrigKosten/K12_Gebouw_OenM
 																			 	,0.0[Eur_yr])
 																			)[Eur_yr];
 																			
@@ -316,7 +338,8 @@ container PlanregioResults : isHidden = "True"
 																			 	 	R_StadV * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_pt_oh +		//onderhoudskosten transport bestaande warmtenetten
 																			 	 	R_StadV * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_pt_adm +		//administratiekosten transport bestaande warmtenetten
 																			 	 	R_StadV * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_ow_oh +		//onderhoudskosten opwekking bestaande warmtenetten
-																			 	 	R_StadV * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_ow_adm		//administratiekosten opwekking bestaande warmtenetten
+																			 	 	R_StadV * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_ow_adm -		//administratiekosten opwekking bestaande warmtenetten
+																			 	 	OrigKosten/K13_Wnet_OenM
 																			 	,0.0[Eur_yr])
 																			)[Eur_yr];
 																														
@@ -326,7 +349,8 @@ container PlanregioResults : isHidden = "True"
 																			 	 	R_AardG * Netwerken/Aardgas/Kj_oh +		//onderhoudskosten gasnet
 																			 	 	R_StadV * Startjaar/Netwerken/Aardgas/Kj_oh +
 																			 	 	R_AardG * Netwerken/Elektriciteit/Kj_oh +	//onderhoudskosten elektriciteitsnet
-																			 	 	R_StadV * Startjaar/Netwerken/Elektriciteit/Kj_oh
+																			 	 	R_StadV * Startjaar/Netwerken/Elektriciteit/Kj_oh -
+																			 	 	OrigKosten/K14_Enet_Gnet_OenM
 																			 	 ,0.0[Eur_yr])
 																			)[Eur_yr];															
 			}																
@@ -351,7 +375,7 @@ container PlanregioResults : isHidden = "True"
 				attribute<ton_yr>	Delta_CO2          (Planregio) :=	Orig_CO2_ton - New_CO2_ton;
 				
 				attribute<Eur_yr>	Orig_nat_kosten    (Planregio) :=	/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/TotaalUitstoot/Natkosten_abs;
-				attribute<Eur_yr>	Delta_nat_kosten   (Planregio) :=	Natkosten_abs - Orig_nat_kosten;
+				attribute<Eur_yr>	Delta_nat_kosten   (Planregio) :=	Natkosten_abs;
 			}
 			container ElekKostenGebouwen_APP :=
 				for_each_nedv(Classifications/BebouwingsComponent/Name, 
