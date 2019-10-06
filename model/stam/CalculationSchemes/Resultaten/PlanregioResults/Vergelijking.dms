@@ -57,78 +57,93 @@ container Vergelijking
 		
 			container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 		}
-		attribute<bool>		s2a_RW             (PlanRegio) := 	!Statisch/Uitgesloten_bool && (Results_s2a/results/A01_Aansl_aardgas +
-																	Results_s2a/results/A02_Aansl_eWP +
-																	Results_s2a/results/A04_Aansl_LT + 
-																	Results_s2a/results/A05_Aansl_hWPgroengas +
-																	Results_s2a/results/A06_Aansl_HRgroengas) <= 0d;
-		attribute<bool>		ref2030_RW         (PlanRegio) := 	!Statisch/Uitgesloten_bool && (Results_Ref2030/results/A01_Aansl_aardgas +
-																	Results_Ref2030/results/A02_Aansl_eWP +
-																	Results_Ref2030/results/A04_Aansl_LT + 
-																	Results_Ref2030/results/A05_Aansl_hWPgroengas +
-																	Results_Ref2030/results/A06_Aansl_HRgroengas) <= 0d;
+		attribute<bool>		s2a_RW             (PlanRegio) := 	!Statisch/Uitgesloten_bool && (	Results_s2a/results/A01_Aansl_aardgas     + //heeft s2a ook daadwerkelijk restwarmte?
+																								Results_s2a/results/A02_Aansl_eWP         +
+																								Results_s2a/results/A04_Aansl_LT          + 
+																								Results_s2a/results/A05_Aansl_hWPgroengas +
+																								Results_s2a/results/A06_Aansl_HRgroengas  ) <= 0d; //heeft ref2030 restwarmte?
+		attribute<bool>		ref2030_RW         (PlanRegio) := 	!Statisch/Uitgesloten_bool && (	Results_Ref2030/results/A01_Aansl_aardgas     +
+																								Results_Ref2030/results/A02_Aansl_eWP         +
+																								Results_Ref2030/results/A04_Aansl_LT          +
+																								Results_Ref2030/results/A05_Aansl_hWPgroengas +
+																								Results_Ref2030/results/A06_Aansl_HRgroengas  ) <= 0d;
+		attribute<bool>		s3a_LT             (PlanRegio) := 	Results_s3a/results/A04_Aansl_LT > 0.0 [nrAansl]; //gebruikt s3a LT warmte?
+		attribute<bool>		s3b_LT             (PlanRegio) := 	Results_s3b/results/A04_Aansl_LT > 0.0 [nrAansl]; //gebruikt s3b LT warmte?
+		attribute<bool>		s3c_LT             (PlanRegio) := 	Results_s3c/results/A04_Aansl_LT > 0.0 [nrAansl]; //gebruikt s3c LT warmte?
+		attribute<bool>		s3d_LT             (PlanRegio) := 	Results_s3d/results/A04_Aansl_LT > 0.0 [nrAansl]; //gebruikt s3d LT warmte?
+		attribute<bool>		s3e_LT             (PlanRegio) := 	Results_s3e/results/A04_Aansl_LT > 0.0 [nrAansl]; //gebruikt s3e LT warmte?
+		
+		
 		container VariantKosten := for_each_nedv(Variant/name,
 											replace('results_@variant@/results/H13_nat_meerkost_CO2', '@variant@', Variant/name),
 											Planregio, Eur_ton);
 		Container StrategieVariant
 		{
-			attribute<Variant>	S1         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? Variant/V/geen :  R_StadV == 1[ratio] ? Variant/V/s2a : VariantKosten/s1a > VariantKosten/s1b ? Variant/V/s1b : Variant/V/s1a;
-			attribute<Variant>	S2         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? Variant/V/geen :  R_StadV == 1[ratio] ? Variant/V/s2a : VariantKosten/s2a > VariantKosten/s2b ? Variant/V/s2b : 
-																				s2a_RW ? Variant/V/s2a : Variant/V/s2b;
+			attribute<Variant>	S1         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? Variant/V/geen : R_StadV == 1[ratio] ? Variant/V/s2a :
+																VariantKosten/s1a > VariantKosten/s1b ? Variant/V/s1b : Variant/V/s1a;
+			attribute<Variant>	S2         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? Variant/V/geen : R_StadV == 1[ratio] ? Variant/V/s2a :
+																VariantKosten/s2a > VariantKosten/s2b ? Variant/V/s2b : s2a_RW ? Variant/V/s2a : Variant/V/s2b; //indien geen RW in s2a, altijd s2b
 																																					
-			attribute<Variant>	S3         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? Variant/V/geen : R_StadV == 1[ratio] ? Variant/V/s2a :
-																		(Results_s3a/results/A04_Aansl_LT +
-																		 Results_s3b/results/A04_Aansl_LT +
-																		 Results_s3c/results/A04_Aansl_LT +
-																		 Results_s3d/results/A04_Aansl_LT +
-																		 Results_s3e/results/A04_Aansl_LT) == 0[eur_yr] ? S1 :
-																		min_elem(VariantKosten/s3a, VariantKosten/s3b, VariantKosten/s3c, VariantKosten/s3d) > VariantKosten/s3e && Results_s3e/results/A04_Aansl_LT > 0[nrAansl] ? Variant/v/s3e :
-																		min_elem(VariantKosten/s3a, VariantKosten/s3b, VariantKosten/s3c) > VariantKosten/s3d && Results_s3d/results/A04_Aansl_LT > 0[nrAansl] ? Variant/v/s3d :
-																		min_elem(VariantKosten/s3a, VariantKosten/s3b) > VariantKosten/s3c && Results_s3c/results/A04_Aansl_LT > 0[nrAansl] ? Variant/v/s3c :
-																				 VariantKosten/s3a > VariantKosten/s3b && Results_s3b/results/A04_Aansl_LT > 0[nrAansl] ? Variant/v/s3b : 
-																				 Results_s3a/results/A04_Aansl_LT > 0[nrAansl] ? Variant/v/s3a : S1;
+			attribute<Variant>	S3         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? Variant/V/geen : R_StadV == 1[ratio] ? Variant/V/s2a :		
+																min_elem(VariantKosten/s3a, VariantKosten/s3b, VariantKosten/s3c, VariantKosten/s3d) > VariantKosten/s3e && s3e_LT ? Variant/v/s3e :
+																min_elem(VariantKosten/s3a, VariantKosten/s3b, VariantKosten/s3c)                    > VariantKosten/s3d && s3d_LT ? Variant/v/s3d :
+																min_elem(VariantKosten/s3a, VariantKosten/s3b)                                       > VariantKosten/s3c && s3c_LT ? Variant/v/s3c :
+																		 VariantKosten/s3a                                                           > VariantKosten/s3b && s3b_LT ? Variant/v/s3b : 
+																		                                                                                                    s3a_LT ? Variant/v/s3a : S1;
 
 			attribute<Variant>	S4         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? Variant/V/geen : R_StadV == 1[ratio] ? Variant/V/s2a : Variant/V/s4a;
 			attribute<Variant>	S5         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? Variant/V/geen : R_StadV == 1[ratio] ? Variant/V/s2a : Variant/V/s5a;
 			attribute<Variant>	S6         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? Variant/V/geen : R_StadV == 1[ratio] ? Variant/V/s2a :
 																min_elem(StrategieKosten/s1, StrategieKosten/s2, StrategieKosten/s3, StrategieKosten/s4) > StrategieKosten/s5 ? S5 :
-																min_elem(StrategieKosten/s1, StrategieKosten/s2, StrategieKosten/s3) > StrategieKosten/s4 ? S4 :
-																min_elem(StrategieKosten/s1, StrategieKosten/s2) > StrategieKosten/s3 ? S3 :
-																		 StrategieKosten/s1 > StrategieKosten/s2 ? S2 : S1;
+																min_elem(StrategieKosten/s1, StrategieKosten/s2, StrategieKosten/s3)                     > StrategieKosten/s4 ? S4 :
+																min_elem(StrategieKosten/s1, StrategieKosten/s2)                                         > StrategieKosten/s3 ? S3 :
+																		 StrategieKosten/s1                                                              > StrategieKosten/s2 ? S2 : S1;
 		}
 		Container StrategieKosten
 		{
-			attribute<Eur_ton>	S1         (Planregio) :=	min_elem(VariantKosten/s1a, VariantKosten/s1b);
-			attribute<Eur_ton>	S2         (Planregio) :=	min_elem((StrategieVariant/S2 == Variant/v/s2a && s2a_RW ? VariantKosten/s2a : VariantKosten/s2b), VariantKosten/s2b);
-			attribute<Eur_ton>	S3         (Planregio) :=	(Results_s3a/results/A04_Aansl_LT +
-															 Results_s3b/results/A04_Aansl_LT +
-															 Results_s3c/results/A04_Aansl_LT +
-															 Results_s3d/results/A04_Aansl_LT +
-															 Results_s3e/results/A04_Aansl_LT) == 0[eur_yr] ? S1 : min_elem(VariantKosten/s3a, VariantKosten/s3b, VariantKosten/s3c, VariantKosten/s3d, VariantKosten/s3e);
-			attribute<Eur_ton>	S4         (Planregio) :=	VariantKosten/s4a;
-			attribute<Eur_ton>	S5         (Planregio) :=	VariantKosten/s5a;
-			attribute<Eur_ton>	S6         (Planregio) :=	min_elem(S1,S2,S3,S4,S5);
+			attribute<Eur_ton>	S1         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[eur_ton] : R_StadV == 1[ratio] ? VariantKosten/s2a :
+																min_elem(VariantKosten/s1a, VariantKosten/s1b);
+			attribute<Eur_ton>	S2         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[eur_ton] : R_StadV == 1[ratio] ? VariantKosten/s2a :
+																min_elem((StrategieVariant/S2 == Variant/v/s2a && s2a_RW ? VariantKosten/s2a : VariantKosten/s2b), VariantKosten/s2b);
+			attribute<Eur_ton>	S3         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[eur_ton] : R_StadV == 1[ratio] ? VariantKosten/s2a :
+																s3a_LT || s3b_LT || s3c_LT || s3d_LT || s3e_LT ?
+																min_elem(VariantKosten/s3a, VariantKosten/s3b, VariantKosten/s3c, VariantKosten/s3d, VariantKosten/s3e) : S1;
+			attribute<Eur_ton>	S4         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[eur_ton] : R_StadV == 1[ratio] ? VariantKosten/s2a :
+																VariantKosten/s4a;
+			attribute<Eur_ton>	S5         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[eur_ton] : R_StadV == 1[ratio] ? VariantKosten/s2a :
+																VariantKosten/s5a;
+			attribute<Eur_ton>	S6         (Planregio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[eur_ton] : R_StadV == 1[ratio] ? VariantKosten/s2a :
+																min_elem(S1,S2,S3,S4,S5);
 		}
 		Container GroenGasVraag
 		{
-			attribute<m3_yr>	GG_m3_S4   (PlanRegio) :=	(Strategie_4/HoofdIndicatoren/table/H03_Vraag_hernieuwbaargas * nrWEQ) / Invoer/Kengetallen/Constanten/GasEnergie;
-			attribute<m3_yr>	GG_m3_S5   (PlanRegio) :=	(Strategie_5/HoofdIndicatoren/table/H03_Vraag_hernieuwbaargas * nrWEQ) / Invoer/Kengetallen/Constanten/GasEnergie;
+			attribute<m3_yr>	GG_m3_S4   (PlanRegio) :=	StrategieVariant/S4 == Variant/v/s4a ? (Strategie_4/HoofdIndicatoren/table/H03_Vraag_hernieuwbaargas * nrWEQ) / Invoer/Kengetallen/Constanten/GasEnergie : 0.0[m3_yr];
+			attribute<m3_yr>	GG_m3_S5   (PlanRegio) :=	StrategieVariant/S5 == Variant/v/s5a ? (Strategie_5/HoofdIndicatoren/table/H03_Vraag_hernieuwbaargas * nrWEQ) / Invoer/Kengetallen/Constanten/GasEnergie : 0.0[m3_yr];
 			attribute<m3_yr>	GG_m3_S6   (PlanRegio) :=	StrategieVariant/S6 == Variant/v/s4a ? GG_m3_S4 : 
 															StrategieVariant/S6 == Variant/v/s5a ? GG_m3_S5 : 0.0[m3_yr];
+															
+			parameter<m3_yr>	Som_GG_S4   :=	sum(GG_m3_S4); // controles of maximale inzet GG wordt overvraagd
+			parameter<m3_yr>	Som_GG_S5   :=	sum(GG_m3_S5);
+			parameter<m3_yr>	Som_GG_S6   :=	sum(GG_m3_S6);										
 		}
 		Container GroenGasBesparing
 		{
-			attribute<eur_yr>	Meerkosten_S4 (PlanRegio) :=	Strategie_4/Hoofdindicatoren/table/H12_Nat_meerkosten;
-			attribute<eur_yr>	Meerkosten_S5 (PlanRegio) :=	Strategie_5/Hoofdindicatoren/table/H12_Nat_meerkosten;
-			attribute<eur_yr>	Meerkosten_S6 (PlanRegio) :=	StrategieVariant/S6 == Variant/v/s4a ? Meerkosten_S4 : 
-																StrategieVariant/S6 == Variant/v/s5a ? Meerkosten_S5 : 0.0[eur_yr];
+			attribute<eur_yr>	Meerkosten_S4 (PlanRegio) :=	GroenGasVraag/GG_m3_S4 > 0.0[m3_yr] ? Strategie_4/Hoofdindicatoren/table/H12_Nat_meerkosten : 0.0[eur_yr];
+			attribute<eur_yr>	Meerkosten_S5 (PlanRegio) :=	GroenGasVraag/GG_m3_S5 > 0.0[m3_yr] ? Strategie_5/Hoofdindicatoren/table/H12_Nat_meerkosten : 0.0[eur_yr];
+			attribute<eur_yr>	Meerkosten_S6 (PlanRegio) :=	GroenGasVraag/GG_m3_S4 > 0.0[m3_yr] && StrategieVariant/S6 == Variant/v/s4a ? Meerkosten_S4 : 
+																GroenGasVraag/GG_m3_S5 > 0.0[m3_yr] && StrategieVariant/S6 == Variant/v/s5a ? Meerkosten_S5 : 0.0[eur_yr];
+																
 			attribute<eur_yr>	Meerkosten_S123 (PlanRegio) :=	min_elem(Strategie_1/Hoofdindicatoren/table/H12_Nat_meerkosten,
 																		 Strategie_2/Hoofdindicatoren/table/H12_Nat_meerkosten,
 																		 Strategie_3/Hoofdindicatoren/table/H12_Nat_meerkosten);
 																
-			attribute<eur_yr>	Besparing_S4  (PlanRegio) :=	Meerkosten_S123 - Meerkosten_S4;
-			attribute<eur_yr>	Besparing_S5  (PlanRegio) :=	Meerkosten_S123 - Meerkosten_S5;
-			attribute<eur_yr>	Besparing_S6  (PlanRegio) :=	Meerkosten_S123 - Meerkosten_S6;
+			attribute<eur_yr>	Besparing_S4  (PlanRegio) :=	max_elem(Meerkosten_S123 - Meerkosten_S4, 0.0[eur_yr]);
+			attribute<eur_yr>	Besparing_S5  (PlanRegio) :=	max_elem(Meerkosten_S123 - Meerkosten_S5, 0.0[eur_yr]);
+			attribute<eur_yr>	Besparing_S6  (PlanRegio) :=	max_elem(Meerkosten_S6 > 0.0[eur_yr] ? Meerkosten_S123 - Meerkosten_S6 : 0.0[eur_yr], 0.0[eur_yr]);
+			
+			attribute<bool>		S4_vraagtGG   (PlanRegio) :=	Besparing_S4 > 0.0[eur_yr];
+			attribute<bool>		S5_vraagtGG   (PlanRegio) :=	Besparing_S5 > 0.0[eur_yr];
+			attribute<bool>		S6_vraagtGG   (PlanRegio) :=	Besparing_S6 > 0.0[eur_yr];
 		}
 		Container OrientatieWaarde
 		{
@@ -141,17 +156,59 @@ container Vergelijking
 			parameter<Eur_m3>	Orientatiewaarde_s4   :=	makedefined(0d - nth_element_weighted(InvertedWaarde_S4, Totaal_GG_beschikbaar, GroenGasVraag/GG_m3_S4), 0[eur_m3]);
 			parameter<Eur_m3>	Orientatiewaarde_s5   :=	makedefined(0d - nth_element_weighted(InvertedWaarde_S5, Totaal_GG_beschikbaar, GroenGasVraag/GG_m3_S5), 0[eur_m3]);
 			parameter<Eur_m3>	Orientatiewaarde_s6   :=	makedefined(0d - nth_element_weighted(InvertedWaarde_S6, Totaal_GG_beschikbaar, GroenGasVraag/GG_m3_S6), 0[eur_m3]);
+			
+			
+			unit<uint32> Gasvragers_S4 := subset(GroenGasBesparing/S4_vraagtGG)
+			{
+				attribute<eur_yr>	Besparing        := 	GroenGasBesparing/Besparing_S4[Nr_OrgEntity];
+				attribute<m3_yr>	GasVraag         := 	GroenGasVraag/GG_m3_S4[Nr_OrgEntity];
+				parameter<m3_yr>	TotaalVraag      := 	sum(Gasvraag);
+				attribute<eur_m3>	GasWaarde        := 	Besparing / Gasvraag;
+				attribute<eur_m3>	InvGasWaarde     := 	0d - Gaswaarde;
+				parameter<eur_m3>	InvOrientWaarde  := 	nth_element_weighted(InvGasWaarde, Totaal_GG_beschikbaar, GasVraag);
+				parameter<eur_m3>	OrientWaarde     := 	0d - InvOrientWaarde;
+				attribute<bool>		Beschikbaarheid  := 	TotaalVraag < Totaal_GG_beschikbaar ? true : GasWaarde > OrientWaarde;
+			}
+			unit<uint32> Gasvragers_S5 := subset(GroenGasBesparing/S5_vraagtGG)
+			{
+				attribute<eur_yr>	Besparing        := 	GroenGasBesparing/Besparing_S5[Nr_OrgEntity];
+				attribute<m3_yr>	GasVraag         := 	GroenGasVraag/GG_m3_S5[Nr_OrgEntity];
+				parameter<m3_yr>	TotaalVraag      := 	sum(Gasvraag);
+				attribute<eur_m3>	GasWaarde        := 	Besparing / Gasvraag;
+				attribute<eur_m3>	InvGasWaarde     := 	0d - Gaswaarde;
+				parameter<eur_m3>	InvOrientWaarde  := 	nth_element_weighted(InvGasWaarde, Totaal_GG_beschikbaar, GasVraag);
+				parameter<eur_m3>	OrientWaarde     := 	0d - InvOrientWaarde;
+				attribute<bool>		Beschikbaarheid  := 	TotaalVraag < Totaal_GG_beschikbaar ? true : GasWaarde > OrientWaarde;
+			}
+			unit<uint32> Gasvragers_S6 := subset(GroenGasBesparing/S6_vraagtGG)
+			{
+				attribute<eur_yr>	Besparing        := 	GroenGasBesparing/Besparing_S6[Nr_OrgEntity];
+				attribute<m3_yr>	GasVraag         := 	GroenGasVraag/GG_m3_S6[Nr_OrgEntity];
+				parameter<m3_yr>	TotaalVraag      := 	sum(Gasvraag);
+				attribute<eur_m3>	GasWaarde        := 	Besparing / Gasvraag;
+				attribute<eur_m3>	InvGasWaarde     := 	0d - Gaswaarde;
+				parameter<eur_m3>	InvOrientWaarde  := 	nth_element_weighted(InvGasWaarde, Totaal_GG_beschikbaar, GasVraag);
+				parameter<eur_m3>	OrientWaarde     := 	0d - InvOrientWaarde;
+				attribute<bool>		Beschikbaarheid  := 	TotaalVraag < Totaal_GG_beschikbaar ? true : GasWaarde > OrientWaarde;
+			}
 		}
 		Container Beschikbaarheid
 		{
-			attribute<Eur_m3>	GroenGasWaarde_S4     (PlanRegio) :=	Results_s4a/results/A05_Aansl_hWPgroengas > 0[nraansl] ? makedefined(GroenGasBesparing/Besparing_S4 / GroenGasVraag/GG_m3_S4, 0[eur_m3]) : 0[eur_m3];
-			attribute<Eur_m3>	GroenGasWaarde_S5     (PlanRegio) :=	Results_s5a/results/A06_Aansl_HRgroengas  > 0[nraansl] ? makedefined(GroenGasBesparing/Besparing_S5 / GroenGasVraag/GG_m3_S5, 0[eur_m3]) : 0[eur_m3];
-			attribute<Eur_m3>	GroenGasWaarde_S6     (PlanRegio) :=	makedefined(GroenGasBesparing/Besparing_S6 / GroenGasVraag/GG_m3_S6, 0[eur_m3]);
-			attribute<Bool>		Beschikbaarheid_S4    (PlanRegio) :=	Results_s4a/results/A05_Aansl_hWPgroengas > 0[nraansl] ? GroenGasWaarde_S4 >= OrientatieWaarde/Orientatiewaarde_s4 : false;
-			attribute<Bool>		Beschikbaarheid_S5    (PlanRegio) :=	Results_s5a/results/A06_Aansl_HRgroengas  > 0[nraansl] ? GroenGasWaarde_S5 >= OrientatieWaarde/Orientatiewaarde_s5 : false;	
-			attribute<Bool>		Beschikbaarheid_S6    (PlanRegio) :=	   (StrategieVariant/S6 == Variant/v/s4a && Results_s4a/results/A05_Aansl_hWPgroengas > 0[nraansl])
-																		|| (StrategieVariant/S6 == Variant/v/s5a && Results_s5a/results/A06_Aansl_HRgroengas  > 0[nraansl]) ?
-																		GroenGasWaarde_S6 >= OrientatieWaarde/Orientatiewaarde_s6 : false;	
+			attribute<Eur_m3>	GroenGasWaarde_S4     (PlanRegio) :=	makedefined(OrientatieWaarde/Gasvragers_S4/GasWaarde[invert(OrientatieWaarde/Gasvragers_S4/nr_OrgEntity)], 0.0[eur_m3]);
+			attribute<Eur_m3>	GroenGasWaarde_S5     (PlanRegio) :=	makedefined(OrientatieWaarde/Gasvragers_S5/GasWaarde[invert(OrientatieWaarde/Gasvragers_S5/nr_OrgEntity)], 0.0[eur_m3]);
+			attribute<Eur_m3>	GroenGasWaarde_S6     (PlanRegio) :=	makedefined(OrientatieWaarde/Gasvragers_S6/GasWaarde[invert(OrientatieWaarde/Gasvragers_S6/nr_OrgEntity)], 0.0[eur_m3]);
+			attribute<Bool>		Beschikbaarheid_S4    (PlanRegio) :=	makedefined(OrientatieWaarde/Gasvragers_S4/Beschikbaarheid[invert(OrientatieWaarde/Gasvragers_S4/nr_OrgEntity)], false);
+			attribute<Bool>		Beschikbaarheid_S5    (PlanRegio) :=	makedefined(OrientatieWaarde/Gasvragers_S5/Beschikbaarheid[invert(OrientatieWaarde/Gasvragers_S5/nr_OrgEntity)], false);
+			attribute<Bool>		Beschikbaarheid_S6    (PlanRegio) :=	makedefined(OrientatieWaarde/Gasvragers_S6/Beschikbaarheid[invert(OrientatieWaarde/Gasvragers_S6/nr_OrgEntity)], false);
+			
+// 			attribute<Eur_m3>	GroenGasWaarde_S4     (PlanRegio) :=	Results_s4a/results/A05_Aansl_hWPgroengas > 0[nraansl] ? makedefined(GroenGasBesparing/Besparing_S4 / GroenGasVraag/GG_m3_S4, 0[eur_m3]) : 0[eur_m3];
+// 			attribute<Eur_m3>	GroenGasWaarde_S5     (PlanRegio) :=	Results_s5a/results/A06_Aansl_HRgroengas  > 0[nraansl] ? makedefined(GroenGasBesparing/Besparing_S5 / GroenGasVraag/GG_m3_S5, 0[eur_m3]) : 0[eur_m3];
+// 			attribute<Eur_m3>	GroenGasWaarde_S6     (PlanRegio) :=	makedefined(GroenGasBesparing/Besparing_S6 / GroenGasVraag/GG_m3_S6, 0[eur_m3]);
+// 			attribute<Bool>		Beschikbaarheid_S4    (PlanRegio) :=	Results_s4a/results/A05_Aansl_hWPgroengas > 0[nraansl] ? GroenGasWaarde_S4 >= OrientatieWaarde/Orientatiewaarde_s4 : false;
+// 			attribute<Bool>		Beschikbaarheid_S5    (PlanRegio) :=	Results_s5a/results/A06_Aansl_HRgroengas  > 0[nraansl] ? GroenGasWaarde_S5 >= OrientatieWaarde/Orientatiewaarde_s5 : false;	
+// 			attribute<Bool>		Beschikbaarheid_S6    (PlanRegio) :=	   (StrategieVariant/S6 == Variant/v/s4a && Results_s4a/results/A05_Aansl_hWPgroengas > 0[nraansl])
+// 																		|| (StrategieVariant/S6 == Variant/v/s5a && Results_s5a/results/A06_Aansl_HRgroengas  > 0[nraansl]) ?
+// 																		GroenGasWaarde_S6 >= OrientatieWaarde/Orientatiewaarde_s6 : false;	
 		}
 		
 		attribute<variant>		Variant_S6_GGcorrectie (PlanRegio) :=	Statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? Variant/V/geen :Beschikbaarheid/Beschikbaarheid_S6 == true ? StrategieVariant/S6 : 
