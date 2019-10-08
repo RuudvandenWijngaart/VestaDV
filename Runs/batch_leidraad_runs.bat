@@ -5,7 +5,7 @@ REM Resultaten worden weggeschreven in: n:/LD/%confignaam%/results/...
 REM Bij nogmaals runnen worden bestanden gewoon overschreven
 
 set pd_root=N:\PD\Runs_Leidraad\Default_Configuratie_Referentie
-set exe=GeoDms7196
+set exe=GeoDms7182
 
 set CUR_YYYY=%date:~10,4%
 set CUR_MM=%date:~4,2%
