@@ -5,553 +5,547 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 
 container PlanregioResults : isHidden = "True"
-	{
-		attribute<nrWoningen>	nrWEQ    (Planregio)  :=	netwerken/nrWoonunits;
-		attribute<Ratio>		R_StadV  (Planregio)  :=	makedefined(/Invoer/RuimtelijkeData/StudieGebied/buurt/Overigen_p_stadsv / 100[percent], 0D);
-		attribute<Ratio>		R_AardG  (Planregio)  :=	1D - R_StadV;
-		attribute<string>		IsWater  (Planregio)  :=	/Invoer/RuimtelijkeData/StudieGebied/buurt/IsWater;
-		parameter<bool>			Groengas              :=	Tussenresultaten/Voorkeuren/Afweging/IsGroenGas;
-		
-		//statische indicatoren per buurt
-		container Statisch
-		{
-			attribute<bool>	Uitgesloten_bool (Planregio) :=	table/I01_buurtcode == 'BU07650101' || table/I01_buurtcode == 'BU07650100' || table/I01_buurtcode == 'BU07650109' || 
-															table/I01_buurtcode == 'BU07370501' || table/I01_buurtcode == 'BU04390201' || table/I01_buurtcode == 'BU05020995' || 
-															table/I01_buurtcode == 'BU05020996' || table/I01_buurtcode == 'BU05020997' || table/I01_buurtcode == 'BU05020998' ||
-															IsWater == 'JA';
-
-			Unit<UInt32>  table := Invoer/DefaultInstellingen/Basis/PlanRegio
-			{
-
-			attribute<String>		BU_CODE                (Planregio) :=	I01_buurtcode;
-			attribute<String>		I01_buurtcode          (Planregio) :=	/Invoer/RuimtelijkeData/StudieGebied/buurt/BU_CODE;
-			attribute<String>		I02_buurtnaam          (Planregio) :=	Uitgesloten_bool ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/BU_NAAM, ',' , '');
-			attribute<String>		I03_wijkcode           (Planregio) :=	/Invoer/RuimtelijkeData/StudieGebied/buurt/WK_CODE;
-			attribute<String>		I04_wijknaam           (Planregio) :=	Uitgesloten_bool ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/WK_NAAM, ',' , '');
-			attribute<String>		I05_gemeentecode       (Planregio) :=	/Invoer/RuimtelijkeData/StudieGebied/buurt/GM_CODE;
-			attribute<String>		I06_gemeentenaam       (Planregio) :=	Uitgesloten_bool ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/GM_NAAM, ',' , '');
-			attribute<String>		I07_energieregionaam   (Planregio) :=	Uitgesloten_bool ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/ER_NAAM, ',' , '');
-			attribute<String>		I08_provincienaam      (Planregio) :=	Uitgesloten_bool ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/PROV_NAAM, ',' , '');
-			attribute<nrAansl>		I09_aantal_woningen	   (Planregio) :=	Uitgesloten_bool ? 0.0[nraansl]    : float64(round(0.49 + sum(BebouwingsComponenten/BestaandeWoning/RuimtelijkeVraagComponent/nrAansluitingen,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)));
-			attribute<nrAansl>		I10_aantal_utiliteit   (Planregio) :=	Uitgesloten_bool ? 0.0[nraansl]    : float64(round(0.49 + sum(BebouwingsComponenten/BestaandeUtil/RuimtelijkeVraagComponent/nrAansluitingen,	BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)));
-			attribute<nrWoningen>	I11_woningequivalenten (Planregio) :=	Uitgesloten_bool ? 0.0[nrwoningen] : float64(round(0.49 + nrWEQ));	//130m2 utiliteit = 1 WEQ
-			attribute<string>		Uitgesloten            (Planregio) :=	string(Uitgesloten_bool);
-		}
-			unit<uint32> variable := SubItem_PropValues(table,'name');
-			container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Statisch.csv');
-		}
-		container HerState := = (ZichtjaarName == 'StartJaar') ? 'StateNaAllocatie/HerKostenBaten' : '/TussenResultaten/R1_2030/StateNaAllocatie/HerKostenBaten';
-		//dynamische indicatoren op hoofdlijnen
-		container Hoofdindicatoren
-		{
-			Unit<UInt32>  table := Invoer/DefaultInstellingen/Basis/PlanRegio
-			{
-				attribute<String>		BU_CODE	               (Planregio) :=	Statisch/table/I01_buurtcode;
-				attribute<GJ_yr_WEQ>	H01_warmtetotaal       (Planregio) :=	add(H02_Vraag_aardgas, H03_Vraag_groengas, H05_Vraag_MTwarmte, H06_Vraag_LTwarmte, H04_Vraag_elekwarmte);
-				
-				attribute<GJ_yr_WEQ>	H02_Vraag_aardgas      (Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool || Groengas || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
-																				 	makedefined(
-																				 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/Aardgas, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//aardgasvraag bestaande woningen - zonder bestaand warmtenet
-																				 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/Aardgas, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +		//aardgasvraag bestaande utiliteit - zonder bestaand warmtenet
-																				 	 	R_StadV * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol ) * HerState/KostenD/Bijstook/Vj_Bijstook +	//bijstook bestaande warmtenetten
-																				 	 	R_AardG * StateNaAllocatie/totaal/Verbruik/V_wd_gas +	//aardgasverbruik hulpketels nieuw warmtenet
-																				 	 	R_AardG * StateNaAllocatie/totaal/Verbruik/V_ow_gas		//aardgasverbruik opwekking nieuw warmtenet
-																				 	,0.0 [GJ_yr]) / nrWEQ
-																				)[GJ_yr_WEQ];
-																					
-				attribute<GJ_yr_WEQ>	H03_Vraag_groengas     (Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool || !Groengas || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
-																				 	makedefined(
-																				 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/Aardgas, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//groengasvraag bestaande woningen - zonder bestaand warmtenet
-																				 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/Aardgas, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +		//groengasvraag bestaande utiliteit - zonder bestaand warmtenet
-																				 	 	R_StadV * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol) * HerState/KostenD/Bijstook/Vj_Bijstook +	//bijstook bestaande warmtenetten
-																				 	 	R_AardG * StateNaAllocatie/totaal/Verbruik/V_wd_gas +	//groengasverbruik hulpketels nieuw warmtenet
-																				 	 	R_AardG * StateNaAllocatie/totaal/Verbruik/V_ow_gas		//groengasverbruik opwekking nieuw warmtenet
-																				 	,0.0[GJ_yr]) / nrWEQ
-																				)[GJ_yr_WEQ];
-				
-				attribute<GJ_yr_WEQ>	H04_Vraag_elekwarmte    (Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
-																				 	makedefined(
-																				 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/eWP, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//elektriciteitsverbruik elektrische warmtepompen bestaande woningen - zonder bestaand warmtenet
-																				 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/eWP, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +		//elektriciteitsverbruik elektrische warmtepompen bestaande utiliteit - zonder bestaand warmtenet
-																				 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/hWP, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//elektriciteitsverbruik hybride warmtepompen bestaande woningen - zonder bestaand warmtenet
-																				 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/hWP, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +		//elektriciteitsverbruik hybride warmtepompen bestaande utiliteit - zonder bestaand warmtenet
-																				 	 	R_AardG * StateNaAllocatie/totaal/verbruik/V_ow_elek +	//elektriciteitsvraag opwekking nieuwe warmtenetten	
-																				 	 	R_AardG * StateNaAllocatie/totaal/verbruik/V_id_elek +	//elektriciteitsvraag inpandig nieuwe warmtenetten	
-																				 	 	R_AardG * StateNaAllocatie/totaal/verbruik/V_wd_elek +	//elektriciteitsvraag pompenergie nieuwe warmtenetten
-																				 	 	R_StadV * HerState/KostenD/SecundairNet/V_wd_elek		//elektriciteitsvraag pompenergie bestaande warmtenetten	
-																				 	 ,0.0 [GJ_yr]) / nrWEQ
-																				)[GJ_yr_WEQ];
-																					
-				attribute<GJ_yr_WEQ>	H05_Vraag_MTwarmte      (Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
-																				 	makedefined(
-																				 	 	R_StadV * HerState/PlanRegioKaarten/BestaandeWoning/Verbruik/alle_totaal +	//MT warmtevraag bestaande warmtenetten in woningen
-																				 	 	R_StadV * HerState/PlanRegioKaarten/BestaandeUtil/Verbruik/alle_totaal +		//MT warmtevraag bestaande warmtenetten in utiliteit
-																				 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/WarmteMT, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//MT warmtevraag woningen in nieuwe warmtenetten
-																				 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/WarmteMT, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)		//MT warmtevraag utiliteit in nieuwe warmtenetten
-																				 	,0.0 [GJ_yr]) / nrWEQ
-																				)[GJ_yr_WEQ];
-																					
-				attribute<GJ_yr_WEQ>	H06_Vraag_LTwarmte      (Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
-																				 	makedefined(
-																				 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/WarmteLT, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//vraag naar LT warmte nieuwe warmtenetten woningen
-																				 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/WarmteLT, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)		//vraag naar LT warmte nieuwe warmtenetten utiliteit
-																				 	,0.0 [GJ_yr]) / nrWEQ
-																				)[GJ_yr_WEQ];
-				
-				attribute<GJ_yr_ha>		H07_Warmte_hectare      (Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_ha] :
-																				 	makedefined(
-																				 	 	(H01_warmtetotaal * nrWEQ) / 
-																				 	 	(/Invoer/RuimtelijkeData/StudieGebied/buurt/AreaInKm2 *
-																				 	 	(Invoer/RuimtelijkeData/StudieGebied/buurt/Overigen_p_land_com / 100d) *
-																				 	 	100 [ha / km2])
-																				 	,0.0[GJ_yr_ha])
-																				)[GJ_yr_ha];
-																					
-				attribute<GJ_yr_WEQ>	H08_Vraag_Koude         (Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
-																				 	makedefined(
-																				 	 	sum(BebouwingsComponenten/BestaandeUtil/Functioneel/Koude, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +		//functionele koudevraag utiliteit
-																				 	 	sum(BebouwingsComponenten/BestaandeWoning/Functioneel/Koude, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)	//functionele koudevraag woningen
-																				 	,0.0 [GJ_yr]) / nrWEQ
-																				)[GJ_yr_WEQ];
-				
-				attribute<GJ_yr_WEQ>	H09_Vraag_elektotaal    (Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
-																				 	makedefined(
-																				 	 	R_AardG * StateNaAllocatie/totaal/verbruik/V_id_elek +	//elektriciteitsvraag inpandig nieuwe warmtenetten
-																				 	 	R_AardG * StateNaAllocatie/totaal/verbruik/V_wd_elek +	//elektriciteitsvraag pompenergie nieuwe warmtenetten
-																				 	 	R_AardG * StateNaAllocatie/totaal/verbruik/V_ow_elek +	//elektriciteitsvraag opwekking nieuwe warmtenetten
-																				 	 	R_StadV * HerState/KostenD/SecundairNet/V_wd_elek +		//elektriciteitsvraag pompenergie bestaande warmtenetten
-																				 	 	
-																				 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/eWP,   BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +	//correctie bestaande warmtenetten elektriciteitsvraag utiliteit elektrische warmtepompen
-																				 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/eWP, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//correctie bestaande warmtenetten elektriciteitsvraag woningen elektrische warmtepompen
-																				 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/hWP,   BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +	//correctie bestaande warmtenetten elektriciteitsvraag utiliteit hybride warmtepompen
-																				 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/hWP, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//correctie bestaande warmtenetten elektriciteitsvraag woningen hybride warmtepompen
-																				 	 	
-																				 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/CVpomp,   BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +			//elektriciteitsverbruik pompenergie utiliteit zonder bestaand warmtenet
-																				 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/CVpomp, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +		//elektriciteitsverbruik pompenergie woningen zonder bestaand warmtenet
-																				 	 	
-																				 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/Koude,   BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +			//elektriciteitsverbruik koude utiliteit zonder bestaand warmtenet
-																				 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/Koude, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +		//elektriciteitsverbruik koude woningen zonder bestaand warmtenet
-																				 	 	R_StadV * sum(Allocatie/BestaandeUtil/Metervraag/Koude_exWKO,   BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +	//elektriciteitsverbruik koude utiliteit met bestaand warmtenet
-																				 	 	R_StadV * sum(Allocatie/BestaandeWoning/Metervraag/Koude_exWKO, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//elektriciteitsverbruik koude woningen met bestaand warmtenet
-																				 		sum(BebouwingsComponenten/BestaandeWoning/DragerOpties/Apparatuur/Elektriciteit, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) + 
-																				 		sum(BebouwingsComponenten/BestaandeUtil/DragerOpties/Apparatuur/Elektriciteit, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
-																				 	 	
-																				 	,0.0 [GJ_yr]) / nrWEQ
-																				)[GJ_yr_WEQ];
-																					
-				attribute<ton_yr>		H10_CO2_reductie        (Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool ? 0.0[ton_yr] :
-																				 	makedefined(
-																				 	 	NationaleKosten/TotaalUitstoot/Delta_CO2	//verschil in CO2 uitstoot tov startjaar
-																				 	,0.0[ton_yr])
-																				)[ton_yr];
-				
-				attribute<Eur_yr>		H11_Nat_abskosten       (Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
-																				 	makedefined(
-																				 	 	NationaleKosten/TotaalUitstoot/Natkosten_abs +	//absolute nationale kosten
-																				 	 	(ZichtjaarName != 'StartJaar' ? /Resultaten/StartJaar/PlanRegioResults/Hoofdindicatoren/Table/H12_Nat_meerkosten : 0.0[eur_yr])
-																				 	,0.0[Eur_yr])
-																				)[Eur_yr];		
-																								
-				attribute<Eur_yr>		H12_Nat_meerkosten      (Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
-																				 	makedefined(
-																				 	 	NationaleKosten/TotaalUitstoot/Delta_nat_kosten	//nationale meerkosten ten opzichte van startjaar
-																				 	,0.0[Eur_yr])
-																				)[Eur_yr];
-																					
-				attribute<Eur_ton>		H13_Nat_meerkost_CO2   	(Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool || ZichtjaarName == 'StartJaar' ? 0.0[eur_ton] :
-																				 	makedefined(
-																				 	 	(NationaleKosten/TotaalUitstoot/Delta_nat_kosten / NationaleKosten/TotaalUitstoot/Delta_CO2)	//nationale meerkosten per vermeden ton CO2
-																				 	,0.0[EUR_ton])
-																				)[Eur_ton];
-																				
-				attribute<Eur_yr_WEQ>	H16_Nat_meerkost_WEQ   	(Planregio) :=	round(
-																				 	statisch/Uitgesloten_bool || ZichtjaarName == 'StartJaar' ? 0.0[Eur_yr_WEQ] :
-																				 	makedefined(
-																				 	 	(NationaleKosten/TotaalUitstoot/Delta_nat_kosten / nrWEQ)	//nationale meerkosten per woningequivalent
-																				 	,0.0[Eur_yr_WEQ])
-																				)[Eur_yr_WEQ];
-			}
-			
-			unit<uint32> variable := SubItem_PropValues(table,'name');
-			container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Hoofdindicatoren.csv');
-		}
-		
-		//nationale kosten absoluut en CO2 uitstoot
-		container NationaleKosten
-		{		
-			container OrigKosten
-			{
-				parameter<bool> StartJaar := ZichtjaarName == 'StartJaar';
-				attribute<Eur_yr>	K09_Inkoop_Warmte      (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K09_Inkoop_Warmte';																			
-				attribute<Eur_yr>	K10_Inkoop_Gas         (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K10_Inkoop_Gas';
-				attribute<Eur_yr>	K11_Inkoop_Elek        (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K11_Inkoop_Elek';
-				attribute<Eur_yr>	K12_Gebouw_OenM        (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K12_Gebouw_OenM';
-				attribute<Eur_yr>	K13_Wnet_OenM          (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K13_Wnet_OenM';
-				attribute<Eur_yr>	K14_Enet_Gnet_OenM     (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K14_Enet_Gnet_OenM';	
-			}
-			Unit<UInt32>  table := Invoer/DefaultInstellingen/Basis/PlanRegio
-			{
-				attribute<String>	BU_CODE                (Planregio) :=	Statisch/table/I01_buurtcode;	
-				attribute<Eur_yr>	K01_Enet_verzwaren     (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
-																			 	makedefined(
-																			 	 	R_AardG * Netwerken/Kosten/Ki_verzw_e_aansl * NCW/mr50/AnnualisationFactor +
-																			 	 	R_AardG * Netwerken/Kosten/cumulatief/Ki_verzw_MSR * NCW/mr50/AnnualisationFactor +
-																			 	 	R_AardG * Netwerken/Kosten/cumulatief/Ki_verzw_LS * NCW/mr50/AnnualisationFactor 	//jaarlijkse kapitaallasten verzwaren elektriciteits
-																			 	, 0.0[Eur_yr])
-																			)[Eur_yr];
-																			
-				attribute<Eur_yr>	K02_Gnet_verwijderen   (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
-																			 	makedefined(
-																			 	 	R_AardG * Netwerken/Aardgas/Kji_verwijderen	//jaarlijkse kapitaallasten verwijderen gasnetten
-																			 	, 0.0[Eur_yr])
-																			)[Eur_yr];
-																			
-				attribute<Eur_yr>	K03_Gnet_vervangen     (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
-																			 	makedefined(
-																			 	 	Netwerken/Aardgas/Kji_vervangen	//jaarlijkse kapitaallasten vervangen gasnetten
-																			 	, 0.0[Eur_yr])
-																			)[Eur_yr];
-																			
-				attribute<Eur_yr>	K04_Wnet_pand_buurt    (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
-																			 	makedefined(
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Kmi_id +			//jaarlijkse kapitaallasten inpandig nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ge/Kmi_ge_ov +		//jaarlijkse kapitaallasten ongeriefsvergoeding nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ge/Kmi_ge_pm +		//jaarlijkse kapitaallasten projectmanagement nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Kmi_wd -			//jaarlijkse kapitaallasten  wijkdistributie nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ge/Om_ge_comfort	//jaarlijkse kapitaallasten comfortwinst nieuwe warmtenetten
-																			 	,0.0[Eur_yr])
-																			)[Eur_yr];	
-																							
-				attribute<Eur_yr>	K05_Wnet_transport     (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[Eur_yr] :
-																			 	makedefined(
-																			 	 	R_StadV > 0[ratio] ? 0[eur_yr] : R_AardG * StateNaAllocatie/totaal/jaarlijks/pt/Kmi_pt	//transportleidingen nieuwe warmtenetten
-																			 	,0.0[Eur_yr])
-																			)[Eur_yr];
-																			
-				attribute<Eur_yr>	K06_Wnet_opwekking     (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
-																			 	makedefined(
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Kmi_ow	//realisatie bronnen nieuwe warmtenetten
-																			 	,0.0[Eur_yr])
-																			)[Eur_yr];
-				
-				attribute<Eur_yr>	K07_Gebouw_schil       (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
-																			 	makedefined(
-																			 	 	maatschappelijk/gebouwen/Kmi_GebouwVerbetering	//kosten schilverbetering
-																			 	,0.0[Eur_yr])
-																			)[Eur_yr];
-																			
-				attribute<Eur_yr>	K08_Gebouw_installatie (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
-																			 	makedefined(
-																			 	 	R_AardG * Maatschappelijk/LokaleEnergieProductie/Ki_Totaal30 * NCW/mr30/AnnualisationFactor	+	//jaarlijkse kapitaallasten lokale opwekkingsinstallaties (over 30 jaar)
-																			 	 	R_AardG * Maatschappelijk/LokaleEnergieProductie/Ki_Totaal15 * NCW/mr15/AnnualisationFactor -	//jaarlijkse kapitaallasten lokale opwekkingsinstallaties (over 15 jaar)
-																			 	 	R_AardG * Eindgebruiker/BestaandeWoning/LokaleEnergieProductie/Oi_HR * NCW/mr15/AnnualisationFactor -	//opbrengsten vermeden gasketels bestaande woningen zonder bestaand warmtenet
-																			 	 	R_AardG * Eindgebruiker/BestaandeUtil/LokaleEnergieProductie/Oi_HR * NCW/mr15/AnnualisationFactor +		//opbrengsten vermeden gasketels bestaande utiliteit zonder bestaand warmtenet
-																			 	 	R_AardG * Eindgebruiker/BestaandeWoning/LokaleEnergieProductie/Ki_HR_afschrijving * NCW/mr15/AnnualisationFactor +	//afschrijvingen gasketels bestaande woningen zonder bestaand warmtenet
-																			 	 	R_AardG * Eindgebruiker/BestaandeUtil/LokaleEnergieProductie/Ki_HR_afschrijving * NCW/mr15/AnnualisationFactor		//afschrijvingen gasketels bestaande utiliteit zonder bestaand warmtenet
-																			 	,0.0[Eur_yr])
-																			)[Eur_yr];
-																						
-				attribute<Eur_yr>	K09_Inkoop_Warmte      (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[Eur_yr] :
-																			 	makedefined( 
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Kj_ow_productie + //productie warmte nieuwe warmtenetten
-																			 	 	R_StadV * GebiedsAllocatie/RestWarmte/Iterations/I0/Assignment/Km_WarmteFactor * HerState/Vj_WarmtePrimairD -	//productie warmte bestaande warmtenetten
-																			 	 	OrigKosten/K09_Inkoop_Warmte
-																			 	,0.0[Eur_yr])
-																			)[Eur_yr];
-																			
-				attribute<Eur_yr>	K10_Inkoop_Gas         (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[Eur_yr] :
-																			 	makedefined( 
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Km_ow_gas +	//kosten gas opwekking warmte nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Km_wd_gas +	//kosten gas hulpketels in nieuwe warmtenetten
-																			 	 	R_StadV * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol) * HerState/KostenD/Bijstook/Km_wd_gas +	//kosten gas hulpketels bestaande warmtenetten
-																			 	 	R_AardG * GasKostenGebouwen/Km_totaal -	//kosten gas in gebouwen
-																			 	 	OrigKosten/K10_Inkoop_Gas
-																			 	,0.0[Eur_yr])
-																			)[Eur_yr];
-																			
-				attribute<Eur_yr>	K11_Inkoop_Elek        (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[Eur_yr] :
-																			 	makedefined( 
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Km_ow_elek +		//elektriciteitskosten opwekking in nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Km_id_elek +		//elektriciteitskosten inpandig in nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Km_wd_elek +		//elektriciteitskosten distributie in nieuwe warmtenetten
-																			 	 	R_StadV * HerState/KostenD/SecundairNet/Km_wd_elek +			//elektriciteitskosten distributie in bestaande warmtenetten
-																			 	 	R_AardG * ElekKostenGebouwen_eWP/Km_totaal +	//elektriciteitskosten warmtepompen in gebouwen zonder bestaande warmtenetten
-																			 	 	R_AardG * ElekKostenGebouwen_CVpomp/Km_totaal + //elektriciteitskosten pompenergie in gebouwen zonder bestaande warmtenetten
-																			 	 	R_StadV * ElekKostenGebouwen_Koude_exWP/Km_totaal +	//elektriciteitskosten Koude
-																			 	 	R_AardG * ElekKostenGebouwen_APP/Km_totaal + 	//elektriciteitskosten gebouwen volgens nieuwe staffel
-																			 	 	R_StadV * ElekKostenGebouwen_APP_exWP/Km_totaal +
-																			 	 	R_AardG * ElekKostenGebouwen_Koude/Km_totaal -	//elektriciteitskosten gebouwen volgens staffel in bestaand warmtenet
-																			 	 	OrigKosten/K11_Inkoop_Elek
-																			 	,0.0[Eur_yr])
-																			)[Eur_yr];	
-				
-				attribute<Eur_yr>	K12_Gebouw_OenM        (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[Eur_yr] :
-																			 	makedefined(
-																			 	 	R_AardG * maatschappelijk/LokaleEnergieProductie/Kj_Onderhoud +		//onderhoud lodake opwekkingsinstallaties
-																			 	 	R_AardG * maatschappelijk/LokaleEnergieProductie/Kj_Admin +			//administratie lokale opwekkingsinstallaties
-																			 	 	maatschappelijk/gebouwen/Kj_Onderhoud +		//onderhoud schilsprongen
-																			 	 	maatschappelijk/gebouwen/Kj_Admin -			//administratie schilsprongen
-																			 	 	OrigKosten/K12_Gebouw_OenM
-																			 	,0.0[Eur_yr])
-																			)[Eur_yr];
-																			
-				attribute<Eur_yr>	K13_Wnet_OenM          (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
-																			 	makedefined(
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Kj_ow_oh +		//onderhoudskosten opwekking nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Kj_ow_adm +		//administratiekosten opwekking nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/pt/Kj_pt_oh +		//onderhoudskosten transport nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/pt/Kj_pt_adm +		//administratiekosten transport nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Kj_id_oh +		//onderhoudskosten inpandig nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Kj_id_adm +		//administratiekosten inpandig nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Kj_wd_oh +		//onderhoudskosten distributie nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Kj_wd_adm +		//administratiekosten distributie nieuwe warmtenetten
-																			 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/lv/Oj_lv_vastrecht * Tussenresultaten/Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_lv_Admin * 1[yr] +				//administratiekosten leverancier nieuwe warmtenetten
-																			 	 	R_StadV * HerState/Opbrengsten/JaarlijksD/Oj_vastrecht * Tussenresultaten/Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_lv_Admin * 1[yr] +	//administratiekosten leverancier bestaande warmtenetten
-																			 	 	R_StadV * StartJaar/StateNaAllocatie/HerKostenBaten/KostenD/Kj_id_oh +	//onderhoudskosten inpandig bestaande warmtenetten
-																			 	 	R_StadV * StartJaar/StateNaAllocatie/HerKostenBaten/KostenD/Kj_wd_oh +	//onderhoudskosten distributie bestaande warmtenetten
-																			 	 	R_StadV * StartJaar/StateNaAllocatie/HerKostenBaten/KostenD/Kj_wd_adm +	//administratiekosten distributie bestaande warmtenetten
-																			 	 	R_StadV * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_pt_oh +		//onderhoudskosten transport bestaande warmtenetten
-																			 	 	R_StadV * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_pt_adm +		//administratiekosten transport bestaande warmtenetten
-																			 	 	R_StadV * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_ow_oh +		//onderhoudskosten opwekking bestaande warmtenetten
-																			 	 	R_StadV * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_ow_adm -		//administratiekosten opwekking bestaande warmtenetten
-																			 	 	OrigKosten/K13_Wnet_OenM
-																			 	,0.0[Eur_yr])
-																			)[Eur_yr];
-																														
-				attribute<Eur_yr>	K14_Enet_Gnet_OenM     (Planregio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
-																			 	makedefined(
-																			 	 	R_AardG * Netwerken/Aardgas/Kj_oh +		//onderhoudskosten gasnet
-																			 	 	R_StadV * Startjaar/Netwerken/Aardgas/Kj_oh +
-																			 	 	R_AardG * Netwerken/Elektriciteit/Kj_oh +	//onderhoudskosten elektriciteitsnet
-																			 	 	R_StadV * Startjaar/Netwerken/Elektriciteit/Kj_oh -
-																			 	 	OrigKosten/K14_Enet_Gnet_OenM
-																			 	 ,0.0[Eur_yr])
-																			)[Eur_yr];															
-			}																
+{
+	attribute<nrWoningen>	nrWEQ    (Planregio)  :=	netwerken/nrWoonunits;
+	attribute<Ratio>		R_StadV  (Planregio)  :=	/Invoer/RuimtelijkeData/StudieGebied/buurt/R_StadV;
+	attribute<Ratio>		R_AardG  (Planregio)  :=	1D - R_StadV;
+	attribute<string>		IsWater  (Planregio)  :=	/Invoer/RuimtelijkeData/StudieGebied/buurt/IsWater;
+	parameter<bool>			Groengas              :=	Tussenresultaten/Voorkeuren/Afweging/IsGroenGas;
 	
-			unit<uint32> variable := SubItem_PropValues(table,'name');
-			container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/NationaleKosten.csv');		
-													
-			container TotaalUitstoot
-			{															
-				attribute<Eur_yr>	Natkosten_abs      (Planregio) :=	  Table/K01_Enet_verzwaren     + Table/K02_Gnet_verwijderen   + Table/K03_Gnet_vervangen + Table/K14_Enet_Gnet_OenM
-																		+ Table/K04_Wnet_pand_buurt    + Table/K05_Wnet_transport     + Table/K06_Wnet_opwekking + Table/K13_Wnet_OenM
-																		+ Table/K07_Gebouw_schil       + Table/K08_Gebouw_installatie + Table/K12_Gebouw_OenM
-																		+ Table/K09_Inkoop_Warmte      + Table/K10_Inkoop_Gas         + Table/K11_Inkoop_Elek;
+	//statische indicatoren per buurt
+	container Statisch
+	{
+		attribute<bool>	Uitgesloten_bool (Planregio) := Invoer/RuimtelijkeData/leidraad_oktober_2019/Uitgesloten_bool;
 
-				attribute<ton_yr>	Orig_CO2_ton       (Planregio) :=	StartJaar/EnergyResults/CO2/gebouwen/Aardgas/totaal / 1000.0[kg_yr / ton_yr]+
-																		StartJaar/EnergyResults/CO2/GebiedsOpties/totaal    / 1000.0[kg_yr / ton_yr];
-			
-				attribute<ton_yr>	New_CO2_ton        (Planregio) :=	Groengas ? const( 0 [ton_yr], PlanRegio) : 
-																		EnergyResults/CO2/gebouwen/Aardgas/totaal / 1000.0[kg_yr / ton_yr]+
-																		EnergyResults/CO2/GebiedsOpties/totaal    / 1000.0[kg_yr / ton_yr];
-			
-				attribute<ton_yr>	Delta_CO2          (Planregio) :=	Orig_CO2_ton - New_CO2_ton;
-				
-				attribute<Eur_yr>	Orig_nat_kosten    (Planregio) :=	/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/TotaalUitstoot/Natkosten_abs;
-				attribute<Eur_yr>	Delta_nat_kosten   (Planregio) :=	Natkosten_abs;
-			}
-			container ElekKostenGebouwen_APP :=
-				for_each_nedv(Classifications/BebouwingsComponent/Name, 
-					replace(
-						'sum(Allocatie/@BC@/Elektriciteit/Km_elek_APP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
-					,	'@BC@', Classifications/BebouwingsComponent/Name
-					)
-					,PlanRegio
-					,Eur_yr
-					)
-				{
-					attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
-				}
-			container ElekKostenGebouwen_APP_exWP :=
-				for_each_nedv(Classifications/BebouwingsComponent/Name, 
-					replace(
-						'sum(Allocatie/@BC@/Elektriciteit/Km_elek_APP_exWP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
-					,	'@BC@', Classifications/BebouwingsComponent/Name
-					)
-					,PlanRegio
-					,Eur_yr
-					)
-				{
-					attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
-				}
-			container ElekKostenGebouwen_CVpomp :=
-				for_each_nedv(Classifications/BebouwingsComponent/Name, 
-					replace(
-						'sum(Allocatie/@BC@/Elektriciteit/Km_elek_CVpomp, BebouwingsComponenten/@BC@/PlanRegio_rel)'
-					,	'@BC@', Classifications/BebouwingsComponent/Name
-					)
-					,PlanRegio
-					,Eur_yr
-					)
-				{
-					attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
-				}
-			container ElekKostenGebouwen_CVpomp_exWP :=
-				for_each_nedv(Classifications/BebouwingsComponent/Name, 
-					replace(
-						'sum(Allocatie/@BC@/Elektriciteit/Km_elek_CVpomp_exWP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
-					,	'@BC@', Classifications/BebouwingsComponent/Name
-					)
-					,PlanRegio
-					,Eur_yr
-					)
-				{
-					attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
-				}
-			container ElekKostenGebouwen_eWP :=
-				for_each_nedv(Classifications/BebouwingsComponent/Name, 
-					replace(
-						'sum(Allocatie/@BC@/Elektriciteit/Km_elek_eWP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
-					,	'@BC@', Classifications/BebouwingsComponent/Name
-					)
-					,PlanRegio
-					,Eur_yr
-					)
-				{
-					attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
-				}
-			container ElekKostenGebouwen_eWP_exWP :=
-				for_each_nedv(Classifications/BebouwingsComponent/Name, 
-					replace(
-						'sum(Allocatie/@BC@/Elektriciteit/Km_elek_eWP_exWP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
-					,	'@BC@', Classifications/BebouwingsComponent/Name
-					)
-					,PlanRegio
-					,Eur_yr
-					)
-				{
-					attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
-				}
-			container ElekKostenGebouwen_Koude_exWP :=
-				for_each_nedv(Classifications/BebouwingsComponent/Name, 
-					replace(
-						'sum(Allocatie/@BC@/Elektriciteit/Km_elek_Koude_exWP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
-					,	'@BC@', Classifications/BebouwingsComponent/Name
-					)
-					,PlanRegio
-					,Eur_yr
-					)
-				{
-					attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
-				}
-			container ElekKostenGebouwen_Koude :=
-				for_each_nedv(Classifications/BebouwingsComponent/Name, 
-					replace(
-						'sum(Allocatie/@BC@/Elektriciteit/Km_elek_Koude, BebouwingsComponenten/@BC@/PlanRegio_rel)'
-					,	'@BC@', Classifications/BebouwingsComponent/Name
-					)
-					,PlanRegio
-					,Eur_yr
-					)
-				{
-					attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
-				}
-			container GasKostenGebouwen :=
-				for_each_nedv(Classifications/BebouwingsComponent/Name, 
-					replace(
-						'sum(Allocatie/@BC@/Aardgas/maatschappelijk, BebouwingsComponenten/@BC@/PlanRegio_rel)'
-					,	'@BC@', Classifications/BebouwingsComponent/Name
-					)
-					,PlanRegio
-					,Eur_yr
-					)
-				{
-					attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
-				}
-				
-		}	
-		
-		container Aansluitingen
+		Unit<UInt32>  table := Invoer/DefaultInstellingen/Basis/PlanRegio
 		{
-			Unit<UInt32>  table := Invoer/DefaultInstellingen/Basis/PlanRegio
-			{
-				attribute<String>	BU_CODE             (Planregio)   :=	Statisch/table/I01_buurtcode;
-				
-				attribute<nrAansl>	A01_Aansl_aardgas   (PlanRegio) :=		round(
-																			 	statisch/Uitgesloten_bool || GroenGas ? 0.0[nrAansl] :
-																			 	makedefined(
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/Gas
-																			 	,0.0[nrAansl])
-																			)[nrAansl];
-				
-				attribute<nrAansl>	A02_Aansl_eWP       (PlanRegio) :=		round(
-																			 	statisch/Uitgesloten_bool ? 0.0[nrAansl] :
-																			 	makedefined(
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/eWP
-																			 	,0.0[nrAansl])
-																			)[nrAansl];
-				
-				attribute<nrAansl>	A03_Aansl_MT        (PlanRegio) :=		round(
-																			 	statisch/Uitgesloten_bool ? 0.0[nrAansl] :
-																			 	makedefined(
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/Restwarmte +	//nieuwe aansluitingen restwarmte
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/Geothermie +	//nieuwe aansluitingen geothermie
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/WijkWKK +		//nieuwe aansluitingen wijkwkk
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/BioWKK +		//nieuwe aansluitingen biowkk
-																			 	 	R_StadV * HerState/PlanRegioKaarten/BestaandeWoning/nrAansl_totaal +		//bestaande warmtenetaansluitingen woningen
-																			 	 	R_StadV * HerState/PlanRegioKaarten/BestaandeUtil/nrAansl_totaal			//bestaande warmtenetaansluitingen utiliteit
-																			 	,0.0[nrAansl])
-																			)[nrAansl];
-																			
-				attribute<nrAansl>	A04_Aansl_LT        (PlanRegio) :=		round(
-																			 	statisch/Uitgesloten_bool ? 0.0[nrAansl] :
-																			 	makedefined(
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/WKO +
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/LT15_30 +
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/LT15_50 +
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/LT15_70 +
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/LT30_30 +
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/LT30_50 +
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/LT30_70 +
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/TEO
-																			,0.0[nrAansl])
-																			)[nrAansl];
-																			
-				attribute<nrAansl>	A05_Aansl_hWPgroengas (PlanRegio) :=	round(
-																			 	statisch/Uitgesloten_bool ? 0.0[nrAansl] :
-																			 	makedefined(
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/hWP
-																			 	,0.0[nrAansl])
-																			)[nrAansl];
-				
-				attribute<nrAansl>	A06_Aansl_HRgroengas  (PlanRegio) :=	round(
-																			 	statisch/Uitgesloten_bool || !GroenGas ? 0.0[nrAansl] :
-																			 	makedefined(
-																			 	 	R_AardG * StateNaAllocatie/nrAansluitinging/Gas
-																			 	,0.0[nrAansl])
-																			)[nrAansl];
-			}
-			unit<uint32> variable := SubItem_PropValues(table,'name');
-			container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Aansluitingen.csv');
-		}			
-		
-		#include <Vergelijking.dms>
-		#include <Gevoeligheidsanalyses.dms>
+
+		attribute<String>		BU_CODE                (Planregio) :=	I01_buurtcode;
+		attribute<String>		I01_buurtcode          (Planregio) :=	/Invoer/RuimtelijkeData/StudieGebied/buurt/BU_CODE;
+		attribute<String>		I02_buurtnaam          (Planregio) :=	Uitgesloten_bool ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/BU_NAAM, ',' , '');
+		attribute<String>		I03_wijkcode           (Planregio) :=	/Invoer/RuimtelijkeData/StudieGebied/buurt/WK_CODE;
+		attribute<String>		I04_wijknaam           (Planregio) :=	Uitgesloten_bool ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/WK_NAAM, ',' , '');
+		attribute<String>		I05_gemeentecode       (Planregio) :=	/Invoer/RuimtelijkeData/StudieGebied/buurt/GM_CODE;
+		attribute<String>		I06_gemeentenaam       (Planregio) :=	Uitgesloten_bool ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/GM_NAAM, ',' , '');
+		attribute<String>		I07_energieregionaam   (Planregio) :=	Uitgesloten_bool ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/ER_NAAM, ',' , '');
+		attribute<String>		I08_provincienaam      (Planregio) :=	Uitgesloten_bool ? 'UITGESLOTEN' : replace(/Invoer/RuimtelijkeData/StudieGebied/buurt/PROV_NAAM, ',' , '');
+		attribute<nrAansl>		I09_aantal_woningen	   (Planregio) :=	Uitgesloten_bool ? 0.0[nraansl]    : float64(round(0.49 + sum(BebouwingsComponenten/BestaandeWoning/RuimtelijkeVraagComponent/nrAansluitingen,	BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)));
+		attribute<nrAansl>		I10_aantal_utiliteit   (Planregio) :=	Uitgesloten_bool ? 0.0[nraansl]    : float64(round(0.49 + sum(BebouwingsComponenten/BestaandeUtil/RuimtelijkeVraagComponent/nrAansluitingen,	BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)));
+		attribute<nrWoningen>	I11_woningequivalenten (Planregio) :=	Uitgesloten_bool ? 0.0[nrwoningen] : float64(round(0.49 + nrWEQ));	//130m2 utiliteit = 1 WEQ
+		attribute<string>		Uitgesloten            (Planregio) :=	string(Uitgesloten_bool);
 	}
+		unit<uint32> variable := SubItem_PropValues(table,'name');
+		container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Statisch.csv');
+	}
+	container HerState := = (ZichtjaarName == 'StartJaar') ? 'StateNaAllocatie/HerKostenBaten' : '/TussenResultaten/R1_2030/StateNaAllocatie/HerKostenBaten';
+	//dynamische indicatoren op hoofdlijnen
+	container Hoofdindicatoren
+	{
+		Unit<UInt32>  table := Invoer/DefaultInstellingen/Basis/PlanRegio
+		{
+			attribute<String>		BU_CODE	               (Planregio) :=	Statisch/table/I01_buurtcode;
+			attribute<GJ_yr_WEQ>	H01_warmtetotaal       (Planregio) :=	add(H02_Vraag_aardgas, H03_Vraag_groengas, H05_Vraag_MTwarmte, H06_Vraag_LTwarmte, H04_Vraag_elekwarmte);
+			
+			attribute<GJ_yr_WEQ>	H02_Vraag_aardgas      (Planregio) :=	round(
+																			 	statisch/Uitgesloten_bool || Groengas || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
+																			 	makedefined(
+																			 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/Aardgas, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//aardgasvraag bestaande woningen - zonder bestaand warmtenet
+																			 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/Aardgas, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +		//aardgasvraag bestaande utiliteit - zonder bestaand warmtenet
+																			 	 	R_StadV * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol ) * HerState/KostenD/Bijstook/Vj_Bijstook +	//bijstook bestaande warmtenetten
+																			 	 	R_AardG * StateNaAllocatie/totaal/Verbruik/V_wd_gas +	//aardgasverbruik hulpketels nieuw warmtenet
+																			 	 	R_AardG * StateNaAllocatie/totaal/Verbruik/V_ow_gas		//aardgasverbruik opwekking nieuw warmtenet
+																			 	,0.0 [GJ_yr]) / nrWEQ
+																			)[GJ_yr_WEQ];
+																				
+			attribute<GJ_yr_WEQ>	H03_Vraag_groengas     (Planregio) :=	round(
+																			 	statisch/Uitgesloten_bool || !Groengas || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
+																			 	makedefined(
+																			 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/Aardgas, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//groengasvraag bestaande woningen - zonder bestaand warmtenet
+																			 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/Aardgas, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +		//groengasvraag bestaande utiliteit - zonder bestaand warmtenet
+																			 	 	R_StadV * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol) * HerState/KostenD/Bijstook/Vj_Bijstook +	//bijstook bestaande warmtenetten
+																			 	 	R_AardG * StateNaAllocatie/totaal/Verbruik/V_wd_gas +	//groengasverbruik hulpketels nieuw warmtenet
+																			 	 	R_AardG * StateNaAllocatie/totaal/Verbruik/V_ow_gas		//groengasverbruik opwekking nieuw warmtenet
+																			 	,0.0[GJ_yr]) / nrWEQ
+																			)[GJ_yr_WEQ];
+			
+			attribute<GJ_yr_WEQ>	H04_Vraag_elekwarmte    (Planregio) :=	round(
+																			 	statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
+																			 	makedefined(
+																			 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/eWP, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//elektriciteitsverbruik elektrische warmtepompen bestaande woningen - zonder bestaand warmtenet
+																			 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/eWP, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +		//elektriciteitsverbruik elektrische warmtepompen bestaande utiliteit - zonder bestaand warmtenet
+																			 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/hWP, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//elektriciteitsverbruik hybride warmtepompen bestaande woningen - zonder bestaand warmtenet
+																			 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/hWP, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +		//elektriciteitsverbruik hybride warmtepompen bestaande utiliteit - zonder bestaand warmtenet
+																			 	 	R_AardG * StateNaAllocatie/totaal/verbruik/V_ow_elek +	//elektriciteitsvraag opwekking nieuwe warmtenetten	
+																			 	 	R_AardG * StateNaAllocatie/totaal/verbruik/V_id_elek +	//elektriciteitsvraag inpandig nieuwe warmtenetten	
+																			 	 	R_AardG * StateNaAllocatie/totaal/verbruik/V_wd_elek +	//elektriciteitsvraag pompenergie nieuwe warmtenetten
+																			 	 	R_StadV * HerState/KostenD/SecundairNet/V_wd_elek		//elektriciteitsvraag pompenergie bestaande warmtenetten	
+																			 	 ,0.0 [GJ_yr]) / nrWEQ
+																			)[GJ_yr_WEQ];
+																				
+			attribute<GJ_yr_WEQ>	H05_Vraag_MTwarmte      (Planregio) :=	round(
+																			 	statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
+																			 	makedefined(
+																			 	 	R_StadV * HerState/PlanRegioKaarten/BestaandeWoning/Verbruik/alle_totaal +	//MT warmtevraag bestaande warmtenetten in woningen
+																			 	 	R_StadV * HerState/PlanRegioKaarten/BestaandeUtil/Verbruik/alle_totaal +		//MT warmtevraag bestaande warmtenetten in utiliteit
+																			 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/WarmteMT, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//MT warmtevraag woningen in nieuwe warmtenetten
+																			 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/WarmteMT, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)		//MT warmtevraag utiliteit in nieuwe warmtenetten
+																			 	,0.0 [GJ_yr]) / nrWEQ
+																			)[GJ_yr_WEQ];
+																				
+			attribute<GJ_yr_WEQ>	H06_Vraag_LTwarmte      (Planregio) :=	round(
+																			 	statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
+																			 	makedefined(
+																			 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/WarmteLT, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//vraag naar LT warmte nieuwe warmtenetten woningen
+																			 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/WarmteLT, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)		//vraag naar LT warmte nieuwe warmtenetten utiliteit
+																			 	,0.0 [GJ_yr]) / nrWEQ
+																			)[GJ_yr_WEQ];
+			
+			attribute<GJ_yr_ha>		H07_Warmte_hectare      (Planregio) :=	round(
+																			 	statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_ha] :
+																			 	makedefined(
+																			 	 	(H01_warmtetotaal * nrWEQ) / 
+																			 	 	(/Invoer/RuimtelijkeData/StudieGebied/buurt/AreaInKm2 *
+																			 	 	(Invoer/RuimtelijkeData/StudieGebied/buurt/Overigen_p_land_com / 100d) *
+																			 	 	100 [ha / km2])
+																			 	,0.0[GJ_yr_ha])
+																			)[GJ_yr_ha];
+																				
+			attribute<GJ_yr_WEQ>	H08_Vraag_Koude         (Planregio) :=	round(
+																			 	statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
+																			 	makedefined(
+																			 	 	sum(BebouwingsComponenten/BestaandeUtil/Functioneel/Koude, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +		//functionele koudevraag utiliteit
+																			 	 	sum(BebouwingsComponenten/BestaandeWoning/Functioneel/Koude, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)	//functionele koudevraag woningen
+																			 	,0.0 [GJ_yr]) / nrWEQ
+																			)[GJ_yr_WEQ];
+			
+			attribute<GJ_yr_WEQ>	H09_Vraag_elektotaal    (Planregio) :=	round(
+																			 	statisch/Uitgesloten_bool || nrWEQ == 0.0[nrWoningen] ? 0.0[GJ_yr_WEQ] :
+																			 	makedefined(
+																			 	 	R_AardG * StateNaAllocatie/totaal/verbruik/V_id_elek +	//elektriciteitsvraag inpandig nieuwe warmtenetten
+																			 	 	R_AardG * StateNaAllocatie/totaal/verbruik/V_wd_elek +	//elektriciteitsvraag pompenergie nieuwe warmtenetten
+																			 	 	R_AardG * StateNaAllocatie/totaal/verbruik/V_ow_elek +	//elektriciteitsvraag opwekking nieuwe warmtenetten
+																			 	 	R_StadV * HerState/KostenD/SecundairNet/V_wd_elek +		//elektriciteitsvraag pompenergie bestaande warmtenetten
+																			 	 	
+																			 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/eWP,   BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +	//correctie bestaande warmtenetten elektriciteitsvraag utiliteit elektrische warmtepompen
+																			 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/eWP, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//correctie bestaande warmtenetten elektriciteitsvraag woningen elektrische warmtepompen
+																			 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/hWP,   BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +	//correctie bestaande warmtenetten elektriciteitsvraag utiliteit hybride warmtepompen
+																			 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/hWP, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//correctie bestaande warmtenetten elektriciteitsvraag woningen hybride warmtepompen
+																			 	 	
+																			 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/CVpomp,   BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +			//elektriciteitsverbruik pompenergie utiliteit zonder bestaand warmtenet
+																			 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/CVpomp, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +		//elektriciteitsverbruik pompenergie woningen zonder bestaand warmtenet
+																			 	 	
+																			 	 	R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/Koude,   BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +			//elektriciteitsverbruik koude utiliteit zonder bestaand warmtenet
+																			 	 	R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/Koude, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +		//elektriciteitsverbruik koude woningen zonder bestaand warmtenet
+																			 	 	R_StadV * sum(Allocatie/BestaandeUtil/Metervraag/Koude_exWKO,   BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +	//elektriciteitsverbruik koude utiliteit met bestaand warmtenet
+																			 	 	R_StadV * sum(Allocatie/BestaandeWoning/Metervraag/Koude_exWKO, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) +	//elektriciteitsverbruik koude woningen met bestaand warmtenet
+																			 		sum(BebouwingsComponenten/BestaandeWoning/DragerOpties/Apparatuur/Elektriciteit, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) + 
+																			 		sum(BebouwingsComponenten/BestaandeUtil/DragerOpties/Apparatuur/Elektriciteit, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
+																			 	 	
+																			 	,0.0 [GJ_yr]) / nrWEQ
+																			)[GJ_yr_WEQ];
+																				
+			attribute<ton_yr>		H10_CO2_reductie        (Planregio) :=	round(
+																			 	statisch/Uitgesloten_bool ? 0.0[ton_yr] :
+																			 	makedefined(
+																			 	 	NationaleKosten/TotaalUitstoot/Delta_CO2	//verschil in CO2 uitstoot tov startjaar
+																			 	,0.0[ton_yr])
+																			)[ton_yr];
+			
+			attribute<Eur_yr>		H11_Nat_abskosten       (Planregio) :=	round(
+																			 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
+																			 	makedefined(
+																			 	 	NationaleKosten/TotaalUitstoot/Natkosten_abs +	//absolute nationale kosten
+																			 	 	(ZichtjaarName != 'StartJaar' ? /Resultaten/StartJaar/PlanRegioResults/Hoofdindicatoren/Table/H12_Nat_meerkosten : 0.0[eur_yr])
+																			 	,0.0[Eur_yr])
+																			)[Eur_yr];		
+																							
+			attribute<Eur_yr>		H12_Nat_meerkosten      (Planregio) :=	round(
+																			 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
+																			 	makedefined(
+																			 	 	NationaleKosten/TotaalUitstoot/Delta_nat_kosten	//nationale meerkosten ten opzichte van startjaar
+																			 	,0.0[Eur_yr])
+																			)[Eur_yr];
+																				
+			attribute<Eur_ton>		H13_Nat_meerkost_CO2   	(Planregio) :=	round(
+																			 	statisch/Uitgesloten_bool || ZichtjaarName == 'StartJaar' ? 0.0[eur_ton] :
+																			 	makedefined(
+																			 	 	(NationaleKosten/TotaalUitstoot/Delta_nat_kosten / NationaleKosten/TotaalUitstoot/Delta_CO2)	//nationale meerkosten per vermeden ton CO2
+																			 	,0.0[EUR_ton])
+																			)[Eur_ton];
+																			
+			attribute<Eur_yr_WEQ>	H16_Nat_meerkost_WEQ   	(Planregio) :=	round(
+																			 	statisch/Uitgesloten_bool || ZichtjaarName == 'StartJaar' ? 0.0[Eur_yr_WEQ] :
+																			 	makedefined(
+																			 	 	(NationaleKosten/TotaalUitstoot/Delta_nat_kosten / nrWEQ)	//nationale meerkosten per woningequivalent
+																			 	,0.0[Eur_yr_WEQ])
+																			)[Eur_yr_WEQ];
+		}
+		
+		unit<uint32> variable := SubItem_PropValues(table,'name');
+		container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Hoofdindicatoren.csv');
+	}
+	
+	//nationale kosten absoluut en CO2 uitstoot
+	container NationaleKosten
+	{		
+		container OrigKosten
+		{
+			parameter<bool> StartJaar := ZichtjaarName == 'StartJaar';
+			attribute<Eur_yr>	K09_Inkoop_Warmte      (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K09_Inkoop_Warmte';																			
+			attribute<Eur_yr>	K10_Inkoop_Gas         (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K10_Inkoop_Gas';
+			attribute<Eur_yr>	K11_Inkoop_Elek        (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K11_Inkoop_Elek';
+			attribute<Eur_yr>	K12_Gebouw_OenM        (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K12_Gebouw_OenM';
+			attribute<Eur_yr>	K13_Wnet_OenM          (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K13_Wnet_OenM';
+			attribute<Eur_yr>	K14_Enet_Gnet_OenM     (Planregio) :=	= StartJaar ? 'const(0.0[Eur_yr], PlanRegio)' : '/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/Table/K14_Enet_Gnet_OenM';	
+		}
+		Unit<UInt32>  table := Invoer/DefaultInstellingen/Basis/PlanRegio
+		{
+			attribute<String>	BU_CODE                (Planregio) :=	Statisch/table/I01_buurtcode;	
+			attribute<Eur_yr>	K01_Enet_verzwaren     (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
+																		 	makedefined(
+																		 	 	R_AardG * Netwerken/Kosten/Ki_verzw_e_aansl * NCW/mr50/AnnualisationFactor +
+																		 	 	R_AardG * Netwerken/Kosten/cumulatief/Ki_verzw_MSR * NCW/mr50/AnnualisationFactor +
+																		 	 	R_AardG * Netwerken/Kosten/cumulatief/Ki_verzw_LS * NCW/mr50/AnnualisationFactor 	//jaarlijkse kapitaallasten verzwaren elektriciteits
+																		 	, 0.0[Eur_yr])
+																		)[Eur_yr];
+																		
+			attribute<Eur_yr>	K02_Gnet_verwijderen   (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
+																		 	makedefined(
+																		 	 	R_AardG * Netwerken/Aardgas/Kji_verwijderen	//jaarlijkse kapitaallasten verwijderen gasnetten
+																		 	, 0.0[Eur_yr])
+																		)[Eur_yr];
+																		
+			attribute<Eur_yr>	K03_Gnet_vervangen     (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
+																		 	makedefined(
+																		 	 	Netwerken/Aardgas/Kji_vervangen	//jaarlijkse kapitaallasten vervangen gasnetten
+																		 	, 0.0[Eur_yr])
+																		)[Eur_yr];
+																		
+			attribute<Eur_yr>	K04_Wnet_pand_buurt    (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
+																		 	makedefined(
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Kmi_id +			//jaarlijkse kapitaallasten inpandig nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ge/Kmi_ge_ov +		//jaarlijkse kapitaallasten ongeriefsvergoeding nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ge/Kmi_ge_pm +		//jaarlijkse kapitaallasten projectmanagement nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Kmi_wd -			//jaarlijkse kapitaallasten  wijkdistributie nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ge/Om_ge_comfort	//jaarlijkse kapitaallasten comfortwinst nieuwe warmtenetten
+																		 	,0.0[Eur_yr])
+																		)[Eur_yr];	
+																						
+			attribute<Eur_yr>	K05_Wnet_transport     (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[Eur_yr] :
+																		 	makedefined(
+																		 	 	R_StadV > 0[ratio] ? 0[eur_yr] : R_AardG * StateNaAllocatie/totaal/jaarlijks/pt/Kmi_pt	//transportleidingen nieuwe warmtenetten
+																		 	,0.0[Eur_yr])
+																		)[Eur_yr];
+																		
+			attribute<Eur_yr>	K06_Wnet_opwekking     (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
+																		 	makedefined(
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Kmi_ow	//realisatie bronnen nieuwe warmtenetten
+																		 	,0.0[Eur_yr])
+																		)[Eur_yr];
+			
+			attribute<Eur_yr>	K07_Gebouw_schil       (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
+																		 	makedefined(
+																		 	 	maatschappelijk/gebouwen/Kmi_GebouwVerbetering	//kosten schilverbetering
+																		 	,0.0[Eur_yr])
+																		)[Eur_yr];
+																		
+			attribute<Eur_yr>	K08_Gebouw_installatie (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
+																		 	makedefined(
+																		 	 	R_AardG * Maatschappelijk/LokaleEnergieProductie/Ki_Totaal30 * NCW/mr30/AnnualisationFactor	+	//jaarlijkse kapitaallasten lokale opwekkingsinstallaties (over 30 jaar)
+																		 	 	R_AardG * Maatschappelijk/LokaleEnergieProductie/Ki_Totaal15 * NCW/mr15/AnnualisationFactor -	//jaarlijkse kapitaallasten lokale opwekkingsinstallaties (over 15 jaar)
+																		 	 	R_AardG * Eindgebruiker/BestaandeWoning/LokaleEnergieProductie/Oi_HR * NCW/mr15/AnnualisationFactor -	//opbrengsten vermeden gasketels bestaande woningen zonder bestaand warmtenet
+																		 	 	R_AardG * Eindgebruiker/BestaandeUtil/LokaleEnergieProductie/Oi_HR * NCW/mr15/AnnualisationFactor +		//opbrengsten vermeden gasketels bestaande utiliteit zonder bestaand warmtenet
+																		 	 	R_AardG * Eindgebruiker/BestaandeWoning/LokaleEnergieProductie/Ki_HR_afschrijving * NCW/mr15/AnnualisationFactor +	//afschrijvingen gasketels bestaande woningen zonder bestaand warmtenet
+																		 	 	R_AardG * Eindgebruiker/BestaandeUtil/LokaleEnergieProductie/Ki_HR_afschrijving * NCW/mr15/AnnualisationFactor		//afschrijvingen gasketels bestaande utiliteit zonder bestaand warmtenet
+																		 	,0.0[Eur_yr])
+																		)[Eur_yr];
+																					
+			attribute<Eur_yr>	K09_Inkoop_Warmte      (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[Eur_yr] :
+																		 	makedefined( 
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Kj_ow_productie + //productie warmte nieuwe warmtenetten
+																		 	 	R_StadV * GebiedsAllocatie/RestWarmte/Iterations/I0/Assignment/Km_WarmteFactor * HerState/Vj_WarmtePrimairD -	//productie warmte bestaande warmtenetten
+																		 	 	OrigKosten/K09_Inkoop_Warmte
+																		 	,0.0[Eur_yr])
+																		)[Eur_yr];
+																		
+			attribute<Eur_yr>	K10_Inkoop_Gas         (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[Eur_yr] :
+																		 	makedefined( 
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Km_ow_gas +	//kosten gas opwekking warmte nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Km_wd_gas +	//kosten gas hulpketels in nieuwe warmtenetten
+																		 	 	R_StadV * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol) * HerState/KostenD/Bijstook/Km_wd_gas +	//kosten gas hulpketels bestaande warmtenetten
+																		 	 	R_AardG * GasKostenGebouwen/Km_totaal -	//kosten gas in gebouwen
+																		 	 	OrigKosten/K10_Inkoop_Gas
+																		 	,0.0[Eur_yr])
+																		)[Eur_yr];
+																		
+			attribute<Eur_yr>	K11_Inkoop_Elek        (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[Eur_yr] :
+																		 	makedefined( 
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Km_ow_elek +		//elektriciteitskosten opwekking in nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Km_id_elek +		//elektriciteitskosten inpandig in nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Km_wd_elek +		//elektriciteitskosten distributie in nieuwe warmtenetten
+																		 	 	R_StadV * HerState/KostenD/SecundairNet/Km_wd_elek +			//elektriciteitskosten distributie in bestaande warmtenetten
+																		 	 	R_AardG * ElekKostenGebouwen_eWP/Km_totaal +	//elektriciteitskosten warmtepompen in gebouwen zonder bestaande warmtenetten
+																		 	 	R_AardG * ElekKostenGebouwen_CVpomp/Km_totaal + //elektriciteitskosten pompenergie in gebouwen zonder bestaande warmtenetten
+																		 	 	R_StadV * ElekKostenGebouwen_Koude_exWP/Km_totaal +	//elektriciteitskosten Koude
+																		 	 	R_AardG * ElekKostenGebouwen_APP/Km_totaal + 	//elektriciteitskosten gebouwen volgens nieuwe staffel
+																		 	 	R_StadV * ElekKostenGebouwen_APP_exWP/Km_totaal +
+																		 	 	R_AardG * ElekKostenGebouwen_Koude/Km_totaal -	//elektriciteitskosten gebouwen volgens staffel in bestaand warmtenet
+																		 	 	OrigKosten/K11_Inkoop_Elek
+																		 	,0.0[Eur_yr])
+																		)[Eur_yr];	
+			
+			attribute<Eur_yr>	K12_Gebouw_OenM        (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[Eur_yr] :
+																		 	makedefined(
+																		 	 	R_AardG * maatschappelijk/LokaleEnergieProductie/Kj_Onderhoud +		//onderhoud lodake opwekkingsinstallaties
+																		 	 	R_AardG * maatschappelijk/LokaleEnergieProductie/Kj_Admin +			//administratie lokale opwekkingsinstallaties
+																		 	 	maatschappelijk/gebouwen/Kj_Onderhoud +		//onderhoud schilsprongen
+																		 	 	maatschappelijk/gebouwen/Kj_Admin -			//administratie schilsprongen
+																		 	 	OrigKosten/K12_Gebouw_OenM
+																		 	,0.0[Eur_yr])
+																		)[Eur_yr];
+																		
+			attribute<Eur_yr>	K13_Wnet_OenM          (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
+																		 	makedefined(
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Kj_ow_oh +		//onderhoudskosten opwekking nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Kj_ow_adm +		//administratiekosten opwekking nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/pt/Kj_pt_oh +		//onderhoudskosten transport nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/pt/Kj_pt_adm +		//administratiekosten transport nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Kj_id_oh +		//onderhoudskosten inpandig nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Kj_id_adm +		//administratiekosten inpandig nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Kj_wd_oh +		//onderhoudskosten distributie nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Kj_wd_adm +		//administratiekosten distributie nieuwe warmtenetten
+																		 	 	R_AardG * StateNaAllocatie/totaal/jaarlijks/lv/Oj_lv_vastrecht * Tussenresultaten/Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_lv_Admin * 1[yr] +				//administratiekosten leverancier nieuwe warmtenetten
+																		 	 	R_StadV * HerState/Opbrengsten/JaarlijksD/Oj_vastrecht * Tussenresultaten/Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_lv_Admin * 1[yr] +	//administratiekosten leverancier bestaande warmtenetten
+																		 	 	R_StadV * StartJaar/StateNaAllocatie/HerKostenBaten/KostenD/Kj_id_oh +	//onderhoudskosten inpandig bestaande warmtenetten
+																		 	 	R_StadV * StartJaar/StateNaAllocatie/HerKostenBaten/KostenD/Kj_wd_oh +	//onderhoudskosten distributie bestaande warmtenetten
+																		 	 	R_StadV * StartJaar/StateNaAllocatie/HerKostenBaten/KostenD/Kj_wd_adm +	//administratiekosten distributie bestaande warmtenetten
+																		 	 	R_StadV * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_pt_oh +		//onderhoudskosten transport bestaande warmtenetten
+																		 	 	R_StadV * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_pt_adm +		//administratiekosten transport bestaande warmtenetten
+																		 	 	R_StadV * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_ow_oh +		//onderhoudskosten opwekking bestaande warmtenetten
+																		 	 	R_StadV * Startjaar/GebiedsAllocatie/RestWarmte/lastiter/Assignment/Kj_ow_adm -		//administratiekosten opwekking bestaande warmtenetten
+																		 	 	OrigKosten/K13_Wnet_OenM
+																		 	,0.0[Eur_yr])
+																		)[Eur_yr];
+																													
+			attribute<Eur_yr>	K14_Enet_Gnet_OenM     (Planregio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[eur_yr] :
+																		 	makedefined(
+																		 	 	R_AardG * Netwerken/Aardgas/Kj_oh +		//onderhoudskosten gasnet
+																		 	 	R_StadV * Startjaar/Netwerken/Aardgas/Kj_oh +
+																		 	 	R_AardG * Netwerken/Elektriciteit/Kj_oh +	//onderhoudskosten elektriciteitsnet
+																		 	 	R_StadV * Startjaar/Netwerken/Elektriciteit/Kj_oh -
+																		 	 	OrigKosten/K14_Enet_Gnet_OenM
+																		 	 ,0.0[Eur_yr])
+																		)[Eur_yr];															
+		}																
+
+		unit<uint32> variable := SubItem_PropValues(table,'name');
+		container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/NationaleKosten.csv');		
+												
+		container TotaalUitstoot
+		{															
+			attribute<Eur_yr>	Natkosten_abs      (Planregio) :=	  Table/K01_Enet_verzwaren     + Table/K02_Gnet_verwijderen   + Table/K03_Gnet_vervangen + Table/K14_Enet_Gnet_OenM
+																	+ Table/K04_Wnet_pand_buurt    + Table/K05_Wnet_transport     + Table/K06_Wnet_opwekking + Table/K13_Wnet_OenM
+																	+ Table/K07_Gebouw_schil       + Table/K08_Gebouw_installatie + Table/K12_Gebouw_OenM
+																	+ Table/K09_Inkoop_Warmte      + Table/K10_Inkoop_Gas         + Table/K11_Inkoop_Elek;
+
+			attribute<ton_yr>	Orig_CO2_ton       (Planregio) :=	StartJaar/EnergyResults/CO2/gebouwen/Aardgas/totaal / 1000.0[kg_yr / ton_yr]+
+																	StartJaar/EnergyResults/CO2/GebiedsOpties/totaal    / 1000.0[kg_yr / ton_yr];
+		
+			attribute<ton_yr>	New_CO2_ton        (Planregio) :=	Groengas ? const( 0 [ton_yr], PlanRegio) : 
+																	EnergyResults/CO2/gebouwen/Aardgas/totaal / 1000.0[kg_yr / ton_yr]+
+																	EnergyResults/CO2/GebiedsOpties/totaal    / 1000.0[kg_yr / ton_yr];
+		
+			attribute<ton_yr>	Delta_CO2          (Planregio) :=	Orig_CO2_ton - New_CO2_ton;
+			
+			attribute<Eur_yr>	Orig_nat_kosten    (Planregio) :=	/Resultaten/StartJaar/PlanRegioResults/NationaleKosten/TotaalUitstoot/Natkosten_abs;
+			attribute<Eur_yr>	Delta_nat_kosten   (Planregio) :=	Natkosten_abs;
+		}
+		container ElekKostenGebouwen_APP :=
+			for_each_nedv(Classifications/BebouwingsComponent/Name, 
+				replace(
+					'sum(Allocatie/@BC@/Elektriciteit/Km_elek_APP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
+				,	'@BC@', Classifications/BebouwingsComponent/Name
+				)
+				,PlanRegio
+				,Eur_yr
+				)
+			{
+				attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
+			}
+		container ElekKostenGebouwen_APP_exWP :=
+			for_each_nedv(Classifications/BebouwingsComponent/Name, 
+				replace(
+					'sum(Allocatie/@BC@/Elektriciteit/Km_elek_APP_exWP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
+				,	'@BC@', Classifications/BebouwingsComponent/Name
+				)
+				,PlanRegio
+				,Eur_yr
+				)
+			{
+				attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
+			}
+		container ElekKostenGebouwen_CVpomp :=
+			for_each_nedv(Classifications/BebouwingsComponent/Name, 
+				replace(
+					'sum(Allocatie/@BC@/Elektriciteit/Km_elek_CVpomp, BebouwingsComponenten/@BC@/PlanRegio_rel)'
+				,	'@BC@', Classifications/BebouwingsComponent/Name
+				)
+				,PlanRegio
+				,Eur_yr
+				)
+			{
+				attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
+			}
+		container ElekKostenGebouwen_CVpomp_exWP :=
+			for_each_nedv(Classifications/BebouwingsComponent/Name, 
+				replace(
+					'sum(Allocatie/@BC@/Elektriciteit/Km_elek_CVpomp_exWP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
+				,	'@BC@', Classifications/BebouwingsComponent/Name
+				)
+				,PlanRegio
+				,Eur_yr
+				)
+			{
+				attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
+			}
+		container ElekKostenGebouwen_eWP :=
+			for_each_nedv(Classifications/BebouwingsComponent/Name, 
+				replace(
+					'sum(Allocatie/@BC@/Elektriciteit/Km_elek_eWP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
+				,	'@BC@', Classifications/BebouwingsComponent/Name
+				)
+				,PlanRegio
+				,Eur_yr
+				)
+			{
+				attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
+			}
+		container ElekKostenGebouwen_eWP_exWP :=
+			for_each_nedv(Classifications/BebouwingsComponent/Name, 
+				replace(
+					'sum(Allocatie/@BC@/Elektriciteit/Km_elek_eWP_exWP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
+				,	'@BC@', Classifications/BebouwingsComponent/Name
+				)
+				,PlanRegio
+				,Eur_yr
+				)
+			{
+				attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
+			}
+		container ElekKostenGebouwen_Koude_exWP :=
+			for_each_nedv(Classifications/BebouwingsComponent/Name, 
+				replace(
+					'sum(Allocatie/@BC@/Elektriciteit/Km_elek_Koude_exWP, BebouwingsComponenten/@BC@/PlanRegio_rel)'
+				,	'@BC@', Classifications/BebouwingsComponent/Name
+				)
+				,PlanRegio
+				,Eur_yr
+				)
+			{
+				attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
+			}
+		container ElekKostenGebouwen_Koude :=
+			for_each_nedv(Classifications/BebouwingsComponent/Name, 
+				replace(
+					'sum(Allocatie/@BC@/Elektriciteit/Km_elek_Koude, BebouwingsComponenten/@BC@/PlanRegio_rel)'
+				,	'@BC@', Classifications/BebouwingsComponent/Name
+				)
+				,PlanRegio
+				,Eur_yr
+				)
+			{
+				attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
+			}
+		container GasKostenGebouwen :=
+			for_each_nedv(Classifications/BebouwingsComponent/Name, 
+				replace(
+					'sum(Allocatie/@BC@/Aardgas/maatschappelijk, BebouwingsComponenten/@BC@/PlanRegio_rel)'
+				,	'@BC@', Classifications/BebouwingsComponent/Name
+				)
+				,PlanRegio
+				,Eur_yr
+				)
+			{
+				attribute<Eur_yr> Km_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
+			}
+			
+	}	
+	
+	container Aansluitingen
+	{
+		Unit<UInt32>  table := Invoer/DefaultInstellingen/Basis/PlanRegio
+		{
+			attribute<String>	BU_CODE             (Planregio)   :=	Statisch/table/I01_buurtcode;
+			
+			attribute<nrAansl>	A01_Aansl_aardgas   (PlanRegio) :=		round(
+																		 	statisch/Uitgesloten_bool || GroenGas ? 0.0[nrAansl] :
+																		 	makedefined(
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/Gas
+																		 	,0.0[nrAansl])
+																		)[nrAansl];
+			
+			attribute<nrAansl>	A02_Aansl_eWP       (PlanRegio) :=		round(
+																		 	statisch/Uitgesloten_bool ? 0.0[nrAansl] :
+																		 	makedefined(
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/eWP
+																		 	,0.0[nrAansl])
+																		)[nrAansl];
+			
+			attribute<nrAansl>	A03_Aansl_MT        (PlanRegio) :=		round(
+																		 	statisch/Uitgesloten_bool ? 0.0[nrAansl] :
+																		 	makedefined(
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/Restwarmte +	//nieuwe aansluitingen restwarmte
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/Geothermie +	//nieuwe aansluitingen geothermie
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/WijkWKK +		//nieuwe aansluitingen wijkwkk
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/BioWKK +		//nieuwe aansluitingen biowkk
+																		 	 	R_StadV * HerState/PlanRegioKaarten/BestaandeWoning/nrAansl_totaal +		//bestaande warmtenetaansluitingen woningen
+																		 	 	R_StadV * HerState/PlanRegioKaarten/BestaandeUtil/nrAansl_totaal			//bestaande warmtenetaansluitingen utiliteit
+																		 	,0.0[nrAansl])
+																		)[nrAansl];
+																		
+			attribute<nrAansl>	A04_Aansl_LT        (PlanRegio) :=		round(
+																		 	statisch/Uitgesloten_bool ? 0.0[nrAansl] :
+																		 	makedefined(
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/WKO +
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/LT15_30 +
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/LT15_50 +
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/LT15_70 +
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/LT30_30 +
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/LT30_50 +
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/LT30_70 +
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/TEO
+																		,0.0[nrAansl])
+																		)[nrAansl];
+																		
+			attribute<nrAansl>	A05_Aansl_hWPgroengas (PlanRegio) :=	round(
+																		 	statisch/Uitgesloten_bool ? 0.0[nrAansl] :
+																		 	makedefined(
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/hWP
+																		 	,0.0[nrAansl])
+																		)[nrAansl];
+			
+			attribute<nrAansl>	A06_Aansl_HRgroengas  (PlanRegio) :=	round(
+																		 	statisch/Uitgesloten_bool || !GroenGas ? 0.0[nrAansl] :
+																		 	makedefined(
+																		 	 	R_AardG * StateNaAllocatie/nrAansluitinging/Gas
+																		 	,0.0[nrAansl])
+																		)[nrAansl];
+		}
+		unit<uint32> variable := SubItem_PropValues(table,'name');
+		container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Aansluitingen.csv');
+	}
+}

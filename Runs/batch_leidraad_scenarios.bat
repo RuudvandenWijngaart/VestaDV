@@ -4,9 +4,13 @@ REM Sluit GUI-variant(GeoDmsGui.exe) af bij aanroepen van GeoDmsRun.exe (indien 
 REM Resultaten worden weggeschreven in: n:/LD/%confignaam%/results/...
 REM Bij nogmaals runnen worden bestanden gewoon overschreven
 
-set pd_root=N:\PD\_Bas\Vesta35beta_Bas
-set log_root=N:\log_bas
-set exe=GeoDms7182
+REM aanpassingen voor machine specifieke paden
+set prj_dir=D:\prj\Vesta35beta
+set log_dir=D:\tmp\log_vesta
+set exe_dir=C:\Program Files\ObjectVision\GeoDms7182
+REM einde aanpassingen voor machine specifieke paden
+
+set exe_path=%exe_dir%\GeoDMSRun.exe
 
 set CUR_YYYY=%date:~10,4%
 set CUR_MM=%date:~4,2%
@@ -18,35 +22,35 @@ set CUR_SS=%time:~6,2%
 set CUR_MS=%time:~9,2%
 set SUBFILENAME=%CUR_YYYY%%CUR_MM%%CUR_DD%-%CUR_HH%%CUR_NN%%CUR_SS%
 
-if not exist %pd_root% goto error
+if not exist %prj_dir% goto error
 
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S1_Hoofdindicatoren.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_1/Hoofdindicatoren
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S1_NationaleKosten.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_1/NationaleKosten
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S1_Aansluitingen.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_1/Aansluitingen
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S1_Gevoeligheidsanalyse.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_1/Gevoeligheidsanalyse
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S1_Hoofdindicatoren.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_1/Hoofdindicatoren
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S1_NationaleKosten.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_1/NationaleKosten
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S1_Aansluitingen.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_1/Aansluitingen
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S1_Gevoeligheidsanalyse.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_1/Gevoeligheidsanalyse
 
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S2_Hoofdindicatoren.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_2/Hoofdindicatoren
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S2_NationaleKosten.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_2/NationaleKosten
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S2_Aansluitingen.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_2/Aansluitingen
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S2_Gevoeligheidsanalyse.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_2/Gevoeligheidsanalyse
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S2_Hoofdindicatoren.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_2/Hoofdindicatoren
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S2_NationaleKosten.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_2/NationaleKosten
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S2_Aansluitingen.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_2/Aansluitingen
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S2_Gevoeligheidsanalyse.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_2/Gevoeligheidsanalyse
 
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S3_Hoofdindicatoren.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_3/Hoofdindicatoren
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S3_NationaleKosten.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_3/NationaleKosten
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S3_Aansluitingen.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_3/Aansluitingen
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S3_Gevoeligheidsanalyse.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_3/Gevoeligheidsanalyse
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S3_Hoofdindicatoren.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_3/Hoofdindicatoren
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S3_NationaleKosten.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_3/NationaleKosten
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S3_Aansluitingen.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_3/Aansluitingen
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S3_Gevoeligheidsanalyse.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_3/Gevoeligheidsanalyse
 
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S4_Hoofdindicatoren.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_4/Hoofdindicatoren
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S4_NationaleKosten.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_4/NationaleKosten
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S4_Aansluitingen.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_4/Aansluitingen
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S4_Gevoeligheidsanalyse.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_4/Gevoeligheidsanalyse
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S4_Hoofdindicatoren.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_4/Hoofdindicatoren
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S4_NationaleKosten.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_4/NationaleKosten
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S4_Aansluitingen.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_4/Aansluitingen
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S4_Gevoeligheidsanalyse.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_4/Gevoeligheidsanalyse
 
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S5_Hoofdindicatoren.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_5/Hoofdindicatoren
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S5_NationaleKosten.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_5/NationaleKosten
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S5_Aansluitingen.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_5/Aansluitingen
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S4_Gevoeligheidsanalyse.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_4/Gevoeligheidsanalyse
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S5_Hoofdindicatoren.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_5/Hoofdindicatoren
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S5_NationaleKosten.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_5/NationaleKosten
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S5_Aansluitingen.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_5/Aansluitingen
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S4_Gevoeligheidsanalyse.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_4/Gevoeligheidsanalyse
 
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S6_Hoofdindicatoren.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_6/Hoofdindicatoren
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S6_NationaleKosten.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_6/NationaleKosten
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S6_Aansluitingen.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_6/Aansluitingen
-"N:\prog\ObjectVision\%exe%\GeoDmsRun.exe" /L"%log_root%\%SUBFILENAME%_S0_Referentie_StartJaar_S6_Gevoeligheidsanalyse.txt" "%pd_root%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_6/Gevoeligheidsanalyse
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S6_Hoofdindicatoren.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_6/Hoofdindicatoren
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S6_NationaleKosten.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_6/NationaleKosten
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S6_Aansluitingen.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_6/Aansluitingen
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_S0_Referentie_StartJaar_S6_Gevoeligheidsanalyse.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Vergelijking/meerkosten/Strategie_6/Gevoeligheidsanalyse
 
