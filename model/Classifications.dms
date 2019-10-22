@@ -12,25 +12,36 @@
 
 container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 {
-	unit<uint8> BebouwingsComponentAttr: nrofrows = 6
+	unit<uint8> BebouwingsSector: nrofrows = 3
 	{
-		attribute<string> Name:
-		[
-			 'BestaandeWoning'
-			,'NieuwbouwWoning'
-			,'BestaandeUtil'
-			,'NieuwbouwUtil'
-			,'BestaandeGlTb'
-			,'NieuwbouwGlTb'
-		];
+		attribute<string> Name: [ 'Woning', 'Util', 'GlTb'];
+		attribute<bool> isActive := Invoer/SpecifiekeInstellingen/BS_isActive;
+
+//		attribute<string> Code             := string(id(.));
+		attribute<string> Label            := Name, DialogType = "LabelText";
+
+		attribute<bool>   IsGlastuinbouw   : [ false, false,  true ];
+		attribute<bool>   DraagtBTW        : [ true, false, false ];
+		attribute<.>      Warmtewet_BC_rel : [ 0, 1, 3 ]; /// warmtewet prijs voor Nieuwbouw obv bestaande objecten
+
+		attribute<string> NcwRefBase   : ['w', 'u', 't'];
+// REMOVE		attribute<string> NameBestaand := IsBestaand ? Name : '';
+// REMOVE		attribute<string> NameNieuw    := IsBestaand ? '' : Name;
+
+		container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+	}
+	unit<uint8> BebouwingsComponent := combine_uint8(Bool, BebouwingsSector)
+	{
+		attribute<string> Name := ( nr_1 ? 'Nieuwbouw' : 'Bestaande')+bebouwingsSector/name[nr_2];
+		attribute<bool> isActive := BebouwingsSector/isActive[nr_2] && (Invoer/SpecifiekeInstellingen/BC_doNieuwbouw || !isNieuwbouw);
 
 		attribute<string> Code             := string(id(.));
 		attribute<string> Label            := Name, DialogType = "LabelText";
 
-		attribute<bool>   IsBestaand       : [ true,  false,  true, false,  true, false ];
-		attribute<bool>   IsGlastuinbouw   : [ false, false, false, false,  true,  true ];
-		attribute<bool>   IsNieuwbouw      := !IsBestaand;
-		attribute<bool>   DraagtBTW        : [ true,  true, false, false, false, false ];
+		attribute<bool>   isBestaand       := not(IsNieuwbouw);
+		attribute<bool>   isGlastuinbouw   := BebouwingsSector/isGlastuinbouw[nr_2];
+		attribute<bool>   isNieuwbouw      := nr_1;
+		attribute<bool>   DraagtBTW        := BebouwingsSector/DraagtBTW[nr_2];
 		attribute<bool>   KanWKO           := not(IsGlastuinbouw);
 		attribute<bool>   Warmtewet        : [ true, false, false, false, false, false ]; // prijsberekening warmte volgens ACM berekening ?
 		attribute<.>      Warmtewet_BC_rel : [ 0, 0, 2, 2, 4, 4 ]; /// warmtewet prijs voor Nieuwbouw obv bestaande objecten
@@ -44,38 +55,31 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<string> entity := 'BebouwingsComponenten/'+ name +'/BebouwingsObject';
 
 		attribute<string> NcwRefBase   : ['bw', 'nw','bu', 'nu','bt', 'nt'];
-// REMOVE		attribute<string> NameBestaand := IsBestaand ? Name : '';
-// REMOVE		attribute<string> NameNieuw    := IsBestaand ? '' : Name;
 
 		container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
 	}
 	
-	unit<uint8> BebouwingsComponentSel := subset(Invoer/SpecifiekeInstellingen/BC_isActive) 
+	unit<uint8> BebouwingsComponentSel := subset(BebouwingsComponent/isActive) 
 	{
-		attribute<string> name := BebouwingsComponentAttr/name [nr_OrgEntity];
-		attribute<string> code := BebouwingsComponentAttr/code [nr_OrgEntity];
-		attribute<string> label:= BebouwingsComponentAttr/label[nr_OrgEntity];
-		attribute<string> BronExpr:= BebouwingsComponentAttr/BronExpr[nr_OrgEntity];
-		attribute<string> NcwRefBase:= BebouwingsComponentAttr/NcwRefBase[nr_OrgEntity];
-		attribute<string> NameBestaand:= IsBestaand ? Name : '';
-		attribute<string> NameNieuw   := IsBestaand ? '' : Name;
+		attribute<string> name := BebouwingsComponent/name [nr_OrgEntity];
+		attribute<string> code := BebouwingsComponent/code [nr_OrgEntity];
+		attribute<string> label:= BebouwingsComponent/label[nr_OrgEntity];
+		attribute<string> BronExpr:= BebouwingsComponent/BronExpr[nr_OrgEntity];
+		attribute<string> NcwRefBase:= BebouwingsComponent/NcwRefBase[nr_OrgEntity];
+//		attribute<string> NameBestaand:= IsBestaand ? Name : '';
+//		attribute<string> NameNieuw   := IsBestaand ? '' : Name;
 		
-		attribute<bool > IsBestaand:= BebouwingsComponentAttr/IsBestaand[nr_OrgEntity];
-		attribute<bool > IsGlastuinbouw:= BebouwingsComponentAttr/IsGlastuinbouw[nr_OrgEntity];
-		attribute<bool > IsNieuwbouw:= BebouwingsComponentAttr/IsNieuwbouw[nr_OrgEntity];
-		attribute<bool > DraagtBTW:= BebouwingsComponentAttr/DraagtBTW[nr_OrgEntity];
-		attribute<bool > KanWKO:= BebouwingsComponentAttr/KanWKO[nr_OrgEntity];
-		attribute<bool > Warmtewet:= BebouwingsComponentAttr/Warmtewet[nr_OrgEntity];
-		attribute<.>      Warmtewet_BC_rel := rlookup(BebouwingsComponentAttr/Warmtewet_BC_rel[nr_OrgEntity], nr_OrgEntity);
+		attribute<bool > IsBestaand:= BebouwingsComponent/IsBestaand[nr_OrgEntity];
+		attribute<bool > IsGlastuinbouw:= BebouwingsComponent/IsGlastuinbouw[nr_OrgEntity];
+		attribute<bool > IsNieuwbouw:= BebouwingsComponent/IsNieuwbouw[nr_OrgEntity];
+		attribute<bool > DraagtBTW:= BebouwingsComponent/DraagtBTW[nr_OrgEntity];
+		attribute<bool > KanWKO:= BebouwingsComponent/KanWKO[nr_OrgEntity];
+		attribute<bool > Warmtewet:= BebouwingsComponent/Warmtewet[nr_OrgEntity];
+		attribute<.>      Warmtewet_BC_rel := rlookup(BebouwingsComponent/Warmtewet_BC_rel[nr_OrgEntity], nr_OrgEntity);
 			
 		container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
 	}
-	unit<uint8> BebouwingsComponent := = all(Invoer/SpecifiekeInstellingen/BC_isActive) ? 'BebouwingsComponentAttr'  : 'BebouwingsComponentSel'
-	{
-		
-	}
-
-	unit<uint8> BtwComponent := subset(BebouwingsComponent/DraagtBTW)
+	unit<uint8> BtwComponent := subset(BebouwingsComponentSel/DraagtBTW)
 	{
 		attribute<string> name := BebouwingsComponent/name[nr_OrgEntity];
 	}
@@ -354,12 +358,9 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	
 	unit<uint8> rekenstap := /rekenstap
 	{
-		attribute<zichtjaar>       zichtjaar_rel := classify(Jaar, zichtjaar/Jaar);
+		attribute<zichtjaar>       zichtjaar_rel := Invoer/SpecifiekeInstellingen/BC_doNieuwbouw ? classify(Jaar, zichtjaar/Jaar) : 0[zichtjaar];
 		
-		attribute<bool>            HasMutations := Jaar > 2010[units/yr_uint16];
-		// bij label en name kun je eigen rekenstappen opgeven. Deze namen moeten overeen komen met:
-		// - namen van subitems van in Invoer/SpecifiekeInstellingen
-		// - 
+		attribute<bool>            HasMutations := zichtjaar/HasMutations[zichtjaar_rel];
 	
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
