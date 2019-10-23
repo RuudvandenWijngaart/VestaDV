@@ -7,9 +7,15 @@
 template Resultaten
 {
 	// begin case parameters
-	parameter<String> RekenstapName: isHidden = "true";
-	parameter<String> ZichtjaarName: isHidden = "true";
+	parameter<String> RekenstapName;
 	// optional case parameter
+
+	parameter<bool> isStap0 := RekenstapName == 'StartJaar';
+	
+	parameter<Classifications/RekenStap> Rekenstap_rel  := rlookup(RekenstapName, Classifications/rekenstap/name);
+	parameter<String> RekenjaarName   := Classifications/rekenjaar/Name[Classifications/RekenStap/rekenjaar_rel          [Rekenstap_rel]];
+	parameter<String> BouwjaarName    := Classifications/Zichtjaar/Name[Classifications/RekenStap/zichtjaar_rel_bebouwing[Rekenstap_rel]];
+	parameter<String> KlimaatjaarName := Classifications/Zichtjaar/Name[Classifications/RekenStap/zichtjaar_rel_klimaat  [Rekenstap_rel]];
 
 	container TussenResultaten      := ='/TussenResultaten/' + RekenstapName				, isHidden = "true";
 	unit<uint32> PlanRegio          := Invoer/SpecifiekeInstellingen/PlanRegio			, isHidden = "true";
@@ -22,39 +28,25 @@ template Resultaten
 	container Voorkeuren            := TussenResultaten/Voorkeuren					, isHidden = "true";
 
 	container Allocatie             := TussenResultaten/AllocatieResultaten			, isHidden = "true";
-	parameter<Classifications/zichtjaar> ZichtJaar_rel  := rlookup(ZichtJaarName, Classifications/zichtjaar/name)	, isHidden = "true";
-	parameter<units/yr_uint16>           ZichtJaar_jaar := Classifications/zichtjaar/jaar[zichtjaar_rel]			, isHidden = "true";
+//	parameter<Classifications/zichtjaar> ZichtJaar_rel  := rlookup(ZichtJaarName, Classifications/zichtjaar/name)	, isHidden = "true";
+//	parameter<units/yr_uint16>           ZichtJaar_jaar := Classifications/zichtjaar/jaar[zichtjaar_rel]			, isHidden = "true";
 
 	container Generate: isHidden = "false"
 	{
-		parameter<String> All := 'Ready',
-			ExplicitSuppliers =
-				"= ';' + AsList('InputOutput/'+SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-				"+ (SpecifiekeInstellingen/Rapportage/Regio/Name != 'NL' ? ';InputOutput/Totaal/GenerateAll': '')"
-				"+ ';' + AsList('MaatregelenRapportage/BestaandeWoning/'+SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-				"+ ';' + AsList('MaatregelenRapportage/NieuwbouwWoning/'+SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-				"+ ';' + AsList('MaatregelenRapportage/BestaandeUtil/'  +SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-				"+ ';' + AsList('MaatregelenRapportage/NieuwbouwUtil/'  +SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-				"+ ';' + AsList('MaatregelenRapportage/BestaandeGlTb/'  +SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-				"+ ';' + AsList('MaatregelenRapportage/NieuwbouwGlTb/'  +SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-	//			"+ ';' + 'AllocExports/GenerateThisToo'" // comment-out if you want to skip all exports
+		parameter<string> ExplicitSupplierList :=
+				AsList('InputOutput/'+SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')
+//				+ (SpecifiekeInstellingen/Rapportage/Regio/Name != 'NL' ? ';InputOutput/Totaal/GenerateAll': '')
+				+ replace(';' + AsList('MaatregelenRapportage/@BC/'+SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';'),'@BC',Classifications/BebouwingsComponent/Name)
+//				+ ';' + 'AllocExports/GenerateThisToo' // comment-out if you want to skip all exports
 			;
+		parameter<String> All := 'Ready', ExplicitSuppliers = "=ExplicitSupplierList";
 	}
 	
 	container GenerateSamenstelling: isHidden = "false"
 	{
-		parameter<String> All := 'Ready',
-			ExplicitSuppliers =
-	//			"= ';' + AsList('InputOutput/'+SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-	//			"+ (SpecifiekeInstellingen/Rapportage/Regio/Name != 'NL' ? ';InputOutput/Totaal/GenerateAll': '')"
-				"= ';' + AsList('MaatregelenRapportage/BestaandeWoning/'+SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-	//			"+ ';' + AsList('MaatregelenRapportage/NieuwbouwWoning/'+SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-				"+ ';' + AsList('MaatregelenRapportage/BestaandeUtil/'  +SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-	//			"+ ';' + AsList('MaatregelenRapportage/NieuwbouwUtil/'  +SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-	//			"+ ';' + AsList('MaatregelenRapportage/BestaandeGlTb/'  +SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-	//			"+ ';' + AsList('MaatregelenRapportage/NieuwbouwGlTb/'  +SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';')"
-	//			"+ ';' + 'AllocExports/GenerateThisToo'" // comment-out if you want to skip all exports
-			;
+		parameter<string> ExplicitSupplierList :=replace(';' + AsList('MaatregelenRapportage/@BC/'+SpecifiekeInstellingen/Rapportage/Regio/Name+'/GenerateAll',';'),'@BC',Classifications/BebouwingsComponentSel/Name);
+		
+		parameter<String> All := 'Ready', ExplicitSuppliers = "= ExplicitSupplierList";
 	}
 	
 	container InputOutput :=
