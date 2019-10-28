@@ -16,4 +16,4 @@ set CUR_SS=%time:~6,2%
 set CUR_MS=%time:~9,2%
 set SUBFILENAME=%CUR_YYYY%%CUR_MM%%CUR_DD%-%CUR_HH%%CUR_NN%%CUR_SS%
 
-"%exe_path%" /L"%log_dir%\%SUBFILENAME%_Statisch.txt" "%prj_dir%\Runs\S0_Referentie.dms" /Resultaten/StartJaar/PlanRegioResults/Statisch
+"%exe_path%" /L"%log_dir%\%SUBFILENAME%_Statisch.txt" "%prj_dir%\Runs\S0_Referentie.dms" /LeidraadResultaten/StartJaar/PlanRegioResults/Statisch
