@@ -54,16 +54,8 @@ container WarmteBronnen
 			attribute<Ratio>   P_cap     :=	makedefined(capfactor[Ratio], MetaData/TypeInfo/Pcap_default[TypeInfo_rel]);
 			
 			attribute<_yr>  Rj_Onderhoud :=	value(MetaData/TypeInfo/JaarKosten[ TypeInfo_rel ], _yr);
-			attribute<Eur_GJ>  K_GJ10    :=	makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/K_GJ10[TypeInfo_rel]);
-			attribute<Eur_GJ>  K_GJ20    :=	makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/K_GJ20[TypeInfo_rel]);
-			attribute<Eur_GJ>  K_GJ30    :=	makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/K_GJ30[TypeInfo_rel]);
-			attribute<Eur_GJ>  K_GJ40    :=	makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/K_GJ40[TypeInfo_rel]);
-			attribute<Eur_GJ>  K_GJ50    :=	makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/K_GJ50[TypeInfo_rel]);
-			attribute<Eur_GJ>  Km_GJ10   :=	makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/Km_GJ10[TypeInfo_rel]);
-			attribute<Eur_GJ>  Km_GJ20   :=	makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/Km_GJ20[TypeInfo_rel]);
-			attribute<Eur_GJ>  Km_GJ30   :=	makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/Km_GJ30[TypeInfo_rel]);
-			attribute<Eur_GJ>  Km_GJ40   :=	makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/Km_GJ40[TypeInfo_rel]);
-			attribute<Eur_GJ>  Km_GJ50   :=	makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/Km_GJ50[TypeInfo_rel]);
+			container K_GJ := for_each_nedv(classifications/RekenStap/name, 'makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/K_GJ/'+classifications/RekenStap/Name+'[TypeInfo_rel])', ., Eur_GJ);
+			container Km_GJ := for_each_nedv(classifications/RekenStap/name, 'makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/Km_GJ/'+classifications/RekenStap/Name+'[TypeInfo_rel])', ., Eur_GJ);
 			attribute<kg_GJ>   CO2_2010  := value(MetaData/TypeInfo/CO2_2010[TypeInfo_rel],KG_GJ);
 			attribute<kg_GJ>   CO2_2020  := value(MetaData/TypeInfo/CO2_2020[TypeInfo_rel],KG_GJ);
 			attribute<kg_GJ>   CO2_2030  := value(MetaData/TypeInfo/CO2_2030[TypeInfo_rel],KG_GJ);
@@ -103,7 +95,9 @@ container WarmteBronnen
 
 		template BronSelectie: IsHidden = "True"
 		{
-			parameter<units/yr_uint16> Jaar;
+			parameter<string> RekenStapName;
+			parameter<classifications/RekenStap> RekenStap_rel := rlookup(RekenStapName, classifications/RekenStap/Name);
+			parameter<units/yr_uint16> Jaar := classifications/RekenStap/jaar[RekenStap_rel];
 			parameter<units/yr_uint16> ZichtJaar := Classifications/ZichtJaar/Jaar[classify(Jaar, Classifications/ZichtJaar/Jaar)];
 			unit<uint32> WarmteBronnen := data;
 
@@ -127,8 +121,8 @@ container WarmteBronnen
 				attribute<Eur_kW>                Ki_kW_max        := WarmteBronnen/Ki_kW_max[nr_OrgEntity];
 				attribute<_yr>                   Rj_Onderhoud     := WarmteBronnen/Rj_Onderhoud[nr_OrgEntity];
 				attribute<MW>                    MWth_max         := WarmteBronnen/MWth_max[nr_OrgEntity];
-				attribute<Eur_GJ>                K_GJ             := = 'WarmteBronnen/K_GJ' +String(ZichtJaar - 2000w)+'[nr_OrgEntity]';
-				attribute<Eur_GJ>                Km_GJ            := = 'WarmteBronnen/Km_GJ'+String(ZichtJaar - 2000w)+'[nr_OrgEntity]';
+				attribute<Eur_GJ>                K_GJ             := = 'WarmteBronnen/K_GJ/' +RekenStapName+'[nr_OrgEntity]';
+				attribute<Eur_GJ>                Km_GJ            := = 'WarmteBronnen/Km_GJ/'+RekenStapName+'[nr_OrgEntity]';
 				attribute<KG_GJ>                 CO2_GJ           := ='WarmteBronnen/CO2_'+string(ZichtJaar)+'[nr_OrgEntity]';
 				attribute<G_GJ>                  NOx_GJ           := ='WarmteBronnen/NOx_'+string(ZichtJaar)+'[nr_OrgEntity]';
 				attribute<G_GJ>                  SO2_GJ           := ='WarmteBronnen/SO2_'+string(ZichtJaar)+'[nr_OrgEntity]';
@@ -166,7 +160,7 @@ container WarmteBronnen
 			}
 		}
 		// Vooralsnog per zichtjaar, zou ook per rekenstap kunnnen.
-		container BronSelecties := for_each_ne(Classifications/Rekenjaar/name, 'BronSelectie('+string(Classifications/RekenJaar/Values)+'[units/yr_uint16])');
+		container BronSelecties := for_each_ne(Classifications/RekenStap/name, 'BronSelectie('+Quote(Classifications/RekenStap/name)+')');
 
 		container linkset
 		{
