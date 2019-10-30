@@ -48,3 +48,4 @@ REM "%exe_path%" /L"%log_dir%\%SUBFILENAME%_Vergelijking_StartJaar_S4_Gevoelighe
 "%exe_path%" /L"%log_dir%\%SUBFILENAME%_Vergelijking_StartJaar_S6_Aansluitingen.txt" "%prj_dir%\CombineerRuns\Vergelijking.dms" /model/meerkosten/Strategie_6/Aansluitingen
 REM "%exe_path%" /L"%log_dir%\%SUBFILENAME%_Vergelijking_StartJaar_S6_Gevoeligheidsanalyse.txt" "%prj_dir%\CombineerRuns\Vergelijking.dms" /model/meerkosten/Strategie_6/Gevoeligheidsanalyse
 
+pause Scenarios
