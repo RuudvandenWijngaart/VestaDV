@@ -6,7 +6,7 @@ REM Bij nogmaals runnen worden bestanden gewoon overschreven
 
 Call path/set.bat
 
-"%exe_path%" /L"%log_dir%\Statisch.txt" "%prj_dir%\Runs\S0_Referentie.dms" /LeidraadResultaten/StartJaar/PlanRegioResults/Statisch/export_csv/result /LeidraadResultaten/Zichtjaar/PlanRegioResults/Hoofdindicatoren/export_csv/result /LeidraadResultaten/Zichtjaar/NLResults/Hoofdindicatoren/export_csv/result /LeidraadResultaten/Zichtjaar/PlanRegioResults/NationaleKosten/export_csv/result /LeidraadResultaten/Zichtjaar/NLResults/NationaleKosten/export_csv/result /LeidraadResultaten/Zichtjaar/PlanRegioResults/Aansluitingen/export_csv/result /LeidraadResultaten/Zichtjaar/NLResults/Aansluitingen/export_csv/result
+"%exe_path%" /L"%log_dir%\S0_StatischAll.txt" "%prj_dir%\Runs\S0_Referentie.dms" /LeidraadResultaten/StartJaar/PlanRegioResults/Statisch/export_csv/result /LeidraadResultaten/Zichtjaar/PlanRegioResults/Hoofdindicatoren/export_csv/result /LeidraadResultaten/Zichtjaar/NLResults/Hoofdindicatoren/export_csv/result /LeidraadResultaten/Zichtjaar/PlanRegioResults/NationaleKosten/export_csv/result /LeidraadResultaten/Zichtjaar/NLResults/NationaleKosten/export_csv/result /LeidraadResultaten/Zichtjaar/PlanRegioResults/Aansluitingen/export_csv/result /LeidraadResultaten/Zichtjaar/NLResults/Aansluitingen/export_csv/result
 
 set ITEM1=/LeidraadResultaten/Zichtjaar/PlanRegioResults/Hoofdindicatoren/export_csv/result /LeidraadResultaten/Zichtjaar/NLResults/Hoofdindicatoren/export_csv/result
 set ITEM2=/LeidraadResultaten/Zichtjaar/PlanRegioResults/NationaleKosten/export_csv/result /LeidraadResultaten/Zichtjaar/NLResults/NationaleKosten/export_csv/result
@@ -29,4 +29,3 @@ set ITEMS=%ITEM1% %ITEM2% %ITEM3%
 "%exe_path%" /L"%log_dir%\S4_hwp_GG_R1_2030_Hoofdindicatoren.txt" "%prj_dir%\Runs\S4_hwp_GG.dms" %ITEMS%
 "%exe_path%" /L"%log_dir%\S5_HR_GG_R1_2030_Hoofdindicatoren.txt" "%prj_dir%\Runs\S5_HR_GG.dms" %ITEMS%
 
-pause Runs

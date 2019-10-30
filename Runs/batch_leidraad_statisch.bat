@@ -7,5 +7,3 @@ REM Bij nogmaals runnen worden bestanden gewoon overschreven
 Call path/set.bat
 
 "%exe_path%" /L"%log_dir%\S0_Statisch.txt" "%prj_dir%\Runs\S0_Referentie.dms" /LeidraadResultaten/StartJaar/PlanRegioResults/Statisch/export_csv/result
-
-pause S0_Statistisch
