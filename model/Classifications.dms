@@ -531,7 +531,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 // =========  Classificaties voor Energielabels
 	unit<uint8> schillabel: nrofrows = 7
 	{
-		attribute<string> Name  : ['GAplus', 'GB', 'GC', 'GD', 'GE', 'GF', 'GG'];
+		attribute<string> Name  : ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
 		attribute<string> Label : DialogType = "LabelText",  ['GA+', 'GB', 'GC', 'GD', 'GE', 'GF', 'GG'];
 		
 		attribute<uint32> Color : DialogType = "BrushColor",
@@ -547,6 +547,146 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<uint32> SymbColor := Color, DialogType = "SymbolColor";
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+	unit<uint32> ProductType: nrofrows = 3
+	{
+		attribute<string> Name  : ['RV', 'K', 'TW'];
+		attribute<string> Label := Name, DialogType = "LabelText";
+	}
+	unit<uint32> ServiceNiveau : nrofrows = 2
+	{
+		attribute<string> Name  : ['b', 'p'];
+		attribute<string> Label : ['basis', 'piek'], DialogType = "LabelText";
+	}
+	unit<uint32> Product := combine(ProductType, ServiceNiveau) {
+		attribute<string> Name := ProductType/Name[nr_1] + ServiceNiveau/Name[nr_2];
+		attribute<string> Label:= ProductType/Label[nr_1] + '.' + ServiceNiveau/Label[nr_2], DialogType = "LabelText";
+	}
+	unit<uint32> AfgifteSysteem
+	{
+		attribute<string> Name : [ 'geen', 'kachel', 'RAS', 'LTAS' ];
+		attribute<string> Label:= Name, DialogType = "LabelText";
+	}
+	unit<uint32> Input : nrofrows = 7
+	{
+		attribute<string> Name : ['e', 'zon', 'wind', 'gas', 'H2', 'kolen', 'pellets'];
+		
+		attribute<string> Label := Name, DialogType = "LabelText";
+	}
+	
+	// te lezen van .csv files
+	unit<uint32> Installatie_StamTabel: StorageName = "%projDir%/installaties/StamTabel.csv", StorageType = "gdal2.vect"
+	{
+		attribute<string> Name;
+		attribute<string> RVb;
+		attribute<string> RVp;
+		attribute<string> TWb;
+		attribute<string> TWp;
+		attribute<string> Kb;
+		attribute<string> Kp;
+	}
+	
+	// te lezen van .csv files
+	unit<uint32> WarmteInstallatie := subset(Float64(Installatie_StamTabel/RVb) > 0.0) {
+		attribute<string> Name := Installatie_StamTabel/Name[nr_OrgEntity];
+	}
+	
+	// te lezen van .csv files
+	unit<uint32> WarmteInstallatiePerSchil_imp: StorageName = "%projDir%/installaties/PerSchil.csv", StorageType = "gdal2.vect"
+	{		
+		// pk
+		attribute<string> WarmteInstallatie_name;
+		attribute<string> schillabel_name;
+		
+		// kosten attr
+		attribute<string> Ki_vast;
+		attribute<string> Ki_cap;
+		attribute<string> Ki_opp;
+		
+		attribute<string> R_OH;
+		attribute<string> R_Adm;
+		
+		attribute<string> AS_Name;
+	}
+	unit<uint32> WarmteInstallatiePerSchil := WarmteInstallatiePerSchil_imp
+	{		
+		// kosten attr
+		attribute<EUR>    Ki_vast := WarmteInstallatiePerSchil_imp/Ki_vast[ EUR ];
+		attribute<EUR_kW> Ki_cap  := WarmteInstallatiePerSchil_imp/Ki_cap [ EUR_kW ];
+		attribute<EUR_m2> Ki_opp  := WarmteInstallatiePerSchil_imp/Ki_opp [ EUR_m2 ];
+		
+		attribute<_yr>    R_OH    := WarmteInstallatiePerSchil_imp/Ki_opp [ _yr ];
+		attribute<_yr>    R_Adm   := WarmteInstallatiePerSchil_imp/Ki_opp [ _yr ];
+		
+		// relatie met andere entiteiten
+		attribute<WarmteInstallatie> WarmteInstallatie_rel := rlookup(WarmteInstallatie_name, WarmteInstallatie/Name);
+		attribute<schillabel> schillabel_rel := rlookup(schillabel_name, schillabel/Name);
+		attribute<AfgifteSysteem> AfgifteSysteem_rel := rlookup(AS_Name, AfgifteSysteem/Name);
+	}
+	// te lezen van .csv files
+	unit<uint32> Performance_imp: StorageName = "%projDir%/installaties/Performance.csv", StorageType = "gdal2.vect"
+	{
+		// pk
+		attribute<string> Installatie_name;
+		attribute<string> schillabel_name; // bijvoorbeeld A
+		attribute<string> ProductType_name; // bijvoorbeeld: RV
+		attribute<string> Input_name; // bijvoorbeel: e
+		
+		// attributes
+		attribute<string> P_vol; // aandeel in volume van basislevering (rest is pieklevering, evt door andere installatie)
+		attribute<string> P_cap; // aandeel in capaciteit van basislevering 
+		attribute<string> SPF_b; // SPF van basislevering
+		attribute<string> SPF_p; // SPF van pieklevering
+		
+	}
+	unit<uint32> Performance := Performance_imp
+	{
+		// relatie met andere entiteiten
+		attribute<WarmteInstallatie> WarmteInstallatie_rel := rlookup(Installatie_name, WarmteInstallatie/Name);
+		attribute<schillabel> schillabel_rel   := rlookup(schillabel_name, schillabel/Name);
+		attribute<ProductType> ProductType_rel := rlookup(ProductType_Name, ProductType/Name);
+		attribute<Input>       Input_rel       := rlookup(Input_Name, Input/Name);
+		
+		// attributes
+		attribute<Float64> P_vol := Performance_imp/P_vol[Float64]; // aandeel in volume van basislevering (rest is pieklevering, evt door andere installatie)
+		attribute<Float64> P_cap := Performance_imp/P_cap[Float64]; // aandeel in capaciteit van basislevering 
+		attribute<Float64> SPF_b := Performance_imp/SPF_b[Float64]; // SPF van basislevering
+		attribute<Float64> SPF_p := Performance_imp/SPF_p[Float64]; // SPF van pieklevering
+	}
+	// te lezen van .csv files
+	unit<uint32> DakPerformance_imp: StorageName = "%projDir%/installaties/DakPerformance.csv", StorageType = "gdal2.vect"
+	{		
+		// pk
+		attribute<string> Installatie_name;
+		
+		// kosten attr
+		attribute<string> Ki_vast;
+		attribute<string> Ki_cap;
+//		attribute<string> Ki_opp;
+		
+		attribute<string> R_OH;
+		attribute<string> R_Adm;
+		
+		attribute<string> eEff_cap;
+		attribute<string> twEff_cap;
+	}
+	unit<uint32> DakPerformance := DakPerformance_imp
+	{
+		// relatie met andere entiteiten
+		attribute<Installatie_StamTabel> Installatie_rel := rlookup(Installatie_name, Installatie_StamTabel/Name);
+		
+		// attributes
+		attribute<EUR>    Ki_vast := DakPerformance_imp/Ki_vast[ EUR ];
+		attribute<EUR_kW> Ki_cap  := DakPerformance_imp/Ki_cap [ EUR_kW ];
+//		attribute<EUR_m2> Ki_opp  := DakPerformance_imp/Ki_opp [ EUR_m2 ];
+		
+		attribute<_yr>    R_OH    := DakPerformance_imp/R_OH [ _yr ];
+		attribute<_yr>    R_Adm   := DakPerformance_imp/R_Adm [ _yr ];
+		
+		unit<Float64> GJ_Yr_kW := GJ_Yr / kW;
+		
+		attribute<GJ_Yr_kw> eEff_cap := DakPerformance_imp/eEff_cap[GJ_Yr_kw];
+		attribute<GJ_Yr_kW> twEff_cap  := DakPerformance_imp/twEff_cap[GJ_Yr_kW];
 	}
 	
 	unit<uint8> energielabel: nrofrows = 10
@@ -697,6 +837,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<string> Name:            [ 'Cmin', 'Bpls', 'Verder', 'mWKK', 'ZonB', 'ZonPV', 'eWPlw', 'eWPww', 'hWP', 'EWV', 'LTAS', 'MTnet', 'Inpand', 'Aansl', 'Verl', 'OenM', 'LTnet', 'Infra' ];
 	}
 
+	unit<uint8> Installatie: StorageName = "";
 	unit<uint8> GebouwOptie : nrofrows = 5
 	{
 		attribute<string> Name:            [ 'gas', 'mWKK', 'eWP', 'HWP', 'EWV' ];
