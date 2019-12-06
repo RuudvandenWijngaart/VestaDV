@@ -1,4 +1,5 @@
 //////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
 //                                                                                      //
 //                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
 //                                                                                      //
@@ -551,7 +552,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	}
 	unit<uint32> ProductType: nrofrows = 3
 	{
-		attribute<string> Name  : ['RV', 'K', 'TW'];
+		attribute<string> Name  : ['RV', 'TW', 'K'];
 		attribute<string> Label := Name, DialogType = "LabelText";
 	}
 	unit<uint32> ServiceNiveau : nrofrows = 2
@@ -620,6 +621,8 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<EUR_m2> Ki_opp_max_w  := Installatie_StamTabel/Ki_opp_max_w [EUR_m2];
 		attribute<EUR_m2> Ki_opp_min_u  := Installatie_StamTabel/Ki_opp_min_u [EUR_m2];
 		attribute<EUR_m2> Ki_opp_max_u  := Installatie_StamTabel/Ki_opp_max_u [EUR_m2];
+	
+		attribute<leerCurves> LeerCurve_rel := MakeDefined(rlookup(LeerCurve, leerCurves/name), rlookup(Name, LeerCurves/name), rlookup('Default', LeerCurves/name));
 		
 		attribute<_yr>    R_OH    := Installatie_StamTabel/R_OH [_yr];
 		attribute<_yr>    R_Adm   := Installatie_StamTabel/R_Adm [_yr];
@@ -659,6 +662,9 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<Float64> P_cap := Performance_imp/P_cap[Float64]; // aandeel in capaciteit van basislevering 
 		attribute<Float64> SPF_b := Performance_imp/SPF_b[Float64]; // SPF van basislevering
 		attribute<Float64> SPF_p := Performance_imp/SPF_p[Float64]; // SPF van pieklevering
+		
+		attribute<GJ_Yr_kw> eEffect_cap := DakPerformance_imp/eEffect_cap[GJ_Yr_kw];
+		attribute<GJ_GJ>    eEffect_vol := DakPerformance_imp/eEffect_vol[GJ_GJ];
 	}
 	// te lezen van .csv files
 	unit<uint32> DakPerformance_imp: StorageName = "%projDir%/installaties/DakPerformance.csv", StorageType = "gdal2.vect"
@@ -682,8 +688,8 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		
 		unit<Float64> GJ_Yr_kW := GJ_Yr / kW;
 		
-		attribute<GJ_Yr_kw> eEff_cap := DakPerformance_imp/eEff_cap[GJ_Yr_kw];
-		attribute<GJ_Yr_kW> twEff_cap  := DakPerformance_imp/twEff_cap[GJ_Yr_kW];
+		attribute<GJ_Yr_kw> eEffect_cap := DakPerformance_imp/eEffect_cap[GJ_Yr_kw];
+		attribute<GJ_Yr_kW> twEffect_cap  := DakPerformance_imp/twEffect_cap[GJ_Yr_kW];
 	}
 	
 	unit<uint8> energielabel: nrofrows = 10
@@ -818,15 +824,31 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	}
 
 // =========  Classificaties overig	
-	unit<uint8> LeerCurves : nrofrows = 18
+	unit<uint8> LeerCurves : nrofrows = 19
 	{
-		attribute<string> Name:            [ 'Cmin', 'Bpls', 'Verder', 'mWKK', 'ZonB', 'ZonPV', 'eWPlw', 'eWPww', 'hWP', 'EWV', 'LTAS', 'MTnet', 'Inpand', 'Aansl', 'Verl', 'OenM', 'LTnet', 'Infra' ];
+		attribute<string> Name: [ 
+			'Cmin', 'Bpls', 'Verder', 'mWKK', 'ZonB', 'ZonPV', 'eWPlw', 'eWPww', 'hWP', 'EWV', 
+			'LTAS', 'MTnet', 'Inpand', 'Aansl', 'Verl', 'OenM', 'LTnet', 'Infra', 'Default' 
+		];
 	}
 
 	unit<uint8> GebouwOptie : nrofrows = 5
 	{
-		attribute<string> Name:            [ 'gas', 'mWKK', 'eWP', 'HWP', 'EWV' ];
-		attribute<bool>   kanGebiedsOptie: [ true,   false,  false, false, false ];
+		attribute<string> Name:            [ 'HRw', 'HRu', 'eWPw', 'eWPu', 'HWP' ];
+		attribute<bool>   kanGebiedsOptie: [ true,   true, false,  false, false, false ];
+		attribute<Installatie> RVb:= union_data(., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
+		attribute<Installatie> RVp:= union_data(., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/HR);
+		attribute<Installatie> TWb:= union_data(., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
+		attribute<Installatie> TWp:= union_data(., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
+		attribute<Installatie> Kb := union_data(., Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen,    Installatie/V/eWP_lw,  Installatie/V/geen);
+		attribute<Installatie> Kp := union_data(., Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen,    Installatie/V/eWP_lw,  Installatie/V/geen);
+		
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+		
+		container PerProduct := for_each_nedv(Name
+			,	replace('union_data(Product, '+AsItemList(Product/Name+'[V/@GO]')+')', '@GO', Name)
+			,	Product, Installatie
+		);
 	}
 	unit<uint8> GebiedsOptie : nrofrows = 12 // volgorde niet hier instellen maar in SpecifiekeInstellingen/Voorkeuren/BaseLine/WarmteOpties
 	{
