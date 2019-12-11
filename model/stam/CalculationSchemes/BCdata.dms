@@ -37,22 +37,33 @@ template BCdata
 
 	container union := =IsNieuwbouw ? 'CalculationSchemes/BebouwingsOperaties/union(StartingStateComponent/BebouwingsObject, BebouwingsObjectZonderNieuwbouw)' : '..';
 	
-	unit<uint32> BebouwingsObject := =IsNieuwbouw ? 'union/result' : 'BebouwingsObjectZonderNieuwbouw';
+	unit<uint32>  BebouwingsObject := =IsNieuwbouw ? 'union/result' : 'BebouwingsObjectZonderNieuwbouw';
 	unit<uint32>  PrevObject           := StartingStateComponent/BebouwingsObject;
 	unit<uint8>   BebouwingsTypeDomein := BebouwingsObject/BebouwingsTypeDomein;
 	unit<uint32>  ModelObject          := EnergieVraagModellen/ModelObject;
 	unit<float64> ModelUnit            := EnergieVraagModellen/ModelUnit;
-	unit<uint32>  WkoCluster           := StateVoorAllocatie/Wko/Cluster;
 
 	attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel (BebouwingsObject) := BebouwingsObject/buurt_rel;
 
 
 	attribute<ModelObject>                 Model_rel        (BebouwingsObject) := rlookup(BebouwingsObject/ModelObjectKey, EnergieVraagModellen/ModelObjectKey);
 	attribute<PrevObject>                  StartingState_rel(BebouwingsObject) := rlookup(BebouwingsObject/code, PrevObject/code);
-	attribute<Classifications/WarmteOptie> WarmteAllocatie_Org(BebouwingsObject) := StartingStateComponent/WarmteAllocatie[StartingState_rel];
-	attribute<Eur_yr>                      KoudeAllocatie   (BebouwingsObject) := MakeDefined(StartingStateComponent/KoudeAllocatie[StartingState_rel], 0[Eur_yr]);
-	attribute<Eur_yr>                      Om_Comfort       (BebouwingsObject) := MakeDefined(StartingStateComponent/Om_Comfort[StartingState_rel], 0[Eur_yr]);
-	attribute<WkoCluster>                  WkoCluster_rel   (BebouwingsObject) := StartingStateComponent/WkoCluster_rel[StartingState_rel];	
+	
+	container beginState {
+	
+		unit<uint32>  AfnameGebied         := StateVoorAllocatie/AfnameGebied;
+		attribute<Classifications/SchilLabel>  SchilLabel_rel  (BebouwingsObject) := StartingStateComponent/SchilLabel_rel [StartingState_rel];
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel (BebouwingsObject) := StartingStateComponent/GebouwOptie_rel[StartingState_rel];
+		
+		container PerProductAsTable := for_each_nedv(Classifications/Product/Name
+		,	'StartingStateComponent/PerProductAsTable/'+Classifications/Product/Name+'[StartingState_rel]'
+		,	BebouwingsObject, Classifications/Installatie
+		);
+		attribute<AfnameGebied>  AfnameGebied_rel (BebouwingsObject):= StartingStateComponent/AfnameGebied_rel[StartingState_rel];	
+	}
+//	attribute<Classifications/WarmteOptie> WarmteAllocatie_Org(BebouwingsObject) := StartingStateComponent/WarmteAllocatie[StartingState_rel];
+//	attribute<Eur_yr>                      KoudeAllocatie   (BebouwingsObject) := MakeDefined(StartingStateComponent/KoudeAllocatie[StartingState_rel], 0[Eur_yr]);
+//	attribute<Eur_yr>                      Om_Comfort       (BebouwingsObject) := MakeDefined(StartingStateComponent/Om_Comfort[StartingState_rel], 0[Eur_yr]);
 
 	unit<uint32> RuimtelijkeVraagComponent := BebouwingsObject
 	{

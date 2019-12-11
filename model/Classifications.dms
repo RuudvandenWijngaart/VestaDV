@@ -696,16 +696,8 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	{
 		attribute<string> Name  : ['AeWP', 'EWV', 'Aplus', 'LabelB', 'LabelC', 'LabelD', 'LabelE', 'LabelF', 'LabelG', 'BeWP'];
 		attribute<string> Label : DialogType = "LabelText",  ['AeWP', 'EWV', 'A+', 'B', 'C', 'D', 'E', 'F', 'G', 'BeWP'];
-		
-		attribute<WarmteOptie> WarmteOptie_rel := union_data(., 
-			WarmteOptie/V/eWP, WarmteOptie/V/eWV, 
-			WarmteOptie/V/gas, WarmteOptie/V/gas,
-			WarmteOptie/V/gas, WarmteOptie/V/gas,
-			WarmteOptie/V/gas, WarmteOptie/V/gas,
-			WarmteOptie/V/gas, WarmteOptie/V/eWP
-		);
-		
-		attribute<WarmteOptie> schillabel_rel := union_data(., 
+				
+		attribute<SchilLabel> schillabel_rel := union_data(., 
 			schillabel/V/A, schillabel/V/A, 
 			schillabel/V/A, schillabel/V/B,
 			schillabel/V/C, schillabel/V/D,
@@ -836,19 +828,27 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	{
 		attribute<string> Name:            [ 'HRw', 'HRu', 'eWPw', 'eWPu', 'HWP' ];
 		attribute<bool>   kanGebiedsOptie: [ true,   true, false,  false, false, false ];
-		attribute<Installatie> RVb:= union_data(., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
-		attribute<Installatie> RVp:= union_data(., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/HR);
-		attribute<Installatie> TWb:= union_data(., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
-		attribute<Installatie> TWp:= union_data(., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
-		attribute<Installatie> Kb := union_data(., Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen,    Installatie/V/eWP_lw,  Installatie/V/geen);
-		attribute<Installatie> Kp := union_data(., Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen,    Installatie/V/eWP_lw,  Installatie/V/geen);
 		
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+		attribute<WarmteOptie> WarmteOptie_rel := rlookup(name, WarmteOptie/name);
 		
-		container PerProduct := for_each_nedv(Name
-			,	replace('union_data(Product, '+AsItemList(Product/Name+'[V/@GO]')+')', '@GO', Name)
+		container PerProduct {
+			attribute<Installatie> RVb(..):= union_data(.., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
+			attribute<Installatie> RVp(..):= union_data(.., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/HR);
+			attribute<Installatie> TWb(..):= union_data(.., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
+			attribute<Installatie> TWp(..):= union_data(.., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
+			attribute<Installatie> Kb (..):= union_data(.., Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen,    Installatie/V/eWP_lw,  Installatie/V/geen);
+			attribute<Installatie> Kp (..):= union_data(.., Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen,    Installatie/V/eWP_lw,  Installatie/V/geen);
+		}
+		
+		container PerOptie := for_each_nedv(Name
+			,	replace('union_data(Product, '+AsItemList('PerProduct/'+Product/Name+'[V/@GO]')+')', '@GO', Name)
 			,	Product, Installatie
 		);
+		unit<uint32> xProduct := combine(GebouwOptie, Product)
+		{
+			attribute<Installatie> Installatie_rel := ='union_data(., '+AsItemList('PerOptie/'+Name)+')';
+		}
 	}
 	unit<uint8> GebiedsOptie : nrofrows = 12 // volgorde niet hier instellen maar in SpecifiekeInstellingen/Voorkeuren/BaseLine/WarmteOpties
 	{
