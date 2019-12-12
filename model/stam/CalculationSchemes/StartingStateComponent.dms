@@ -26,15 +26,40 @@ template StartingStateComponent
 
 	container EnergieLabel
 	{
-		attribute<Classifications/EnergieLabel> ModelValue (BebouwingsObject) := EnergieVraagModellen/Efficiency/EnergieLabel[ Model_rel];			 
-		attribute<Classifications/EnergieLabel> CurrValue  (BebouwingsObject) :=
-			= BebouwingsComponent_rel == Classifications/BebouwingsComponent/V/BestaandeWoning
-			?	'MakeDefined(BebouwingsObject/EnergieLabelData_rel, ModelValue)'
-			:	'ModelValue'
-		;
+		
+		attribute<Classifications/EnergieLabel> ModelValue(BebouwingsObject) := EnergieVraagModellen/Efficiency/EnergieLabel[ Model_rel];
+		attribute<Classifications/EnergieLabel> DataValu(BebouwingsObject) := 
+			=(BebouwingsComponent_rel == Classifications/BebouwingsComponent/V/BestaandeWoning)
+			? 'BebouwingsObject/EnergieLabelData_rel'
+			: 'ModelValue';
+			
+		attribute<Classifications/EnergieLabel> CalcValue(BebouwingsObject) :=
+			=(BebouwingsComponent_rel == Classifications/BebouwingsComponent/V/BestaandeWoning) 
+			?	'value((float64(ModelValue) * (max_elem(BebouwingsObject/Gebied/n, float64(BebouwingsObject/EnergieLabelData_rel/Totaal))'
+					'- float64(BebouwingsObject/EnergieLabelData_rel/Totaal))'
+					'+ float64(BebouwingsObject/EnergieLabelData_rel/TotWeight))'
+				'/ max_elem(BebouwingsObject/Gebied/n, float64(BebouwingsObject/EnergieLabelData_rel/Totaal)) + 0.5,Classifications/EnergieLabel)'
+			: 'ModelValue';
+		attribute<uint8>                        code      (BebouwingsObject) := ModelValue * uint8(#Classifications/EnergieLabel) + CalcValue;
+
+		attribute<Classifications/EnergieLabel> CurrValue (BebouwingsObject) := MakeDefined(rjoin(code, Classifications/LabelBasedOnModelAndObservedValue/code, Classifications/LabelBasedOnModelAndObservedValue/CurrLabel), ModelValue);
+		attribute<Classifications/LabelSprong>  CurrSprong(BebouwingsObject) := rjoin(code, Classifications/LabelBasedOnModelAndObservedValue/code, Classifications/LabelBasedOnModelAndObservedValue/CurrSprong);
+		
+		attribute<Bool>                       IsChanged  (BebouwingsObject) := isdefined(currsprong);
+//		attribute<Classifications/SchilLabel> ModelValue (BebouwingsObject) := Classifications/EnergieLabel/SchilLabel_rel[ModelValue];
+//		attribute<Classifications/SchilLabel> CurrValue  (BebouwingsObject) := Classifications/EnergieLabel/SchilLabel_rel[ModelValue];
+		
+//		attribute<bool> IsSlechter  (BebouwingsObject) := DataValueEL > ModelValueEL;
+//		attribute<bool>	IsOnbLabel  (BebouwingsObject) := !isdefined(DataValue);
+		attribute<bool>	HasEWP      (BebouwingsObject) := Classifications/EnergieLabel/HasEWP[CurrValue];
+		attribute<bool>	HasEWV      (BebouwingsObject) := Classifications/EnergieLabel/HasEWV[CurrValue];
 	}
 	attribute<Classifications/SchilLabel>  SchilLabel_rel  (BebouwingsObject) := Classifications/EnergieLabel/SchilLabel_rel[ EnergieLabel/CurrValue ];
-	attribute<Classifications/GebouwOptie> GebouwOptie_rel (BebouwingsObject) := const(EnergieVraagModellen/StartOptie_rel, BebouwingsObject);
+	attribute<Classifications/GebouwOptie> GebouwOptie_rel (BebouwingsObject) := 
+		EnergieLabel/HasEWP ? Classifications/GebouwOptie/V/eWPw :
+		EnergieLabel/HasEWV ? value(0/0, Classifications/GebouwOptie) :
+		const(EnergieVraagModellen/StartOptie_rel, BebouwingsObject);		
+	attribute<Classifications/SchilSprong>  SchilSprong_rel(BebouwingsObject) := Classifications/LabelSprong/SchilSprong_rel[ EnergieLabel/CurrSprong];
 	
 	unit<uint32> PerProduct := combine(BebouwingsObject, Classifications/Product)
 	{
