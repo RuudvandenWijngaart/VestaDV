@@ -573,9 +573,9 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
-	unit<uint32> Input : nrofrows = 9
+	unit<uint32> Input : nrofrows = 10
 	{
-		attribute<string> Name : ['e', 'zon', 'wind', 'gas', 'H2', 'kolen', 'pellets', 'LT', 'MT'];
+		attribute<string> Name : ['e', 'zon', 'wind', 'gas', 'H2', 'kolen', 'pellets', 'LT', 'MT', 'biomassa'];
 		
 		attribute<string> Label := Name, DialogType = "LabelText";
 		
@@ -586,25 +586,16 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	unit<uint32> Installatie_StamTabel: StorageName = "%projDir%/installaties/StamTabel.csv", StorageType = "gdal2.vect"
 	{
 		// PrimaryKey
-		
-		attribute<string> Name;
-		
-/* REMOVE: Kan dit weg ?
-		attribute<string> RVb;
-		attribute<string> RVp;
-		attribute<string> TWb;
-		attribute<string> TWp;
-		attribute<string> Kb;
-		attribute<string> Kp;
-*/		
-		
-		attribute<string> R_OH;
-		attribute<string> R_Adm;
+		attribute<string> Name;		
 	}	
 	unit<uint32> Installatie := Installatie_StamTabel
 	,	IntegrityCheck = "#(unique(Installatie_StamTabel/name)) == #(Installatie_StamTabel)"
 	{
 		attribute<string> Label := name, DialogType = "LabelText";
+		
+		attribute<Float64> OpDak := Float64(Installatie_StamTabel/Dak);
+		container KanLeveren := for_each_nedv(Product/Name, 'Float64(Installatie_StamTabel/'+Product/Name+')', ., Ratio);
+		attribute<Bool> GebouwOptieBepaald := ='or('+AsItemList('KanLeveren/'+Product/Name+' > 0.0')+')';
 		
 		// kosten attr
 		attribute<EUR>    Ki_vast_min_w := Installatie_StamTabel/Ki_vast_min_w [EUR];
@@ -627,7 +618,9 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<_yr>    R_OH    := Installatie_StamTabel/R_OH [_yr];
 		attribute<_yr>    R_Adm   := Installatie_StamTabel/R_Adm [_yr];
 		
-		attribute<bool>   KanGebiedsoptie := (name == 'HR');
+		attribute<Ratio>  AT30    := Installatie_StamTabel/AT30 [Ratio];
+		attribute<Ratio>  AT20    := Installatie_StamTabel/AT20 [Ratio];
+		attribute<Ratio>  AT15    := 1.0 - AT20 - AT30;
 		
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
@@ -651,11 +644,11 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		
 		// relatie met andere entiteiten
 		attribute<Installatie>  Installatie_rel := rlookup(Installatie_name, Installatie/Name), IntegrityCheck="IsDefined(this)";
-		attribute<schillabel>   schillabel_rel  := rlookup(schillabel_name,  schillabel/Name ), IntegrityCheck="IsDefined(this)";
-		attribute<ProductType>  ProductType_rel := rlookup(ProductType_Name, ProductType/Name), IntegrityCheck="IsDefined(this)";
+		attribute<schillabel>   schillabel_rel  := rlookup(schillabel_name,  schillabel/Name ), IntegrityCheck="IsDefined(this) || schillabel_name == 'x'";
+		attribute<ProductType>  ProductType_rel := rlookup(ProductType_Name, ProductType/Name), IntegrityCheck="IsDefined(this) || ProductType_Name == 'e' || ProductType_Name == 'geen'";
 		
 		attribute<AfgifteSysteem> AfgifteSysteem_rel := rlookup(AS_Name, AfgifteSysteem/Name), IntegrityCheck = "IsDefined(this)";
-		attribute<Input>          Input_rel          := rlookup(Input_Name, Input/Name),       IntegrityCheck = "IsDefined(this)";
+		attribute<Input>          Input_rel          := rlookup(Input_Name, Input/Name),       IntegrityCheck = "IsDefined(this) || Input_name == 'geen'";
 		
 		// attributes
 		attribute<Float64> P_vol := Performance_imp/P_vol[Float64]; // aandeel in volume van basislevering (rest is pieklevering, evt door andere installatie)
@@ -663,35 +656,11 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<Float64> SPF_b := Performance_imp/SPF_b[Float64]; // SPF van basislevering
 		attribute<Float64> SPF_p := Performance_imp/SPF_p[Float64]; // SPF van pieklevering
 		
-		attribute<GJ_Yr_kw> eEffect_cap := DakPerformance_imp/eEffect_cap[GJ_Yr_kw];
-		attribute<GJ_GJ>    eEffect_vol := DakPerformance_imp/eEffect_vol[GJ_GJ];
+		attribute<GJ_Yr_kw> eEffect_cap := Performance_imp/eEffect_cap[GJ_Yr_kw];
+		attribute<GJ_GJ>    eEffect_vol := Performance_imp/eEffect_vol[GJ_GJ];
+		attribute<kW_m2>    Pdak_opp    := Performance_imp/Pdak_opp   [kW_m2];
 	}
-	// te lezen van .csv files
-	unit<uint32> DakPerformance_imp: StorageName = "%projDir%/installaties/DakPerformance.csv", StorageType = "gdal2.vect"
-	{		
-		// pk
-		attribute<string> Installatie_name;
-	}
-	unit<uint32> DakPerformance := DakPerformance_imp
-	,	IntegrityCheck = "#(unique(DakPerformance_imp/Installatie_name)) == #(DakPerformance_imp)"
-	{
-		// relatie met andere entiteiten
-		attribute<Installatie_StamTabel> Installatie_rel := rlookup(Installatie_name, Installatie_StamTabel/Name), IntegrityCheck="IsDefined(this)";
-		
-		// attributes
-		attribute<EUR>    Ki_vast := DakPerformance_imp/Ki_vast[ EUR ];
-		attribute<EUR_kW> Ki_cap  := DakPerformance_imp/Ki_cap [ EUR_kW ];
-//		attribute<EUR_m2> Ki_opp  := DakPerformance_imp/Ki_opp [ EUR_m2 ];
-		
-		attribute<_yr>    R_OH    := DakPerformance_imp/R_OH [ _yr ];
-		attribute<_yr>    R_Adm   := DakPerformance_imp/R_Adm [ _yr ];
-		
-		unit<Float64> GJ_Yr_kW := GJ_Yr / kW;
-		
-		attribute<GJ_Yr_kw> eEffect_cap := DakPerformance_imp/eEffect_cap[GJ_Yr_kw];
-		attribute<GJ_Yr_kW> twEffect_cap  := DakPerformance_imp/twEffect_cap[GJ_Yr_kW];
-	}
-	
+
 	unit<uint8> energielabel: nrofrows = 10
 	{
 		attribute<string> Name  : ['AeWP', 'EWV', 'Aplus', 'LabelB', 'LabelC', 'LabelD', 'LabelE', 'LabelF', 'LabelG', 'BeWP'];
@@ -849,21 +818,21 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		];
 	}
 
-	unit<uint8> GebouwOptie : nrofrows = 5
+	unit<uint8> GebouwOptie : nrofrows = 7
 	{
-		attribute<string> Name:            [ 'HRw', 'HRu', 'eWPw', 'eWPu', 'HWP' ];
-		attribute<bool>   kanGebiedsOptie: [ true,   true, false,  false, false, false ];
+		attribute<string> Name:            [ 'VRw','VRu','HRw','HRu', 'eWPw', 'eWPu', 'HWP' ];
+		attribute<bool>   kanGebiedsOptie: [ true, true, true,  true, false,  false, false, false ];
 		
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 		attribute<WarmteOptie> WarmteOptie_rel := rlookup(name, WarmteOptie/name);
 		
 		container PerProduct {
-			attribute<Installatie> RVb(..):= union_data(.., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
-			attribute<Installatie> RVp(..):= union_data(.., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/HR);
-			attribute<Installatie> TWb(..):= union_data(.., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
-			attribute<Installatie> TWp(..):= union_data(.., Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
-			attribute<Installatie> Kb (..):= union_data(.., Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen,    Installatie/V/eWP_lw,  Installatie/V/geen);
-			attribute<Installatie> Kp (..):= union_data(.., Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen,    Installatie/V/eWP_lw,  Installatie/V/geen);
+			attribute<Installatie> RVb(..):= union_data(.., Installatie/V/VR,   Installatie/V/VR,   Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
+			attribute<Installatie> RVp(..):= union_data(.., Installatie/V/VR,   Installatie/V/VR,   Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/HR);
+			attribute<Installatie> TWb(..):= union_data(.., Installatie/V/VR,   Installatie/V/VR,   Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
+			attribute<Installatie> TWp(..):= union_data(.., Installatie/V/VR,   Installatie/V/VR,   Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
+			attribute<Installatie> Kb (..):= union_data(.., Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen,    Installatie/V/eWP_lw,  Installatie/V/geen);
+			attribute<Installatie> Kp (..):= union_data(.., Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen,    Installatie/V/eWP_lw,  Installatie/V/geen);
 		}
 		
 		container PerOptie := for_each_nedv(Name
