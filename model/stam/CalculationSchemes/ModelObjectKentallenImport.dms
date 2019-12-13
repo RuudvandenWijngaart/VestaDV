@@ -1,0 +1,48 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+template ModelObjectKentallenImport 
+{
+	// Begin case parameters
+	parameter<string> FileName;
+	parameter<string> ModelType_str_name;
+
+	unit<uint8> model_type;
+	unit<uint8> bouwjaarindeling;
+	// end case parameters
+
+// Ki_SXY_[min/max]_[asl/opp]
+
+//REMOVE unit<uint32> TableColumns := SubItem_PropValues(table, 'name'), isHidden = "True";
+
+	unit<uint32> Table:	StorageName     = "='%EnergieDataProjDir%/'+ FileName", StorageType = "gdal.vect", StorageReadOnly = "True";
+
+	unit<uint32> Results := Table
+	{
+		attribute<string> ModelType_str := ='table/'+ModelType_str_name;
+		attribute<string> Label         := trim(ModelType_str) +  ', ' + trim(table/BouwJaar_str), DialogType = "LabelText";
+		
+		attribute<bouwjaarindeling> BouwJaar_rel    := rlookup(trim(Table/BouwJaar_str ), bouwjaarindeling/excel_code);
+		attribute<model_type>       ModelType_rel   := rlookup(trim(ModelType_str), model_type/Excel_code);
+		attribute<uint8>            ModelObjectKey  := ModelType_rel *  uint8(NrOfRows(bouwjaarindeling)) + BouwJaar_rel;
+		
+		attribute<classifications/SchilLabel> SchilLabel_rel := rlookup(Table/Default_Label, Classifications/SchilLabel/Name);
+
+		container V_RV_asl := for_each_nedv(Classifications/SchilLabel/Name, 'table/Vrv_'+Classifications/SchilLabel/Name+'_asl[GJ_yr_asl]', ., GJ_yr_asl), Descr = "per schillabel: functionele warmtevraag voor ruimteverwarming per aansluiting, onafhankelijk van oppervlak";
+		container V_RV_opp := for_each_nedv(Classifications/SchilLabel/Name, 'table/Vrv_'+Classifications/SchilLabel/Name+'_opp[GJ_yr_m2 ]', ., GJ_yr_m2 ), Descr = "per schillabel: functionele warmtevraag voor ruimteverwarming per vierkante meter, het variabele deel";
+		
+		attribute<GJ_yr_asl> V_WW_asl  := table/Vww_asl  [GJ_yr_asl];
+		attribute<GJ_yr_asl> V_EA_asl  := table/Ve_asl   [GJ_yr_asl];
+		attribute<GJ_yr_m2>  V_K_opp   := table/Vk_opp   [GJ_yr_m2 ];
+		attribute<GJ_yr_m2>	 V_Vent_opp:= table/Vvent_opp[GJ_yr_m2 ], Descr = "variabele extra ventilatievraag bij woningen vanaf schillabel B";
+		
+		container Ki_min_asl := for_each_nedv(Classifications/SchilSprong/Name, 'table/Ki_'+Classifications/SchilSprong/Name+'_min_asl[EUR_asl]', ., EUR_asl);
+		container Ki_max_asl := for_each_nedv(Classifications/SchilSprong/Name, 'table/Ki_'+Classifications/SchilSprong/Name+'_max_asl[EUR_asl]', ., EUR_asl);
+		
+		container Ki_min_opp := for_each_nedv(Classifications/SchilSprong/Name, 'table/Ki_'+Classifications/SchilSprong/Name+'_min_opp[EUR_m2]', ., EUR_m2);
+		container Ki_max_opp := for_each_nedv(Classifications/SchilSprong/Name, 'table/Ki_'+Classifications/SchilSprong/Name+'_max_opp[EUR_m2]', ., EUR_m2);
+	}
+}
