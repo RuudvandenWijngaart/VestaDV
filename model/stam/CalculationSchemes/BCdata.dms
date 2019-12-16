@@ -87,30 +87,31 @@ template BCdata
 		container Functioneel
 		{
 			container DragerSpecifiekeOpties := SpecifiekeInstellingen/RuimtelijkeVraag/Drager;
-			attribute<m2>	     var_f  	(..)	 :=	(RuimtelijkeVraagComponent/nrOppunits <=  50[m2] ? 50[m2]  :
-																	 RuimtelijkeVraagComponent/nrOppunits >= 200[m2] ? 200[m2] :
-																	 RuimtelijkeVraagComponent/nrOppunits);
 			
+			attribute<Ratio>	Klimaateffect (..)	:=	KlimaatFactorMap[gridm100_rel];
 			
-			attribute<Ratio>	Klimaateffect			(..)	:=	KlimaatFactorMap[gridm100_rel];
-			attribute<GJ_yr_m2>	Koude_m2				(..)	:=	EnergieVraagModellen/functioneel/V_K_opp[Model_rel] * ( 1.0 + 3.66*(1.0 - Klimaateffect));
-			attribute<GJ_yr>	WarmWater				(..)	:=	nrModelUnits * EnergieVraagModellen/functioneel/WarmWater				[Model_rel] * DragerSpecifiekeOpties/WarmWater;
-			attribute<GJ_yr>	Koude					(..)	:=	var_f * Koude_m2[Model_rel] * DragerSpecifiekeOpties/Koude;
-			attribute<GJ_yr>	ElektrischeApparatuur	(..)	:=	nrModelUnits * EnergieVraagModellen/functioneel/ElektrischeApparatuur	[Model_rel] * DragerSpecifiekeOpties/ElektrischeApparatuur;
-			attribute<GJ_yr>	RuimteVerwarming_vast	(..)	:=	nrModelUnits 
-						* EnergieVraagModellen/functioneel/RuimteVerwarming_vast	[Model_rel]
-						* DragerSpecifiekeOpties/RuimteVerwarming 
-						* Klimaateffect;
-			attribute<GJ_yr>	RuimteVerwarming_var	(..)	:=	
-				var_f  
-				* EnergieVraagModellen/functioneel/RuimteVerwarming_var	[Model_rel] 
-				* DragerSpecifiekeOpties/RuimteVerwarming 
-				* Klimaateffect
-			;
-				
-			attribute<GJ_yr>	PompEnergie				(..)	:=	var_f   * EnergieVraagModellen/functioneel/Pompenergie_m2			[Model_rel] * DragerSpecifiekeOpties/RuimteVerwarming;
-			attribute<GJ_yr>	RuimteVerwarming		(..)	:=	RuimteVerwarming_vast + RuimteVerwarming_var;
-			attribute<GJ_yr>	Ventilatie				(..)	:=	var_f   * EnergieVraagModellen/functioneel/V_Ventilatie			[Model_rel];
+			attribute<GJ_yr>	WW(..) := (nrAansluitingen * ModelObject/V_WW_asl [Model_rel] + Oppervlakte * ModelObject/V_WW_opp [Model_rel])
+						* DragerSpecifiekeOpties/WarmWater;
+						
+			attribute<GJ_yr>	K (..) := Oppervlakte * ModelObject/V_K_opp[Model_rel] 
+						* DragerSpecifiekeOpties/Koude
+						* ( 1.0 + 3.66*(1.0 - Klimaateffect));
+			
+			attribute<GJ_yr>	EA(..) := (nrAansluitingen * ModelObject/V_EA_asl [Model_rel] + Oppervlakte * ModelObject/V_EA_opp [Model_rel])
+						* DragerSpecifiekeOpties/ElektrischeApparatuur;
+			
+			container RV := for_each_nedv(Classifications/SchilLabel/Name
+			,	replace(
+					'(nrAansluitingen * ModelObject/V_RV_asl/@SL@[Model_rel] + Oppervlakte * ModelObject/V_RV_opp/@SL@[Model_rel])'
+						'* DragerSpecifiekeOpties/RuimteVerwarming'
+						'* Klimaateffect'
+				,'@SL@', Classifications/SchilLabel/Name)
+			,	.., GJ_Yr);
+			
+			attribute<GJ_Yr> CurrRV(..) := ='merge(SchilLabel_rel, GJ_Yr, '+AsItemList('RV/'+Classifications/SchilLabel/Name)+')';
+			
+			attribute<GJ_yr>	PE  (..)	:=	Oppervlakte * ModelObject/V_PE_opp[Model_rel] * DragerSpecifiekeOpties/RuimteVerwarming;
+			attribute<GJ_yr>	Vent(..)	:=	Oppervlakte * ModelObject/V_Vent_opp[Model_rel];
 		}
 	}
 
