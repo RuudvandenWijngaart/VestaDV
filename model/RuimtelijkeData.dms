@@ -118,7 +118,6 @@ container RuimtelijkeData: Using = "Units;Geography;model", FreeData = "False"
 	#include <Bebouwing.dms>
 	container EnergieLabel
 	{
-		parameter<string> SQoute := '\''', IsHidden = "True";
 		// Voor koppeling aan de BAG
 		unit<uint32> nummeraanduiding := RuimtelijkeData/BAG/import/nummeraanduiding;
 		unit<uint32> vbo              := RuimtelijkeData/BAG/import/vbo;
@@ -129,30 +128,26 @@ container RuimtelijkeData: Using = "Units;Geography;model", FreeData = "False"
 		,	StorageReadOnly = "True"
 		,	url             = "%SourceDataProjDir%/vraag/wonen/20190101_inputlabels_rvo_FvdM.txt"
 		{
-			attribute<string> HLT_unquoted := trim(replace(HLT,SQoute,''));
+			attribute<string> HLT_unquoted := trim(replace(HLT,'''',''));
 			attribute<string> adres_key    :=
-				replace(Postcode,SQoute,'') + '_' + replace(HNR,SQoute,'') + 
+				replace(Postcode,'''','') + '_' + replace(HNR,'''','') + 
 				(strlen(HLT_unquoted) > 0 
 					? '_' + HLT_unquoted
 					: ''
 				);
+			unit<uint32> UniqueLabel := unique(label), DisableStorage="True" { attribute<uint32> Count := pcount(rlookup(label, values)); }
+			
 			//order of replace matters!
-			attribute<Classifications/energielabel> energielabel_rel := rlookup(replace(replace(replace(replace(replace(replace(label,SQoute,''),'A++++','A+'),'A+++','A+'),'A++','A+'),'A+','A'), 'A','A+'), Classifications/energielabel/Label);
-			attribute<uint32>                       datum_numeriek   := uint32(replace(DATUM,SQoute,''));
-			attribute<voorkomend>                   voorkomend_rel   := rlookup(label, voorkomend/Values);
+			attribute<Classifications/SchilLabel>   schillabel_rel   := rlookup(replace(label, '+',''), Classifications/SchilLabel/Name), IntegrityCheck = "IsDefined(this)";
+			attribute<uint32>                       datum_numeriek   := uint32(replace(DATUM,'''',''));
 		}
 
 		unit<uint32> data := unique(src/adres_key)
 		{
-			attribute<string>                       nummeraanduiding_id := nummeraanduiding/identificatie[rlookup(values, nummeraanduiding/adres_key)];
-			attribute<string>                       vbo_id              := rjoin(nummeraanduiding_id, vbo/nummeraanduiding_id, vbo/identificatie), FreeData = "False";
-			attribute<uint32>                       datum_laatste       := max(src/datum_numeriek, rlookup(src/adres_key, values));
-			attribute<Classifications/energielabel> energielabel_rel    := rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/energielabel_rel), FreeData = "False";
-		}
-
-		unit<uint32> voorkomend := unique(src/label), isHidden = "True"
-		{
-			attribute<uint32> aantal := pcount(src/voorkomend_rel);
+			attribute<string>                     nummeraanduiding_id := nummeraanduiding/identificatie[rlookup(values, nummeraanduiding/adres_key)];
+			attribute<string>                     vbo_id              := rjoin(nummeraanduiding_id, vbo/nummeraanduiding_id, vbo/identificatie), FreeData = "False";
+			attribute<uint32>                     datum_laatste       := max(src/datum_numeriek, rlookup(src/adres_key, values));
+			attribute<Classifications/SchilLabel> SchilLabel_rel      := rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/schillabel_rel), FreeData = "False";
 		}
 
 		unit<uint32> opgelegd

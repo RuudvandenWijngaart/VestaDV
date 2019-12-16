@@ -13,7 +13,8 @@ template BCdata
 	parameter<bool>   HasResterendFactors;
 
 	container ResterendFactorMaps;
-	container EnergieVraagModellen;
+	unit<uint32>  ModelObject;
+	attribute<bool> SchilSprong_sel(Classifications/SchilSprong);
 	container LocatieSpecifiekeOpties;
 	container VraagKentallen;
 	container StartingStateComponent;
@@ -40,14 +41,12 @@ template BCdata
 	unit<uint32>  BebouwingsObject := =IsNieuwbouw ? 'union/result' : 'BebouwingsObjectZonderNieuwbouw';
 	unit<uint32>  PrevObject           := StartingStateComponent/BebouwingsObject;
 	unit<uint8>   BebouwingsTypeDomein := BebouwingsObject/BebouwingsTypeDomein;
-	unit<uint32>  ModelObject          := EnergieVraagModellen/ModelObject;
-	unit<float64> ModelUnit            := EnergieVraagModellen/ModelUnit;
 
 	attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel (BebouwingsObject) := BebouwingsObject/buurt_rel;
 
 
-	attribute<ModelObject>                 Model_rel        (BebouwingsObject) := rlookup(BebouwingsObject/ModelObjectKey, EnergieVraagModellen/ModelObjectKey);
-	attribute<PrevObject>                  StartingState_rel(BebouwingsObject) := rlookup(BebouwingsObject/code, PrevObject/code);
+	attribute<ModelObject> Model_rel        (BebouwingsObject) := rlookup(BebouwingsObject/ModelObjectKey, ModelObject/ModelObjectKey);
+	attribute<PrevObject>  StartingState_rel(BebouwingsObject) := rlookup(BebouwingsObject/code, PrevObject/code);
 	
 	container beginState {
 	
@@ -61,9 +60,6 @@ template BCdata
 		);
 		attribute<AfnameGebied>  AfnameGebied_rel (BebouwingsObject):= StartingStateComponent/AfnameGebied_rel[StartingState_rel];	
 	}
-//	attribute<Classifications/WarmteOptie> WarmteAllocatie_Org(BebouwingsObject) := StartingStateComponent/WarmteAllocatie[StartingState_rel];
-//	attribute<Eur_yr>                      KoudeAllocatie   (BebouwingsObject) := MakeDefined(StartingStateComponent/KoudeAllocatie[StartingState_rel], 0[Eur_yr]);
-//	attribute<Eur_yr>                      Om_Comfort       (BebouwingsObject) := MakeDefined(StartingStateComponent/Om_Comfort[StartingState_rel], 0[Eur_yr]);
 
 	unit<uint32> RuimtelijkeVraagComponent := BebouwingsObject
 	{
@@ -75,19 +71,18 @@ template BCdata
 
 		attribute<Ratio>      ResterendFactor := ResterendFactorBase * float64(IsDefined(PlanRegio_rel));
 		attribute<nrAansl>    nrAansluitingen := ResterendFactor * nrAansluitingen_i;
-//		attribute<nrWoningen> nrWoonunits     := ResterendFactor * nrWoonUnits_i;
 		attribute<m2>         Oppervlakte     := ResterendFactor * Oppervlakte_i;
-//REMOVE attribute<ModelUnit>  nrModelUnits    := ResterendFactor * NrJoinedUnits * 1.0;
 		
-		attribute<nrWoningen>   nrWoonUnits_per_PlanRegio (Invoer/SpecifiekeInstellingen/PlanRegio)     := sum(nrWoonunits, planregio_rel)[nrWoningen];
+		attribute<nrAansl>   nrAansluitingen_per_PlanRegio (Invoer/SpecifiekeInstellingen/PlanRegio) := sum(nrAansluitingen, planregio_rel);
 
 		container AansluitCapaciteit
 		{
-			attribute<kW> RV             (..) := nrAansluitingen * EnergieVraagModellen/AansluitCapaciteit/RV_asl[Model_rel] + Oppervlakte * EnergieVraagModellen/AansluitCapaciteit/RV_opp[Model_rel];
-			attribute<kW> WW             (..) := nrAansluitingen * EnergieVraagModellen/AansluitCapaciteit/WW_asl[Model_rel] + Oppervlakte * EnergieVraagModellen/AansluitCapaciteit/WW_opp[Model_rel];
-			attribute<kW> Warmte         (..) := NrModelUnits * EnergieVraagModellen/AansluitCapaciteit/Warmte[Model_rel];
-			attribute<kW> eWP            (..) := max_elem(RV, WW);
-			attribute<kW> Elektriciteit  (..) := NrModelUnits * EnergieVraagModellen/AansluitCapaciteit/Elektriciteit[Model_rel];
+			attribute<kW> RV    (..) := nrAansluitingen * ModelObject/ASW_RV_asl[Model_rel] + Oppervlakte * ModelObject/ASW_RV_opp[Model_rel];
+			attribute<kW> WW    (..) := nrAansluitingen * ModelObject/ASW_WW_asl[Model_rel] + Oppervlakte * ModelObject/ASW_WW_opp[Model_rel];
+			attribute<kW> Warmte(..) := RV + WW;
+			attribute<kW> eWP   (..) := max_elem(RV, WW);
+			attribute<kW> EZ    (..) := nrAansluitingen * ModelObject/ASW_EZ_asl[Model_rel] + Oppervlakte * ModelObject/ASW_EZ_opp[Model_rel];
+			attribute<kW> EM    (..) := nrAansluitingen * ModelObject/ASW_EM_asl[Model_rel] + Oppervlakte * ModelObject/ASW_EM_opp[Model_rel];
 		}
 		container Functioneel
 		{
@@ -125,8 +120,6 @@ template BCdata
 		attribute<bool> Never  (BebouwingsObject) := const(false, BebouwingsObject);
 	}
 
-	unit<float64> Eur_ModelUnit := Eur / ModelUnit;
-	
 	attribute<BebouwingsTypeDomein> BebouwingsType (BebouwingsObject) := RuimtelijkeVraagComponent/BebouwingsType;
 
 	container EIA_Opties := ='SpecifiekeInstellingen/Beleid/EIA/E_'+NcwRefBase;
@@ -198,13 +191,9 @@ template BCdata
 									Schuiven/KostenMax,
 									BCname,
 									BebouwingsTypeDomein);
-	container EnergieLabel
-	{
-		attribute<Classifications/EnergieLabel> LastValue    (BebouwingsObject) := MakeDefined(StartingStateComponent/EnergieLabel/CurrValue[StartingState_rel], EnergieVraagModellen/Efficiency/EnergieLabel[Model_rel]);
-		attribute<Classifications/EnergieLabel> CurrValue    (BebouwingsObject) := Sprongen/NaarEnergieLabel;
-		attribute<bool>                         WasChanged   (BebouwingsObject) := StartingStateComponent/EnergieLabel/IsChanged[StartingState_rel];
-		attribute<bool>                         IsChangedNow (BebouwingsObject) := LastValue != CurrValue;
-		attribute<bool>                         IsChanged    (BebouwingsObject) := WasChanged || IsChangedNow;
+	unit<uint8> SchilSprong_set := subset(SchilSprong_sel) {
+		attribute<Classifications/SchilSprong> SchilSprong_rel := nr_OrgEntity;
+		attribute<string> Name := Classifications/SchilSprong/name[SchilSprong_rel];
 	}
 	container SchilLabel
 	{
@@ -447,7 +436,7 @@ template BCdata
 		container deelnemers
 		{
 			attribute<nrAansl>   NrAansluitingen    (BebouwingsObject) := Aandeel/WarmteVraag * RuimtelijkeVraagComponent/nrAansluitingen ;
-			attribute<ModelUnit> NrModelUnits       (BebouwingsObject) := Aandeel/WarmteVraag * RuimtelijkeVraagComponent/NrModelUnits; // @@@ Let op GlasTuinbouw alleen areaal warmte glastuinbouw
+			attribute<m2>        Oppervlakte        (BebouwingsObject) := Aandeel/WarmteVraag * RuimtelijkeVraagComponent/Opervlakte;
 			attribute<kW>        AansluitCapaciteit (BebouwingsObject) := Aandeel/WarmteVraag * RuimtelijkeVraagComponent/AansluitCapaciteit/Warmte;
 			attribute<GJ_yr>     Verbruik           (BebouwingsObject) := Aandeel/WarmteVraag * DragerOpties/Warmte/Warmte;
 			attribute<GJ_yr>     Verbruik_RV        (BebouwingsObject) := Aandeel/WarmteVraag * DragerOpties/RuimteVerwarming/Warmte;
