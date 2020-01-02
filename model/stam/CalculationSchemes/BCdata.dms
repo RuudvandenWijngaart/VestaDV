@@ -126,6 +126,51 @@ template BCdata
 	container EIA_Opties := ='SpecifiekeInstellingen/Beleid/EIA/E_'+NcwRefBase;
 	container EEA_Opties := SpecifiekeInstellingen/Beleid/EEA/Kosten/Basis;
 
+	container VerbruiksOpties {
+	
+		unit<uint8> SchilSprong_set := subset(SchilSprong_sel) {
+			attribute<Classifications/SchilSprong> SchilSprong_rel := nr_OrgEntity;
+			attribute<string> Name := Classifications/SchilSprong/name[SchilSprong_rel];
+			attribute<Classifications/SchilLabel> Naar_rel := Classifications/SchilSprong/Naar_rel[SchilSprong_rel];
+			
+			attribute<string> LeerCurveName := Classifications/SchilLabel/LeerCurveName[Naar_rel];
+			
+			container Ki_asl := for_each_nedv(Name
+			,	replace('(ModelObject/Ki_min_asl/@SS@ * Schuiven/KostenMin + ModelObject/Ki_max_asl/@SS@ * Schuiven/KostenMax) * Leercurves/'+LeerCurveName+'/Curve', '@SS@', Name)
+			,	ModelObject, EUR_asl);
+			
+			container Ki_opp := for_each_nedv(Name
+			,	replace('(ModelObject/Ki_min_opp/@SS@ * Schuiven/KostenMin + ModelObject/Ki_max_opp/@SS@ * Schuiven/KostenMax) * Leercurves/'+LeerCurveName+'/Curve', '@SS@', Name)
+			,	ModelObject, EUR_m2);
+		}
+		unit<uint8> SchilSprongOrIdle_set := union_unit_uint8(Classifications/SchilLabel, SchilSprong_set) {
+			attribute<Classifications/SchilLabel> Van_rel  := union_data(., ID(Classifications/SchilLabel), Classifications/SchilSprong/Van_rel [SchilSprong_set/nr_OrgEntity]);
+			attribute<Classifications/SchilLabel> Naar_rel := union_data(., ID(Classifications/SchilLabel), Classifications/SchilSprong/Naar_rel[SchilSprong_set/nr_OrgEntity]);
+			
+			attribute<string> Name := union_data(., 'S'+repeat(Classifications/SchilLabel/name,2), SchilSprong_set/name);
+			
+			container Ki_asl := for_each_nedv(Name
+			,	union_data(., const('const(0[EUR_asl], ModelObject)', Classifications/SchilLabel), 'SchilSprong_set/Ki_asl/'+SchilSprong_set/name)
+			,	ModelObject, EUR_asl);
+			
+			container Ki_opp := for_each_nedv(Name
+			,	union_data(., const('const(0[EUR_m2 ], ModelObject)', Classifications/SchilLabel), 'SchilSprong_set/Ki_opp/'+SchilSprong_set/name)
+			,	ModelObject, EUR_m2);
+		}
+		
+		unit<uint16> Optie_xtab := Combine_uint16(SchilSprongOrIdle_set, Classifications/GebouwOptie)
+		{
+			attribute<bool> Allowed := Classifications/GebouwOptie/MinSchilLabel_rel[nr_2] >= SchilSprongOrIdle_set/Naar_rel[nr_1];
+		}
+		unit<uint8> Optie_set := subset_uint8(optie_xtab/Allowed)
+		{
+			attribute<SchilSprongOrIdle_set> SchilSprongOrIdle_set_rel := optie_xtab/nr_1[nr_OrgEntity];
+			attribute<Classifications/SchilLabel> Van_rel    := SchilSprongOrIdle_set/Van_rel[optie_xtab/nr_1][nr_OrgEntity];
+			attribute<Classifications/SchilLabel> Naar_rel   := SchilSprongOrIdle_set/Naar_rel[optie_xtab/nr_1][nr_OrgEntity];
+			attribute<Classifications/GebouwOptie> Optie_rel := optie_xtab/nr_2[nr_OrgEntity];
+			attribute<string> Name := SchilSprongOrIdle_set/Name[SchilSprongOrIdle_set_rel] + '_' +Classifications/GebouwOptie/Name[Optie_rel];
+		}
+	}
 	container OpwekkingsOpties
 	{
 		container bereidheid
@@ -192,10 +237,6 @@ template BCdata
 									Schuiven/KostenMax,
 									BCname,
 									BebouwingsTypeDomein);
-	unit<uint8> SchilSprong_set := subset(SchilSprong_sel) {
-		attribute<Classifications/SchilSprong> SchilSprong_rel := nr_OrgEntity;
-		attribute<string> Name := Classifications/SchilSprong/name[SchilSprong_rel];
-	}
 	container SchilLabel
 	{
 		attribute<Classifications/SchilLabel> LastValue    (BebouwingsObject) := StartingStateComponent/SchilLabel_rel[StartingState_rel];
