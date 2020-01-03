@@ -13,8 +13,9 @@ template Waterstof
 	parameter<Classifications/GebiedsOptie> Optie;
 	// end case parameters
 
-	unit<uint32> PlanRegio := Invoer/SpecifiekeInstellingen/PlanRegio;
-
+	unit<uint32> PlanRegio    :=	Invoer/SpecifiekeInstellingen/PlanRegio;
+	unit<uint8>  Prijzen_elec :=	Prijzen/Elektriciteit/Staffel;
+	
 	container Emissie
 	{
 		parameter<kg_GJ> CO2_GJb := 0[kg_GJ];
@@ -24,14 +25,50 @@ template Waterstof
 		parameter<g_GJ>  TS_GJb  := 0[g_GJ];
 	}
 	
+	container BestaandeWoningData :=	WaterstofData(BebouwingsComponenten/BestaandeWoning, Optie);
+	container NieuwbouwWoningData :=	WaterstofData(BebouwingsComponenten/NieuwbouwWoning, Optie);
+	container BestaandeUtilData   :=	WaterstofData(BebouwingsComponenten/BestaandeUtil,   Optie);
+	container NieuwbouwUtilData   :=	WaterstofData(BebouwingsComponenten/NieuwbouwUtil,   Optie);
+	
 	container KostenBaten := CalculationSchemes/KostenBaten(BeginStatus/Bebouwing, invoer/Energieprijzen);
 
 	container Vraag
 	{
-		attribute<gj_yr>	V_Warmte       (PlanRegio) :=	KostenBaten/WarmteVraag/deelnemers_RV + KostenBaten/WarmteVraag/deelnemers_WW;
-		attribute<gj_yr>	WaterstofVraag (PlanRegio) :=	( KostenBaten/WarmteVraag/deelnemers_RV / Kengetallen/H2kentallen/Eff_H2_RV
-															+ KostenBaten/WarmteVraag/deelnemers_WW / Kengetallen/H2kentallen/Eff_H2_WW);
-		attribute<nraansl>	Aansluitingen  (PlanRegio) :=	KostenBaten/WarmteVraag/nrAansluitingen;
+		attribute<gj_yr>	V_Warmte       (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/V_Warmte
+			+ NieuwbouwWoningData/PerPlanRegio/V_Warmte
+			+ BestaandeUtilData/PerPlanRegio/V_Warmte
+			+ NieuwbouwUtilData/PerPlanRegio/V_Warmte;
+		attribute<gj_yr>	WaterstofVraag (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/V_Waterstof
+			+ NieuwbouwWoningData/PerPlanRegio/V_Waterstof
+			+ BestaandeUtilData/PerPlanRegio/V_Waterstof
+			+ NieuwbouwUtilData/PerPlanRegio/V_Waterstof;
+		attribute<nraansl>	Aansluitingen  (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/Aansluitingen
+			+ NieuwbouwWoningData/PerPlanRegio/Aansluitingen
+			+ BestaandeUtilData/PerPlanRegio/Aansluitingen
+			+ NieuwbouwUtilData/PerPlanRegio/Aansluitingen;
+		attribute<eur_yr>	Kj_id_elek  (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/Kj_id_elek
+			+ NieuwbouwWoningData/PerPlanRegio/Kj_id_elek
+			+ BestaandeUtilData/PerPlanRegio/Kj_id_elek
+			+ NieuwbouwUtilData/PerPlanRegio/Kj_id_elek;
+		attribute<eur_yr>	Km_id_elek  (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/Km_id_elek
+			+ NieuwbouwWoningData/PerPlanRegio/Km_id_elek
+			+ BestaandeUtilData/PerPlanRegio/Km_id_elek
+			+ NieuwbouwUtilData/PerPlanRegio/Km_id_elek;
+		attribute<eur_yr>	Kj_id_elek_EH  (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/Kj_id_elek_EH
+			+ NieuwbouwWoningData/PerPlanRegio/Kj_id_elek_EH
+			+ BestaandeUtilData/PerPlanRegio/Kj_id_elek_EH
+			+ NieuwbouwUtilData/PerPlanRegio/Kj_id_elek_EH;
+		attribute<eur_yr>	Kj_id_elek_CO2  (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/Kj_id_elek_CO2
+			+ NieuwbouwWoningData/PerPlanRegio/Kj_id_elek_CO2
+			+ BestaandeUtilData/PerPlanRegio/Kj_id_elek_CO2
+			+ NieuwbouwUtilData/PerPlanRegio/Kj_id_elek_CO2;
 	}	
 	container Kosten
 	{
@@ -73,7 +110,13 @@ template Waterstof
 		}
 		container id			//INPANDIG
 		{			
-			attribute<Eur>		Ki_id           (PlanRegio) :=	Kengetallen/H2kentallen/K_brander * vraag/Aansluitingen;
+			attribute<Eur>		Ki_id_WP        (PlanRegio) :=
+				  BestaandeWoningData/PerPlanRegio/Ki_id_WP
+				+ NieuwbouwWoningData/PerPlanRegio/Ki_id_WP
+				+ BestaandeUtilData/PerPlanRegio/Ki_id_WP
+				+ NieuwbouwUtilData/PerPlanRegio/Ki_id_WP;
+			attribute<Eur>		Ki_id_brander   (PlanRegio) :=	Kengetallen/H2kentallen/K_brander * vraag/Aansluitingen;	
+			attribute<Eur>		Ki_id           (PlanRegio) :=	Ki_id_brander + Ki_id_WP;
 			attribute<Eur_yr>	Kji_id          (PlanRegio) :=	Ki_id * NCW/id28/AnnualisationFactor;
 			attribute<Eur_yr>	Kmi_id          (PlanRegio) :=	Ki_id * NCW/mr28/AnnualisationFactor;
 			attribute<Eur_yr>	Kj_id_oh        (PlanRegio) :=	Leercurves/OenM/Curve * Kengetallen/H2kentallen/R_oh_inpandig * Ki_id;
@@ -127,7 +170,7 @@ template Waterstof
 	{
 		container BebouwingMutatie :=
 			for_each_ne(Classifications/BebouwingsComponent/Name
-				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name+', Classifications/GebiedsOptie/V/Waterstof, .../InGebruik)'
+				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name+', Optie, .../InGebruik)'
 			);
 		container Bebouwing :=
 			for_each_ne(Classifications/BebouwingsComponent/Name
