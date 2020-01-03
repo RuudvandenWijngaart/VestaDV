@@ -547,6 +547,25 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
+	
+	unit<uint8> DoelLabel := unique(SchilSprong/Naar_rel)
+	{
+		attribute<schillabel> SchilLabel_rel := values;
+		attribute<string> Name := SchilLabel/Name[SchilLabel_rel];
+		
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);		
+	}
+/* REMOVE	
+	unit<uint8> DoelLabelOrIdle := union(DoelLabel, void)
+	{
+		attribute<string> Name := union_data(., DoelLabel/Name, 'geen');
+		attribute<schillabel> SchilLabel_rel := union_data(., DoelLabel/Name, (0/0)[schillabel]);
+		
+		attribute<uint32> Color := schillabel/Color[SchilLabel_rel],DialogType = "BrushColor";
+		
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+*/	
 	unit<uint32> ProductType: nrofrows = 3
 	{
 		attribute<string> Name  : ['RV', 'TW', 'K'];
@@ -595,10 +614,10 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<Bool> GebouwOptieBepaald := ='or('+AsItemList('KanLeveren/'+Product/Name+' > 0.0')+')';
 		
 		// kosten attr
-		attribute<EUR>    Ki_vast_min_w := Installatie_StamTabel/Ki_vast_min_w [EUR];
-		attribute<EUR>    Ki_vast_max_w := Installatie_StamTabel/Ki_vast_max_w [EUR];
-		attribute<EUR>    Ki_vast_min_u := Installatie_StamTabel/Ki_vast_min_u [EUR];
-		attribute<EUR>    Ki_vast_max_u := Installatie_StamTabel/Ki_vast_max_u [EUR];
+		attribute<EUR_asl> Ki_asl_min_w := Installatie_StamTabel/Ki_asl_min_w [EUR_asl];
+		attribute<EUR_asl> Ki_asl_max_w := Installatie_StamTabel/Ki_asl_max_w [EUR_asl];
+		attribute<EUR_asl> Ki_asl_min_u := Installatie_StamTabel/Ki_asl_min_u [EUR_asl];
+		attribute<EUR_asl> Ki_asl_max_u := Installatie_StamTabel/Ki_asl_max_u [EUR_asl];
 		
 		attribute<EUR_kW> Ki_cap_min_w  := Installatie_StamTabel/Ki_cap_min_w [EUR_kW];
 		attribute<EUR_kW> Ki_cap_max_w  := Installatie_StamTabel/Ki_cap_max_w [EUR_kW];
@@ -691,6 +710,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
+	unit<uint32> SchilSprongCode := combine(SchilLabel, SchilLabel);
 	
 	unit<uint8> SchilSprongOrg: nrofrows = 6
 	{
@@ -729,6 +749,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<string> Name:= 'S'+Van+Naar;
 		attribute<string> Descr:= 'Van '+Van+' naar '+Naar;
 		attribute<string> Label := Name, DialogType = "LabelText";
+		attribute<SchilSprongCode> SchilSprongCode_rel := combine_data(SchilSprongCode, Van_rel, Naar_rel);
 	}	
 	unit<uint8> LabelSprong: nrofrows = 17
 	{
@@ -829,37 +850,46 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		];
 	}
 
+	// TODO: Verplaatsen naar /Invoer/DefaultInstellingen/Basis
 	unit<uint8> GebouwOptie : nrofrows = 7
 	{
 		attribute<string> Name:            [ 'VRw','VRu','HRw','HRu', 'eWPw', 'eWPu', 'HWP' ];
 		attribute<bool>   kanGebiedsOptie: [ true, true, true,  true, false,  false, false ];
 		
-		attribute<SchilLabel> MinSchilLabel_rel:= union_data(SchilLabel, 
-			SchilLabel/V/G, SchilLabel/V/G, 
-			SchilLabel/V/G, SchilLabel/V/G, 
-			SchilLabel/V/B, SchilLabel/V/B,
-			SchilLabel/V/F
+		attribute<SchilLabel> DoelLabel_rel:= union_data(., 
+			(0/0)[SchilLabel], (0/0)[SchilLabel],
+			DoelLabel/V/C,    DoelLabel/V/C, 
+			SchilLabel/V/C,   SchilLabel/V/A,
+			SchilLabel/V/A
 		);
+	
+		container I := Installatie/V;
 		
-		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
-		attribute<WarmteOptie> WarmteOptie_rel := rlookup(name, WarmteOptie/name);
-		
-		container PerProduct {
-			attribute<Installatie> RVb(..):= union_data(.., Installatie/V/VR,   Installatie/V/VR,   Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
-			attribute<Installatie> RVp(..):= union_data(.., Installatie/V/VR,   Installatie/V/VR,   Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/HR);
-			attribute<Installatie> TWb(..):= union_data(.., Installatie/V/VR,   Installatie/V/VR,   Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
-			attribute<Installatie> TWp(..):= union_data(.., Installatie/V/VR,   Installatie/V/VR,   Installatie/V/HR,   Installatie/V/HR,    Installatie/V/eWP_lw,  Installatie/V/eWP_lw,  Installatie/V/eWP_lw);
-			attribute<Installatie> Kb (..):= union_data(.., Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen,    Installatie/V/eWP_lw,  Installatie/V/geen);
-			attribute<Installatie> Kp (..):= union_data(.., Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen, Installatie/V/AirCo, Installatie/V/geen,    Installatie/V/eWP_lw,  Installatie/V/geen);
+		container PerOptie
+		{	//                                                 Product: RVb       RVp       TWb       TWp       Kb        Kp
+			attribute<Installatie> VRw (Product) := union_data(Product, I/VR,     I/VR,     I/VR,     I/VR,     I/geen,   I/geen  );
+			attribute<Installatie> VRu (Product) := union_data(Product, I/VR,     I/VR,     I/VR,     I/VR,     I/AirCo,  I/AirCo );
+			attribute<Installatie> HRw (Product) := union_data(Product, I/HR,     I/HR,     I/HR,     I/HR,     I/geen,   I/geen  ); 
+			attribute<Installatie> HRu (Product) := union_data(Product, I/HR,     I/HR,     I/HR,     I/HR,     I/AirCo,  I/AirCo );
+ 			attribute<Installatie> eWPw(Product) := union_data(Product, I/eWP_lw, I/eWP_lw, I/eWP_lw, I/eWP_lw, I/geen,   I/geen  );
+			attribute<Installatie> eWPu(Product) := union_data(Product, I/eWP_lw, I/eWP_lw, I/eWP_lw, I/eWP_lw, I/eWP_lw, I/eWP_lw);
+			attribute<Installatie> HWP (Product) := union_data(Product, I/eWP_lw, I/HR,     I/eWP_lw, I/eWP_lw, I/geen,   I/geen  );
 		}
 		
-		container PerOptie := for_each_nedv(Name
-			,	replace('union_data(Product, '+AsItemList('PerProduct/'+Product/Name+'[V/@GO]')+')', '@GO', Name)
-			,	Product, Installatie
-		);
+		// generieke code
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+		attribute<WarmteOptie> WarmteOptie_rel := rlookup(name, WarmteOptie/name);
 		unit<uint32> xProduct := combine(GebouwOptie, Product)
 		{
 			attribute<Installatie> Installatie_rel := ='union_data(., '+AsItemList('PerOptie/'+Name)+')';
+		}
+		unit<uint32> xInstallatie := combine(GebouwOptie, Installatie)
+		{
+			attribute<bool> x := pcount(combine_data(., xProduct/nr_1, xProduct/Installatie_rel)) > 0;
+		}
+		unit<uint32> uInstallatie := subset(xInstallatie/x) {
+			attribute<GebouwOptie> GebouwOptie_rel := xInstallatie/nr_1[nr_OrgEntity];
+			attribute<Installatie> Installatie_rel := xInstallatie/nr_2[nr_OrgEntity];
 		}
 	}
 	unit<uint8> GebiedsOptie : nrofrows = 12 // volgorde niet hier instellen maar in SpecifiekeInstellingen/Voorkeuren/BaseLine/WarmteOpties

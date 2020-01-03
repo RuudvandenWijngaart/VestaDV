@@ -132,16 +132,14 @@ template BCdata
 			attribute<Classifications/SchilSprong> SchilSprong_rel := nr_OrgEntity;
 			attribute<string> Name := Classifications/SchilSprong/name[SchilSprong_rel];
 			attribute<Classifications/SchilLabel> Naar_rel := Classifications/SchilSprong/Naar_rel[SchilSprong_rel];
+			attribute<Classifications/SchilSprongCode> SchilSprongCode_rel := Classifications/SchilSprong/SchilSprongCode_rel[SchilSprong_rel];
 			
 			attribute<string> LeerCurveName := Classifications/SchilLabel/LeerCurveName[Naar_rel];
 			
-			container Ki_asl := for_each_nedv(Name
-			,	replace('(ModelObject/Ki_min_asl/@SS@ * Schuiven/KostenMin + ModelObject/Ki_max_asl/@SS@ * Schuiven/KostenMax) * Leercurves/'+LeerCurveName+'/Curve', '@SS@', Name)
-			,	ModelObject, EUR_asl);
-			
-			container Ki_opp := for_each_nedv(Name
-			,	replace('(ModelObject/Ki_min_opp/@SS@ * Schuiven/KostenMin + ModelObject/Ki_max_opp/@SS@ * Schuiven/KostenMax) * Leercurves/'+LeerCurveName+'/Curve', '@SS@', Name)
-			,	ModelObject, EUR_m2);
+			unit<uint32> xMO := combine(., ModelObject) {
+				attribute<EUR_asl> Ki_asl := ='union_data(.,'+AsItemList(replace('(ModelObject/Ki_min_asl/@SS@ * Schuiven/KostenMin + ModelObject/Ki_max_asl/@SS@ * Schuiven/KostenMax) * Leercurves/'+LeerCurveName+'/Curve', '@SS@', Name))+')';
+				attribute<EUR_m2 > Ki_opp := ='union_data(.,'+AsItemList(replace('(ModelObject/Ki_min_opp/@SS@ * Schuiven/KostenMin + ModelObject/Ki_max_opp/@SS@ * Schuiven/KostenMax) * Leercurves/'+LeerCurveName+'/Curve', '@SS@', Name))+')';
+			}
 		}
 		unit<uint8> SchilSprongOrIdle_set := union_unit_uint8(Classifications/SchilLabel, SchilSprong_set) {
 			attribute<Classifications/SchilLabel> Van_rel  := union_data(., ID(Classifications/SchilLabel), Classifications/SchilSprong/Van_rel [SchilSprong_set/nr_OrgEntity]);
@@ -149,57 +147,93 @@ template BCdata
 			
 			attribute<string> Name := union_data(., 'S'+repeat(Classifications/SchilLabel/name,2), SchilSprong_set/name);
 			
-			container Ki_asl := for_each_nedv(Name
-			,	union_data(., const('const(0[EUR_asl], ModelObject)', Classifications/SchilLabel), 'SchilSprong_set/Ki_asl/'+SchilSprong_set/name)
-			,	ModelObject, EUR_asl);
-			
-			container Ki_opp := for_each_nedv(Name
-			,	union_data(., const('const(0[EUR_m2 ], ModelObject)', Classifications/SchilLabel), 'SchilSprong_set/Ki_opp/'+SchilSprong_set/name)
-			,	ModelObject, EUR_m2);
+			unit<uint32> xMO := combine(., ModelObject) {
+				attribute<EUR_asl> Ki_asl := ='union_data(., ' + AsItemList(const('const(0[EUR_asl], ModelObject)', Classifications/SchilLabel))+', SchilSprong_set/xMO/Ki_asl)';
+				attribute<EUR_m2 > Ki_opp := ='union_data(., ' + AsItemList(const('const(0[EUR_m2 ], ModelObject)', Classifications/SchilLabel))+', SchilSprong_set/xMO/Ki_opp)';
+			}
 		}
 		
-		unit<uint16> Optie_xtab := Combine_uint16(SchilSprongOrIdle_set, Classifications/GebouwOptie)
-		{
-			attribute<bool> Allowed := Classifications/GebouwOptie/MinSchilLabel_rel[nr_2] >= SchilSprongOrIdle_set/Naar_rel[nr_1];
+		parameter<string> BcCode := Classifications/BebouwingsSector/Name[rjoin(BcName, Classifications/BebouwingsComponent/Name, Classifications/BebouwingsComponent/nr_1)] == 'w' ? 'w' : 'u';
+		unit<uint32> Installatie := Classifications/Installatie {
+			// TODO, MTA: remove const in merge wanneer void domain hier zal worden toegestaan, issue XXX.
+			attribute<EUR_asl> Ki_asl := =replace('(Ki_asl_min_@BC * Schuiven/KostenMin + Ki_asl_max_@BC * Schuiven/KostenMax)* merge(LeerCurve_rel, Float64, '+AsItemList('const(LeerCurves/'+Classifications/LeerCurves/Name+'/Curve, .)')+')', '@BC', BcCode);
+			attribute<EUR_kW>  Ki_cap := =replace('(Ki_cap_min_@BC * Schuiven/KostenMin + Ki_cap_max_@BC * Schuiven/KostenMax)* merge(LeerCurve_rel, Float64, '+AsItemList('const(LeerCurves/'+Classifications/LeerCurves/Name+'/Curve, .)')+')', '@BC', BcCode);
+			attribute<EUR_m2>  Ki_opp := =replace('(Ki_opp_min_@BC * Schuiven/KostenMin + Ki_opp_max_@BC * Schuiven/KostenMax)* merge(LeerCurve_rel, Float64, '+AsItemList('const(LeerCurves/'+Classifications/LeerCurves/Name+'/Curve, .)')+')', '@BC', BcCode);
 		}
-		unit<uint8> Optie_set := subset_uint8(optie_xtab/Allowed)
-		{
-			attribute<SchilSprongOrIdle_set> SchilSprongOrIdle_set_rel := optie_xtab/nr_1[nr_OrgEntity];
-			attribute<Classifications/SchilLabel> Van_rel    := SchilSprongOrIdle_set/Van_rel[optie_xtab/nr_1][nr_OrgEntity];
-			attribute<Classifications/SchilLabel> Naar_rel   := SchilSprongOrIdle_set/Naar_rel[optie_xtab/nr_1][nr_OrgEntity];
-			attribute<Classifications/GebouwOptie> Optie_rel := optie_xtab/nr_2[nr_OrgEntity];
-			attribute<string> Name := SchilSprongOrIdle_set/Name[SchilSprongOrIdle_set_rel] + '_' +Classifications/GebouwOptie/Name[Optie_rel];
+		
+		unit<uint8> GebouwOptie := Classifications/GebouwOptie {
+			attribute<EUR_asl> Ki_asl := sum(Installatie/Ki_asl[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
+			attribute<EUR_kW > Ki_cap := sum(Installatie/Ki_cap[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel); // TODO: houdt rekening met gelijktijdigheid
+			attribute<EUR_m2 > Ki_opp := sum(Installatie/Ki_opp[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
 		}
+		unit<uint32> Optie := combine(Classifications/DoelLabel, GebouwOptie) {
+			attribute<Classifications/DoelLabel> DoelLabel_rel   := nr_1;
+			attribute<GebouwOptie>               GebouwOptie_rel := nr_2;
+			// bepaal parameters voor verbruik
+		}		
 	}
+	
+	unit<uint32> DoelLabelSet := combine(BebouwingsObject, Classifications/DoelLabel) {
+		attribute<BebouwingsObject         > BebouwingsObject_rel := nr_1;
+		attribute<Classifications/DoelLabel> DoelLabel_rel        := nr_2;
+		
+		attribute<Classifications/SchilLabel> Van_rel  := BeginState/schillabel_rel[BebouwingsObject_rel];
+		attribute<Classifications/SchilLabel> Naar_rel := MakeDefined(Classifications/DoelLabel/SchilLabel_rel[DoelLabel_rel], Van_rel);
+		attribute<ModelObject>         ModelObject_rel := Model_rel[BebouwingsObject_rel];
+		
+		attribute<VerbruiksOpties/SchilSprong_set>     SchilSprong_rel     := rlookup(combine_data(Classifications/SchilSprongCode, Van_rel, Naar_rel), VerbruiksOpties/SchilSprong_set/SchilSprongCode_rel);
+		attribute<VerbruiksOpties/SchilSprong_set/xMO> SchilSprong_xMO_rel := combine_data(VerbruiksOpties/schilsprong_set/xMO, SchilSprong_rel, ModelObject_rel);
+		
+		attribute<EUR> Ki_schil := MakeDefined(
+			VerbruiksOpties/schilsprong_set/xMO/Ki_asl[SchilSprong_xMO_rel] * RuimtelijkeVraagComponent/nrAansluitingen[BebouwingsObject_rel] +
+			VerbruiksOpties/schilsprong_set/xMO/Ki_opp[SchilSprong_xMO_rel] * RuimtelijkeVraagComponent/Oppervlakte    [BebouwingsObject_rel]
+		,	0[EUR]
+		);
+	}
+	
+	unit<uint32> GebouwOptieSet := combine(BebouwingsObject, Classifications/GebouwOptie) {
+		attribute<BebouwingsObject           > BebouwingsObject_rel := nr_1;
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel      := nr_2;
+		attribute<Classifications/SchilLabel > DoelLabel_rel := Classifications/GebouwOptie/DoelLabel_rel[GebouwOptie_rel];
+		attribute<DoelLabelSet>                DoelLabelSet_rel := combine_data(DoelLabelSet, BebouwingsObject_rel, DoelLabel_rel);
+		attribute<EUR> Ki_installatie := 
+			VerbruiksOpties/GebouwOptie/Ki_asl[GebouwOptie_rel] * RuimtelijkeVraagComponent/nrAansluitingen[BebouwingsObject_rel] +
+			VerbruiksOpties/GebouwOptie/Ki_opp[GebouwOptie_rel] * RuimtelijkeVraagComponent/Oppervlakte    [BebouwingsObject_rel];
+		attribute<EUR> Ki_schil       := MakeDefined(DoelLabelSet/Ki_schil[DoelLabelSet_rel], 0[EUR]);
+		attribute<EUR> Ki_totaal      := Ki_installatie + Ki_schil;
+	}
+	attribute<EUR> Ki_totaal_max(BebouwingsObject) := max(GebouwOptieSet/Ki_totaal, GebouwOptieSet/BebouwingsObject_rel);
+	
+/* REMOVE	
+	unit<uint32> OptieSet := combine(BebouwingsObject, VerbruiksOpties/Optie) {
+		attribute<BebouwingsObject>      BebouwingsObject_rel := nr_1;
+		attribute<VerbruiksOpties/Optie> VerbruiksOptie_rel   := nr_2;
+		
+		attribute<GebouwOptie>               GebouwOptie_rel := VerbruiksOpties/Optie/gebouwOptie_rel[nr_2];
+		attribute<EUR> Ki_installatie :=  VerbruiksOpties/GebouwOptie/Ki_asl[GebouwOptie_rel] * nr_Aansl + VerbruiksOpties/GebouwOptie/Ki_opp[GebouwOptie_rel] * opp;
+	}
+*/	
 	container OpwekkingsOpties
 	{
 		container bereidheid
 		{
 			attribute<Ratio> Zon_PV     (BebouwingsObject) := const(LocatieSpecifiekeOpties/OpwekkingF/Zon_PV,      BebouwingsObject);
 			attribute<Ratio> ZonneBoiler(BebouwingsObject) := const(LocatieSpecifiekeOpties/OpwekkingF/ZonneBoiler, BebouwingsObject);
-			attribute<Ratio> mWKK       (BebouwingsObject) := const(LocatieSpecifiekeOpties/OpwekkingF/mWKK,        BebouwingsObject);
-			attribute<Ratio> hWP        (BebouwingsObject) := MakeDefined(LocatieSpecifiekeOpties/OpwekkingF/hWP[energielabel/LastValue], 0.0);
 		}
 		container org_capaciteit
 		{
 			attribute<Ratio> Zon_PV     (BebouwingsObject) := MakeDefined(StartingStateComponent/OpwekkingsOpties/capaciteit/Zon_PV     [StartingState_rel], 0[Ratio]);
 			attribute<Ratio> ZonneBoiler(BebouwingsObject) := MakeDefined(StartingStateComponent/OpwekkingsOpties/capaciteit/ZonneBoiler[StartingState_rel], 0[Ratio]);
-			attribute<Ratio> mWKK       (BebouwingsObject) := MakeDefined(StartingStateComponent/OpwekkingsOpties/capaciteit/mWKK       [StartingState_rel], 0[Ratio]);
-			attribute<Ratio> hWP        (BebouwingsObject) := MakeDefined(StartingStateComponent/OpwekkingsOpties/capaciteit/hWP        [StartingState_rel], 0[Ratio]);
 		}
 		container investering
 		{
 			attribute<Ratio> Zon_PV     (BebouwingsObject) := median(0.0, bereidheid/Zon_PV      - org_capaciteit/Zon_PV,      1.0[Ratio] - org_capaciteit/Zon_PV);
 			attribute<Ratio> ZonneBoiler(BebouwingsObject) := median(0.0, bereidheid/ZonneBoiler - org_capaciteit/ZonneBoiler, 1.0[Ratio] - org_capaciteit/ZonneBoiler);
-			attribute<Ratio> mWKK       (BebouwingsObject) := median(0.0, bereidheid/mWKK        - org_capaciteit/mWKK,        1.0[Ratio] - org_capaciteit/mWKK);
-			attribute<Ratio> hWP        (BebouwingsObject) := median(0.0, bereidheid/hWP         - org_capaciteit/hWP,         1.0[Ratio] - org_capaciteit/hWP);
 		}
 		container capaciteit
 		{
 			attribute<Ratio> Zon_PV     (BebouwingsObject) := org_capaciteit/Zon_PV      + investering/Zon_PV;
 			attribute<Ratio> ZonneBoiler(BebouwingsObject) := org_capaciteit/ZonneBoiler + investering/ZonneBoiler;
-			attribute<Ratio> mWKK       (BebouwingsObject) := org_capaciteit/mWKK        + investering/mWKK;
-			attribute<Ratio> hWP        (BebouwingsObject) := org_capaciteit/hWP         + investering/hWP;
 		}
 	}
 
@@ -212,17 +246,7 @@ template BCdata
 		attribute<nrAansl> hWP         (BebouwingsObject) := RuimtelijkeVraagComponent/nrAansluitingen * Opwekking/hWP;
 	}
 
-	container Functioneel
-	{
-		attribute<GJ_yr>	RuimteVerwarming_vast	(BebouwingsObject)	:=	RuimtelijkeVraagComponent/Functioneel/RuimteVerwarming_vast;
-		attribute<GJ_yr>	RuimteVerwarming_var	(BebouwingsObject)	:=	RuimtelijkeVraagComponent/Functioneel/RuimteVerwarming_var;
-		attribute<GJ_yr>	RuimteVerwarming		(BebouwingsObject)	:=	RuimteVerwarming_vast + RuimteVerwarming_var;
-		attribute<GJ_yr>	Koude					(BebouwingsObject)	:=	RuimtelijkeVraagComponent/Functioneel/Koude;
-		attribute<GJ_yr>	WarmWater				(BebouwingsObject)	:=	RuimtelijkeVraagComponent/Functioneel/WarmWater;
-		attribute<GJ_yr>	PompEnergie				(BebouwingsObject)	:=	RuimtelijkeVraagComponent/Functioneel/PompEnergie;
-		attribute<GJ_yr>	Ventilatie				(BebouwingsObject)	:=	RuimtelijkeVraagComponent/Functioneel/Ventilatie;
-		attribute<GJ_yr>	Apparatuur				(BebouwingsObject)	:=	RuimtelijkeVraagComponent/Functioneel/ElektrischeApparatuur;
-	}
+	container Functioneel := RuimtelijkeVraagComponent/Functioneel;
 
 	container BC_kentallen :=	kengetallen/BCkentallen/BC_kentallen(
 									Schuiven/LuchtBodemSchuif,
@@ -478,7 +502,7 @@ template BCdata
 		container deelnemers
 		{
 			attribute<nrAansl>   NrAansluitingen    (BebouwingsObject) := Aandeel/WarmteVraag * RuimtelijkeVraagComponent/nrAansluitingen ;
-			attribute<m2>        Oppervlakte        (BebouwingsObject) := Aandeel/WarmteVraag * RuimtelijkeVraagComponent/Opervlakte;
+			attribute<m2>        Oppervlakte        (BebouwingsObject) := Aandeel/WarmteVraag * RuimtelijkeVraagComponent/Oppervlakte;
 			attribute<kW>        AansluitCapaciteit (BebouwingsObject) := Aandeel/WarmteVraag * RuimtelijkeVraagComponent/AansluitCapaciteit/Warmte;
 			attribute<GJ_yr>     Verbruik           (BebouwingsObject) := Aandeel/WarmteVraag * DragerOpties/Warmte/Warmte;
 			attribute<GJ_yr>     Verbruik_RV        (BebouwingsObject) := Aandeel/WarmteVraag * DragerOpties/RuimteVerwarming/Warmte;
