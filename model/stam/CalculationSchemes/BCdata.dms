@@ -78,9 +78,9 @@ template BCdata
 		container AansluitCapaciteit
 		{
 			attribute<kW> RV    (..) := nrAansluitingen * ModelObject/ASW_RV_asl[Model_rel] + Oppervlakte * ModelObject/ASW_RV_opp[Model_rel];
-			attribute<kW> WW    (..) := nrAansluitingen * ModelObject/ASW_WW_asl[Model_rel] + Oppervlakte * ModelObject/ASW_WW_opp[Model_rel];
-			attribute<kW> Warmte(..) := RV + WW;
-			attribute<kW> eWP   (..) := max_elem(RV, WW);
+			attribute<kW> TW    (..) := nrAansluitingen * ModelObject/ASW_WW_asl[Model_rel] + Oppervlakte * ModelObject/ASW_WW_opp[Model_rel];
+			attribute<kW> Warmte(..) := RV + TW;
+			attribute<kW> eWP   (..) := max_elem(RV, TW);
 			attribute<kW> EZ    (..) := nrAansluitingen * ModelObject/ASW_EZ_asl[Model_rel] + Oppervlakte * ModelObject/ASW_EZ_opp[Model_rel];
 			attribute<kW> EM    (..) := nrAansluitingen * ModelObject/ASW_EM_asl[Model_rel] + Oppervlakte * ModelObject/ASW_EM_opp[Model_rel];
 		}
@@ -90,7 +90,7 @@ template BCdata
 			
 			attribute<Ratio>	Klimaateffect (..)	:=	KlimaatFactorMap[gridm100_rel];
 			
-			attribute<GJ_yr>	WW(..) := (nrAansluitingen * ModelObject/V_WW_asl [Model_rel] + Oppervlakte * ModelObject/V_WW_opp [Model_rel])
+			attribute<GJ_yr>	TW(..) := (nrAansluitingen * ModelObject/V_TW_asl [Model_rel] + Oppervlakte * ModelObject/V_TW_opp [Model_rel])
 						* DragerSpecifiekeOpties/WarmWater;
 						
 			attribute<GJ_yr>	K (..) := Oppervlakte * ModelObject/V_K_opp[Model_rel] 
@@ -163,7 +163,10 @@ template BCdata
 		
 		unit<uint8> GebouwOptie := Classifications/GebouwOptie {
 			attribute<EUR_asl> Ki_asl := sum(Installatie/Ki_asl[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
-			attribute<EUR_kW > Ki_cap := sum(Installatie/Ki_cap[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel); // TODO: houdt rekening met gelijktijdigheid
+			
+			
+//			attribute<EUR_kW > Ki_cap := sum(Installatie/Ki_cap[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel); // TODO: houdt rekening met gelijktijdigheid
+			
 			attribute<EUR_m2 > Ki_opp := sum(Installatie/Ki_opp[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
 		}
 		unit<uint32> Optie := combine(Classifications/DoelLabel, GebouwOptie) {
@@ -196,14 +199,26 @@ template BCdata
 		attribute<Classifications/GebouwOptie> GebouwOptie_rel      := nr_2;
 		attribute<Classifications/SchilLabel > DoelLabel_rel := Classifications/GebouwOptie/DoelLabel_rel[GebouwOptie_rel];
 		attribute<DoelLabelSet>                DoelLabelSet_rel := combine_data(DoelLabelSet, BebouwingsObject_rel, DoelLabel_rel);
+		
+		attribute<Classifications/Performance> RVb_rel := rlookup(
+			Installatie/name[Classifications/GebouwOptie/xProduct/Installatie_rel[combine_data(Classifications/GebouwOptie/xProduct, GebouwOptie_rel, Product/V/RVb)]] 
+			+ '.' + schillabel_name 
+			+ '.RV'
+		,	Classifications/Performance/code);
+		attribute<Classifications/Performance> TW_rel := rlookup(Installatie_name + '.' + schillabel_name + '.TW', Classifications/Performance/code);
+		attribute<Classifications/Performance> K_rel  := rlookup(Installatie_name + '.' + schillabel_name + '.K',  Classifications/Performance/code);
+		
+//			RuimtelijkeVraagComponent/Aansluitcapaciteit/RV 
+//			RuimtelijkeVraagComponent/Aansluitcapaciteit/TW
+//			RuimtelijkeVraagComponent/Aansluitcapaciteit/K
+		
+		
 		attribute<EUR> Ki_installatie := 
 			VerbruiksOpties/GebouwOptie/Ki_asl[GebouwOptie_rel] * RuimtelijkeVraagComponent/nrAansluitingen[BebouwingsObject_rel] +
 			VerbruiksOpties/GebouwOptie/Ki_opp[GebouwOptie_rel] * RuimtelijkeVraagComponent/Oppervlakte    [BebouwingsObject_rel];
 		attribute<EUR> Ki_schil       := MakeDefined(DoelLabelSet/Ki_schil[DoelLabelSet_rel], 0[EUR]);
 		attribute<EUR> Ki_totaal      := Ki_installatie + Ki_schil;
 	}
-	attribute<EUR> Ki_totaal_max(BebouwingsObject) := max(GebouwOptieSet/Ki_totaal, GebouwOptieSet/BebouwingsObject_rel);
-	
 /* REMOVE	
 	unit<uint32> OptieSet := combine(BebouwingsObject, VerbruiksOpties/Optie) {
 		attribute<BebouwingsObject>      BebouwingsObject_rel := nr_1;
