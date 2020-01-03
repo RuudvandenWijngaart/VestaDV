@@ -1,0 +1,326 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+template Waterstof
+{
+	// begin case parameters
+	container BeginStatus;
+	container EnergiePrijzen;
+	parameter<units/yr_uint16> Jaar;
+	parameter<Classifications/GebiedsOptie> Optie;
+	// end case parameters
+
+	unit<uint32> PlanRegio    :=	Invoer/SpecifiekeInstellingen/PlanRegio;
+	unit<uint8>  Prijzen_elec :=	Prijzen/Elektriciteit/Staffel;
+	
+	container Emissie
+	{
+		parameter<kg_GJ> CO2_GJb := 0[kg_GJ];
+		parameter<g_GJ>  NOx_GJb := 0[g_GJ];
+		parameter<g_GJ>  SO2_GJb := 0[g_GJ];
+		parameter<g_GJ>  VOS_GJb := 0[g_GJ];
+		parameter<g_GJ>  TS_GJb  := 0[g_GJ];
+	}
+	
+	container BestaandeWoningData :=	WaterstofData(BebouwingsComponenten/BestaandeWoning, Optie);
+	container NieuwbouwWoningData :=	WaterstofData(BebouwingsComponenten/NieuwbouwWoning, Optie);
+	container BestaandeUtilData   :=	WaterstofData(BebouwingsComponenten/BestaandeUtil,   Optie);
+	container NieuwbouwUtilData   :=	WaterstofData(BebouwingsComponenten/NieuwbouwUtil,   Optie);
+	
+	container KostenBaten := CalculationSchemes/KostenBaten(BeginStatus/Bebouwing, invoer/Energieprijzen);
+
+	container Vraag
+	{
+		attribute<gj_yr>	V_Warmte       (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/V_Warmte
+			+ NieuwbouwWoningData/PerPlanRegio/V_Warmte
+			+ BestaandeUtilData/PerPlanRegio/V_Warmte
+			+ NieuwbouwUtilData/PerPlanRegio/V_Warmte;
+		attribute<gj_yr>	WaterstofVraag (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/V_Waterstof
+			+ NieuwbouwWoningData/PerPlanRegio/V_Waterstof
+			+ BestaandeUtilData/PerPlanRegio/V_Waterstof
+			+ NieuwbouwUtilData/PerPlanRegio/V_Waterstof;
+		attribute<nraansl>	Aansluitingen  (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/Aansluitingen
+			+ NieuwbouwWoningData/PerPlanRegio/Aansluitingen
+			+ BestaandeUtilData/PerPlanRegio/Aansluitingen
+			+ NieuwbouwUtilData/PerPlanRegio/Aansluitingen;
+		attribute<eur_yr>	Kj_id_elek  (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/Kj_id_elek
+			+ NieuwbouwWoningData/PerPlanRegio/Kj_id_elek
+			+ BestaandeUtilData/PerPlanRegio/Kj_id_elek
+			+ NieuwbouwUtilData/PerPlanRegio/Kj_id_elek;
+		attribute<eur_yr>	Km_id_elek  (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/Km_id_elek
+			+ NieuwbouwWoningData/PerPlanRegio/Km_id_elek
+			+ BestaandeUtilData/PerPlanRegio/Km_id_elek
+			+ NieuwbouwUtilData/PerPlanRegio/Km_id_elek;
+		attribute<eur_yr>	Kj_id_elek_EH  (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/Kj_id_elek_EH
+			+ NieuwbouwWoningData/PerPlanRegio/Kj_id_elek_EH
+			+ BestaandeUtilData/PerPlanRegio/Kj_id_elek_EH
+			+ NieuwbouwUtilData/PerPlanRegio/Kj_id_elek_EH;
+		attribute<eur_yr>	Kj_id_elek_CO2  (PlanRegio) :=
+			  BestaandeWoningData/PerPlanRegio/Kj_id_elek_CO2
+			+ NieuwbouwWoningData/PerPlanRegio/Kj_id_elek_CO2
+			+ BestaandeUtilData/PerPlanRegio/Kj_id_elek_CO2
+			+ NieuwbouwUtilData/PerPlanRegio/Kj_id_elek_CO2;
+	}	
+	container Kosten
+	{
+		container ge			//VERGOEDINGEN
+		{
+			attribute<Eur>		Ki_ge_pm        (PlanRegio) :=	KostenBaten/Ki_ge_pm;
+			attribute<Eur>		Ki_ge_ov        (PlanRegio) :=	KostenBaten/Ki_ge_ov;
+			attribute<Eur>		Ki_ge           (PlanRegio) :=	Ki_ge_pm + Ki_ge_ov;
+			attribute<Eur_yr>	Kji_ge          (PlanRegio) :=	Ki_ge * NCW/id28/AnnualisationFactor;
+			attribute<Eur_yr>	Kmi_ge          (PlanRegio) :=	Ki_ge * NCW/mr28/AnnualisationFactor;
+			attribute<Eur_yr>	Kj_ge_oh        (PlanRegio) :=	const(0[Eur_yr], Planregio);	
+		}
+		container ow			//OPWEKKING
+		{
+			attribute<Eur>		Ki_ow           (PlanRegio) :=	const(0[eur], Planregio);													
+			attribute<Eur_yr>	Kji_ow          (PlanRegio) :=	Ki_ow * NCW/ow28/AnnualisationFactor;
+			attribute<Eur_yr>	Kmi_ow          (PlanRegio) :=	Ki_ow * NCW/mr28/AnnualisationFactor;
+			attribute<Eur_yr>	Kj_ow_oh        (PlanRegio) :=	Leercurves/OenM/Curve * Kengetallen/H2kentallen/R_oh_opwekking * Ki_ow;
+			parameter<Eur_GJ>	K_GJ                        :=	Km_GJ;
+			parameter<Eur_GJ>	Km_GJ                       :=	invoer/energieprijzen/Overig/results/Waterstof[rlookup(jaar,invoer/energieprijzen/Overig/results/jaar)];
+			attribute<Eur_yr>	Kj_ow_productie (PlanRegio) :=	K_GJ  * vraag/WaterstofVraag;
+			attribute<Eur_yr>	Km_ow_productie (PlanRegio) :=	Km_GJ * vraag/WaterstofVraag;
+		}
+		container pt			//TRANSPORT
+		{			
+			attribute<Eur>		Ki_pt           (PlanRegio) :=	const(0[eur], Planregio);
+			attribute<Eur_yr>	Kji_pt          (PlanRegio) :=	Ki_pt * NCW/pt28/AnnualisationFactor;
+			attribute<Eur_yr>	Kmi_pt          (PlanRegio) :=	Ki_pt * NCW/mr28/AnnualisationFactor;
+			attribute<Eur_yr>	Kj_pt_oh        (PlanRegio) :=	Leercurves/OenM/Curve * Kengetallen/H2kentallen/R_oh_transport * Ki_pt;
+		}
+		container wd			//DISTRIBUTIE
+		{			
+			attribute<Eur>		Ki_wd_section   (PlanRegio) :=	Kengetallen/H2kentallen/K_section * RuimtelijkeData/infra/per_buurt/lengte_LD_net;
+			attribute<Eur>		Ki_wd_aansl     (PlanRegio) :=	Kengetallen/H2kentallen/K_aansl * vraag/Aansluitingen;
+			attribute<Eur>		Ki_wd           (PlanRegio) :=	Ki_wd_section + Ki_wd_aansl;
+			attribute<Eur_yr>	Kji_wd          (PlanRegio) :=	Ki_wd * NCW/wd28/AnnualisationFactor;
+			attribute<Eur_yr>	Kmi_wd          (PlanRegio) :=	Ki_wd * NCW/mr28/AnnualisationFactor;
+			attribute<Eur_yr>	Kj_wd_oh        (PlanRegio) :=	Leercurves/OenM/Curve * Kengetallen/H2kentallen/R_oh_wijkdist * Ki_wd;
+		}
+		container id			//INPANDIG
+		{			
+			attribute<Eur>		Ki_id_WP        (PlanRegio) :=
+				  BestaandeWoningData/PerPlanRegio/Ki_id_WP
+				+ NieuwbouwWoningData/PerPlanRegio/Ki_id_WP
+				+ BestaandeUtilData/PerPlanRegio/Ki_id_WP
+				+ NieuwbouwUtilData/PerPlanRegio/Ki_id_WP;
+			attribute<Eur>		Ki_id_brander   (PlanRegio) :=	Kengetallen/H2kentallen/K_brander * vraag/Aansluitingen;	
+			attribute<Eur>		Ki_id           (PlanRegio) :=	Ki_id_brander + Ki_id_WP;
+			attribute<Eur_yr>	Kji_id          (PlanRegio) :=	Ki_id * NCW/id28/AnnualisationFactor;
+			attribute<Eur_yr>	Kmi_id          (PlanRegio) :=	Ki_id * NCW/mr28/AnnualisationFactor;
+			attribute<Eur_yr>	Kj_id_oh        (PlanRegio) :=	Leercurves/OenM/Curve * Kengetallen/H2kentallen/R_oh_inpandig * Ki_id;
+		}
+		container lv			//LEVERANCIER
+		{			
+			attribute<Eur_yr>	Kj_lv_adm       (PlanRegio) :=	Leercurves/OenM/Curve * Kengetallen/H2kentallen/R_lv_admin * opbrengsten/Oj_Vastrecht;
+		}
+	}
+	container Opbrengsten
+	{
+		//SUBSIDIES
+		attribute<Eur_yr>	Oj_SDE       (PlanRegio) :=		SpecifiekeInstellingen/Beleid/EEA/SDE_H2 * vraag/WaterstofVraag;
+		attribute<Eur>		Oi_ge_EIA    (PlanRegio) :=		SpecifiekeInstellingen/Beleid/EIA/H2 * kosten/ge/ki_ge;
+		attribute<Eur_yr>	Oji_ge_EIA   (PlanRegio) :=		Oi_ge_EIA * NCW/id28/AnnualisationFactor;
+		attribute<Eur_yr>	Oj_ge_EEA    (PlanRegio) :=		SpecifiekeInstellingen/Beleid/EEA/H2 * kosten/ge/kj_ge_oh;
+		attribute<Eur>		Oi_ow_EIA    (PlanRegio) :=		SpecifiekeInstellingen/Beleid/EIA/H2 * kosten/ow/ki_ow;
+		attribute<Eur_yr>	Oji_ow_EIA   (PlanRegio) :=		Oi_ow_EIA * NCW/ow28/AnnualisationFactor;
+		attribute<Eur_yr>	Oj_ow_EEA    (PlanRegio) :=		SpecifiekeInstellingen/Beleid/EEA/H2 * kosten/ow/kj_ow_oh;
+		attribute<Eur>		Oi_pt_EIA    (PlanRegio) :=		SpecifiekeInstellingen/Beleid/EIA/H2 * kosten/pt/ki_pt;
+		attribute<Eur_yr>	Oji_pt_EIA   (PlanRegio) :=		Oi_pt_EIA * NCW/pt28/AnnualisationFactor;
+		attribute<Eur_yr>	Oj_pt_EEA    (PlanRegio) :=		SpecifiekeInstellingen/Beleid/EEA/H2 * kosten/pt/kj_pt_oh;
+		attribute<Eur>		Oi_wd_EIA    (PlanRegio) :=		SpecifiekeInstellingen/Beleid/EIA/H2 * kosten/wd/ki_wd;
+		attribute<Eur_yr>	Oji_wd_EIA   (PlanRegio) :=		Oi_wd_EIA * NCW/wd28/AnnualisationFactor;
+		attribute<Eur_yr>	Oj_wd_EEA    (PlanRegio) :=		SpecifiekeInstellingen/Beleid/EEA/H2 * kosten/wd/kj_wd_oh;
+		attribute<Eur>		Oi_id_EIA    (PlanRegio) :=		SpecifiekeInstellingen/Beleid/EIA/H2 * kosten/id/ki_id;
+		attribute<Eur_yr>	Oji_id_EIA   (PlanRegio) :=		Oi_id_EIA * NCW/id28/AnnualisationFactor;
+		attribute<Eur_yr>	Oj_id_EEA    (PlanRegio) :=		SpecifiekeInstellingen/Beleid/EEA/H2 * kosten/id/kj_id_oh;
+		
+		//AFNEMERS
+		attribute<Eur_yr>	Oj_Vastrecht (PlanRegio) :=		SpecifiekeInstellingen/H2_prijzen/Tarief_vastr  * vraag/Aansluitingen;
+		attribute<Eur_yr>	Oj_Verbruik  (PlanRegio) :=		SpecifiekeInstellingen/H2_prijzen/Marktprijs_H2 * vraag/WaterstofVraag;
+		attribute<Eur>		Oi_Aansl     (PlanRegio) :=		SpecifiekeInstellingen/H2_prijzen/Tarief_aansl  * vraag/Aansluitingen;
+		attribute<Eur_yr>	Oji_Aansl    (PlanRegio) :=		Oi_Aansl * NCW/wd28/AnnualisationFactor;
+	}
+	attribute<Eur_yr>	Oj_Afnemers  (PlanRegio) :=		Opbrengsten/Oj_Vastrecht + Opbrengsten/Oj_Verbruik + Opbrengsten/Oji_Aansl;
+	attribute<Eur_yr>	Oji_Subsidie (PlanRegio) :=		Opbrengsten/Oji_ge_EIA + Opbrengsten/Oji_pt_EIA + Opbrengsten/Oji_wd_EIA + Opbrengsten/Oji_ow_EIA + Opbrengsten/Oji_id_EIA;
+	attribute<Eur_yr>	Oj_Subsidie  (PlanRegio) :=		Opbrengsten/Oj_ge_EEA + Opbrengsten/Oj_pt_EEA + Opbrengsten/Oj_wd_EEA + Opbrengsten/Oj_ow_EEA + Opbrengsten/Oj_id_EEA + Opbrengsten/Oj_SDE;
+	attribute<Eur_yr>	Kj_OenM      (PlanRegio) :=		Kosten/ge/Kj_ge_oh + Kosten/pt/Kj_pt_oh + Kosten/wd/Kj_wd_oh + Kosten/ow/Kj_ow_oh + Kosten/id/Kj_id_oh + Kosten/lv/Kj_lv_adm;
+	attribute<Eur_yr>	Kji_Totaal   (PlanRegio) :=		Kosten/ge/Kji_ge + Kosten/pt/Kji_pt + Kosten/ow/Kji_ow + Kosten/wd/Kji_wd + Kosten/id/Kji_id;
+	attribute<Eur_yr>	Oj_Afweging  (PlanRegio) :=		Oj_Afnemers + Oji_Subsidie + Oj_Subsidie - Kj_OenM - Kji_Totaal - Kosten/ow/Kj_ow_productie;
+	attribute<kg_yr>	CO2          (PlanRegio) :=		const(0.0[kg_yr], PlanRegio);
+
+	attribute<bool>		Rendabel     (PlanRegio) :=		Voorkeuren/Afweging/AlwaysH2 ? const(true, Planregio) : Oj_Afweging > 0[Eur_yr];
+	attribute<bool>		HeeftOptie   (PlanRegio) :=		IsDefined(BeginStatus/PlanRegioWarmteAllocatie_REMOVE);
+	attribute<bool>		OldGebruik   (PlanRegio) :=		BeginStatus/PlanRegioWarmteAllocatie_REMOVE == Optie;
+	attribute<bool>		NewGebruik   (PlanRegio) :=		Rendabel && not(HeeftOptie);
+	attribute<bool>		InGebruik    (PlanRegio) :=		OldGebruik || NewGebruik;
+
+	container Results := BeginStatus
+	{
+		container BebouwingMutatie :=
+			for_each_ne(Classifications/BebouwingsComponent/Name
+				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name+', Optie, .../InGebruik)'
+			);
+		container Bebouwing :=
+			for_each_ne(Classifications/BebouwingsComponent/Name
+				, 'BebouwingMutatie/'+Classifications/BebouwingsComponent/Name+'/result'
+			);
+		attribute<Classifications/GebiedsOptie> PlanRegioWarmteAllocatie_REMOVE (PlanRegio) :=
+			../InGebruik
+				? Optie
+				: BeginStatus/PlanRegioWarmteAllocatie_REMOVE;
+				
+		container Waterstof {
+			container VorigePeriode := ='BeginStatus/'+Classifications/GebiedsOptie/Name[optie];
+			attribute<Float64> P_vol(PlanRegio) := VorigePeriode/P_Vol;
+			
+			container jaarlijks
+			{
+				container ge {
+					attribute<Eur_yr>	Kj_ge_hv        (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kji_ge_ov       (PlanRegio) :=	float64(NewGebruik) * Kosten/ge/Ki_ge_ov * NCW/id28/AnnualisationFactor + VorigePeriode/jaarlijks/ge/Kji_ge_ov;
+					attribute<Eur_yr>	Kji_ge_pm       (PlanRegio) :=	float64(NewGebruik) * Kosten/ge/Ki_ge_pm * NCW/id28/AnnualisationFactor + VorigePeriode/jaarlijks/ge/Kji_ge_pm;
+					attribute<Eur_yr>	Kmi_ge_ov       (PlanRegio) :=	float64(NewGebruik) * Kosten/ge/Ki_ge_ov * NCW/mr28/AnnualisationFactor + VorigePeriode/jaarlijks/ge/Kmi_ge_ov;
+					attribute<Eur_yr>	Kmi_ge_pm       (PlanRegio) :=	float64(NewGebruik) * Kosten/ge/Ki_ge_pm * NCW/mr28/AnnualisationFactor + VorigePeriode/jaarlijks/ge/Kmi_ge_pm;
+					attribute<Eur_yr>	Om_ge_comfort   (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Omi_ge_HR       (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Oji_ge_HR       (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Bji_ge_Aansl    (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oji_aansl + VorigePeriode/jaarlijks/ge/Bji_ge_Aansl;
+					attribute<Eur_yr>	Oji_ge_EIA      (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_ge_EIA * NCW/id28/AnnualisationFactor + VorigePeriode/jaarlijks/ge/Oji_ge_EIA;
+					attribute<Eur_yr>	Omi_ge_EIA      (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_ge_EIA * NCW/mr28/AnnualisationFactor + VorigePeriode/jaarlijks/ge/Omi_ge_EIA;
+				}
+				
+				container id {
+					attribute<Eur_yr>	Kj_id_gas       (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_id_gas_EH    (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_id_gas_CO2   (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Km_id_gas       (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_id_elek      (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_id_elek_EH   (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_id_elek_CO2  (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Km_id_elek      (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_id_oh        (PlanRegio) :=	float64(InGebruik) * Kosten/id/Kj_id_oh;
+					attribute<Eur_yr>	Kj_id_adm       (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kji_id          (PlanRegio) :=	float64(NewGebruik) * Kosten/id/Kji_id + VorigePeriode/jaarlijks/id/Kji_id;
+					attribute<Eur_yr>	Kmi_id          (PlanRegio) :=	float64(NewGebruik) * Kosten/id/Kmi_id + VorigePeriode/jaarlijks/id/Kmi_id;
+					attribute<Eur_yr>	Oji_id_EIA      (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_id_EIA * NCW/id28/AnnualisationFactor + VorigePeriode/jaarlijks/id/Oji_id_EIA;
+					attribute<Eur_yr>	Omi_id_EIA      (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_id_EIA * NCW/mr28/AnnualisationFactor + VorigePeriode/jaarlijks/id/Omi_id_EIA;
+					attribute<Eur_yr>	Oj_id_EEA       (PlanRegio) :=	float64(InGebruik) * Opbrengsten/Oj_id_EEA;
+					attribute<Eur_yr>	Oj_id_SDE       (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+				}
+				
+				container wd {
+					attribute<Eur_yr>	Kj_wd_gas       (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_wd_gas_EH    (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_wd_gas_CO2   (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Km_wd_gas       (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_wd_elek      (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_wd_elek_EH   (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_wd_elek_CO2  (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Km_wd_elek      (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_wd_oh        (PlanRegio) :=	float64(InGebruik) * Kosten/wd/Kj_wd_oh + VorigePeriode/jaarlijks/wd/Kj_wd_oh;
+					attribute<Eur_yr>	Kj_wd_adm       (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kji_wd          (PlanRegio) :=	float64(NewGebruik) * Kosten/wd/Kji_wd + VorigePeriode/jaarlijks/wd/Kji_wd;
+					attribute<Eur_yr>	Kmi_wd          (PlanRegio) :=	float64(NewGebruik) * Kosten/wd/Kmi_wd + VorigePeriode/jaarlijks/wd/Kmi_wd;
+					attribute<Eur_yr>	Oji_wd_EIA      (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_wd_EIA * NCW/wd28/AnnualisationFactor + VorigePeriode/jaarlijks/wd/Oji_wd_EIA;
+					attribute<Eur_yr>	Omi_wd_EIA      (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_wd_EIA * NCW/mr28/AnnualisationFactor + VorigePeriode/jaarlijks/wd/Omi_wd_EIA;
+					attribute<Eur_yr>	Oj_wd_EEA       (PlanRegio) :=	float64(InGebruik) * Opbrengsten/Oj_wd_EEA;
+					attribute<Eur_yr>	Oj_wd_SDE       (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+				}
+				container pt {				
+					attribute<Eur_yr>	Kj_pt_oh        (PlanRegio) :=	float64(NewGebruik) * Kosten/pt/Kj_pt_oh + VorigePeriode/jaarlijks/pt/Kj_pt_oh;
+					attribute<Eur_yr>	Kj_pt_adm       (PlanRegio) :=	const(0[Eur_yr], PlanRegio);
+					attribute<Eur_yr>	Kji_pt          (PlanRegio) :=	float64(NewGebruik) * Kosten/pt/Kji_pt + VorigePeriode/jaarlijks/pt/Kji_pt;
+					attribute<Eur_yr>	Kmi_pt          (PlanRegio) :=	float64(NewGebruik) * Kosten/pt/Kmi_pt + VorigePeriode/jaarlijks/pt/Kmi_pt;
+					attribute<Eur_yr>	Oji_pt_EIA      (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_pt_EIA * NCW/pt28/AnnualisationFactor + VorigePeriode/jaarlijks/pt/Oji_pt_EIA;
+					attribute<Eur_yr>	Omi_pt_EIA      (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_pt_EIA * NCW/mr28/AnnualisationFactor + VorigePeriode/jaarlijks/pt/Omi_pt_EIA;
+					attribute<Eur_yr>	Oj_pt_EEA       (PlanRegio) :=	float64(InGebruik) * Opbrengsten/Oj_pt_EEA;
+				}
+				container ow {
+					attribute<Eur_yr>	Kj_ow_gas       (PlanRegio) :=	const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_ow_gas_EH    (PlanRegio) :=	const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_ow_gas_CO2   (PlanRegio) :=	const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Km_ow_gas       (PlanRegio) :=	const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_ow_elek      (PlanRegio) :=	const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_ow_elek_EH   (PlanRegio) :=	const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_ow_elek_CO2  (PlanRegio) :=	const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Km_ow_elek      (PlanRegio) :=	const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Kj_ow_productie (PlanRegio) :=	float64(InGebruik) * Kosten/ow/Kj_ow_productie;
+					attribute<Eur_yr>	Kj_ow_oh        (PlanRegio) :=	float64(InGebruik) * Kosten/ow/Kj_ow_oh;
+					attribute<Eur_yr>	Kj_ow_adm       (PlanRegio) :=	const(0[EUR_yr], PlanRegio);
+					attribute<Eur_yr>	Kji_ow          (PlanRegio) :=	float64(NewGebruik) * Kosten/ow/Kji_ow + VorigePeriode/jaarlijks/ow/Kji_ow;
+					attribute<Eur_yr>	Kmi_ow          (PlanRegio) :=	float64(NewGebruik) * Kosten/ow/Kmi_ow + VorigePeriode/jaarlijks/ow/Kmi_ow;
+					attribute<Eur_yr>	Oji_ow_EIA      (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_ow_EIA * NCW/ow28/AnnualisationFactor + VorigePeriode/jaarlijks/ow/Oji_ow_EIA;
+					attribute<Eur_yr>	Omi_ow_EIA      (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_ow_EIA * NCW/mr28/AnnualisationFactor + VorigePeriode/jaarlijks/ow/Omi_ow_EIA;
+					attribute<Eur_yr>	Oj_ow_EEA       (PlanRegio) :=	float64(InGebruik) * Opbrengsten/Oj_ow_EEA;					
+					attribute<Eur_yr>	Oj_ow_SDE       (PlanRegio) :=	const(0[EUR_yr], PlanRegio);
+				}
+				container lv
+				{
+					attribute<Eur_yr>	Oji_lv_Aansl    (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_Aansl * NCW/wd28/AnnualisationFactor + VorigePeriode/jaarlijks/lv/Oji_lv_Aansl;
+					attribute<Eur_yr>	Omi_lv_Aansl    (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_Aansl * NCW/mr28/AnnualisationFactor + VorigePeriode/jaarlijks/lv/Omi_lv_Aansl;
+					attribute<Eur_yr>	Oj_lv_verbruik  (PlanRegio) :=	float64(InGebruik) * Opbrengsten/Oj_Verbruik;
+					attribute<Eur_yr>	Oj_lv_vastrecht (PlanRegio) :=	float64(InGebruik) * Opbrengsten/Oj_Vastrecht;
+					attribute<Eur_yr>	Oj_lv_SDE       (PlanRegio) :=	float64(InGebruik) * Opbrengsten/Oj_SDE;
+				}
+			}
+
+			container eenmalig
+			{				
+				attribute<Eur>		Oi_lv_Aansl   (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_aansl;
+				attribute<Eur>		Oi_ge_HR      (PlanRegio) :=	const(0[Eur], PlanRegio);
+				attribute<Eur>		Ki_ge_ov      (PlanRegio) :=	float64(NewGebruik) * Kosten/ge/Ki_ge_ov;
+				attribute<Eur>		Ki_ge_pm      (PlanRegio) :=	float64(NewGebruik) * Kosten/ge/Ki_ge_pm;
+				attribute<Eur>		Oi_ge_EIA     (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_aansl;
+				attribute<Eur>		Ki_id         (PlanRegio) :=	float64(NewGebruik) * Kosten/id/Ki_id;
+				attribute<Eur>		Oi_id_EIA     (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_aansl;
+				attribute<Eur>		Ki_wd         (PlanRegio) :=	float64(NewGebruik) * Kosten/wd/Ki_wd;
+				attribute<Eur>		Oi_wd_EIA     (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_aansl;
+				attribute<Eur>		Ki_pt         (PlanRegio) :=	float64(NewGebruik) * Kosten/pt/Ki_pt;
+				attribute<Eur>		Oi_pt_EIA     (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_aansl;
+				attribute<Eur>		Ki_ow         (PlanRegio) :=	float64(NewGebruik) * Kosten/ow/Ki_ow;
+				attribute<Eur>		Oi_ow_EIA     (PlanRegio) :=	float64(NewGebruik) * Opbrengsten/Oi_aansl;
+			}
+			container Verbruik
+			{
+				attribute<Gj_yr>	V_id_gas      (PlanRegio) :=	const(0[Gj_yr], PlanRegio);
+				attribute<Gj_yr>	V_wd_gas      (PlanRegio) :=	const(0[Gj_yr], PlanRegio);
+				attribute<Gj_yr>	V_ow_gas      (PlanRegio) :=	const(0[Gj_yr], PlanRegio);
+				attribute<Gj_yr>	V_id_elek     (PlanRegio) :=	const(0[Gj_yr], PlanRegio);
+				attribute<Gj_yr>	V_wd_elek     (PlanRegio) :=	const(0[Gj_yr], PlanRegio);
+				attribute<Gj_yr>	V_ow_elek     (PlanRegio) :=	const(0[Gj_yr], PlanRegio);
+				attribute<Gj_yr>	V_id_verlies  (PlanRegio) :=	const(0[Gj_yr], PlanRegio);
+				attribute<Gj_yr>	V_wd_verlies  (PlanRegio) :=	const(0[Gj_yr], PlanRegio);
+				attribute<Gj_yr>	V_pt_verlies  (PlanRegio) :=	const(0[Gj_yr], PlanRegio);
+				attribute<Gj_yr>	V_warmte      (PlanRegio) :=	float64(InGebruik) * Vraag/V_Warmte;
+				attribute<Gj_yr>	V_koude       (PlanRegio) :=	const(0[Gj_yr], PlanRegio);
+				attribute<Gj_yr>	V_id_warmte   (PlanRegio) :=	float64(InGebruik) * (Vraag/WaterstofVraag - Vraag/V_Warmte);
+				attribute<Gj_yr>	V_wd_warmte   (PlanRegio) :=	const(0[Gj_yr], PlanRegio);
+				attribute<Gj_yr>	V_ow_warmte   (PlanRegio) :=	const(0[Gj_yr], PlanRegio);			
+				attribute<Gj_yr>	V_ow_koude    (PlanRegio) :=	const(0[Gj_yr], PlanRegio);
+			}
+			
+			container Uitstoot
+			{
+				attribute<KG_yr>	CO2_id_gas    (PlanRegio) :=	const(0[KG_yr], PlanRegio);
+				attribute<KG_yr>	CO2_wd_gas    (PlanRegio) :=	const(0[KG_yr], PlanRegio);
+				attribute<KG_yr>	CO2_ow_gas    (PlanRegio) :=	const(0[KG_yr], PlanRegio);
+				attribute<KG_yr>	CO2_id_elek   (PlanRegio) :=	const(0[KG_yr], PlanRegio);
+				attribute<KG_yr>	CO2_wd_elek   (PlanRegio) :=	const(0[KG_yr], PlanRegio);
+				attribute<KG_yr>	CO2_ow_elek   (PlanRegio) :=	const(0[KG_yr], PlanRegio);			
+			}
+
+		}
+	}
+}
