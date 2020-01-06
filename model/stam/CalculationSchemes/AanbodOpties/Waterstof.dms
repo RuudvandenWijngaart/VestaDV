@@ -17,18 +17,16 @@ template Waterstof
 	unit<uint8>		Prijzen_elec   :=	Prijzen/Elektriciteit/Staffel;
 	unit<uint8>		H2Component    :=	Classifications/WkoComponent;
 	
+	//KOSTEN EN PERFORMANCE KENTALLEN
 	container Kentallen := Kengetallen/H2kentallen/H2template(LeerCurves/Waterstof/Curve, LeerCurves/OenM/Curve, Schuiven/KostenMin, Schuiven/KostenMax, Schuiven/EfficiencySchuif);
 	
-	container Emissie
-	{
-		parameter<kg_GJ> CO2_GJb := 0[kg_GJ];
-		parameter<g_GJ>  NOx_GJb := 0[g_GJ];
-		parameter<g_GJ>  SO2_GJb := 0[g_GJ];
-		parameter<g_GJ>  VOS_GJb := 0[g_GJ];
-		parameter<g_GJ>  TS_GJb  := 0[g_GJ];
-	}
+	//UITSTOOTKENTALLEN
+	container Emissie := Kengetallen/H2kentallen/Emissies;
+	
+	//GEBOUWNIVEAU BEREKENINGEN
 	container CandidateSets := for_each_ne(H2Component/Name, 'WaterstofData(BebouwingsComponenten/'+H2Component/Name+', Optie)');
 
+	//SAMENVOEGING BEREKENINGEN GEBOUWNIVEAU NAAR PLANREGIO
 	container Vraag
 	{
 		attribute<gj_yr>		V_Warmte        (PlanRegio) :=	='add('+AsItemList('CandidateSets/' + H2Component/Name + '/PerPlanRegio/V_Warmte')+')';	
@@ -39,6 +37,8 @@ template Waterstof
 		attribute<eur_yr>		Kj_id_elek_EH   (PlanRegio) :=	='add('+AsItemList('CandidateSets/' + H2Component/Name + '/PerPlanRegio/Kj_id_elek_EH')+')';	
 		attribute<eur_yr>		Kj_id_elek_CO2  (PlanRegio) :=	='add('+AsItemList('CandidateSets/' + H2Component/Name + '/PerPlanRegio/Kj_id_elek_CO2')+')';	
 	}	
+	
+	//KOSTEN PER PLANREGIO
 	container Kosten
 	{
 		container ge			//VERGOEDINGEN
@@ -92,6 +92,8 @@ template Waterstof
 			attribute<Eur_yr>	Kj_lv_adm       (PlanRegio) :=	Leercurves/OenM/Curve * Kengetallen/H2kentallen/R_lv_admin * opbrengsten/Oj_Vastrecht;
 		}
 	}
+	
+	//OPBRENGSTEN PER PLANREGIO
 	container Opbrengsten
 	{
 		//SUBSIDIES
@@ -118,6 +120,8 @@ template Waterstof
 		attribute<Eur>		Oi_Aansl     (PlanRegio) :=		SpecifiekeInstellingen/H2_prijzen/Tarief_aansl  * vraag/Aansluitingen;
 		attribute<Eur_yr>	Oji_Aansl    (PlanRegio) :=		Oi_Aansl * NCW/wd28/AnnualisationFactor;
 	}
+	
+	//AFWEGING
 	attribute<Eur_yr>	Oj_Afnemers  (PlanRegio) :=		Opbrengsten/Oj_Vastrecht + Opbrengsten/Oj_Verbruik + Opbrengsten/Oji_Aansl;
 	attribute<Eur_yr>	Oji_Subsidie (PlanRegio) :=		Opbrengsten/Oji_ge_EIA + Opbrengsten/Oji_pt_EIA + Opbrengsten/Oji_wd_EIA + Opbrengsten/Oji_ow_EIA + Opbrengsten/Oji_id_EIA;
 	attribute<Eur_yr>	Oj_Subsidie  (PlanRegio) :=		Opbrengsten/Oj_ge_EEA + Opbrengsten/Oj_pt_EEA + Opbrengsten/Oj_wd_EEA + Opbrengsten/Oj_ow_EEA + Opbrengsten/Oj_id_EEA + Opbrengsten/Oj_SDE;
@@ -125,13 +129,13 @@ template Waterstof
 	attribute<Eur_yr>	Kji_Totaal   (PlanRegio) :=		Kosten/ge/Kji_ge + Kosten/pt/Kji_pt + Kosten/ow/Kji_ow + Kosten/wd/Kji_wd + Kosten/id/Kji_id;
 	attribute<Eur_yr>	Oj_Afweging  (PlanRegio) :=		Oj_Afnemers + Oji_Subsidie + Oj_Subsidie - Kj_OenM - Kji_Totaal - Kosten/ow/Kj_ow_productie - Kosten/id/Kj_id_elek;
 	attribute<kg_yr>	CO2          (PlanRegio) :=		Emissie/CO2_GJb * Vraag/Waterstofvraag;
-
 	attribute<bool>		Rendabel     (PlanRegio) :=		Voorkeuren/Afweging/AlwaysH2 ? const(true, Planregio) : Oj_Afweging > 0[Eur_yr];
 	attribute<bool>		HeeftOptie   (PlanRegio) :=		IsDefined(BeginStatus/PlanRegioWarmteAllocatie_REMOVE);
 	attribute<bool>		OldGebruik   (PlanRegio) :=		BeginStatus/PlanRegioWarmteAllocatie_REMOVE == Optie;
 	attribute<bool>		NewGebruik   (PlanRegio) :=		Rendabel && not(HeeftOptie);
 	attribute<bool>		InGebruik    (PlanRegio) :=		OldGebruik || NewGebruik;
 
+	//ADMINISTRATIE RESULTATEN
 	container Results := BeginStatus
 	{
 		container BebouwingMutatie :=
