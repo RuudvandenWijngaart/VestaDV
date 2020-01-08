@@ -86,10 +86,60 @@ template WKO
 	}
 
 	container Iterations := for_each_ne(Iteration/Name, 'WKOIter(' + Iteration/Prev + ', UnitedCandidates)');
-//	container IterationTest := WKOIter(UnitedCandidates,UnitedCandidates);
 	container LastIter :=  ='Iterations/'+last(Iteration/Name);
 	container LastClusters := LastIter/SelectedClusters;
 
+	container BuurtSelected
+	{		
+		attribute<Eur_yr>   CoMr_bw           (PlanRegio) := sum(CandidateSets/BestaandeWoning/Contributiemarge, CandidateSets/BestaandeWoning/BCdata/Planregio_rel);
+		attribute<Eur_yr>   CoMr_nw           (PlanRegio) := sum(CandidateSets/NieuwbouwWoning/Contributiemarge, CandidateSets/NieuwbouwWoning/BCdata/Planregio_rel);
+		attribute<Eur_yr>   CoMr_bu           (PlanRegio) := sum(CandidateSets/BestaandeUtil/Contributiemarge, CandidateSets/BestaandeUtil/BCdata/Planregio_rel);
+		attribute<Eur_yr>   CoMr_nu           (PlanRegio) := sum(CandidateSets/NieuwbouwUtil/Contributiemarge, CandidateSets/NieuwbouwUtil/BCdata/Planregio_rel);
+		attribute<Eur_yr>	Contributiemarge  (PlanRegio) := CoMr_bw + CoMr_nw + CoMr_bu + CoMr_nu;		
+		
+		attribute<KW>   	PW_bw             (PlanRegio) := sum(CandidateSets/BestaandeWoning/P_sec, CandidateSets/BestaandeWoning/BCdata/Planregio_rel);
+		attribute<KW>   	PW_nw             (PlanRegio) := sum(CandidateSets/NieuwbouwWoning/P_sec, CandidateSets/NieuwbouwWoning/BCdata/Planregio_rel);
+		attribute<KW>   	PW_bu             (PlanRegio) := sum(CandidateSets/BestaandeUtil/P_sec, CandidateSets/BestaandeUtil/BCdata/Planregio_rel);
+		attribute<KW>   	PW_nu             (PlanRegio) := sum(CandidateSets/NieuwbouwUtil/P_sec, CandidateSets/NieuwbouwUtil/BCdata/Planregio_rel);
+		attribute<KW>   	P_sec             (PlanRegio) := PW_bw + PW_nw + PW_bu + PW_nu;		
+		attribute<m2>		AreaProxy         (PlanRegio) := Invoer/RuimtelijkeData/StudieGebied/buurt/Overigen_r_land_com * Invoer/RuimtelijkeData/StudieGebied/buurt/Area;
+		
+		container LeidingKosten	:=	BuisKosten(PlanRegio, P_sec * 0.001[ MW / kW]);
+			
+		attribute<m>		L_hoofdleiding    (PlanRegio) := 0.25 * /Invoer/RuimtelijkeData/buislengte/per_buurt/L_dist, Descr = "aantal meter distributieleidingen (hoofd)", Source = "aanlevering GreenVis juni 2019";
+		attribute<Eur>		K_hoofdleiding    (PlanRegio) := L_hoofdleiding * Leidingkosten/K_m;
+		attribute<m>		L_zijleiding      (PlanRegio) := 0.75 * /Invoer/RuimtelijkeData/buislengte/per_buurt/L_dist, Descr = "aantal meter distributieleidingen (zij)", Source = "aanlevering GreenVis juni 2019";
+		attribute<Eur>		K_zijleiding      (PlanRegio) := 0.125 * L_zijleiding * Leidingkosten/K_m;
+		attribute<Eur>		Ki_wd             (PlanRegio) := AreaProxy * Kostenkentallen/Ki_distr;
+		
+		attribute<Eur_yr>	Kj_wd_oh          (PlanRegio) := Ki_wd * Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_wd_onderhoud;
+		attribute<Eur_yr>	Kj_wd_adm         (PlanRegio) := Ki_wd * Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_wd_admin;	
+		attribute<Eur>		Oi_wd_EIA         (PlanRegio) := Ki_wd * SpecifiekeInstellingen/Beleid/EIA/wd   ,	Descr ="investeringssubsidie wijkdistributie";
+		attribute<Eur_Yr>	Kji_wd            (PlanRegio) := Ki_wd * NCW/wd28/AnnualisationFactor           ,	Descr ="jaarlijkse kapitaallasten wijkdistributie";
+		attribute<Eur_Yr>	Oji_wd_EIA        (PlanRegio) := Oi_wd_EIA * NCW/wd28/AnnualisationFactor       ,	Descr ="jaarlijkse subsidie wijkdistributie";
+		attribute<Eur_Yr>	Oj_wd_EEA         (PlanRegio) := SpecifiekeInstellingen/Beleid/EEA/wd * (Kj_wd_oh + Kj_wd_adm);	
+		attribute<Eur>		Ki_ow             (PlanRegio) := const(KostenKentallen/Ki_WKO_vast * KostenKentallen/R_Regeneratie, PlanRegio);
+		attribute<Eur_yr>	Kj_ow_oh          (PlanRegio) := Ki_ow * Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_WKO_onderhoud;
+		attribute<Eur_yr>	Kj_ow_adm         (PlanRegio) := Ki_ow * Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_WKO_admin;	
+		attribute<Eur>		Oi_ow_EIA         (PlanRegio) := Ki_ow * SpecifiekeInstellingen/Beleid/EIA/LT   ,	Descr ="investeringssubsidie opwekking";
+		attribute<Eur_Yr>	Oji_ow_EIA        (PlanRegio) := Oi_ow_EIA * NCW/ow28/AnnualisationFactor       ,	Descr ="jaarlijkse subsidie opwekking";
+		attribute<Eur_Yr>	Oj_ow_EEA         (PlanRegio) := SpecifiekeInstellingen/Beleid/EEA/LT * (Kj_ow_oh + Kj_ow_adm);
+		attribute<Eur_Yr>	Kji_ow            (PlanRegio) := Ki_ow * NCW/ow28/AnnualisationFactor;
+		attribute<Eur_yr>	Oji_netto         (PlanRegio) := Contributiemarge
+																- Kji_ow
+																- Kji_wd
+																- Kj_wd_oh
+																- Kj_wd_adm
+																- Kj_ow_oh
+																- Kj_ow_adm
+																+ Oji_ow_EIA
+																+ Oji_wd_EIA
+																+ Oj_ow_EEA
+																+ Oj_wd_EEA;
+		attribute<bool>		Afweging          (PlanRegio) := Voorkeuren/Afweging/LTversusWP ? const(true, PlanRegio) : Oji_netto > 0[Eur_yr];
+	}
+	
+	
 	// decouple the cluster to the individual object level to support reporting of the allocation result
 	unit<uint32> Selected := ='union_unit('+asItemList('Iterations/'+Iteration/Name+'/Selected')+', LastClusters)', DialogType = "Map", DialogData = "Point"
 	{
@@ -100,7 +150,6 @@ template WKO
 		attribute<kW>        P_Warmte (selected) := sum(UnitedCandidates/P_Warmte, Partitioning);
 		attribute<kW>        P_Koude  (selected) := sum(UnitedCandidates/P_Warmte, Partitioning);
 		
-//		attribute<Eur_yr>    Contributiemarge (selected) := sum(UnitedCandidates/Contributiemarge, Partitioning);
 		attribute<Eur_yr>    Contributiemarge (selected) := ='union_data(., '+AsItemList('Iterations/'+Iteration/Name+'/Selected/Contributiemarge')+', LastClusters/Contributiemarge)';
 
 		//Afweging tot aansluiten op clusterniveau, inclusief berekening bronkosten vast deel
