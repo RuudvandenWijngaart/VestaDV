@@ -11,68 +11,71 @@ template WaterstofData
 	parameter<Classifications/GebiedsOptie> Optie;
 	// end case parameters
 
-	unit<uint32>		BebouwingsObject :=	BCdata/BebouwingsObject;
-	unit<uint32>		PlanRegio        :=	Invoer/SpecifiekeInstellingen/PlanRegio;
-	parameter<bool>		IsHybride        :=	Optie == Classifications/GebiedsOptie/V/WaterstofWP;
+	unit<uint32>			BebouwingsObject   :=	BCdata/BebouwingsObject;
+	unit<uint32>			PlanRegio          :=	Invoer/SpecifiekeInstellingen/PlanRegio;
+	parameter<bool>			IsHybride          :=	Optie == Classifications/GebiedsOptie/V/WaterstofWP;
+	parameter<bool>			IsNieuwbouw        :=	BCdata/IsNieuwbouw;
 	
 	//DEELNAME
-	attribute<bool>		GasVerwarmd     (BebouwingsObject) :=	BcData/WarmteOptie == 'gas';
-	attribute<bool>		LabelOK         (BebouwingsObject) :=	IsHybride ? BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelC : const(true, BebouwingsObject);
-	attribute<bool>		WPgeschikt      (BebouwingsObject) :=	GasVerwarmd && LabelOK;
-	attribute<nrAansl>	nrAansluitingen (BebouwingsObject) :=	float64(GasVerwarmd) * BcData/RuimtelijkeVraagComponent/nrAansluitingen;
+	attribute<bool>			GasVerwarmd     (BebouwingsObject) :=	BcData/WarmteOptie == 'gas';
+	attribute<bool>			LabelOK         (BebouwingsObject) :=	IsHybride ? BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelC : const(true, BebouwingsObject);
+	attribute<bool>			WPgeschikt      (BebouwingsObject) :=	GasVerwarmd && LabelOK;
+	attribute<nrAansl>		nrAansluitingen (BebouwingsObject) :=	float64(GasVerwarmd) * BcData/RuimtelijkeVraagComponent/nrAansluitingen;
 	
 	//VRAAG
-	attribute<GJ_yr> V_RV       (BebouwingsObject) := BCdata/Functioneel/RuimteVerwarming,	Descr = "metervraag naar ruimteverwarming";
-	attribute<GJ_yr> V_APP      (BebouwingsObject) := BCdata/Functioneel/Apparatuur,		Descr = "vraag naar elektriciteit voor apparatuur";
-	attribute<GJ_yr> V_TW       (BebouwingsObject) := BCdata/Functioneel/WarmWater,			Descr = "metervraag naar warm tapwater";
+	attribute<GJ_yr>		V_RV            (BebouwingsObject) := BCdata/Functioneel/RuimteVerwarming,	Descr = "vraag naar ruimteverwarming";
+	attribute<GJ_yr>		V_APP           (BebouwingsObject) := BCdata/Functioneel/Apparatuur,		Descr = "vraag naar elektriciteit voor apparatuur";
+	attribute<GJ_yr>		V_TW            (BebouwingsObject) := BCdata/Functioneel/WarmWater,			Descr = "vraag naar warm tapwater";
 	
 	//EFFICIENCY
-	parameter<ratio>  Eff_H2_RV := Kengetallen/H2kentallen/Eff_H2_RV;
-	parameter<ratio>  Eff_H2_TW := Kengetallen/H2kentallen/Eff_H2_TW;
+	parameter<ratio>		Eff_H2_RV        := Kentallen/Eff_H2_RV;
+	parameter<ratio>		Eff_H2_TW        := Kentallen/Eff_H2_TW;
 	
 	attribute<ratio>     SPF_elek_rv  (BebouwingsObject) := 
-		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/Aplus  ? Kengetallen/H2kentallen/SPF_WP_RV_A :
-		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelB ? Kengetallen/H2kentallen/SPF_WP_RV_B :
-		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelC ? Kengetallen/H2kentallen/SPF_WP_RV_C : 1.0, Descr = "Efficientie van de individuele warmtepomp voor eigen ruimteverwarming";
+		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/Aplus  ? Kentallen/SPF_WP_RV_A :
+		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelB ? Kentallen/SPF_WP_RV_B :
+		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelC ? Kentallen/SPF_WP_RV_C : 1.0, Descr = "Efficientie van de individuele warmtepomp voor eigen ruimteverwarming";
 		
 	attribute<ratio>     Dekking_WP  (BebouwingsObject) := !IsHybride || !WPgeschikt ? 0.0 : (
-		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/Aplus  ? Kengetallen/H2kentallen/Dekking_WP_A :
-		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelB ? Kengetallen/H2kentallen/Dekking_WP_B :
-		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelC ? Kengetallen/H2kentallen/Dekking_WP_C : 0.0), Descr = "Dekkingsgraad warmtepomp, afhankelijk van schillabel";
+		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/Aplus  ? Kentallen/Dekking_WP_A :
+		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelB ? Kentallen/Dekking_WP_B :
+		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelC ? Kentallen/Dekking_WP_C : 0.0), Descr = "Dekkingsgraad warmtepomp, afhankelijk van schillabel";
 	
 	//VERBRUIK
-	attribute<GJ_yr> V_H2_TW   (BebouwingsObject) :=	float64(GasVerwarmd) * (V_TW / Eff_H2_TW);
-	attribute<GJ_yr> V_H2_RV   (BebouwingsObject) :=	float64(GasVerwarmd) * (V_RV * (1.0 - Dekking_WP) / Eff_H2_RV);
-	attribute<GJ_yr> V_elek    (BebouwingsObject) :=	float64(GasVerwarmd) * (V_RV * Dekking_WP / SPF_elek_rv);
-	attribute<GJ_yr> V_pomp    (BebouwingsObject) :=	float64(GasVerwarmd) * (IsHybride && WPgeschikt ? const(0.0, BebouwingsObject) : BCdata/Functioneel/PompEnergie);
+	attribute<GJ_yr>		V_H2_TW        (BebouwingsObject) :=	float64(GasVerwarmd) * (V_TW / Eff_H2_TW);
+	attribute<GJ_yr>		V_H2_RV        (BebouwingsObject) :=	float64(GasVerwarmd) * (V_RV * (1.0 - Dekking_WP) / Eff_H2_RV);
+	attribute<GJ_yr>		V_elek         (BebouwingsObject) :=	float64(GasVerwarmd) * (V_RV * Dekking_WP / SPF_elek_rv) + (IsHybride && WPgeschikt ? const(0.0, BebouwingsObject) : BCdata/Functioneel/PompEnergie);
 		
 	//KOSTEN	
 	attribute<classifications/gebruiksgrootteklasse> ind_gebruiksgrootteklasse_rel(BebouwingsObject) := classify((V_Elek + V_APP), Prijzen_elec/ClassBreak);
 	
-	attribute<Eur_yr>		Kj_elek_EH		(BebouwingsObject)	:= (V_Elek + V_pomp) * Prijzen_elec/KGJ_EnergieHeffing[ind_gebruiksgrootteklasse_rel];	
-	attribute<Eur_yr>		Kj_elek_CO2		(BebouwingsObject)	:= (V_Elek + V_pomp) * Prijzen_elec/KGJ_CO2Heffing[ind_gebruiksgrootteklasse_rel];		
-	attribute<Eur_yr>		Kj_elek			(BebouwingsObject)	:= (V_Elek + V_pomp) * Prijzen_elec/KGJ_eindgebruik_excl[ind_gebruiksgrootteklasse_rel];
-	attribute<Eur_yr>		Km_elek			(BebouwingsObject)	:= (V_Elek + V_pomp) * Prijzen_elec/KGJ_maatschappelijk [ind_gebruiksgrootteklasse_rel];
-	
-	parameter<eur_aansl> Ki_hWP_asl := BCdata/BC_kentallen/Ki_hWP_vast;
-	parameter<eur_kw>    Ki_hWP_cap := BCdata/BC_kentallen/Ki_hWP_var;
-	attribute<KW>        ASW_WP     (BebouwingsObject) := BCdata/RuimtelijkeVraagComponent/Aansluitcapaciteit/RV;
-	attribute<eur>       Ki_hWP     (BebouwingsObject) := float64(WPgeschikt) * (Ki_hWP_asl * nrAansluitingen + Ki_hWP_cap * ASW_WP);
+	parameter<eur_aansl>	Ki_hWP_asl     := BCdata/BC_kentallen/Ki_hWP_vast;
+	parameter<eur_kw>		Ki_hWP_cap     := BCdata/BC_kentallen/Ki_hWP_var;
+
+	attribute<Eur_yr>		Kj_elek_EH     (BebouwingsObject) :=	V_Elek * Prijzen_elec/KGJ_EnergieHeffing[ind_gebruiksgrootteklasse_rel];	
+	attribute<Eur_yr>		Kj_elek_CO2    (BebouwingsObject) :=	V_Elek * Prijzen_elec/KGJ_CO2Heffing[ind_gebruiksgrootteklasse_rel];		
+	attribute<Eur_yr>		Kj_elek	       (BebouwingsObject) :=	V_Elek * Prijzen_elec/KGJ_eindgebruik_excl[ind_gebruiksgrootteklasse_rel];
+	attribute<Eur_yr>		Km_elek        (BebouwingsObject) :=	V_Elek * Prijzen_elec/KGJ_maatschappelijk [ind_gebruiksgrootteklasse_rel];
+	attribute<KW>			ASW_WP         (BebouwingsObject) :=	BCdata/RuimtelijkeVraagComponent/Aansluitcapaciteit/RV;
+	attribute<eur>			Ki_hWP         (BebouwingsObject) :=	float64(WPgeschikt) * (Ki_hWP_asl * nrAansluitingen + Ki_hWP_cap * ASW_WP);
 	
 	container PerPlanRegio
 	{
-			attribute<nrAansl> Aansluitingen (PlanRegio) := sum(nrAansluitingen, BCdata/PlanRegio_rel);
+			attribute<nrAansl>	Aansluitingen (PlanRegio) := sum(nrAansluitingen, BCdata/PlanRegio_rel);
 			
 			//VERBRUIK
-			attribute<GJ_yr> V_Warmte        (PlanRegio) := sum((V_RV + V_TW), BCdata/PlanRegio_rel);
-			attribute<GJ_yr> V_Waterstof     (PlanRegio) := sum((V_H2_TW + V_H2_RV), BCdata/PlanRegio_rel);
-			attribute<GJ_yr> V_id_elek       (PlanRegio) := sum((V_elek + V_pomp), BCdata/PlanRegio_rel);
+			attribute<GJ_yr>	V_Warmte        (PlanRegio) :=	sum((V_RV + V_TW), BCdata/PlanRegio_rel);
+			attribute<GJ_yr>	V_Waterstof     (PlanRegio) :=	sum((V_H2_TW + V_H2_RV), BCdata/PlanRegio_rel);
+			attribute<GJ_yr>	V_id_elek       (PlanRegio) :=	sum(V_elek, BCdata/PlanRegio_rel);
 			
 			//KOSTEN
-			attribute<eur>    Ki_id_WP       (PlanRegio) := sum(Ki_hWP, BCdata/PlanRegio_rel);
-			attribute<Eur_yr> Kj_id_elek     (PlanRegio) := sum(Kj_elek, BCdata/PlanRegio_rel);
-			attribute<Eur_yr> Km_id_elek     (PlanRegio) := sum(Km_elek, BCdata/PlanRegio_rel);
-			attribute<Eur_yr> Kj_id_elek_EH  (PlanRegio) := sum(Kj_elek_EH, BCdata/PlanRegio_rel);
-			attribute<Eur_yr> Kj_id_elek_CO2 (PlanRegio) := sum(Kj_elek_CO2, BCdata/PlanRegio_rel);
+			attribute<eur>		Ki_id_WP        (PlanRegio) :=	sum(Ki_hWP, BCdata/PlanRegio_rel);
+			attribute<Eur_yr>	Kj_id_elek      (PlanRegio) :=	sum(Kj_elek, BCdata/PlanRegio_rel);
+			attribute<Eur_yr>	Km_id_elek      (PlanRegio) :=	sum(Km_elek, BCdata/PlanRegio_rel);
+			attribute<Eur_yr>	Kj_id_elek_EH   (PlanRegio) :=	sum(Kj_elek_EH, BCdata/PlanRegio_rel);
+			attribute<Eur_yr>	Kj_id_elek_CO2  (PlanRegio) :=	sum(Kj_elek_CO2, BCdata/PlanRegio_rel);
+			
+			attribute<Eur>		Ki_ge_pm        (PlanRegio) :=	Aansluitingen * Kentallen/K_pm * float64(!IsNieuwbouw);
+			attribute<Eur>		Ki_ge_ov        (PlanRegio) :=	Aansluitingen * Kentallen/K_ov * float64(!IsNieuwbouw);
 	}
 }
