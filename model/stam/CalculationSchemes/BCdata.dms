@@ -163,16 +163,18 @@ template BCdata
 		
 		unit<uint8> GebouwOptie := Classifications/GebouwOptie {
 			attribute<EUR_asl> Ki_asl := sum(Installatie/Ki_asl[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
-			
-			
-//			attribute<EUR_kW > Ki_cap := sum(Installatie/Ki_cap[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel); // TODO: houdt rekening met gelijktijdigheid
-			
 			attribute<EUR_m2 > Ki_opp := sum(Installatie/Ki_opp[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
+//			attribute<EUR_kW > Ki_cap := Installatie/Ki_cap[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel); // TODO: houdt rekening met gelijktijdigheid			
 		}
 		unit<uint32> Optie := combine(Classifications/DoelLabel, GebouwOptie) {
 			attribute<Classifications/DoelLabel> DoelLabel_rel   := nr_1;
 			attribute<GebouwOptie>               GebouwOptie_rel := nr_2;
 			// bepaal parameters voor verbruik
+			
+			container Performance_rel := for_each_nedv(Classifications/Product/Name
+				,	'GebouwOptie/xProduct/xLabel/Performance_rel[combine_data(GebouwOptie/xProduct/xLabel, combine_data(GebouwOptie/xProduct, GebouwOptie_rel, const(Classifications/Product/V/'+Classifications/Product/Name+', Optie)), DoelLabel_rel)]'
+				,	Optie, Classifications/Performance
+				);
 		}		
 	}
 	
@@ -200,17 +202,29 @@ template BCdata
 		attribute<Classifications/SchilLabel > DoelLabel_rel := Classifications/GebouwOptie/DoelLabel_rel[GebouwOptie_rel];
 		attribute<DoelLabelSet>                DoelLabelSet_rel := combine_data(DoelLabelSet, BebouwingsObject_rel, DoelLabel_rel);
 		
-		attribute<Classifications/Performance> RVb_rel := rlookup(
-			Installatie/name[Classifications/GebouwOptie/xProduct/Installatie_rel[combine_data(Classifications/GebouwOptie/xProduct, GebouwOptie_rel, Product/V/RVb)]] 
-			+ '.' + schillabel_name 
-			+ '.RV'
-		,	Classifications/Performance/code);
+		attribute<Classifications/Performance> RVb_installatie_rel := 
+			Classifications/GebouwOptie/xProduct/Installatie_rel[combine_data(Classifications/GebouwOptie/xProduct, GebouwOptie_rel, Classifications/Product/V/RVb)]; 
+		attribute<Classifications/Performance> RVp_installatie_rel := 
+			Classifications/GebouwOptie/xProduct/Installatie_rel[combine_data(Classifications/GebouwOptie/xProduct, GebouwOptie_rel, Classifications/Product/V/RVP)]; 
+			
+		attribute<Classifications/Performance> RVb_rel := MakeDefined(
+			rlookup(Classifications/Installatie/name[RVb_installatie_rel] + '.' + Classifications/schillabel/name[DoelLabel_rel] + '.RV',	Classifications/Performance/code)
+		,	rlookup(Classifications/Installatie/name[RVb_installatie_rel] + '.x.RV',	Classifications/Performance/code)
+		);
+		attribute<Classifications/Performance> RVp_rel := MakeDefined(
+			rlookup(Classifications/Installatie/name[RVp_installatie_rel] + '.' + Classifications/schillabel/name[DoelLabel_rel] + '.RV',	Classifications/Performance/code)
+		,	rlookup(Classifications/Installatie/name[RVp_installatie_rel] + '.x.RV',	Classifications/Performance/code)
+		);
+		
+		//RVb_rel RuimtelijkeVraagComponent/Aansluitcapaciteit/RV 
+		
 		attribute<Classifications/Performance> TW_rel := rlookup(Installatie_name + '.' + schillabel_name + '.TW', Classifications/Performance/code);
 		attribute<Classifications/Performance> K_rel  := rlookup(Installatie_name + '.' + schillabel_name + '.K',  Classifications/Performance/code);
 		
 //			RuimtelijkeVraagComponent/Aansluitcapaciteit/RV 
 //			RuimtelijkeVraagComponent/Aansluitcapaciteit/TW
 //			RuimtelijkeVraagComponent/Aansluitcapaciteit/K
+		
 		
 		
 		attribute<EUR> Ki_installatie := 

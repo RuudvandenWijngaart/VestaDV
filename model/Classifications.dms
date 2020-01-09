@@ -577,6 +577,8 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<string> Label : ['basis', 'piek'], DialogType = "LabelText";
 	}
 	unit<uint32> Product := combine(ProductType, ServiceNiveau) {
+		attribute<ProductType> ProductType_rel := nr_1;
+		
 		attribute<string> Name := ProductType/Name[nr_1] + ServiceNiveau/Name[nr_2];
 		attribute<string> Label:= ProductType/Label[nr_1] + '.' + ServiceNiveau/Label[nr_2], DialogType = "LabelText";
 		
@@ -882,7 +884,14 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<WarmteOptie> WarmteOptie_rel := rlookup(name, WarmteOptie/name);
 		unit<uint32> xProduct := combine(GebouwOptie, Product)
 		{
+			attribute<Product> Product_rel := nr_2;
 			attribute<Installatie> Installatie_rel := ='union_data(., '+AsItemList('PerOptie/'+Name)+')';
+			unit<uint32> xLabel := combine(xProduct, SchilLabel)
+			{
+				attribute<string> Performance_key1 := Installatie/Name[Installatie_rel[nr_1]] + '.' + SchilLabel/Name[nr_2] + '.' + ProductType/Name[Product/ProductType_rel[Product_rel[nr_1]]];
+				attribute<string> Performance_key2 := Installatie/Name[Installatie_rel[nr_1]] + '.x.' + ProductType/Name[Product/ProductType_rel[Product_rel[nr_1]]];
+				attribute<Performance> Performance_rel := MakeDefined(rlookup(Performance_key1, Performance/code), rlookup(Performance_key2, Performance/code));
+			}
 		}
 		unit<uint32> xInstallatie := combine(GebouwOptie, Installatie)
 		{
@@ -892,6 +901,10 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			attribute<GebouwOptie> GebouwOptie_rel := xInstallatie/nr_1[nr_OrgEntity];
 			attribute<Installatie> Installatie_rel := xInstallatie/nr_2[nr_OrgEntity];
 		}
+		container PerProduct := for_each_nedv(Product/Name
+		,	'xProduct/Installatie_rel[combine_data(xProduct, ID(GebouwOptie), Product/V/'+Product/Name+')]'
+		,	., Installatie
+		);
 	}
 	unit<uint8> GebiedsOptie : nrofrows = 14 // volgorde niet hier instellen maar in SpecifiekeInstellingen/Voorkeuren/BaseLine/WarmteOpties
 	{
