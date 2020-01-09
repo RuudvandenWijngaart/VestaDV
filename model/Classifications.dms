@@ -548,24 +548,25 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
 	
-	unit<uint8> DoelLabel := unique(SchilSprong/Naar_rel)
+	unit<uint8> DoelLabel_NaSprong := unique(SchilSprong/Naar_rel)
 	{
 		attribute<schillabel> SchilLabel_rel := values;
 		attribute<string> Name := SchilLabel/Name[SchilLabel_rel];
 		
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);		
 	}
-/* REMOVE	
-	unit<uint8> DoelLabelOrIdle := union(DoelLabel, void)
+
+	unit<uint8> DoelLabel := union_unit_uint8(DoelLabel_NaSprong, void)
 	{
-		attribute<string> Name := union_data(., DoelLabel/Name, 'geen');
-		attribute<schillabel> SchilLabel_rel := union_data(., DoelLabel/Name, (0/0)[schillabel]);
+		attribute<string> Name := union_data(., DoelLabel_NaSprong/Name, 'geen');
+		attribute<DoelLabel_NaSprong> NaSprong_rel := union_data(., ID(DoelLabel_NaSprong), (0/0)[DoelLabel_NaSprong]);
+		attribute<schillabel> SchilLabel_rel := union_data(., DoelLabel_NaSprong/SchilLabel_rel, (0/0)[schillabel]);
 		
-		attribute<uint32> Color := schillabel/Color[SchilLabel_rel],DialogType = "BrushColor";
+		attribute<uint32> Color := schillabel/Color[SchilLabel_rel], DialogType = "BrushColor";
 		
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
-*/	
+
 	unit<uint32> ProductType: nrofrows = 3
 	{
 		attribute<string> Name  : ['RV', 'TW', 'K'];
@@ -663,7 +664,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		
 		// relatie met andere entiteiten
 		attribute<Installatie>  Installatie_rel := rlookup(Installatie_name, Installatie/Name), IntegrityCheck="IsDefined(this)";
-		attribute<schillabel>   schillabel_rel  := rlookup(schillabel_name,  schillabel/Name ), IntegrityCheck="IsDefined(this) || schillabel_name == 'x'";
+		attribute<SchilLabel>   schillabel_rel  := rlookup(schillabel_name,  schillabel/Name ), IntegrityCheck="IsDefined(this) || schillabel_name == 'x'";
 		attribute<ProductType>  ProductType_rel := rlookup(ProductType_Name, ProductType/Name), IntegrityCheck="IsDefined(this) || ProductType_Name == 'e' || ProductType_Name == 'geen'";
 		
 		attribute<AfgifteSysteem> AfgifteSysteem_rel := rlookup(AS_Name, AfgifteSysteem/Name), IntegrityCheck = "IsDefined(this)";
@@ -859,11 +860,11 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<string> Name:            [ 'VRw','VRu','HRw','HRu', 'eWPw', 'eWPu', 'HWP' ];
 		attribute<bool>   kanGebiedsOptie: [ true, true, true,  true, false,  false, false ];
 		
-		attribute<SchilLabel> DoelLabel_rel:= union_data(., 
-			(0/0)[SchilLabel], (0/0)[SchilLabel],
+		attribute<DoelLabel> DoelLabel_rel:= union_data(., 
+			DoelLabel/V/geen, DoelLabel/V/geen,
 			DoelLabel/V/C,    DoelLabel/V/C, 
-			SchilLabel/V/C,   SchilLabel/V/A,
-			SchilLabel/V/A
+			DoelLabel/V/C,   DoelLabel/V/B,
+			DoelLabel/V/A
 		);
 	
 		container I := Installatie/V;
@@ -886,12 +887,6 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		{
 			attribute<Product> Product_rel := nr_2;
 			attribute<Installatie> Installatie_rel := ='union_data(., '+AsItemList('PerOptie/'+Name)+')';
-			unit<uint32> xLabel := combine(xProduct, SchilLabel)
-			{
-				attribute<string> Performance_key1 := Installatie/Name[Installatie_rel[nr_1]] + '.' + SchilLabel/Name[nr_2] + '.' + ProductType/Name[Product/ProductType_rel[Product_rel[nr_1]]];
-				attribute<string> Performance_key2 := Installatie/Name[Installatie_rel[nr_1]] + '.x.' + ProductType/Name[Product/ProductType_rel[Product_rel[nr_1]]];
-				attribute<Performance> Performance_rel := MakeDefined(rlookup(Performance_key1, Performance/code), rlookup(Performance_key2, Performance/code));
-			}
 		}
 		unit<uint32> xInstallatie := combine(GebouwOptie, Installatie)
 		{
@@ -911,11 +906,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		,	'xProduct/Installatie_rel[xProduct_rel/'+Product/Name+']'
 		,	GebouwOptie, Installatie
 		);
-		
-		container Performance_rel := for_each_nedv(Classifications/Product/Name
-			,	'xProduct/xLabel/Performance_rel[combine_data(xProduct/xLabel, xProduct_rel/'+Classifications/Product/Name+', DoelLabel_rel)]'
-			,	GebouwOptie, Performance
-			);		}
+	}
 	unit<uint8> GebiedsOptie : nrofrows = 14 // volgorde niet hier instellen maar in SpecifiekeInstellingen/Voorkeuren/BaseLine/WarmteOpties
 	{
 		attribute<string> Name:
