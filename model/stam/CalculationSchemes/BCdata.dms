@@ -168,22 +168,26 @@ template BCdata
 		}
 	}
 	
-	unit<uint32> DoelLabelSet := combine(BebouwingsObject, Classifications/DoelLabel_NaSprong) {
-		attribute<BebouwingsObject                  > BebouwingsObject_rel := nr_1;
-		attribute<Classifications/DoelLabel_NaSprong> DoelLabel_rel        := nr_2;
+	template DoelLabelT {
+		parameter<Classifications/DoelLabel_NaSprong> DoelLabel_rel;
 		
-		attribute<Classifications/SchilLabel> Van_rel  := BeginState/schillabel_rel[BebouwingsObject_rel];
-		attribute<Classifications/SchilLabel> Naar_rel := MakeDefined(Classifications/DoelLabel_NaSprong/SchilLabel_rel[DoelLabel_rel], Van_rel);
-		attribute<ModelObject>         ModelObject_rel := Model_rel[BebouwingsObject_rel];
+		attribute<Classifications/SchilLabel> Van_rel(BebouwingsObject) := BeginState/schillabel_rel;
+		parameter<Classifications/SchilLabel> Naar_rel                  := Classifications/DoelLabel_NaSprong/SchilLabel_rel[DoelLabel_rel];
 		
-		attribute<VerbruiksOpties/SchilSprong_set>     SchilSprong_rel     := rlookup(combine_data(Classifications/SchilSprongCode, Van_rel, Naar_rel), VerbruiksOpties/SchilSprong_set/SchilSprongCode_rel);
-		attribute<VerbruiksOpties/SchilSprong_set/xMO> SchilSprong_xMO_rel := combine_data(VerbruiksOpties/schilsprong_set/xMO, SchilSprong_rel, ModelObject_rel);
+		attribute<VerbruiksOpties/SchilSprong_set>     SchilSprong_rel    (BebouwingsObject) := rlookup(combine_data(Classifications/SchilSprongCode, Van_rel, Naar_rel), VerbruiksOpties/SchilSprong_set/SchilSprongCode_rel);
+		attribute<VerbruiksOpties/SchilSprong_set/xMO> SchilSprong_xMO_rel(BebouwingsObject) := combine_data(VerbruiksOpties/schilsprong_set/xMO, SchilSprong_rel, Model_rel);
 		
-		attribute<EUR> Ki_schil := MakeDefined(
-			VerbruiksOpties/schilsprong_set/xMO/Ki_asl[SchilSprong_xMO_rel] * RuimtelijkeVraagComponent/nrAansluitingen[BebouwingsObject_rel] +
-			VerbruiksOpties/schilsprong_set/xMO/Ki_opp[SchilSprong_xMO_rel] * RuimtelijkeVraagComponent/Oppervlakte    [BebouwingsObject_rel]
+		attribute<EUR> Ki_schil (BebouwingsObject) := MakeDefined(
+			VerbruiksOpties/schilsprong_set/xMO/Ki_asl[SchilSprong_xMO_rel] * RuimtelijkeVraagComponent/nrAansluitingen +
+			VerbruiksOpties/schilsprong_set/xMO/Ki_opp[SchilSprong_xMO_rel] * RuimtelijkeVraagComponent/Oppervlakte    
 		,	0[EUR]
 		);
+	}
+	container DoelLabels := for_each_ne(Classifications/DoelLabel_NaSprong/Name, 'DoelLabelT(Classifications/DoelLabel_NaSprong/V/'+Classifications/DoelLabel_NaSprong/Name+')') {
+		container geen  // handle as special case
+		{
+			attribute<EUR> Ki_schil (BebouwingsObject) := const(0[EUR], BebouwingsObject);
+		}
 	}
 	
 	template GebouwOptieT {
@@ -239,9 +243,7 @@ template BCdata
 		
 		attribute<EUR> Ki_installatie (BebouwingsObject):= Ki_installatie_asl +Ki_installatie_opp + Ki_RV + Ki_TW + Ki_K;
 		
-		// TODO, OPTIMIZE, per DoelLabel_NaSprong of geen.
-		attribute<DoelLabelSet> DoelLabelSet_rel(BebouwingsObject) := combine_data(DoelLabelSet, ID(BebouwingsObject), Classifications/DoelLabel/NaSprong_rel[DoelLabel_rel]);
-		attribute<EUR> Ki_schil (BebouwingsObject)      := MakeDefined(DoelLabelSet/Ki_schil[DoelLabelSet_rel], 0[EUR]);
+		attribute<EUR> Ki_schil (BebouwingsObject)      := ='DoelLabels/'+Classifications/DoelLabel/Name[DoelLabel_rel]+'/Ki_schil';
 		attribute<EUR> Ki_totaal(BebouwingsObject)      := Ki_installatie + Ki_schil;
 		
 		// metervraag
