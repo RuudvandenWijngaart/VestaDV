@@ -194,7 +194,12 @@ template BCdata
 		parameter<Classifications/GebouwOptie> GebouwOptie_rel;
 		parameter<Classifications/DoelLabel  > DoelLabel_rel := Classifications/GebouwOptie/DoelLabel_rel[GebouwOptie_rel];
 		// TODO, OPTIMIZE, consider handling no-jump as a special case
-		attribute<Classifications/SchilLabel > SchilLabel_rel(BebouwingsObject) := MakeDefined(Classifications/DoelLabel/SchilLabel_rel[DoelLabel_rel], BeginState/schillabel_rel); // n.b. Meestal constant
+		
+		parameter<bool> DoeSprong := (DoelLabel_rel != Classifications/DoelLabel/V/Geen);
+		parameter<string> SprongSuffix := DoeSprong ? '[0[SchilLabelDomain]]' : '';
+		unit<uint32> SchilLabelDomain := =DoeSprong ? 'range(UInt32, 0, 1)' : 'BebouwingsObject';
+		attribute<Classifications/SchilLabel > SchilLabel_rel(SchilLabelDomain) := 
+			=DoeSprong ? 'union_data(SchilLabelDomain, Classifications/DoelLabel/SchilLabel_rel[DoelLabel_rel])' : 'BeginState/schillabel_rel';
 		
 		container Installatie_rel := for_each_nedv(Classifications/Product/Name
 		,	'Classifications/GebouwOptie/Installatie_rel/'+Classifications/Product/Name+'[GebouwOptie_rel]' 
@@ -204,33 +209,32 @@ template BCdata
 		// TODO: alleen relevant per BebouwingsObject voor no-jump
 		container Performance_rel := for_each_nedv(Classifications/Product/Name
 		,	'Classifications/GebouwOptie/xLabel/Performance_rel/'+Classifications/Product/Name+'[combine_data(Classifications/GebouwOptie/xLabel, GebouwOptie_rel, SchilLabel_rel)]'
-		,	BebouwingsObject, Classifications/Performance
+		,	SchilLabelDomain, Classifications/Performance
 		);
 		
 		// investeringskosten
 		container P_cap {
-			parameter<Float64> RVb :=       Classifications/Performance/P_cap[Performance_rel/RVb];
-			parameter<Float64> RVp := 1.0 - Classifications/Performance/P_cap[Performance_rel/RVb];
-			parameter<Float64> TWb :=       Classifications/Performance/P_cap[Performance_rel/TWb];
-			parameter<Float64> TWp := 1.0 - Classifications/Performance/P_cap[Performance_rel/TWb];
-			parameter<Float64> Kb  :=       Classifications/Performance/P_cap[Performance_rel/Kb];
-			parameter<Float64> Kp  := 1.0 - Classifications/Performance/P_cap[Performance_rel/Kb];
+			attribute<Float64> RVb (SchilLabelDomain):=       Classifications/Performance/P_cap[Performance_rel/RVb];
+			attribute<Float64> RVp (SchilLabelDomain):= 1.0 - Classifications/Performance/P_cap[Performance_rel/RVb];
+			attribute<Float64> TWb (SchilLabelDomain):=       Classifications/Performance/P_cap[Performance_rel/TWb];
+			attribute<Float64> TWp (SchilLabelDomain):= 1.0 - Classifications/Performance/P_cap[Performance_rel/TWb];
+			attribute<Float64> Kb  (SchilLabelDomain):=       Classifications/Performance/P_cap[Performance_rel/Kb];
+			attribute<Float64> Kp  (SchilLabelDomain):= 1.0 - Classifications/Performance/P_cap[Performance_rel/Kb];
 		}
-		container cap {
-			attribute<kW> RVb(BebouwingsObject) := RuimtelijkeVraagComponent/AansluitCapaciteit/RV * P_cap/RVb;
-			attribute<kW> RVp(BebouwingsObject) := RuimtelijkeVraagComponent/AansluitCapaciteit/RV * P_cap/RVp;
-			attribute<kW> TWb(BebouwingsObject) := RuimtelijkeVraagComponent/AansluitCapaciteit/TW * P_cap/TWb;
-			attribute<kW> TWp(BebouwingsObject) := RuimtelijkeVraagComponent/AansluitCapaciteit/TW * P_cap/TWp;
-			attribute<kW> Kb (BebouwingsObject) := RuimtelijkeVraagComponent/AansluitCapaciteit/K  * P_cap/Kb;
-			attribute<kW> Kp (BebouwingsObject) := RuimtelijkeVraagComponent/AansluitCapaciteit/K  * P_cap/Kp;
-		}
+		container capaciteit := for_each_nedv(Classifications/Product/Name
+		,	replace('RuimtelijkeVraagComponent/AansluitCapaciteit/@T * P_cap/@P'+SprongSuffix
+			,	'@T',Classifications/Product/TypeName
+			,	'@P',Classifications/Product/Name
+			)
+		,	BebouwingsObject, kW
+		);
 		container Ki_cap := for_each_nedv(Classifications/Product/Name
 		,	replace('MakeDefined(VerbruiksOpties/Installatie/Ki_cap[Installatie_rel/@P] * P_cap/@P, 0[EUR_kw])', '@P', Classifications/Product/Name)
-		,	BebouwingsObject, EUR_kw
+		,	SchilLabelDomain, EUR_kw
 		);
 		
 		container Ki := for_each_nedv(Classifications/Product/Name
-		,	replace('Ki_cap/@P * cap/@P', '@P', Classifications/Product/Name)
+		,	replace('Ki_cap/@P'+SprongSuffix+' * capaciteit/@P', '@P', Classifications/Product/Name)
 		,	BebouwingsObject, EUR
 		);
 		
@@ -249,43 +253,56 @@ template BCdata
 		// metervraag
 		container SPF := for_each_nedv(Classifications/Product/Name
 		,	replace('Classifications/Performance/SPF_@S[Performance_rel/@P]', '@P', Classifications/Product/Name, '@S', Classifications/Product/ServiceName)
-		,	BebouwingsObject, Float64
+		,	SchilLabelDomain, Float64
 		);
 		
 		// TODO, OPTIMIZE, MTA, consider merge(xy/schil, x/v[xy/x_rel] for each schil)
 		container functioneel
 		{
-			attribute<GJ_Yr> RV(BebouwingsObject) := ='merge(SchilLabel_rel, GJ_Yr, '+AsItemList('RuimtelijkeVraagComponent/Functioneel/RV/'+Classifications/SchilLabel/Name)+')';
+			attribute<GJ_Yr> RV(BebouwingsObject) := =
+				DoeSprong
+				?	'RuimtelijkeVraagComponent/Functioneel/RV/'+Classifications/SchilLabel/Name[SchilLabel_rel]
+				:	'merge(SchilLabel_rel, GJ_Yr, '+AsItemList('RuimtelijkeVraagComponent/Functioneel/RV/'+Classifications/SchilLabel/Name)+')';
 			attribute<GJ_Yr> TW(BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/TW;
 			attribute<GJ_Yr> K (BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/K ;
 			
-			attribute<Float64>  RVb(BebouwingsObject) := RV *        Classifications/Performance/P_Vol[Performance_rel/RVb] ;
-			attribute<Float64>  RVp(BebouwingsObject) := RV * (1.0 - Classifications/Performance/P_Vol[Performance_rel/RVb]);
-			attribute<Float64>  TWb(BebouwingsObject) := TW *        Classifications/Performance/P_Vol[Performance_rel/TWb] ;
-			attribute<Float64>  TWp(BebouwingsObject) := TW * (1.0 - Classifications/Performance/P_Vol[Performance_rel/TWb]);
-			attribute<Float64>  Kb (BebouwingsObject) := K  *        Classifications/Performance/P_Vol[Performance_rel/Kb ] ;
-			attribute<Float64>  Kp (BebouwingsObject) := K  * (1.0 - Classifications/Performance/P_Vol[Performance_rel/Kb ]);
+			attribute<Float64>  RVb(BebouwingsObject) := ='RV *        Classifications/Performance/P_Vol[Performance_rel/RVb] '+SprongSuffix;
+			attribute<Float64>  RVp(BebouwingsObject) := ='RV * (1.0 - Classifications/Performance/P_Vol[Performance_rel/RVb])'+SprongSuffix;
+			attribute<Float64>  TWb(BebouwingsObject) := ='TW *        Classifications/Performance/P_Vol[Performance_rel/TWb] '+SprongSuffix;
+			attribute<Float64>  TWp(BebouwingsObject) := ='TW * (1.0 - Classifications/Performance/P_Vol[Performance_rel/TWb])'+SprongSuffix;
+			attribute<Float64>  Kb (BebouwingsObject) := ='K  *        Classifications/Performance/P_Vol[Performance_rel/Kb ] '+SprongSuffix;
+			attribute<Float64>  Kp (BebouwingsObject) := ='K  * (1.0 - Classifications/Performance/P_Vol[Performance_rel/Kb ])'+SprongSuffix;
 		}
 //		attribute<GJ_Yr> metervraag_RV := (meterfactor_RVb + meterfactor_RVp) * functioneel_RV;
 	
 		container metervraag := for_each_nedv(Classifications/Product/Name
-		,	replace('functioneel/@P / SPF/@P', '@P', Classifications/Product/Name)
+		,	replace('functioneel/@P / SPF/@P'+SprongSuffix, '@P', Classifications/Product/Name)
 		,	BebouwingsObject, Float64
 		);
 
 		container Input_Rel := for_each_nedv(Classifications/Product/Name
 		,	'Classifications/Performance/Input_rel[Performance_rel/'+Classifications/Product/Name+']'
-		,	BebouwingsObject, Classifications/Input
+		,	SchilLabelDomain, Classifications/Input
 		);
-		container metervraag_aggr := for_each_nedv(Classifications/Input/Name
+		
+		container metervraag_aggr_NaSprong {
+			attribute<Classifications/Input> imp_Input_Rel_asVector(Classifications/Product) :=
+				='union_data(Classifications/Product,'+AsItemList('Input_Rel/'+Classifications/Product/Name)+')';
+			attribute<string> imp_MeterVraagExpr_asVector(Classifications/Product) := 'metervraag/' + Classifications/Product/Name;			
+			container metervraag_aggr_NaSprong := for_each_nedv(Classifications/Input/Name
+			,	(pcount(imp_Input_Rel_asVector)>0?'add('+AsItemList(imp_MeterVraagExpr_asVector, imp_Input_Rel_asVector)+')':'const(0[GJ_Yr], BebouwingsObject)')
+			,	BebouwingsObject, GJ_Yr
+			);
+		}
+		container metervraag_aggr_OudLabel := for_each_nedv(Classifications/Input/Name
 		,	replace('add('++AsItemList(replace('Input_rel/@P == Classifications/Input/V/@I ? metervraag/@P: 0[GJ_Yr]', '@P', Classifications/Product/Name))+')', '@I', Classifications/Input/Name)
 		,	BebouwingsObject, GJ_Yr
 		);
 		
 		container eEffect := for_each_nedv(Classifications/Product/Name
 		,	replace(
-				'Classifications/Performance/eEffect_vol[Performance_rel/@P] * metervraag/@P +'
-				'Classifications/Performance/eEffect_cap[Performance_rel/@P] * cap/@P'
+				'Classifications/Performance/eEffect_vol[Performance_rel/@P'+SprongSuffix+'] * metervraag/@P +'
+				'Classifications/Performance/eEffect_cap[Performance_rel/@P'+SprongSuffix+'] * capaciteit/@P'
 			,	'@P', Classifications/Product/Name)
 		,	BebouwingsObject, GJ_Yr
 		);
