@@ -186,97 +186,98 @@ template BCdata
 		);
 	}
 	
-	unit<uint32> GebouwOptieSet := combine(BebouwingsObject, Classifications/GebouwOptie) {
-		attribute<BebouwingsObject           > BebouwingsObject_rel := nr_1;
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel      := nr_2;
-		attribute<Classifications/DoelLabel  > DoelLabel_rel  := Classifications/GebouwOptie/DoelLabel_rel[GebouwOptie_rel];
-		attribute<Classifications/SchilLabel > SchilLabel_rel := MakeDefined(Classifications/DoelLabel/SchilLabel_rel[DoelLabel_rel], BeginState/schillabel_rel[BebouwingsObject_rel]);
+	template GebouwOptieT {
+		parameter<Classifications/GebouwOptie> GebouwOptie_rel;
+		parameter<Classifications/DoelLabel  > DoelLabel_rel := Classifications/GebouwOptie/DoelLabel_rel[GebouwOptie_rel];
+		// TODO, OPTIMIZE, consider handling no-jump as a special case
+		attribute<Classifications/SchilLabel > SchilLabel_rel(BebouwingsObject) := MakeDefined(Classifications/DoelLabel/SchilLabel_rel[DoelLabel_rel], BeginState/schillabel_rel); // n.b. Meestal constant
 		
 		container Installatie_rel := for_each_nedv(Classifications/Product/Name
 		,	'Classifications/GebouwOptie/Installatie_rel/'+Classifications/Product/Name+'[GebouwOptie_rel]' 
-		,	GebouwOptieSet, Classifications/Installatie
+		,	void, Classifications/Installatie
 		);
 		
+		// TODO: alleen relevant per BebouwingsObject voor no-jump
 		container Performance_rel := for_each_nedv(Classifications/Product/Name
-//		,	replace('merge(SchilLabel_rel, Classifications/Performance, '+AsItemList('Classifications/GebouwOptie/xLabel/Performance_rel/@P[combine_data(Classifications/GebouwOptie/xLabel, GebouwOptie_rel, SchilLabel_rel)]')+')', '@P', Classifications/Product/Name)
 		,	'Classifications/GebouwOptie/xLabel/Performance_rel/'+Classifications/Product/Name+'[combine_data(Classifications/GebouwOptie/xLabel, GebouwOptie_rel, SchilLabel_rel)]'
-		,	GebouwOptieSet, Classifications/Performance
+		,	BebouwingsObject, Classifications/Performance
 		);
 		
 		// investeringskosten
 		container P_cap {
-			attribute<Float64> RVb(..) :=       Classifications/Performance/P_cap[Performance_rel/RVb];
-			attribute<Float64> RVp(..) := 1.0 - Classifications/Performance/P_cap[Performance_rel/RVb];
-			attribute<Float64> TWb(..) :=       Classifications/Performance/P_cap[Performance_rel/TWb];
-			attribute<Float64> TWp(..) := 1.0 - Classifications/Performance/P_cap[Performance_rel/TWb];
-			attribute<Float64> Kb (..) :=       Classifications/Performance/P_cap[Performance_rel/Kb];
-			attribute<Float64> Kp (..) := 1.0 - Classifications/Performance/P_cap[Performance_rel/Kb];
+			parameter<Float64> RVb :=       Classifications/Performance/P_cap[Performance_rel/RVb];
+			parameter<Float64> RVp := 1.0 - Classifications/Performance/P_cap[Performance_rel/RVb];
+			parameter<Float64> TWb :=       Classifications/Performance/P_cap[Performance_rel/TWb];
+			parameter<Float64> TWp := 1.0 - Classifications/Performance/P_cap[Performance_rel/TWb];
+			parameter<Float64> Kb  :=       Classifications/Performance/P_cap[Performance_rel/Kb];
+			parameter<Float64> Kp  := 1.0 - Classifications/Performance/P_cap[Performance_rel/Kb];
 		}
 		container cap {
-			attribute<kW> RVb(..) := RuimtelijkeVraagComponent/AansluitCapaciteit/RV[BebouwingsObject_rel] * P_cap/RVb;
-			attribute<kW> RVp(..) := RuimtelijkeVraagComponent/AansluitCapaciteit/RV[BebouwingsObject_rel] * P_cap/RVp;
-			attribute<kW> TWb(..) := RuimtelijkeVraagComponent/AansluitCapaciteit/TW[BebouwingsObject_rel] * P_cap/TWb;
-			attribute<kW> TWp(..) := RuimtelijkeVraagComponent/AansluitCapaciteit/TW[BebouwingsObject_rel] * P_cap/TWp;
-			attribute<kW> Kb (..) := RuimtelijkeVraagComponent/AansluitCapaciteit/K [BebouwingsObject_rel] * P_cap/Kb;
-			attribute<kW> Kp (..) := RuimtelijkeVraagComponent/AansluitCapaciteit/K [BebouwingsObject_rel] * P_cap/Kp;
+			attribute<kW> RVb(BebouwingsObject) := RuimtelijkeVraagComponent/AansluitCapaciteit/RV * P_cap/RVb;
+			attribute<kW> RVp(BebouwingsObject) := RuimtelijkeVraagComponent/AansluitCapaciteit/RV * P_cap/RVp;
+			attribute<kW> TWb(BebouwingsObject) := RuimtelijkeVraagComponent/AansluitCapaciteit/TW * P_cap/TWb;
+			attribute<kW> TWp(BebouwingsObject) := RuimtelijkeVraagComponent/AansluitCapaciteit/TW * P_cap/TWp;
+			attribute<kW> Kb (BebouwingsObject) := RuimtelijkeVraagComponent/AansluitCapaciteit/K  * P_cap/Kb;
+			attribute<kW> Kp (BebouwingsObject) := RuimtelijkeVraagComponent/AansluitCapaciteit/K  * P_cap/Kp;
 		}
 		container Ki_cap := for_each_nedv(Classifications/Product/Name
 		,	replace('MakeDefined(VerbruiksOpties/Installatie/Ki_cap[Installatie_rel/@P] * P_cap/@P, 0[EUR_kw])', '@P', Classifications/Product/Name)
-		,	GebouwOptieSet, EUR_kw
+		,	BebouwingsObject, EUR_kw
 		);
 		
 		container Ki := for_each_nedv(Classifications/Product/Name
 		,	replace('Ki_cap/@P * cap/@P', '@P', Classifications/Product/Name)
-		,	GebouwOptieSet, EUR
+		,	BebouwingsObject, EUR
 		);
 		
-		attribute<EUR> Ki_RV := Ki/RVb + Ki/RVp;
-		attribute<EUR> Ki_TW := Ki/TWb + Ki/TWp;
-		attribute<EUR> Ki_K  := Ki/Kb  + Ki/Kp;
+		attribute<EUR> Ki_RV(BebouwingsObject) := Ki/RVb + Ki/RVp;
+		attribute<EUR> Ki_TW(BebouwingsObject) := Ki/TWb + Ki/TWp;
+		attribute<EUR> Ki_K (BebouwingsObject) := Ki/Kb  + Ki/Kp;
 		
-		attribute<EUR> Ki_installatie_asl := VerbruiksOpties/GebouwOptie/Ki_asl[GebouwOptie_rel] * RuimtelijkeVraagComponent/nrAansluitingen[BebouwingsObject_rel];
-		attribute<EUR> Ki_installatie_opp := VerbruiksOpties/GebouwOptie/Ki_opp[GebouwOptie_rel] * RuimtelijkeVraagComponent/Oppervlakte    [BebouwingsObject_rel];
+		attribute<EUR> Ki_installatie_asl(BebouwingsObject) := VerbruiksOpties/GebouwOptie/Ki_asl[GebouwOptie_rel] * RuimtelijkeVraagComponent/nrAansluitingen;
+		attribute<EUR> Ki_installatie_opp(BebouwingsObject) := VerbruiksOpties/GebouwOptie/Ki_opp[GebouwOptie_rel] * RuimtelijkeVraagComponent/Oppervlakte    ;
 		
-		attribute<EUR> Ki_installatie := Ki_installatie_asl +Ki_installatie_opp + Ki_RV + Ki_TW + Ki_K;
+		attribute<EUR> Ki_installatie (BebouwingsObject):= Ki_installatie_asl +Ki_installatie_opp + Ki_RV + Ki_TW + Ki_K;
 		
-		attribute<DoelLabelSet> DoelLabelSet_rel := combine_data(DoelLabelSet, BebouwingsObject_rel, Classifications/DoelLabel/NaSprong_rel[DoelLabel_rel]);
-		attribute<EUR> Ki_schil       := MakeDefined(DoelLabelSet/Ki_schil[DoelLabelSet_rel], 0[EUR]);
-		attribute<EUR> Ki_totaal      := Ki_installatie + Ki_schil;
+		// TODO, OPTIMIZE, per DoelLabel_NaSprong of geen.
+		attribute<DoelLabelSet> DoelLabelSet_rel(BebouwingsObject) := combine_data(DoelLabelSet, ID(BebouwingsObject), Classifications/DoelLabel/NaSprong_rel[DoelLabel_rel]);
+		attribute<EUR> Ki_schil (BebouwingsObject)      := MakeDefined(DoelLabelSet/Ki_schil[DoelLabelSet_rel], 0[EUR]);
+		attribute<EUR> Ki_totaal(BebouwingsObject)      := Ki_installatie + Ki_schil;
 		
 		// metervraag
 		container SPF := for_each_nedv(Classifications/Product/Name
 		,	replace('Classifications/Performance/SPF_@S[Performance_rel/@P]', '@P', Classifications/Product/Name, '@S', Classifications/Product/ServiceName)
-		,	GebouwOptieSet, Float64
+		,	BebouwingsObject, Float64
 		);
 		
 		// TODO, OPTIMIZE, MTA, consider merge(xy/schil, x/v[xy/x_rel] for each schil)
 		container functioneel
 		{
-			attribute<GJ_Yr> RV(..) := ='merge(SchilLabel_rel, GJ_Yr, '+AsItemList('RuimtelijkeVraagComponent/Functioneel/RV/'+Classifications/SchilLabel/Name+'[BebouwingsObject_rel]')+')';
-			attribute<GJ_Yr> TW(..) := RuimtelijkeVraagComponent/Functioneel/TW[BebouwingsObject_rel];
-			attribute<GJ_Yr> K (..) := RuimtelijkeVraagComponent/Functioneel/K [BebouwingsObject_rel];
+			attribute<GJ_Yr> RV(BebouwingsObject) := ='merge(SchilLabel_rel, GJ_Yr, '+AsItemList('RuimtelijkeVraagComponent/Functioneel/RV/'+Classifications/SchilLabel/Name)+')';
+			attribute<GJ_Yr> TW(BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/TW;
+			attribute<GJ_Yr> K (BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/K ;
 			
-			attribute<Float64>  RVb(..) := RV *        Classifications/Performance/P_Vol[Performance_rel/RVb] ;
-			attribute<Float64>  RVp(..) := RV * (1.0 - Classifications/Performance/P_Vol[Performance_rel/RVb]);
-			attribute<Float64>  TWb(..) := TW *        Classifications/Performance/P_Vol[Performance_rel/TWb] ;
-			attribute<Float64>  TWp(..) := TW * (1.0 - Classifications/Performance/P_Vol[Performance_rel/TWb]);
-			attribute<Float64>  Kb (..) := K  *        Classifications/Performance/P_Vol[Performance_rel/Kb ] ;
-			attribute<Float64>  Kp (..) := K  * (1.0 - Classifications/Performance/P_Vol[Performance_rel/Kb ]);
+			attribute<Float64>  RVb(BebouwingsObject) := RV *        Classifications/Performance/P_Vol[Performance_rel/RVb] ;
+			attribute<Float64>  RVp(BebouwingsObject) := RV * (1.0 - Classifications/Performance/P_Vol[Performance_rel/RVb]);
+			attribute<Float64>  TWb(BebouwingsObject) := TW *        Classifications/Performance/P_Vol[Performance_rel/TWb] ;
+			attribute<Float64>  TWp(BebouwingsObject) := TW * (1.0 - Classifications/Performance/P_Vol[Performance_rel/TWb]);
+			attribute<Float64>  Kb (BebouwingsObject) := K  *        Classifications/Performance/P_Vol[Performance_rel/Kb ] ;
+			attribute<Float64>  Kp (BebouwingsObject) := K  * (1.0 - Classifications/Performance/P_Vol[Performance_rel/Kb ]);
 		}
 //		attribute<GJ_Yr> metervraag_RV := (meterfactor_RVb + meterfactor_RVp) * functioneel_RV;
 	
 		container metervraag := for_each_nedv(Classifications/Product/Name
 		,	replace('functioneel/@P / SPF/@P', '@P', Classifications/Product/Name)
-		,	GebouwOptieSet, Float64
+		,	BebouwingsObject, Float64
 		);
 
 		container Input_Rel := for_each_nedv(Classifications/Product/Name
 		,	'Classifications/Performance/Input_rel[Performance_rel/'+Classifications/Product/Name+']'
-		,	GebouwOptieSet, Classifications/Input
+		,	BebouwingsObject, Classifications/Input
 		);
 		container metervraag_aggr := for_each_nedv(Classifications/Input/Name
 		,	replace('add('++AsItemList(replace('Input_rel/@P == Classifications/Input/V/@I ? metervraag/@P: 0[GJ_Yr]', '@P', Classifications/Product/Name))+')', '@I', Classifications/Input/Name)
-		,	GebouwOptieSet, GJ_Yr
+		,	BebouwingsObject, GJ_Yr
 		);
 		
 		container eEffect := for_each_nedv(Classifications/Product/Name
@@ -284,19 +285,21 @@ template BCdata
 				'Classifications/Performance/eEffect_vol[Performance_rel/@P] * metervraag/@P +'
 				'Classifications/Performance/eEffect_cap[Performance_rel/@P] * cap/@P'
 			,	'@P', Classifications/Product/Name)
-		,	GebouwOptieSet, GJ_Yr
+		,	BebouwingsObject, GJ_Yr
 		);
 	}
+	
+	container GebouwOpties := for_each_ne(Classifications/GebouwOptie/Name, 'GebouwOptieT(Classifications/GebouwOptie/V/'+Classifications/GebouwOptie/Name+')');
+	
 	container statistics {
-		attribute<EUR> Ki_lowest (BebouwingsObject) := min(GebouwOptieSet/Ki_totaal, GebouwOptieSet/BebouwingsObject_rel);
-		attribute<Classifications/GebouwOptie> Ki_lowest_optie (BebouwingsObject) := GebouwOptieSet/GebouwOptie_rel[min_index(GebouwOptieSet/Ki_totaal, GebouwOptieSet/BebouwingsObject_rel)];
-		attribute<EUR> Ki_highest(BebouwingsObject) := max(GebouwOptieSet/Ki_totaal, GebouwOptieSet/BebouwingsObject_rel);
-		attribute<Classifications/GebouwOptie> Ki_highest_optie (BebouwingsObject) := GebouwOptieSet/GebouwOptie_rel[max_index(GebouwOptieSet/Ki_totaal, GebouwOptieSet/BebouwingsObject_rel)];
+		attribute<EUR> Ki_lowest_value  (BebouwingsObject) := ='min_elem('+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'Ki_totaal')+')';
+		attribute<EUR> Ki_lowest_index  (BebouwingsObject) := ='argmin  ('+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'Ki_totaal')+')';
+		attribute<EUR> Ki_highest_value (BebouwingsObject) := ='max_elem('+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'Ki_totaal')+')';
+		attribute<EUR> Ki_highest_index (BebouwingsObject) := ='argmax  ('+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'Ki_totaal')+')';
 	}
 	
 	container Efficiency
-	{
-		
+	{	
 		container Gebouw
 		{
 			attribute<units/Ratio> LaatsteWaarde_vast  (BebouwingsObject) :=
