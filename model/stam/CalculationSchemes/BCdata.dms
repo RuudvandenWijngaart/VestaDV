@@ -315,16 +315,12 @@ template BCdata
 		,	BebouwingsObject, kW
 		);
 		
+		// TODO: Bestaande installaties igv optie installatie == geen.
 		container cap_inst := for_each_nedv(uInstallatie/Name
-		,	'max_elem('+AsItemList('cap_prod/'+Classifications/Product/Name,uInstallatie/Per_Product)+')'
-		,	SchilLabelDomain, kw
+		,	pcount(uInstallatie/Per_Product)== 0 ? 'const(0[kW], SchilLabelDomain)': 'max_elem('+AsItemList('cap_prod/'+Classifications/Product/Name,uInstallatie/Per_Product)+')'
+		,	SchilLabelDomain, kW
 		);
-/* REMOVE		
-		container Ki_cap_inst := for_each_nedv(uInstallatie/Name
-		,	replace('MakeDefined(VerbruiksOpties/Installatie/Ki_cap[uInstallatie/Installatie_rel[Classifications/Product/V/@P]] * P_cap/@P, 0[EUR_kw])', '@P', Classifications/Product/Name)
-		,	SchilLabelDomain, EUR_kw
-		);
-*/		
+		
 		parameter<string> KiX_cap_Expr := 'add('+AsItemList(replace('cap_inst/@I * VerbruiksOpties/Installatie/Ki@X_cap['+string(uInstallatie/Installatie_rel)+'[Classifications/Installatie]]', '@I', uInstallatie/Name))+')';
 		attribute<EUR> Ki_cap  (BebouwingsObject) := =replace(KiX_cap_Expr, '@X', '');
 		attribute<EUR> Ki30_cap(BebouwingsObject) := =replace(KiX_cap_Expr, '@X', '30');
@@ -416,7 +412,7 @@ template BCdata
 			
 			container capaciteit := for_each_nedv(uInstallatie/Name
 			,	replace(
-					'add('+AsItemList('Classifications/Performance/eEffect_cap[Performance_rel/'+Classifications/Product/Name+']', uInstallatie/Per_Product)+') * cap_inst/@I'
+					pcount(uInstallatie/Per_Product)==0?'const(0[GJ_Yr], BebouwingsObject)':'add('+AsItemList('Classifications/Performance/eEffect_cap[Performance_rel/'+Classifications/Product/Name+']', uInstallatie/Per_Product)+') * cap_inst/@I'
 				,	'@I', uInstallatie/Name)
 			,	BebouwingsObject, GJ_Yr
 			)
@@ -841,7 +837,7 @@ template BCdata
 		}
 		container Metervraag
 		{
-			attribute<GJ_yr> Vj_e       (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
+			attribute<GJ_yr> Vj_e       (BebouwingsObject) := ='merge(BesteOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'/metervraag/e')+')';
 			attribute<GJ_yr> Vj_zon     (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
 			attribute<GJ_yr> Vj_wind    (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
 			attribute<GJ_yr> Vj_gas     (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
@@ -853,7 +849,7 @@ template BCdata
 		container Eenmalig
 		{
 			//Aansluitbijdrages
-			attribute<Eur>   Ki_Asl_Enet (BebouwingsObject) :=  Metervraag/Vj_e <= 0.0[GJ_yr] ? 0.0[Eur] :
+			attribute<Eur>   Ki_Asl_Enet (BebouwingsObject) :=  Metervraag/Vj_e <= 0.0[GJ_yr] ? 0.0[Eur] : // TODO: Niet beter ieder gebouw, zelfs als netto terug geleverd wordt?
 																BC_kentallen/Ki_Aansl_e_asl * RuimtelijkeVraagComponent/nraansluitingen
 															+   BC_kentallen/Ki_Aansl_e_opp * RuimtelijkeVraagComponent/oppervlakte;
 			attribute<Eur>   Ki_Asl_Gnet (BebouwingsObject) :=  Metervraag/Vj_gas + Metervraag/Vj_H2 <= 0.0[GJ_yr] ? 0.0[Eur] :
@@ -880,7 +876,7 @@ template BCdata
 			attribute<Eur_yr> Kji_Asl_Gnet (BebouwingsObject) := Eenmalig/Ki_Asl_Gnet * NcwRefs/_50/AnnualisationFactor;
 			attribute<Eur_yr> Kmi_Asl_Gnet (BebouwingsObject) := Eenmalig/Ki_Asl_Gnet * NCW/mr50/AnnualisationFactor;
 			
-			//Investeringen
+			//Investeringen			
 			attribute<Eur_yr> Kji_LO_30 (BebouwingsObject) := Eenmalig/Ki_LO_30 * NcwRefs/_30/AnnualisationFactor;
 			attribute<Eur_yr> Kmi_LO_30 (BebouwingsObject) := Eenmalig/Ki_LO_30 * NCW/mr30/AnnualisationFactor;
 			attribute<Eur_yr> Kji_LO_20 (BebouwingsObject) := Eenmalig/Ki_LO_20 * NcwRefs/_20/AnnualisationFactor;
@@ -922,7 +918,7 @@ template BCdata
 			attribute<Eur_yr> Kj_kolen     (BebouwingsObject) := Metervraag/Vj_Kolen    * invoer/energieprijzen/Overig/results/Kolen_Excl[rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
 			attribute<Eur_yr> Kj_kolen_CO2 (BebouwingsObject) := Metervraag/Vj_Kolen    * invoer/energieprijzen/Overig/results/Kolen_CO2 [rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
 			attribute<Eur_yr> Kj_pellets   (BebouwingsObject) := Metervraag/Vj_Pellets  * invoer/energieprijzen/Overig/results/Pellets   [rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
-			attribute<Eur_yr> Kj_biomassa  (BebouwingsObject) := Metervraag/Vj_Biomassa * invoer/energieprijzen/Overig/results/Waterstof [rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
+			attribute<Eur_yr> Kj_biomassa  (BebouwingsObject) := Metervraag/Vj_Biomassa * invoer/energieprijzen/Overig/results/Biomasssa [rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
 		
 			//Onderhoud installaties
 			attribute<Eur_yr> Kj_OH_LO   (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject); //TODO Maarten
