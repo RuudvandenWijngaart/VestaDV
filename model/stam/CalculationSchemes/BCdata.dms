@@ -227,6 +227,14 @@ template BCdata
 		unit<uint8> GebouwOptie := Classifications/GebouwOptie {
 			attribute<EUR_asl> Ki_asl := sum(Installatie/Ki_asl[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
 			attribute<EUR_m2 > Ki_opp := sum(Installatie/Ki_opp[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
+			
+			attribute<EUR_asl> Ki30_installatie_asl := sum((Installatie/Ki_asl * Installatie/AT30)[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
+			attribute<EUR_asl> Ki20_installatie_asl := sum((Installatie/Ki_asl * Installatie/AT20)[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
+			attribute<EUR_asl> Ki15_installatie_asl := sum((Installatie/Ki_asl * Installatie/AT15)[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
+			
+			attribute<EUR_m2 > Ki30_installatie_opp := sum((Installatie/Ki_opp * Installatie/AT30)[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
+			attribute<EUR_m2 > Ki20_installatie_opp := sum((Installatie/Ki_opp * Installatie/AT20)[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
+			attribute<EUR_m2 > Ki15_installatie_opp := sum((Installatie/Ki_opp * Installatie/AT15)[uInstallatie/Installatie_rel], uInstallatie/GebouwOptie_rel);
 		}
 	}
 	
@@ -307,8 +315,18 @@ template BCdata
 		
 		attribute<EUR> Ki_installatie_asl(BebouwingsObject) := VerbruiksOpties/GebouwOptie/Ki_asl[GebouwOptie_rel] * RuimtelijkeVraagComponent/nrAansluitingen;
 		attribute<EUR> Ki_installatie_opp(BebouwingsObject) := VerbruiksOpties/GebouwOptie/Ki_opp[GebouwOptie_rel] * RuimtelijkeVraagComponent/Oppervlakte    ;
-		
 		attribute<EUR> Ki_installatie (BebouwingsObject):= Ki_installatie_asl +Ki_installatie_opp + Ki_RV + Ki_TW + Ki_K;
+		
+		attribute<EUR> Ki30_installatie(BebouwingsObject):= 
+			VerbruiksOpties/GebouwOptie/Ki30_installatie_asl[GebouwOptie_rel] * RuimtelijkeVraagComponent/nrAansluitingen 
+		+ 	VerbruiksOpties/GebouwOptie/Ki30_installatie_opp[GebouwOptie_rel] * RuimtelijkeVraagComponent/Oppervlakte ;
+		attribute<EUR> Ki20_installatie(BebouwingsObject):= 
+			VerbruiksOpties/GebouwOptie/Ki20_installatie_asl[GebouwOptie_rel] * RuimtelijkeVraagComponent/nrAansluitingen 
+		+ 	VerbruiksOpties/GebouwOptie/Ki20_installatie_opp[GebouwOptie_rel] * RuimtelijkeVraagComponent/Oppervlakte ;
+		attribute<EUR> Ki15_installatie(BebouwingsObject):= 
+			VerbruiksOpties/GebouwOptie/Ki15_installatie_asl[GebouwOptie_rel] * RuimtelijkeVraagComponent/nrAansluitingen 
+		+ 	VerbruiksOpties/GebouwOptie/Ki15_installatie_opp[GebouwOptie_rel] * RuimtelijkeVraagComponent/Oppervlakte ;
+		
 		
 		attribute<EUR> Ki_schil (BebouwingsObject)      := ='DoelLabels/'+Classifications/DoelLabel/Name[DoelLabel_rel]+'/Ki_schil';
 		attribute<EUR> Ki_totaal(BebouwingsObject)      := Ki_installatie + Ki_schil;
@@ -399,10 +417,17 @@ template BCdata
 			prijzen/e   *  metervraag/e 
 		+	prijzen/gas *  metervraag/gas;
 		
-		attribute<EUR_Yr> Kj_schil      (BebouwingsObject) := Ki_schil * NcwRefs/_30/AnnualisationFactor;
-		attribute<EUR_Yr> Kj_installatie(BebouwingsObject) := Ki_installatie * NcwRefs/_30/AnnualisationFactor; // TODO: toepassen AnnualisationFactor_S1, eWP_AnnualisationFactor_eg
+		attribute<EUR_Yr> Kj_schil        (BebouwingsObject) := Ki_schil * NcwRefs/_30/AnnualisationFactor;
+		attribute<EUR_Yr> Kj30_installatie(BebouwingsObject) := Ki30_installatie * NcwRefs/_30/AnnualisationFactor;
+		attribute<EUR_Yr> Kj20_installatie(BebouwingsObject) := Ki20_installatie * NcwRefs/_20/AnnualisationFactor;
+		attribute<EUR_Yr> Kj15_installatie(BebouwingsObject) := Ki15_installatie * NcwRefs/_15/AnnualisationFactor;
+		attribute<EUR_Yr> Kj_installatie(BebouwingsObject) := Kj30_installatie + Kj20_installatie + Kj15_installatie;
 		attribute<EUR_Yr> Km_schil      (BebouwingsObject) := Ki_schil       * NCW/mr30/AnnualisationFactor;
-		attribute<EUR_Yr> Km_installatie(BebouwingsObject) := Ki_installatie * NCW/mr30/AnnualisationFactor; // TODO: toepassen AnnualisationFactor_S1, eWP_AnnualisationFactor_eg
+		
+		attribute<EUR_Yr> Km30_installatie(BebouwingsObject) := Ki30_installatie * NCW/mr30/AnnualisationFactor; // TODO: toepassen AnnualisationFactor_S1, eWP_AnnualisationFactor_eg
+		attribute<EUR_Yr> Km20_installatie(BebouwingsObject) := Ki20_installatie * NCW/mr20/AnnualisationFactor; // TODO: toepassen AnnualisationFactor_S1, eWP_AnnualisationFactor_eg
+		attribute<EUR_Yr> Km15_installatie(BebouwingsObject) := Ki15_installatie * NCW/mr15/AnnualisationFactor; // TODO: toepassen AnnualisationFactor_S1, eWP_AnnualisationFactor_eg
+		attribute<EUR_Yr> Km_installatie  (BebouwingsObject) := Km30_installatie + Km20_installatie + Km15_installatie;
 		
 		// TODO:
 		// ( VermedenKosten_eg_excl/S_H_T * EIA_Opties/R_SplitIncentiveFactor * BTW_Factor 
