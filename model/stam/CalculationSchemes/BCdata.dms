@@ -147,15 +147,18 @@ template BCdata
 			attribute<Ratio>	Klimaateffect (..)	:=	KlimaatFactorMap[gridm100_rel];
 			
 			attribute<GJ_yr>	TW(..) := (nrAansluitingen * ModelObject/V_TW_asl [Model_rel] + Oppervlakte * ModelObject/V_TW_opp [Model_rel])
-						* DragerSpecifiekeOpties/WarmWater;
+						* DragerSpecifiekeOpties/TapWater;
 						
-			attribute<GJ_yr>	K (..) := Oppervlakte * ModelObject/V_K_opp[Model_rel] 
-						* DragerSpecifiekeOpties/Koude
-						* ( 1.0 + 3.66*(1.0 - Klimaateffect));
+			attribute<GJ_yr>	K (..) := =
+			'('
+				+	(all(ModelObject/V_K_asl == 0[GJ_Yr_asl]) ?'':'NrAansluitingen * ModelObject/V_K_asl[Model_rel] +')
+				+	'Oppervlakte * ModelObject/V_K_opp[Model_rel] '
+				+	') * DragerSpecifiekeOpties/Koude * ( 1.0 + 3.66*(1.0 - Klimaateffect))';
 			
 			attribute<GJ_yr>	EA(..) := (nrAansluitingen * ModelObject/V_EA_asl [Model_rel] + Oppervlakte * ModelObject/V_EA_opp [Model_rel])
 						* DragerSpecifiekeOpties/ElektrischeApparatuur;
 			
+			// TODO, OPTIMIZE, V_RV_asl/@SL@ alleen meenemen indien niet allemaal 0, zoals bij utiliteiten wel het geval is
 			container RV := for_each_nedv(Classifications/SchilLabel/Name
 			,	replace(
 					'(nrAansluitingen * ModelObject/V_RV_asl/@SL@[Model_rel] + Oppervlakte * ModelObject/V_RV_opp/@SL@[Model_rel])'
@@ -164,10 +167,13 @@ template BCdata
 				,'@SL@', Classifications/SchilLabel/Name)
 			,	.., GJ_Yr);
 			
-			attribute<GJ_Yr> CurrRV(..) := ='merge(SchilLabel_rel, GJ_Yr, '+AsItemList('RV/'+Classifications/SchilLabel/Name)+')';
-			
-			attribute<GJ_yr>	PE  (..)	:=	Oppervlakte * ModelObject/V_PE_opp[Model_rel] * DragerSpecifiekeOpties/RuimteVerwarming;
-			attribute<GJ_yr>	Vent(..)	:=	Oppervlakte * ModelObject/V_Vent_opp[Model_rel];
+			attribute<GJ_Yr> CurrRV(..) := ='merge(SchilLabel_rel, GJ_Yr, '+AsItemList('RV/'+Classifications/SchilLabel/Name)+')';			
+			attribute<GJ_yr> Ventilatie(..)	:=	=				
+				'('
+				+	(all(ModelObject/V_Vent_asl == 0[GJ_yr_asl]) ? '' : 'NrAansluitingen * ModelObject/V_Vent_asl + ')
+				+ 'Oppervlakte * ModelObject/V_Vent_opp[Model_rel]'
+				+ ') * DragerSpecifiekeOpties/ElektrischeApparatuur'
+				;
 		}
 	}
 
@@ -263,7 +269,6 @@ template BCdata
 			;
 		
 		// TODO: rekening houden met Installatie='geen' => bestaande installatie gebruiken.		
-		// TODO: alleen relevant per BebouwingsObject voor no-jump
 		container Performance_rel := for_each_nedv(Classifications/Product/Name
 		,	'Classifications/GebouwOptie/xLabel/Performance_rel/'+Classifications/Product/Name+'[combine_data(Classifications/GebouwOptie/xLabel, GebouwOptie_rel, SchilLabel_rel)]'
 		,	SchilLabelDomain, Classifications/Performance
@@ -369,8 +374,14 @@ template BCdata
 				'Classifications/Performance/eEffect_cap[Performance_rel/@P'+SprongSuffix+'] * capaciteit/@P'
 			,	'@P', Classifications/Product/Name)
 		,	BebouwingsObject, GJ_Yr
-		) {
-			attribute<GJ_Yr> Totaal(BebouwingsObject) := ='add('+Classifications/Product/Name+')';
+		) 
+		{
+			attribute<GJ_Yr> Ventilatie(BebouwingsObject) := 
+			(SchilLabel_rel <= Classifications/SchilLabel/V/B)
+			?	RuimtelijkeVraagComponent/functioneel/Ventilatie
+			:	const(0[GJ_Yr], SchilLabelDomain);
+			
+			attribute<GJ_Yr> Totaal(BebouwingsObject) := ='add('+Classifications/Product/Name+') + Ventilatie';
 		}
 		
 		container metervraag := metervraag_aggr
