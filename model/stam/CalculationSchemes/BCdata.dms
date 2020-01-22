@@ -249,9 +249,10 @@ template BCdata
 		parameter<Classifications/GebouwOptie> GebouwOptie_rel;
 		parameter<Classifications/DoelLabel  > DoelLabel_rel         := Classifications/GebouwOptie/DoelLabel_rel[GebouwOptie_rel];
 		parameter<Classifications/SchilLabel> SchilLabel_rel_formeel := Classifications/DoelLabel/SchilLabel_rel[DoelLabel_rel];
-		// TODO, OPTIMIZE, consider handling no-jump as a special case
+		attribute<Classifications/Installatie> Installatie_rel(Classifications/Product) := 
+			= 'union_data(Classifications/Product, ' + AsItemList('Classifications/GebouwOptie/Installatie_rel/'+Classifications/Product/Name+'[GebouwOptie_rel]') + ')';
 		
-		parameter<bool> AltijdSprong := (DoelLabel_rel == Classifications/DoelLabel/V/A);
+		parameter<bool> AltijdSprong := (DoelLabel_rel == Classifications/DoelLabel/V/A) && all(Installatie_rel != Classifications/Installatie/V/geen);
 		parameter<bool> SomsSprong   := (DoelLabel_rel != Classifications/DoelLabel/V/geen);
 		parameter<string> SprongSuffix := AltijdSprong ? '[0[SchilLabelDomain]]' : '';
 		unit<uint32> SchilLabelDomain := =AltijdSprong ? 'range(UInt32, 0, 1)' : 'BebouwingsObject';
@@ -261,11 +262,7 @@ template BCdata
 			:                'BeginState/schillabel_rel'
 			;
 		
-		container Installatie_rel := for_each_nedv(Classifications/Product/Name
-		,	'Classifications/GebouwOptie/Installatie_rel/'+Classifications/Product/Name+'[GebouwOptie_rel]' 
-		,	void, Classifications/Installatie
-		);
-		
+		// TODO: rekening houden met Installatie='geen' => bestaande installatie gebruiken.		
 		// TODO: alleen relevant per BebouwingsObject voor no-jump
 		container Performance_rel := for_each_nedv(Classifications/Product/Name
 		,	'Classifications/GebouwOptie/xLabel/Performance_rel/'+Classifications/Product/Name+'[combine_data(Classifications/GebouwOptie/xLabel, GebouwOptie_rel, SchilLabel_rel)]'
@@ -289,7 +286,7 @@ template BCdata
 		,	BebouwingsObject, kW
 		);
 		container Ki_cap := for_each_nedv(Classifications/Product/Name
-		,	replace('MakeDefined(VerbruiksOpties/Installatie/Ki_cap[Installatie_rel/@P] * P_cap/@P, 0[EUR_kw])', '@P', Classifications/Product/Name)
+		,	replace('MakeDefined(VerbruiksOpties/Installatie/Ki_cap[Installatie_rel[Classifications/Product/V/@P]] * P_cap/@P, 0[EUR_kw])', '@P', Classifications/Product/Name)
 		,	SchilLabelDomain, EUR_kw
 		);
 		
@@ -383,8 +380,7 @@ template BCdata
 		
 		container prijzen {
 			attribute<EUR_GJ> e  (BebouwingsObject) := PrijzenElektriciteit/KGJ_eindgebruik_excl [classify(metervraag/e  , PrijzenElektriciteit/ClassBreak )];
-			attribute<EUR_GJ> gas(BebouwingsObject) := PrijzenElektriciteit/KGJ_eindgebruik_excl [classify(metervraag/gas, PrijzenAardgas/ClassBreak )];
-			
+			attribute<EUR_GJ> gas(BebouwingsObject) := PrijzenElektriciteit/KGJ_eindgebruik_excl [classify(metervraag/gas, PrijzenAardgas/ClassBreak )];	
 		}
 		
 		attribute<EUR_Yr> Kj_verbruik(BebouwingsObject) := 
