@@ -275,7 +275,7 @@ template BCdata
 		}
 //		attribute<GJ_Yr> metervraag_RV := (meterfactor_RVb + meterfactor_RVp) * functioneel_RV;
 	
-		container metervraag := for_each_nedv(Classifications/Product/Name
+		container metervraag_base := for_each_nedv(Classifications/Product/Name
 		,	replace('functioneel/@P / SPF/@P'+SprongSuffix, '@P', Classifications/Product/Name)
 		,	BebouwingsObject, Float64
 		);
@@ -284,31 +284,78 @@ template BCdata
 		,	'Classifications/Performance/Input_rel[Performance_rel/'+Classifications/Product/Name+']'
 		,	SchilLabelDomain, Classifications/Input
 		);
-		
-		container metervraag_aggr_NaSprong {
-			attribute<Classifications/Input> imp_Input_Rel_asVector(Classifications/Product) :=
-				='union_data(Classifications/Product,'+AsItemList('Input_Rel/'+Classifications/Product/Name)+')';
-			attribute<string> imp_MeterVraagExpr_asVector(Classifications/Product) := 'metervraag/' + Classifications/Product/Name;			
-			container metervraag_aggr_NaSprong := for_each_nedv(Classifications/Input/Name
-			,	(pcount(imp_Input_Rel_asVector)>0?'add('+AsItemList(imp_MeterVraagExpr_asVector, imp_Input_Rel_asVector)+')':'const(0[GJ_Yr], BebouwingsObject)')
-			,	BebouwingsObject, GJ_Yr
-			);
+
+		container Expr_impl {
+			attribute<string> MeterVraagExpr_asVector(Classifications/Product) := 'metervraag_base/' + Classifications/Product/Name;
+			attribute<Classifications/Input> Input_Rel_asVector(Classifications/Product) :=
+				='union_data(Classifications/Product,'+AsItemList(DoeSprong ? 'Input_Rel/'+Classifications/Product/Name : '(0/0)[Classifications/Input]' )+')';
+				
+			attribute<string> aggr_NaSprong(Classifications/Input) := 
+				pcount(Input_Rel_asVector)>0
+				?	'add('+AsItemList(MeterVraagExpr_asVector, Input_Rel_asVector)+')'
+				:	'const(0[GJ_Yr], BebouwingsObject)';
+				
+			attribute<string> aggr_OudLabel(Classifications/Input) := 
+					replace('add('++AsItemList(replace('Input_rel/@P == Classifications/Input/V/@I ? metervraag_base/@P: 0[GJ_Yr]', '@P', Classifications/Product/Name))+')'
+					, '@I', Classifications/Input/Name
+					);
 		}
-		container metervraag_aggr_OudLabel := for_each_nedv(Classifications/Input/Name
-		,	replace('add('++AsItemList(replace('Input_rel/@P == Classifications/Input/V/@I ? metervraag/@P: 0[GJ_Yr]', '@P', Classifications/Product/Name))+')', '@I', Classifications/Input/Name)
-		,	BebouwingsObject, GJ_Yr
-		);
+		
+		container metervraag_aggr := for_each_nedv(Classifications/Input/Name
+		,	DoeSprong ? Expr_impl/aggr_NaSprong : Expr_impl/aggr_OudLabel
+		,	BebouwingsObject, GJ_Yr);
 		
 		container eEffect := for_each_nedv(Classifications/Product/Name
 		,	replace(
-				'Classifications/Performance/eEffect_vol[Performance_rel/@P'+SprongSuffix+'] * metervraag/@P +'
+				'Classifications/Performance/eEffect_vol[Performance_rel/@P'+SprongSuffix+'] * metervraag_base/@P +'
 				'Classifications/Performance/eEffect_cap[Performance_rel/@P'+SprongSuffix+'] * capaciteit/@P'
 			,	'@P', Classifications/Product/Name)
 		,	BebouwingsObject, GJ_Yr
-		);
+		) {
+			attribute<GJ_Yr> Totaal(BebouwingsObject) := ='add('+Classifications/Product/Name+')';
+		}
+		
+		container metervraag := metervraag_aggr
+		{
+			attribute<GJ_Yr> e(BebouwingsObject) := metervraag_aggr/e + eEffect/Totaal;	// TODO: Functioneel/PompEnergie, VentilatieKosten_eg, Functioneel/Apparatuur
+		}
+		
+		container prijzen {
+			attribute<EUR_GJ> e  (BebouwingsObject) := PrijzenElektriciteit/KGJ_eindgebruik_excl [classify(metervraag/e  , PrijzenElektriciteit/ClassBreak )];
+			attribute<EUR_GJ> gas(BebouwingsObject) := PrijzenElektriciteit/KGJ_eindgebruik_excl [classify(metervraag/gas, PrijzenAardgas/ClassBreak )];
+			
+		}
+		attribute<EUR_Yr> Kj_verbruik(BebouwingsObject) := 
+			prijzen/e   *  metervraag/e 
+		+	prijzen/gas *  metervraag/gas;
+		
+		attribute<EUR_Yr> Kj_schil      (BebouwingsObject) := Ki_schil * NcwRefs/_30/AnnualisationFactor;
+		attribute<EUR_Yr> Kj_installatie(BebouwingsObject) := Ki_installatie * NcwRefs/_30/AnnualisationFactor; // TODO: toepassen AnnualisationFactor_S1, eWP_AnnualisationFactor_eg
+		attribute<EUR_Yr> Km_schil      (BebouwingsObject) := Ki_schil       * NCW/mr30/AnnualisationFactor;
+		attribute<EUR_Yr> Km_installatie(BebouwingsObject) := Ki_installatie * NCW/mr30/AnnualisationFactor; // TODO: toepassen AnnualisationFactor_S1, eWP_AnnualisationFactor_eg
+		
+		// TODO:
+		// ( VermedenKosten_eg_excl/S_H_T * EIA_Opties/R_SplitIncentiveFactor * BTW_Factor 
+		// - GebouwVerbetering_j/S_H_T * S_gv * BTW_Factor_gv - LokaleOpwekking_eg/S_H_T * S_lo * BTW_Factor 
+		// + S_ISDE * BTW_Factor 
+		// - VentilatieKosten_eg/S_H_T * BTW_Factor 
+		// - OnderhoudAdministratie_j/S_H_T * (1.0 - EEA_Opties/S_OenM ) * BTW_Factor ) 
+		// * float64( KanSpringen/S_H_T ) 
+		
+		attribute<EUR_Yr> Rentabiliteit_j(BebouwingsObject) := 
+			Kj_schil  * BTW_Factor_gv
+			+ Kj_installatie * BTW_Factor
+			+ Kj_verbruik * EIA_Opties/R_SplitIncentiveFactor * BTW_Factor;
+			
+		attribute<EUR_Yr> Rentabiliteit_m(BebouwingsObject) := 
+			Km_schil  
+			+ Km_installatie
+			+ Kj_verbruik;
 	}
 	
 	container GebouwOpties := for_each_ne(Classifications/GebouwOptie/Name, 'GebouwOptieT(Classifications/GebouwOptie/V/'+Classifications/GebouwOptie/Name+')');
+	
+	attribute<Classifications/GebouwOptie> BesteOptie(BebouwingsObject) := ='argmax('+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'/Rentabiliteit_j')+')[Classifications/GebouwOptie]';
 	
 	container statistics {
 		attribute<EUR> Ki_lowest_value  (BebouwingsObject) := ='min_elem('+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'Ki_totaal')+')';
@@ -421,6 +468,7 @@ template BCdata
 	{
 		container RuimteVerwarming
 		{
+			// TODO: Wat hiermee te doen ?
 			parameter<float64>	Aardgas_leidingverliesfactor	:=	1.0 - Kengetallen/Efficiency/Leidingverlies_RV_aardgas,	Descr = "extra op te wekken warmte door verlies in leidingen binnen gebouw", Source = "Validatiesessies startanalyse 2019"; //TODO source naar FO 4.0
 			parameter<float64>	eWP_leidingverliesfactor		:=	1.0 - Kengetallen/Efficiency/Leidingverlies_RV_ewp,		Descr = "extra op te wekken warmte door verlies in leidingen binnen gebouw", Source = "Validatiesessies startanalyse 2019"; //TODO source naar FO 4.0
 			
@@ -487,8 +535,6 @@ template BCdata
 		attribute<float64>  NietDeelnemers       (BebouwingsObject) := 1.0 - WarmteVraag;
 		attribute<float64>  Gas                  (BebouwingsObject) := 1.0 - max_elem(float64(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie]), Electric);
 	}
-	
-
 	
 	container OpwekkingsOpties
 	{
