@@ -756,9 +756,15 @@ template BCdata
 		}
 	}
 
-	container Warmtewet 
+	container Warmtewet
 	{
-		parameter<float64> PrijsFactor_impl :=  sum( Aandeel/Gas * DragerOpties/Warmte/Aardgas) / sum( Aandeel/Gas * DragerOpties/Warmte/Warmte ) * Voorkeuren/MinderDanAndersFactor;
+		unit<uint32> GasVerbruikers := subset(results/Aansluitingen/Gnet > 0.0)
+		{
+			attribute<GJ_yr> Vj_gas    := Results/Metervraag/Vj_gas[nr_OrgEntity];
+			attribute<GJ_yr> Vj_warmte := Results/Functioneel/Vj_RV[nr_OrgEntity] + Results/Functioneel/Vj_TW[nr_OrgEntity];
+			//TODO bij Vj_warmte aftrek eventuele installaties die al een deel van de vraag vullen binnen deze groep (bijv Zonneboilers)
+		}
+		parameter<float64> PrijsFactor_impl :=  sum(GasVerbruikers/Vj_gas) / sum(GasVerbruikers/Vj_warmte) * Voorkeuren/MinderDanAndersFactor;
 		parameter<float64> PrijsFactor_corr :=  MakeDefined(PrijsFactor_impl, 1.25);
 		parameter<float64> PrijsFactor      :=  = 'BebouwingsComponenten/'+rjoin(BCname, Classifications/BebouwingsComponent/name, Classifications/BebouwingsComponent/name[Classifications/BebouwingsComponent/Warmtewet_BC_rel])+'/Warmtewet/PrijsFactor_corr';
 
@@ -770,46 +776,48 @@ template BCdata
 	container Results
 	{
 		attribute<Classifications/GebouwOptie> CurrentOptie (BebouwingsObject) := BesteOptie;
-		attribute<Classifications/Schillabel > CurrentLabel (BebouwingsObject) := const(Classifications/schillabel/V/b, BebouwingsObject);
+		attribute<Classifications/Schillabel > CurrentLabel (BebouwingsObject) := const(Classifications/schillabel/V/b, BebouwingsObject); //TODO Maarten
 		
 		container Installaties
 		{
-			attribute<Classifications/Installatie> RVb (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject);
-			attribute<Classifications/Installatie> RVp (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject);
-			attribute<Classifications/Installatie> TWb (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject);
-			attribute<Classifications/Installatie> TWp (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject);
-			attribute<Classifications/Installatie> Kb  (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject);
-			attribute<Classifications/Installatie> Kp  (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject);
+			attribute<Classifications/Installatie> RVb (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
+			attribute<Classifications/Installatie> RVp (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
+			attribute<Classifications/Installatie> TWb (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
+			attribute<Classifications/Installatie> TWp (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
+			attribute<Classifications/Installatie> Kb  (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
+			attribute<Classifications/Installatie> Kp  (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
 			
-			attribute<Classifications/Installatie> Dak (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject);
+			attribute<Classifications/Installatie> Dak (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
 		}
 		
 		container Aansluitingen
 		{
-			attribute<nrAansl> Gnet     (BebouwingsObject) := RuimtelijkeVraagComponent/nraansluitingen;
-			attribute<nrAansl> H2net    (BebouwingsObject) := RuimtelijkeVraagComponent/nraansluitingen;
-			attribute<nrAansl> Enet_app (BebouwingsObject) := RuimtelijkeVraagComponent/nraansluitingen; // alleen apparatuur
-			attribute<nrAansl> Enet_hwp (BebouwingsObject) := RuimtelijkeVraagComponent/nraansluitingen;  // apparatuur en hybride systeem
-			attribute<nrAansl> Enet_ewp (BebouwingsObject) := RuimtelijkeVraagComponent/nraansluitingen;  // apparatuur en volledig elektrisch verwarmd
+			attribute<bool>    IsHybride     (BebouwingsObject) := const(false, bebouwingsObject); //TODO relateren aan gebouwoptie die gekozen is - Maarten
+			attribute<bool>    IsAllElectric (BebouwingsObject) := const(false, bebouwingsObject); //TODO relateren aan gebouwoptie die gekozen is - Maarten
+			attribute<nrAansl> Gnet          (BebouwingsObject) := Metervraag/Vj_gas <= 0.0[GJ_yr] ? 0.0[nrAansl] : RuimtelijkeVraagComponent/nraansluitingen;
+			attribute<nrAansl> H2net         (BebouwingsObject) := Metervraag/Vj_H2  <= 0.0[GJ_yr] ? 0.0[nrAansl] : RuimtelijkeVraagComponent/nraansluitingen;
+			attribute<nrAansl> Enet_app      (BebouwingsObject) := float64(!IsHybride && !IsAllElectric)  * RuimtelijkeVraagComponent/nraansluitingen;  // alleen apparatuur
+			attribute<nrAansl> Enet_hwp      (BebouwingsObject) := float64(IsHybride)                     * RuimtelijkeVraagComponent/nraansluitingen;  // apparatuur en hybride systeem
+			attribute<nrAansl> Enet_ewp      (BebouwingsObject) := float64(IsAllElectric)                 * RuimtelijkeVraagComponent/nraansluitingen;  // apparatuur en volledig elektrisch verwarmd
 		}
 		container Functioneel
 		{
-			attribute<GJ_yr> Vj_RV   (BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject);
+			attribute<GJ_yr> Vj_RV   (BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject); //TODO Maarten
 			attribute<GJ_yr> Vj_TW   (BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/TW;
 			attribute<GJ_yr> Vj_K    (BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/K;
-			attribute<GJ_yr> Vj_Vent (BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject);
+			attribute<GJ_yr> Vj_Vent (BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject); //TODO Maarten
 			attribute<GJ_yr> Vj_App  (BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/EA;
 		}
 		container Metervraag
 		{
-			attribute<GJ_yr> Vj_e       (BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject);
-			attribute<GJ_yr> Vj_zon     (BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject);
-			attribute<GJ_yr> Vj_wind    (BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject);
-			attribute<GJ_yr> Vj_gas     (BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject);
-			attribute<GJ_yr> Vj_H2      (BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject);
-			attribute<GJ_yr> Vj_kolen   (BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject);
-			attribute<GJ_yr> Vj_pellets (BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject);
-			attribute<GJ_yr> Vj_biomassa(BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject);
+			attribute<GJ_yr> Vj_e       (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
+			attribute<GJ_yr> Vj_zon     (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
+			attribute<GJ_yr> Vj_wind    (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
+			attribute<GJ_yr> Vj_gas     (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
+			attribute<GJ_yr> Vj_H2      (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
+			attribute<GJ_yr> Vj_kolen   (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
+			attribute<GJ_yr> Vj_pellets (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
+			attribute<GJ_yr> Vj_biomassa(BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
 		}
 		container Eenmalig
 		{
@@ -822,16 +830,16 @@ template BCdata
 															+   BC_kentallen/Ki_Aansl_g_opp * RuimtelijkeVraagComponent/oppervlakte;
 		
 			//Investeringen
-			attribute<Eur>   Ki_LO_30   (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject);
-			attribute<Eur>   Ki_LO_20   (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject);
-			attribute<Eur>   Ki_LO_15   (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject);
-			attribute<Eur>   Ki_GV      (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject);
+			attribute<Eur>   Ki_LO_30   (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject); //TODO Maarten
+			attribute<Eur>   Ki_LO_20   (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject); //TODO Maarten
+			attribute<Eur>   Ki_LO_15   (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject); //TODO Maarten
+			attribute<Eur>   Ki_GV      (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject); //TODO Maarten
 		
 			//Subsidies
-			attribute<Eur>   Oi_s_LO_30 (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject);
-			attribute<Eur>   Oi_s_LO_20 (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject);
-			attribute<Eur>   Oi_s_LO_15 (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject);
-			attribute<Eur>   Oi_s_GV    (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject);
+			attribute<Eur>   Oi_s_LO_30 (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject); //TODO Maarten
+			attribute<Eur>   Oi_s_LO_20 (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject); //TODO Maarten
+			attribute<Eur>   Oi_s_LO_15 (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject); //TODO Maarten
+			attribute<Eur>   Oi_s_GV    (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject); //TODO Maarten
 		}
 		container Kapitaallasten
 		{
@@ -860,30 +868,33 @@ template BCdata
 		container Jaarlijks
 		{
 			//Vastrecht en korting
-			attribute<Eur_yr> Kj_vastrecht_E (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
-			attribute<Eur_yr> Kj_vastrecht_G (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
-			attribute<Eur_yr> Oj_Hkorting_E  (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
+			attribute<Eur_yr> Kj_vastrecht_E (BebouwingsObject) := Metervraag/Vj_e   <= 0.0[GJ_yr] ? 0.0[Eur_yr] : Opbrengsten/VastRechtBijdrageE;
+			attribute<Eur_yr> Kj_vastrecht_G (BebouwingsObject) := Metervraag/Vj_gas <= 0.0[GJ_yr] ? 0.0[Eur_yr] : Opbrengsten/VastRechtBijdrageG;
+			attribute<Eur_yr> Oj_Hkorting_E  (BebouwingsObject) := Metervraag/Vj_e   <= 0.0[GJ_yr] ? 0.0[Eur_yr] : Opbrengsten/HeffingskortingE;
 			
 			//Elektriciteit
-			attribute<Eur_yr> Kj_e       (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
-			attribute<Eur_yr> Km_e       (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
-			attribute<Eur_yr> Kj_e_EH    (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
-			attribute<Eur_yr> Kj_e_CO2   (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
-			
+			attribute<classifications/gebruiksgrootteklasse> e_gebruiksgrootteklasse_rel (BebouwingsObject) := classify(Metervraag/Vj_e, Prijzen/Elektriciteit/Staffel/ClassBreak);
+			attribute<Eur_yr> Kj_e       (BebouwingsObject) := Metervraag/Vj_e * Prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl[e_gebruiksgrootteklasse_rel];
+			attribute<Eur_yr> Km_e       (BebouwingsObject) := Metervraag/Vj_e * Prijzen/Elektriciteit/Staffel/KGJ_maatschappelijk [e_gebruiksgrootteklasse_rel];
+			attribute<Eur_yr> Kj_e_EH    (BebouwingsObject) := Metervraag/Vj_e * Prijzen/Elektriciteit/Staffel/KGJ_EnergieHeffing[e_gebruiksgrootteklasse_rel];
+			attribute<Eur_yr> Kj_e_CO2   (BebouwingsObject) := Metervraag/Vj_e * Prijzen/Elektriciteit/Staffel/KGJ_CO2Heffing[e_gebruiksgrootteklasse_rel];
+
 			//Gas
-			attribute<Eur_yr> Kj_gas     (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
-			attribute<Eur_yr> Km_gas     (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
-			attribute<Eur_yr> Kj_gas_EH  (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
-			attribute<Eur_yr> Kj_gas_CO2 (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
+			attribute<classifications/gebruiksgrootteklasse> g_gebruiksgrootteklasse_rel (BebouwingsObject) := classify(Metervraag/Vj_gas, Prijzen/Aardgas/Staffel/ClassBreak);
+			attribute<Eur_yr> Kj_gas     (BebouwingsObject) := Metervraag/Vj_gas * Prijzen/Aardgas/Staffel/KGJ_eindgebruik_excl[e_gebruiksgrootteklasse_rel];
+			attribute<Eur_yr> Km_gas     (BebouwingsObject) := Metervraag/Vj_gas * Prijzen/Aardgas/Staffel/KGJ_maatschappelijk [e_gebruiksgrootteklasse_rel];
+			attribute<Eur_yr> Kj_gas_EH  (BebouwingsObject) := Metervraag/Vj_gas * Prijzen/Aardgas/Staffel/KGJ_EnergieHeffing[e_gebruiksgrootteklasse_rel];
+			attribute<Eur_yr> Kj_gas_CO2 (BebouwingsObject) := Metervraag/Vj_gas * Prijzen/Aardgas/Staffel/KGJ_CO2Heffing[e_gebruiksgrootteklasse_rel];
 			
 			//Overige dragers
-			attribute<Eur_yr> Kj_H2      (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
-			attribute<Eur_yr> Kj_kolen   (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
-			attribute<Eur_yr> Kj_pellets (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
-			attribute<Eur_yr> Kj_biomassa(BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
+			attribute<Eur_yr> Kj_H2        (BebouwingsObject) := Metervraag/Vj_H2       * invoer/energieprijzen/Overig/results/Waterstof [rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
+			attribute<Eur_yr> Kj_kolen     (BebouwingsObject) := Metervraag/Vj_Kolen    * invoer/energieprijzen/Overig/results/Kolen_Excl[rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
+			attribute<Eur_yr> Kj_kolen_CO2 (BebouwingsObject) := Metervraag/Vj_Kolen    * invoer/energieprijzen/Overig/results/Kolen_CO2 [rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
+			attribute<Eur_yr> Kj_pellets   (BebouwingsObject) := Metervraag/Vj_Pellets  * invoer/energieprijzen/Overig/results/Pellets   [rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
+			attribute<Eur_yr> Kj_biomassa  (BebouwingsObject) := Metervraag/Vj_Biomassa * invoer/energieprijzen/Overig/results/Waterstof [rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
 		
 			//Onderhoud installaties
-			attribute<Eur_yr> Kj_OH_LO   (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject);
+			attribute<Eur_yr> Kj_OH_LO   (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject); //TODO Maarten
 		}
 	}
 }
