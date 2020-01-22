@@ -247,14 +247,15 @@ template BCdata
 	
 	template GebouwOptieT {
 		parameter<Classifications/GebouwOptie> GebouwOptie_rel;
-		parameter<Classifications/DoelLabel  > DoelLabel_rel := Classifications/GebouwOptie/DoelLabel_rel[GebouwOptie_rel];
+		parameter<Classifications/DoelLabel  > DoelLabel_rel         := Classifications/GebouwOptie/DoelLabel_rel[GebouwOptie_rel];
+		parameter<Classifications/SchilLabel> SchilLabel_rel_formeel := Classifications/DoelLabel/SchilLabel_rel[DoelLabel_rel];
 		// TODO, OPTIMIZE, consider handling no-jump as a special case
 		
 		parameter<bool> DoeSprong := (DoelLabel_rel != Classifications/DoelLabel/V/Geen); // TODO: Alleen zeker springen bij sprong naar A+
 		parameter<string> SprongSuffix := DoeSprong ? '[0[SchilLabelDomain]]' : '';
 		unit<uint32> SchilLabelDomain := =DoeSprong ? 'range(UInt32, 0, 1)' : 'BebouwingsObject';
 		attribute<Classifications/SchilLabel > SchilLabel_rel(SchilLabelDomain) := 
-			=DoeSprong ? 'union_data(SchilLabelDomain, Classifications/DoelLabel/SchilLabel_rel[DoelLabel_rel])' : 'BeginState/schillabel_rel';
+			=DoeSprong ? 'union_data(SchilLabelDomain, SchilLabel_rel_formeel)' : 'BeginState/schillabel_rel';
 		
 		container Installatie_rel := for_each_nedv(Classifications/Product/Name
 		,	'Classifications/GebouwOptie/Installatie_rel/'+Classifications/Product/Name+'[GebouwOptie_rel]' 
@@ -316,8 +317,9 @@ template BCdata
 		{
 			attribute<GJ_Yr> RV(BebouwingsObject) := =
 				DoeSprong
-				?	'RuimtelijkeVraagComponent/Functioneel/RV/'+Classifications/SchilLabel/Name[SchilLabel_rel]
+				?	'RuimtelijkeVraagComponent/Functioneel/RV/'+Classifications/SchilLabel/Name[SchilLabel_rel_formeel]
 				:	'merge(SchilLabel_rel, GJ_Yr, '+AsItemList('RuimtelijkeVraagComponent/Functioneel/RV/'+Classifications/SchilLabel/Name)+')';
+
 			attribute<GJ_Yr> TW(BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/TW;
 			attribute<GJ_Yr> K (BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/K ;
 			
@@ -328,8 +330,7 @@ template BCdata
 			attribute<Float64>  Kb (BebouwingsObject) := ='K  *        Classifications/Performance/P_Vol[Performance_rel/Kb ] '+SprongSuffix;
 			attribute<Float64>  Kp (BebouwingsObject) := ='K  * (1.0 - Classifications/Performance/P_Vol[Performance_rel/Kb ])'+SprongSuffix;
 		}
-//		attribute<GJ_Yr> metervraag_RV := (meterfactor_RVb + meterfactor_RVp) * functioneel_RV;
-	
+		
 		container metervraag_base := for_each_nedv(Classifications/Product/Name
 		,	replace('functioneel/@P / SPF/@P'+SprongSuffix, '@P', Classifications/Product/Name)
 		,	BebouwingsObject, Float64
@@ -349,7 +350,8 @@ template BCdata
 				pcount(Input_Rel_asVector)>0
 				?	'add('+AsItemList(MeterVraagExpr_asVector, Input_Rel_asVector)+')'
 				:	'const(0[GJ_Yr], BebouwingsObject)';
-				
+	
+			// TODO: check waarom 0 bij alle Input in VRw ?
 			attribute<string> aggr_OudLabel(Classifications/Input) := 
 					replace('add('++AsItemList(replace('Input_rel/@P == Classifications/Input/V/@I ? metervraag_base/@P: 0[GJ_Yr]', '@P', Classifications/Product/Name))+')'
 					, '@I', Classifications/Input/Name
@@ -380,6 +382,7 @@ template BCdata
 			attribute<EUR_GJ> gas(BebouwingsObject) := PrijzenElektriciteit/KGJ_eindgebruik_excl [classify(metervraag/gas, PrijzenAardgas/ClassBreak )];
 			
 		}
+		
 		attribute<EUR_Yr> Kj_verbruik(BebouwingsObject) := 
 			prijzen/e   *  metervraag/e 
 		+	prijzen/gas *  metervraag/gas;
@@ -410,7 +413,7 @@ template BCdata
 	
 	container GebouwOpties := for_each_ne(Classifications/GebouwOptie/Name, 'GebouwOptieT(Classifications/GebouwOptie/V/'+Classifications/GebouwOptie/Name+')');
 	
-//	attribute<Classifications/GebouwOptie> BesteOptie(BebouwingsObject) := ='argmin('+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'/kosten_j')+')[Classifications/GebouwOptie]';
+ 	attribute<Classifications/GebouwOptie> BesteOptie(BebouwingsObject) := ='argmin('+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'/kosten_j')+')[Classifications/GebouwOptie]';
 	
 	container statistics {
 		attribute<EUR> Ki_lowest_value  (BebouwingsObject) := ='min_elem('+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'Ki_totaal')+')';
