@@ -251,11 +251,15 @@ template BCdata
 		parameter<Classifications/SchilLabel> SchilLabel_rel_formeel := Classifications/DoelLabel/SchilLabel_rel[DoelLabel_rel];
 		// TODO, OPTIMIZE, consider handling no-jump as a special case
 		
-		parameter<bool> DoeSprong := (DoelLabel_rel != Classifications/DoelLabel/V/Geen); // TODO: Alleen zeker springen bij sprong naar A+
-		parameter<string> SprongSuffix := DoeSprong ? '[0[SchilLabelDomain]]' : '';
-		unit<uint32> SchilLabelDomain := =DoeSprong ? 'range(UInt32, 0, 1)' : 'BebouwingsObject';
+		parameter<bool> AltijdSprong := (DoelLabel_rel == Classifications/DoelLabel/V/A);
+		parameter<bool> SomsSprong   := (DoelLabel_rel != Classifications/DoelLabel/V/geen);
+		parameter<string> SprongSuffix := AltijdSprong ? '[0[SchilLabelDomain]]' : '';
+		unit<uint32> SchilLabelDomain := =AltijdSprong ? 'range(UInt32, 0, 1)' : 'BebouwingsObject';
 		attribute<Classifications/SchilLabel > SchilLabel_rel(SchilLabelDomain) := 
-			=DoeSprong ? 'union_data(SchilLabelDomain, SchilLabel_rel_formeel)' : 'BeginState/schillabel_rel';
+			= AltijdSprong ? 'union_data(SchilLabelDomain, SchilLabel_rel_formeel)'
+			: SomsSprong   ? 'min_elem(BeginState/schillabel_rel, SchilLabel_rel_formeel)'
+			:                'BeginState/schillabel_rel'
+			;
 		
 		container Installatie_rel := for_each_nedv(Classifications/Product/Name
 		,	'Classifications/GebouwOptie/Installatie_rel/'+Classifications/Product/Name+'[GebouwOptie_rel]' 
@@ -316,7 +320,7 @@ template BCdata
 		container functioneel
 		{
 			attribute<GJ_Yr> RV(BebouwingsObject) := =
-				DoeSprong
+				AltijdSprong
 				?	'RuimtelijkeVraagComponent/Functioneel/RV/'+Classifications/SchilLabel/Name[SchilLabel_rel_formeel]
 				:	'merge(SchilLabel_rel, GJ_Yr, '+AsItemList('RuimtelijkeVraagComponent/Functioneel/RV/'+Classifications/SchilLabel/Name)+')';
 
@@ -344,7 +348,7 @@ template BCdata
 		container Expr_impl {
 			attribute<string> MeterVraagExpr_asVector(Classifications/Product) := 'metervraag_base/' + Classifications/Product/Name;
 			attribute<Classifications/Input> Input_Rel_asVector(Classifications/Product) :=
-				='union_data(Classifications/Product,'+AsItemList(DoeSprong ? 'Input_Rel/'+Classifications/Product/Name : '(0/0)[Classifications/Input]' )+')';
+				='union_data(Classifications/Product,'+AsItemList(AltijdSprong ? 'Input_Rel/'+Classifications/Product/Name : '(0/0)[Classifications/Input]' )+')';
 				
 			attribute<string> aggr_NaSprong(Classifications/Input) := 
 				pcount(Input_Rel_asVector)>0
@@ -359,7 +363,7 @@ template BCdata
 		}
 		
 		container metervraag_aggr := for_each_nedv(Classifications/Input/Name
-		,	DoeSprong ? Expr_impl/aggr_NaSprong : Expr_impl/aggr_OudLabel
+		,	AltijdSprong ? Expr_impl/aggr_NaSprong : Expr_impl/aggr_OudLabel
 		,	BebouwingsObject, GJ_Yr);
 		
 		container eEffect := for_each_nedv(Classifications/Product/Name
