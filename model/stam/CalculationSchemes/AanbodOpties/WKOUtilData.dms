@@ -14,25 +14,25 @@ template WKOUtilData
 
 	unit<uint32> BebouwingsObject := BCdata/BebouwingsObject;
 
-	attribute<GJ_yr> Lq4bis    (BebouwingsObject) := KoudeBeschikbaar ? BCdata/Aandeel/WarmteVraag * BCdata/Functioneel/Koude : const(0[GJ_Yr], BebouwingsObject), Descr = "KoudeVraag";
-	attribute<m2>    Lu        (BebouwingsObject) := BCdata/WarmteVraag/deelnemers/NrModelUnits;
+	attribute<GJ_yr> Lq4bis    (BebouwingsObject) := KoudeBeschikbaar ? float64(BCdata/WarmteVraag/kanGebiedsOptie) * BCdata/results/Functioneel/Vj_K : const(0[GJ_Yr], BebouwingsObject), Descr = "metervraag naar koude indien koude geleverd wordt";
+	attribute<m2>    Lu        (BebouwingsObject) := BCdata/WarmteVraag/deelnemers/Oppervlakte;
 
 	
 	attribute<GJ_yr> V_RV      (BebouwingsObject) := BCdata/WarmteVraag/deelnemers/Verbruik_RV;
-	attribute<GJ_yr> V_APP     (BebouwingsObject) := BCdata/Functioneel/Apparatuur,	Descr = "vraag naar elektriciteit voor apparatuur";
+	attribute<GJ_yr> V_APP     (BebouwingsObject) := BCdata/results/Functioneel/Vj_App,	Descr = "vraag naar elektriciteit voor apparatuur";
 	attribute<GJ_yr> V_WW      (BebouwingsObject) := BCdata/WarmteVraag/deelnemers/Verbruik_WW;
 	attribute<GJ_yr> V_Warmte  (BebouwingsObject) := V_RV + V_WW;
 	attribute<GJ_yr> V_Koude   (BebouwingsObject) := Lq4bis;
 	
-	attribute<float64> SPF_ind_rv  (BebouwingsObject) := 
-		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/Aplus  ? Efficiency/SPF_ind_A_rv :
-		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelB ? Efficiency/SPF_ind_B_rv :
-		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelE ? Efficiency/SPF_ind_CE_rv : 1.0;
+	attribute<float64>    SPF_ind_rv  (BebouwingsObject) := 
+		BcData/results/CurrentLabel <= /Classifications/Schillabel/V/A ? Efficiency/SPF_ind_A_rv :
+		BcData/results/CurrentLabel <= /Classifications/Schillabel/V/B ? Efficiency/SPF_ind_B_rv :
+		BcData/results/CurrentLabel <= /Classifications/Schillabel/V/E ? Efficiency/SPF_ind_CE_rv : 1.0, Descr = "Efficientie van de individuele warmtepomp voor eigen ruimteverwarming";
 		
-	attribute<float64> AEO_ind_rv  (BebouwingsObject) := 
-		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/Aplus  ? Efficiency/AEO_ind_A_rv :
-		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelB ? Efficiency/AEO_ind_B_rv :
-		BcData/energielabel/CurrValue <= /Classifications/energielabel/V/LabelE ? Efficiency/AEO_ind_CE_rv : 1.0;
+	attribute<float64>    AEO_ind_rv  (BebouwingsObject) := 
+		BcData/results/CurrentLabel <= /Classifications/Schillabel/V/A ? Efficiency/AEO_ind_A_rv :
+		BcData/results/CurrentLabel <= /Classifications/Schillabel/V/B ? Efficiency/AEO_ind_B_rv :
+		BcData/results/CurrentLabel <= /Classifications/Schillabel/V/E ? Efficiency/AEO_ind_CE_rv : 1.0, Descr = "Aandeel eigen opwekking, afhankelijk van schillabel";
 	
 	//volumevraag gebouwzijde
 	attribute<GJ_yr>	V_id_RV			(BebouwingsObject) := V_RV * AEO_ind_rv,						Descr = "Aandeel van de eigen volumevraag naar ruimteverwarming dat in het gebouw wordt opgewekt";
@@ -94,11 +94,15 @@ template WKOUtilData
 		
 		attribute<Eur>		Ki_eWP				(BebouwingsObject)	:=	max_elem(P_Warmte_sec, P_Koude_sec) * Kostenkentallen/Ki_eWP_util;
 		attribute<Eur>		Ki_id_EigenOpwek	(BebouwingsObject)	:=	
-			(BcData/energielabel/CurrValue <= Classifications/energielabel/V/Aplus  ) ? ((T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_Booster : 0.0[eur]) :
-			(BcData/energielabel/CurrValue <= Classifications/energielabel/V/LabelB ) ? ((T_sec <= 35[Celsius]) ? Ki_eWP : (T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_booster : 0.0[eur]) :
-			(BcData/energielabel/CurrValue <= Classifications/energielabel/V/LabelE ) ? ((T_sec <= 55[Celsius]) ? Ki_eWP : 0.0[eur]) 
-			: 1000000.0[eur],																				Descr = "investeringskosten voor eigen opwekkingsinstallatie, afhankelijk van temperatuurniveau en schillabel";
-		attribute<Eur>		Ki_id_LTAS			(BebouwingsObject)	:= (T_sec <= 55[Celsius]) ? (BCdata/Sprongen/VerbeterKosten_i/LTAS * Lu) : 0 [Eur],	Descr = "investeringskosten laag-temperatuur afgiftesysteem, e.g. LT-radiatoren of vloerverwarming";			
+			(BcData/results/CurrentLabel <= Classifications/Schillabel/V/A ) ? ((T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_Booster : 0.0[eur]) :
+			(BcData/results/CurrentLabel <= Classifications/Schillabel/V/B ) ? ((T_sec <= 35[Celsius]) ? Ki_eWP : (T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_booster : 0.0[eur]) :
+			(BcData/results/CurrentLabel <= Classifications/Schillabel/V/E ) ? ((T_sec <= 55[Celsius]) ? Ki_eWP : 0.0[eur]) 
+			: 1000000.0[eur], Descr = "investeringskosten voor eigen opwekkingsinstallatie, afhankelijk van temperatuurniveau en schillabel";
+			
+		attribute<Eur_aansl>K_LTAS_asl			(BebouwingsObject)	:= const(BCdata/BC_kentallen/Ki_LTAS_l_asl, BebouwingsObject);
+		attribute<Eur_m2>	K_LTAS_opp			(BebouwingsObject)	:= const(BCdata/BC_kentallen/Ki_LTAS_opp, BebouwingsObject);
+		attribute<Eur>		Ki_LTAS				(BebouwingsObject)	:= K_LTAS_opp * BCdata/RuimtelijkeVraagComponent/oppervlakte + K_LTAS_asl * BCdata/RuimtelijkeVraagComponent/nrAansluitingen;
+		attribute<Eur>		Ki_id_LTAS			(BebouwingsObject)	:= (T_sec <= 55[Celsius]) ? Ki_LTAS : 0 [Eur],	Descr = "investeringskosten laag-temperatuur afgiftesysteem, e.g. LT-radiatoren of vloerverwarming";			
 		attribute<Eur>		Ki_id				(BebouwingsObject)	:= (K_wvu * Lu) + Ki_id_EigenOpwek +Ki_id_LTAS,		Descr = "Investeringskosten systeem bij utiliteit, F 64";
 		
 		//geen gebouweigenaar-kosten bij utiliteit
@@ -135,7 +139,7 @@ template WKOUtilData
 	
 	container Opbrengsten
 	{
-		attribute<Eur_GJ>	KoudePrijs			(BebouwingsObject)	:= Prijzen_elec/KGJ_eindgebruik_excl[ind_gebruiksgrootteklasse_rel] / BCdata/Efficiency/Koude/Elektriciteit, Descr = "Prijs per GJ koude met als referentie individuele elektrische koudeproductie";
+		attribute<Eur_GJ>	KoudePrijs			(BebouwingsObject)	:= Prijzen_elec/KGJ_eindgebruik_excl[ind_gebruiksgrootteklasse_rel] / SpecifiekeInstellingen/NMDA_Prijzen/KoudePrijs/Utiliteit, Descr = "Prijs per GJ koude met als referentie individuele elektrische koudeproductie";
 
 		attribute<Eur_yr>	Oj_Warmte			(BebouwingsObject)	:= V_Warmte * WarmtePrijs,							Descr = "opbrengsten voor leverancier uit warmtelevering";
 		attribute<Eur_yr>	Oj_Koude			(BebouwingsObject)	:= KoudePrijs * Lq4bis,								Descr = "opbrengsten voor leverancier uit koudelevering", Source = "F 71";
