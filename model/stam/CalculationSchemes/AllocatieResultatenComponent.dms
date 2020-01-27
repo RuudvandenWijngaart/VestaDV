@@ -25,25 +25,33 @@ template AllocatieResultatenComponent
 	attribute<bool>                                   VeroorzaaktGrondroering          (BebouwingsObject) := Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie];
 	attribute<bool>                                   GrondroeringInPlanRegio          (PlanRegio)        := sum(VeroorzaaktGrondroering ? 1 : 0, PlanRegio_BebouwingsObject_rel) > 0;
  
-	attribute<nrAansl>                                AllElec_Aansl_inPlanRegio        (PlanRegio)        := sum(Aansl_capaciteit < 100[kw] ? Aandelen/AllElectric[uint32] : 0, PlanRegio_BebouwingsObject_rel)[nrAansl];
-	attribute<kW>                                     Aansl_capaciteit                 (BebouwingsObject) := BCdata/RuimtelijkeVraagComponent/AansluitCapaciteit/Elektriciteit;
+	attribute<nrAansl>   nrAsl_e_app  (PlanRegio) := sum(BCdata/results/Aansluitingen/Enet_app, BCdata/Planregio_rel);
+	attribute<nrAansl>   nrAsl_e_ewp  (PlanRegio) := sum(BCdata/results/Aansluitingen/Enet_ewp, BCdata/Planregio_rel);
+	attribute<nrAansl>   nrAsl_e_hwp  (PlanRegio) := sum(BCdata/results/Aansluitingen/Enet_hwp, BCdata/Planregio_rel);
 	
-	attribute<ModelUnit>                              ModelUnits_met_WP_inPlanRegio    (PlanRegio)        :=
-		  sum(Aandelen/eWP[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
-		+ sum((WarmteAllocatie == Classifications/WarmteOptie/V/WKO)[uint32],     PlanRegio_BebouwingsObject_rel)[ModelUnit]
-		+ sum((WarmteAllocatie == Classifications/WarmteOptie/V/LT15_30)[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
-		+ sum((WarmteAllocatie == Classifications/WarmteOptie/V/LT15_50)[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
-		+ sum((WarmteAllocatie == Classifications/WarmteOptie/V/LT30_30)[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
-		+ sum((WarmteAllocatie == Classifications/WarmteOptie/V/LT30_50)[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit];
+	attribute<kw> CapaciteitsvraagE (PlanRegio) :=  sum(BCdata/RuimtelijkeVraagComponent/AansluitCapaciteit/GTF_Enet * 
+		( BCdata/RuimtelijkeVraagComponent/AansluitCapaciteit/ASW_Eapp * float64(BCdata/results/Aansluitingen/Enet_app > 0.0[nrAansl])
+		+ BCdata/RuimtelijkeVraagComponent/AansluitCapaciteit/ASW_Ehwp * float64(BCdata/results/Aansluitingen/Enet_ewp > 0.0[nrAansl])
+		+ BCdata/RuimtelijkeVraagComponent/AansluitCapaciteit/ASW_Eewp * float64(BCdata/results/Aansluitingen/Enet_hwp > 0.0[nrAansl]) ), BCdata/Planregio_rel);
+	
+	
+//	attribute<kW>        Aansl_capaciteit (BebouwingsObject) := BCdata/RuimtelijkeVraagComponent/AansluitCapaciteit/Elektriciteit; not in use?
 
-	attribute<ModelUnit>                              ModelUnits_met_HWP_inPlanRegio    (PlanRegio)       :=
-		  sum(Aandelen/hWP[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
-		+ sum((WarmteAllocatie == Classifications/WarmteOptie/V/WaterstofWP)[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit];																												
-																												
-	attribute<ModelUnit>                              ModelUnits_zonder_WP_inPlanRegio (PlanRegio)        :=
-		sum(BCdata/RuimtelijkeVraagComponent/nrModelUnits, PlanRegio_BebouwingsObject_rel)[ModelUnit]
-		- ModelUnits_met_WP_inPlanRegio
-		- ModelUnits_met_HWP_inPlanRegio;
+// 	attribute<nrAansl> ModelUnits_met_WP_inPlanRegio (PlanRegio) :=
+// 		+ sum((WarmteAllocatie == Classifications/WarmteOptie/V/WKO)[uint32],     PlanRegio_BebouwingsObject_rel)[ModelUnit]
+// 		+ sum((WarmteAllocatie == Classifications/WarmteOptie/V/LT15_30)[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
+// 		+ sum((WarmteAllocatie == Classifications/WarmteOptie/V/LT15_50)[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
+// 		+ sum((WarmteAllocatie == Classifications/WarmteOptie/V/LT30_30)[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
+// 		+ sum((WarmteAllocatie == Classifications/WarmteOptie/V/LT30_50)[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit];
+
+// 	attribute<ModelUnit>                              ModelUnits_met_HWP_inPlanRegio    (PlanRegio)       :=
+// 		  sum(Aandelen/hWP[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit]
+// 		+ sum((WarmteAllocatie == Classifications/WarmteOptie/V/WaterstofWP)[uint32], PlanRegio_BebouwingsObject_rel)[ModelUnit];																												
+// 																												
+// 	attribute<ModelUnit>                              ModelUnits_zonder_WP_inPlanRegio (PlanRegio)        :=
+// 		sum(BCdata/RuimtelijkeVraagComponent/nrModelUnits, PlanRegio_BebouwingsObject_rel)[ModelUnit]
+// 		- ModelUnits_met_WP_inPlanRegio
+// 		- ModelUnits_met_HWP_inPlanRegio;
 	
 	container Aandelen := for_each_nedv(Classifications/GebiedsOptie/name, 'BCdata/Aandeel/WarmteVraag * float64(WarmteAllocatie == Classifications/WarmteOptie/V/'+Classifications/GebiedsOptie/name+')', BebouwingsObject, float64)
 	{
