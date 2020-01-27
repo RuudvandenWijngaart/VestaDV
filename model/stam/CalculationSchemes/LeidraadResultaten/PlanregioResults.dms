@@ -6,7 +6,9 @@
 
 container PlanregioResults
 {
-	attribute<nrWoningen> nrWEQ    (Planregio) := netwerken/nrWoonunits;
+	attribute<nrWoningen> nrWEQ    (Planregio) :=
+		  sum(BebouwingsComponenten/BestaandeWoning/RuimtelijkeVraagComponent/nrAansluitingen / 1.0[nrAansl / nrWoningen], BebouwingsComponenten/BestaandeWoning/Planregio_rel)
+		+ sum(BebouwingsComponenten/BestaandeUtil/RuimtelijkeVraagComponent/Oppervlakte / 130[m2 / nrWoningen], BebouwingsComponenten/BestaandeUtil/Planregio_rel);
 	attribute<Ratio>      R_StadV  (Planregio) := Invoer/RuimtelijkeData/StudieGebied/buurt/R_StadV;
 	attribute<Ratio>      R_AardG  (Planregio) := 1D - R_StadV;
 	attribute<string>     IsWater  (Planregio) := Invoer/RuimtelijkeData/StudieGebied/buurt/IsWater;
@@ -31,7 +33,7 @@ container PlanregioResults
 			attribute<nrAansl>    I09_aantal_woningen    := uitgesloten_bool ? 0[nrAansl]    : roundUp(sum(BebouwingsComponenten/BestaandeWoning/RuimtelijkeVraagComponent/nrAansluitingen, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel))[nrAansl];
 			attribute<nrAansl>    I10_aantal_utiliteit   := uitgesloten_bool ? 0[nrAansl]    : roundUp(sum(BebouwingsComponenten/BestaandeUtil/RuimtelijkeVraagComponent/nrAansluitingen  , BebouwingsComponenten/BestaandeUtil/PlanRegio_rel))[nrAansl];
 			attribute<nrWoningen> I11_woningequivalenten := uitgesloten_bool ? 0[nrwoningen] : roundUp(nrWEQ)[nrWoningen]; //130m2 utiliteit = 1 WEQ
-			attribute<string>     Uitgesloten            := string(uitgesloten_bool);
+			attribute<string>     I12_Uitgesloten        := string(uitgesloten_bool);
 		}
 		unit<uint32> variable := SubItem_PropValues(table,'name');
 		container export_csv := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Statisch.csv');
@@ -50,42 +52,30 @@ container PlanregioResults
 	{
 		unit<uint32> extensief := Invoer/DefaultInstellingen/Basis/PlanRegio
 		{
-			attribute<GJ_yr> H01_warmtetotaal := add(H02_Vraag_aardgas, H03_Vraag_groengas, H04_Vraag_elekwarmte, H05_Vraag_MTwarmte, H06_Vraag_LTwarmte);
+			attribute<GJ_yr> H01_vraag_totaal := add(H02_Vraag_RV, H03_Vraag_TW, H04_Vraag_Vent, H05_Vraag_K, H06_Vraag_App);
 
-			attribute<GJ_yr> H02_Vraag_aardgas :=
-				(Statisch/Uitgesloten_bool || Groengas || nrWEQ == 0[nrWoningen])
-					? 0[GJ_yr] 
-					: makedefined(
-						 R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/Aardgas, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) + //aardgasvraag bestaande woningen - zonder bestaand warmtenet
-						 R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/Aardgas, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) + //aardgasvraag bestaande utiliteit - zonder bestaand warmtenet
-						 R_StadV * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol ) * HerState/KostenD/Bijstook/Vj_Bijstook + //bijstook bestaande warmtenetten
-						 R_AardG * StateNaAllocatie/totaal/Verbruik/V_wd_gas + //aardgasverbruik hulpketels nieuw warmtenet
-						 R_AardG * StateNaAllocatie/totaal/Verbruik/V_ow_gas //aardgasverbruik opwekking nieuw warmtenet
-						,0[GJ_yr]);
-
-			attribute<GJ_yr> H03_Vraag_groengas :=
-				(Statisch/Uitgesloten_bool || !Groengas || nrWEQ == 0[nrWoningen])
-					? 0[GJ_yr] 
-					: makedefined(
-						 R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/Aardgas, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) + //groengasvraag bestaande woningen - zonder bestaand warmtenet
-						 R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/Aardgas, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) + //groengasvraag bestaande utiliteit - zonder bestaand warmtenet
-						 R_StadV * (1d - GebiedsAllocatie/RestWarmte/results/RestWarmte/P_vol) * HerState/KostenD/Bijstook/Vj_Bijstook + //bijstook bestaande warmtenetten
-						 R_AardG * StateNaAllocatie/totaal/Verbruik/V_wd_gas + //groengasverbruik hulpketels nieuw warmtenet
-						 R_AardG * StateNaAllocatie/totaal/Verbruik/V_ow_gas   //groengasverbruik opwekking nieuw warmtenet
-						,0[GJ_yr]);
-
-			attribute<GJ_yr> H04_Vraag_elekwarmte :=
+			attribute<GJ_yr> H02_Vraag_RV :=
 				(Statisch/Uitgesloten_bool || nrWEQ == 0[nrWoningen])
 					? 0[GJ_yr] 
 					: makedefined(
-						 R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/eWP, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) + //elektriciteitsverbruik elektrische warmtepompen bestaande woningen - zonder bestaand warmtenet
-						 R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/eWP, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +//elektriciteitsverbruik elektrische warmtepompen bestaande utiliteit - zonder bestaand warmtenet
-						 R_AardG * sum(Allocatie/BestaandeWoning/Metervraag/hWP, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) + //elektriciteitsverbruik hybride warmtepompen bestaande woningen - zonder bestaand warmtenet
-						 R_AardG * sum(Allocatie/BestaandeUtil/Metervraag/hWP, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) + //elektriciteitsverbruik hybride warmtepompen bestaande utiliteit - zonder bestaand warmtenet
-						 R_AardG * StateNaAllocatie/totaal/verbruik/V_ow_elek + //elektriciteitsvraag opwekking nieuwe warmtenetten	
-						 R_AardG * StateNaAllocatie/totaal/verbruik/V_id_elek + //elektriciteitsvraag inpandig nieuwe warmtenetten	
-						 R_AardG * StateNaAllocatie/totaal/verbruik/V_wd_elek + //elektriciteitsvraag pompenergie nieuwe warmtenetten
-						 R_StadV * HerState/KostenD/SecundairNet/V_wd_elek //elektriciteitsvraag pompenergie bestaande warmtenetten	
+						  sum(BebouwingsComponenten/BestaandeWoning/results/Functioneel/Vj_RV, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+						+ sum(BebouwingsComponenten/BestaandeUtil/results/Functioneel/Vj_RV, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
+						,0[GJ_yr]);
+
+			attribute<GJ_yr> H03_Vraag_TW :=
+				(Statisch/Uitgesloten_bool || nrWEQ == 0[nrWoningen])
+					? 0[GJ_yr] 
+					: makedefined(
+						  sum(BebouwingsComponenten/BestaandeWoning/results/Functioneel/Vj_TW, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+						+ sum(BebouwingsComponenten/BestaandeUtil/results/Functioneel/Vj_TW, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
+						,0[GJ_yr]);
+
+			attribute<GJ_yr> H04_Vraag_Vent :=
+				(Statisch/Uitgesloten_bool || nrWEQ == 0[nrWoningen])
+					? 0[GJ_yr] 
+					: makedefined(
+						  sum(BebouwingsComponenten/BestaandeWoning/results/Functioneel/Vj_Vent, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel)
+						+ sum(BebouwingsComponenten/BestaandeUtil/results/Functioneel/Vj_Vent, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)
 						,0[GJ_yr]);
 
 			attribute<GJ_yr> H05_Vraag_MTwarmte :=
