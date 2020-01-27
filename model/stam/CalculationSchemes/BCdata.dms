@@ -381,28 +381,29 @@ template BCdata
 		);
 
 		container Input_Rel := for_each_nedv(Classifications/Product/Name
-		,	'Classifications/Performance/Input_rel[Performance_rel/'+Classifications/Product/Name+']'
-		,	SchilLabelDomain, Classifications/Input
+		,	'rlookup(Classifications/Performance/Input_rel, Classifications/BemeterdeGebouwInput/nr_OrgEntity)[Performance_rel/'+Classifications/Product/Name+']'
+		,	SchilLabelDomain, Classifications/BemeterdeGebouwInput
 		);
 
 		container Expr_impl {
 			attribute<string> MeterVraagExpr_asVector(Classifications/Product) := 'metervraag_base/' + Classifications/Product/Name;
-			attribute<Classifications/Input> Input_Rel_asVector(Classifications/Product) :=
-				='union_data(Classifications/Product,'+AsItemList(AltijdSprong ? 'Input_Rel/'+Classifications/Product/Name : '(0/0)[Classifications/Input]' )+')';
+			
+			attribute<Classifications/BemeterdeGebouwInput> Input_Rel_asVector(Classifications/Product) :=
+				='union_data(Classifications/Product,'+AsItemList(AltijdSprong ? 'Input_Rel/'+Classifications/Product/Name : '(0/0)[Classifications/BemeterdeGebouwInput]' )+')';
 				
-			attribute<string> aggr_NaSprong(Classifications/Input) := 
+			attribute<string> aggr_NaSprong(Classifications/BemeterdeGebouwInput) := 
 				pcount(Input_Rel_asVector)>0
 				?	'add('+AsItemList(MeterVraagExpr_asVector, Input_Rel_asVector)+')'
 				:	'const(0[GJ_Yr], BebouwingsObject)';
 	
 			// TODO: check waarom 0 bij alle Input in VRw ?
-			attribute<string> aggr_OudLabel(Classifications/Input) := 
-					replace('add('++AsItemList(replace('Input_rel/@P == Classifications/Input/V/@I ? metervraag_base/@P: 0[GJ_Yr]', '@P', Classifications/Product/Name))+')'
-					, '@I', Classifications/Input/Name
+			attribute<string> aggr_OudLabel(Classifications/BemeterdeGebouwInput) := 
+					replace('add('++AsItemList(replace('Input_rel/@P == Classifications/BemeterdeGebouwInput/V/@I ? metervraag_base/@P: 0[GJ_Yr]', '@P', Classifications/Product/Name))+')'
+					, '@I', Classifications/BemeterdeGebouwInput/Name
 					);
 		}
 		
-		container metervraag_aggr := for_each_nedv(Classifications/Input/Name
+		container metervraag_aggr := for_each_nedv(Classifications/BemeterdeGebouwInput/Name
 		,	AltijdSprong ? Expr_impl/aggr_NaSprong : Expr_impl/aggr_OudLabel
 		,	BebouwingsObject, GJ_Yr);
 		
@@ -836,22 +837,20 @@ template BCdata
 		attribute<Classifications/GebouwOptie> CurrentOptie (BebouwingsObject) := BesteGebouwOptie;
 		attribute<Classifications/Schillabel > CurrentLabel (BebouwingsObject) := const(Classifications/schillabel/V/b, BebouwingsObject); //TODO Maarten
 		
-		container Installaties
+		container Installaties := InstallatiePerProduct
 		{
-			attribute<Classifications/Installatie> RVb (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
-			attribute<Classifications/Installatie> RVp (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
-			attribute<Classifications/Installatie> TWb (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
-			attribute<Classifications/Installatie> TWp (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
-			attribute<Classifications/Installatie> Kb  (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
-			attribute<Classifications/Installatie> Kp  (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
-			
 			attribute<Classifications/Installatie> Dak (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
 		}
 		
 		container Aansluitingen
 		{
 			attribute<bool>    IsHybride     (BebouwingsObject) := const(false, bebouwingsObject); //TODO relateren aan gebouwoptie die gekozen is - Maarten
-			attribute<bool>    IsAllElectric (BebouwingsObject) := const(false, bebouwingsObject); //TODO relateren aan gebouwoptie die gekozen is - Maarten
+			attribute<bool>    IsAllElectric (BebouwingsObject) := 
+				Classifications/Installatie/Input[Installaties/RVb] == Classifications/Input/V/e
+			&&	Classifications/Installatie/Input[Installaties/RVp] == Classifications/Input/V/e
+			&&	Classifications/Installatie/Input[Installaties/TWb] == Classifications/Input/V/e
+			&&	Classifications/Installatie/Input[Installaties/TWp] == Classifications/Input/V/e;
+			
 			attribute<nrAansl> Gnet          (BebouwingsObject) := Metervraag/Vj_gas <= 0.0[GJ_yr] ? 0.0[nrAansl] : RuimtelijkeVraagComponent/nraansluitingen;
 			attribute<nrAansl> H2net         (BebouwingsObject) := Metervraag/Vj_H2  <= 0.0[GJ_yr] ? 0.0[nrAansl] : RuimtelijkeVraagComponent/nraansluitingen;
 			attribute<nrAansl> Enet_app      (BebouwingsObject) := float64(!IsHybride && !IsAllElectric)  * RuimtelijkeVraagComponent/nraansluitingen;  // alleen apparatuur
@@ -860,23 +859,17 @@ template BCdata
 		}
 		container Functioneel
 		{
-			attribute<GJ_yr> Vj_RV   (BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject); //TODO Maarten
-			attribute<GJ_yr> Vj_TW   (BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/TW;
-			attribute<GJ_yr> Vj_K    (BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/K;
+			attribute<GJ_yr> Vj_RV   (BebouwingsObject) := ='merge(CurrentOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'/Functioneel/RV')+')';
+			attribute<GJ_yr> Vj_TW   (BebouwingsObject) := ='merge(CurrentOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'/Functioneel/TW')+')';
+			attribute<GJ_yr> Vj_K    (BebouwingsObject) := ='merge(CurrentOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'/Functioneel/K')+')';
 			attribute<GJ_yr> Vj_Vent (BebouwingsObject) := const(0.0 [GJ_yr], BebouwingsObject); //TODO Maarten
 			attribute<GJ_yr> Vj_App  (BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/EA;
 		}
-		container Metervraag
-		{
-			attribute<GJ_yr> Vj_e       (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'/metervraag/e')+')';
-			attribute<GJ_yr> Vj_zon     (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
-			attribute<GJ_yr> Vj_wind    (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
-			attribute<GJ_yr> Vj_gas     (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
-			attribute<GJ_yr> Vj_H2      (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
-			attribute<GJ_yr> Vj_kolen   (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
-			attribute<GJ_yr> Vj_pellets (BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
-			attribute<GJ_yr> Vj_biomassa(BebouwingsObject) := const(1.0 [GJ_yr], BebouwingsObject); //TODO Maarten
-		}
+		container Metervraag := for_each_nedv(Classifications/BemeterdeGebouwInput/Name
+			,	replace('merge(CurrentOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+Classifications/GebouwOptie/Name+'/metervraag/@I')+')', '@I', Classifications/BemeterdeGebouwInput/Name)
+			,	BebouwingsObject, GJ_yr
+			);
+			
 		container Eenmalig
 		{
 			//Aansluitbijdrages
