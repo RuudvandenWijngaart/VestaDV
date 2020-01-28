@@ -142,7 +142,7 @@ container PlanregioResults
 					? 0[GJ_yr] 
 					: makedefined(
 							 (sum(Allocatie/BestaandeWoning/metervraag/Warmte_LT, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) <= 0.0[gj_yr]?
-							  R_AardG * StateNaAllocatie/Totaal/Verbruik/Vj_warmte : 0.0[gj_yr])
+							  R_AardG * StateNaAllocatie/Totaal/Verbruik/V_warmte : 0.0[gj_yr])
 							+ R_StadV * HerState/KostenD/Vj_warmte
 						,0[GJ_yr]);
 						
@@ -151,7 +151,7 @@ container PlanregioResults
 					? 0[GJ_yr] 
 					: makedefined(
 							  sum(Allocatie/BestaandeWoning/metervraag/Warmte_LT, BebouwingsComponenten/BestaandeWoning/PlanRegio_rel) > 0.0[gj_yr]?
-							  R_AardG * StateNaAllocatie/Totaal/Verbruik/Vj_warmte : 0.0[gj_yr]
+							  R_AardG * StateNaAllocatie/Totaal/Verbruik/V_warmte : 0.0[gj_yr]
 						,0[GJ_yr]);
 						
 			attribute<GJ_yr> H14_Saldo_Omgevingswarmte :=
@@ -196,8 +196,7 @@ container PlanregioResults
 			attribute<GJ_yr_WEQ> H13_input_LTwarmtebronnen := round(makedefined(extensief/H13_input_LTwarmtebronnen / nrWEQ, 0[GJ_yr_WEQ]))[GJ_yr_WEQ];
 			attribute<GJ_yr_WEQ> H14_saldo_omgevingswarmte := round(makedefined(extensief/H14_saldo_omgevingswarmte / nrWEQ, 0[GJ_yr_WEQ]))[GJ_yr_WEQ];
 			
-			
-			attribute<ton_yr> H10_CO2_reductie :=
+			attribute<ton_yr> H15_CO2_reductie :=
 				round(
 					statisch/uitgesloten_bool
 						? 0[ton_yr]
@@ -206,19 +205,7 @@ container PlanregioResults
 							,0[ton_yr])
 				)[ton_yr];
 
-			attribute<Eur_yr> H11_Nat_abskosten:=
-				round(
-					statisch/uitgesloten_bool
-						? 0[Eur_yr] 
-						: makedefined(
-							 NationaleKosten/TotaalUitstoot/Natkosten_abs + //absolute nationale kosten
-							 (not(isStap0)
-								? StartJaar/PlanRegioResults/Hoofdindicatoren/Table/H12_Nat_meerkosten 
-								: 0[Eur_yr])
-							,0[Eur_yr])
-				)[Eur_yr];
-
-			attribute<Eur_yr> H12_Nat_meerkosten :=
+			attribute<Eur_yr> H16_Nat_abskosten :=
 				round(
 					statisch/uitgesloten_bool
 						? 0[Eur_yr] 
@@ -227,7 +214,7 @@ container PlanregioResults
 							,0[Eur_yr])
 				)[Eur_yr];
 
-			attribute<Eur_ton> H13_Nat_meerkost_CO2 :=
+			attribute<Eur_ton> H17_Nat_meerkost_CO2 :=
 				round(
 					(statisch/Uitgesloten_bool || isStap0 )
 						? 0[eur_ton]
@@ -236,7 +223,10 @@ container PlanregioResults
 							,0.0[EUR_ton])
 				)[Eur_ton];
 
-			attribute<Eur_yr_WEQ> H16_Nat_meerkost_WEQ := round(makedefined(extensief/H16_Nat_meerkost / nrWEQ, 0[Eur_yr_WEQ]))[Eur_yr_WEQ];
+			attribute<Eur_yr_WEQ> H18_Nat_meerkost_WEQ := round(makedefined(extensief/H16_Nat_meerkost / nrWEQ, 0[Eur_yr_WEQ]))[Eur_yr_WEQ];
+			
+			attribute<eur_m3> H19_waarde_hernieuwbaar_gas          := const(0.0[eur_m3], PlanRegio);
+			attribute<string> H20_beschikbaarheid_hernieuwbaar_gas := const('onbekend', PlanRegio);
 		}
 
 		unit<uint32> variable := SubItem_PropValues(table,'name');
@@ -279,25 +269,32 @@ container PlanregioResults
 							,0[Eur_yr])
 				)[Eur_yr];
 
-			attribute<Eur_yr> K03_Gnet_vervangen :=
+			attribute<Eur_yr> K03_Gnet_aanpassen :=
 				round(
 					statisch/Uitgesloten_bool 
 						? 0[Eur_yr]
 						: makedefined(
-							 Netwerken/Aardgas/Kji_vervangen //jaarlijkse kapitaallasten vervangen gasnetten
+							 Netwerken/Aardgas/Kji_aanpassen //jaarlijkse kapitaallasten vervangen gasnetten
 							,0[Eur_yr])
 					)[Eur_yr];
 
-			attribute<Eur_yr> K04_Wnet_pand_buurt :=
+			attribute<Eur_yr> K04_Wnet_buurt :=
 				round(
 					statisch/Uitgesloten_bool 
 					? 0[Eur_yr] 
 					: makedefined(
-						 R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Kmi_id +      //jaarlijkse kapitaallasten inpandig nieuwe warmtenetten
-						 R_AardG * StateNaAllocatie/totaal/jaarlijks/ge/Kmi_ge_ov +   //jaarlijkse kapitaallasten ongeriefsvergoeding nieuwe warmtenetten
-						 R_AardG * StateNaAllocatie/totaal/jaarlijks/ge/Kmi_ge_pm +   //jaarlijkse kapitaallasten projectmanagement nieuwe warmtenetten
-						 R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Kmi_wd -      //jaarlijkse kapitaallasten  wijkdistributie nieuwe warmtenetten
-						 R_AardG * StateNaAllocatie/totaal/jaarlijks/ge/Om_ge_comfort //jaarlijkse kapitaallasten comfortwinst nieuwe warmtenetten
+						 R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Kmi_wd       //jaarlijkse kapitaallasten wijkdistributie nieuwe warmtenetten
+						,0[Eur_yr])
+				)[Eur_yr];
+				
+			attribute<Eur_yr> K05_Wnet_pand :=
+				round(
+					statisch/Uitgesloten_bool 
+					? 0[Eur_yr] 
+					: makedefined(
+						  R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Kmi_id       //jaarlijkse kapitaallasten inpandig nieuwe warmtenetten
+						+ R_AardG * StateNaAllocatie/totaal/jaarlijks/ge/Kmi_ge_ov    //jaarlijkse kapitaallasten ongeriefsvergoeding nieuwe warmtenetten
+						+ R_AardG * StateNaAllocatie/totaal/jaarlijks/ge/Kmi_ge_pm    //jaarlijkse kapitaallasten projectmanagement nieuwe warmtenetten
 						,0[Eur_yr])
 				)[Eur_yr];
 
