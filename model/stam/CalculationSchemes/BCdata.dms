@@ -284,18 +284,32 @@ template BCdata
 			:                'BeginState/schillabel_rel'
 			;
 		
-		// TODO: rekening houden met Installatie='geen' => bestaande installatie gebruiken.		
-		container Performance_rel := for_each_nedv(Classifications/Product/Name
-		,	'Classifications/GebouwOptie/xLabel/Performance_rel/'+Classifications/Product/Name+'[combine_data(Classifications/GebouwOptie/xLabel, GebouwOptie_rel, SchilLabel_rel)]'
-		,	SchilLabelDomain, Classifications/Performance
-		);
-		
 		container InstallatiePerProduct := for_each_nedv(Classifications/Product/Name
 		,   Installatie_rel != Classifications/Installatie/V/geen 
 			? 'const(Classifications/Installatie/V/' + Classifications/Installatie/Name[Installatie_rel] + ', SchilLabelDomain)' 
 			: 'beginState/InstallatiePerProduct/' + Classifications/Product/Name
 		,	SchilLabelDomain, Classifications/Installatie
 		);
+
+
+		container Performance_key1 := for_each_nedv(Classifications/Product/Name
+			,	'Classifications/Installatie/Name[InstallatiePerProduct/'+Classifications/Product/Name+']+''.'' + Classifications/SchilLabel/Name[SchilLabel_rel] + ''.' + Classifications/Product/TypeName+''''
+			,	SchilLabelDomain, string
+			);	
+		container Performance_key2 := for_each_nedv(Classifications/Product/Name
+			,	'Classifications/Installatie/Name[InstallatiePerProduct/'+Classifications/Product/Name+']+''.x.' + Classifications/Product/TypeName+''''
+			,	SchilLabelDomain, string
+			);	
+		container Performance_rel := for_each_nedv(Classifications/Product/Name
+			,	replace(
+					'MakeDefined('
+						'rlookup(Performance_key1/@P, Classifications/Performance/code), '
+						'rlookup(Performance_key2/@P, Classifications/Performance/code),'
+						'rlookup(''geen.x.x'', Classifications/Performance/code)'
+					')'
+				, '@P', Classifications/Product/Name)
+			,	SchilLabelDomain, Classifications/Performance
+			);	
 		
 		// investeringskosten
 		container P_cap {
