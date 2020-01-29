@@ -267,7 +267,11 @@ template BCdata
 	}
 	
 	template GebouwOptieT {
+		// Begin case parameters
 		parameter<Classifications/GebouwOptie> GebouwOptie_rel;
+		parameter<string> Criterium_expr;
+		// End case parameters
+		
 		parameter<Classifications/DoelLabel  > DoelLabel_rel         := Classifications/GebouwOptie/DoelLabel_rel[GebouwOptie_rel];
 		parameter<Classifications/SchilLabel> SchilLabel_rel_formeel := Classifications/DoelLabel/SchilLabel_rel[DoelLabel_rel];
 		attribute<Classifications/Installatie> Installatie_rel(Classifications/Product) := 
@@ -487,6 +491,7 @@ template BCdata
 		attribute<EUR_Yr> Kmi15_LO(BebouwingsObject) := Ki15_LO * NCW/mr15/AnnualisationFactor; // TODO: toepassen AnnualisationFactor_S1, eWP_AnnualisationFactor_eg
 		attribute<EUR_Yr> Kmi_LO  (BebouwingsObject) := Kmi30_LO + Kmi20_LO + Kmi15_LO;
 		
+		attribute<bool> Criterium (BebouwingsObject) := = (Criterium_expr == '') ? 'Criteria/Always' : Criterium_expr;
 		// TODO:
 		// ( VermedenKosten_eg_excl/S_H_T * EIA_Opties/R_SplitIncentiveFactor * BTW_Factor 
 		// - GebouwVerbetering_j/S_H_T * S_gv * BTW_Factor_gv - LokaleOpwekking_eg/S_H_T * S_lo * BTW_Factor 
@@ -504,6 +509,18 @@ template BCdata
 			  Kmi_GV
 			+ Kmi_LO 
 			+ Km_verbruik;
+			
+		attribute<EUR_Yr> kosten(BebouwingsObject) := 
+			=	(LocatieSpecifiekeOpties/GebouwOpties/KiesMaatschappelijk) 
+			?	'kosten_m'
+			:	'kosten_j'
+		;
+		
+		attribute<EUR_Yr> kosten_or_undefined(BebouwingsObject) := 
+			=	(Criterium_expr == '') 
+			?	'kosten'
+			:	'('+Criterium_expr + ') ? (0/0)[EUR_yr] : kosten'
+		;
 	}
 	
 	attribute<string> GebouwOptie_sel_Expr(Classifications/GebouwOptie) := 'LowerCase(LocatieSpecifiekeOpties/GebouwOpties/'+Classifications/GebouwOptie/Name+') != ' + Quote('criteria/never');
@@ -513,10 +530,11 @@ template BCdata
 	unit<uint8> GebouwOptie := subset(GebouwOptie_sel) {
 		attribute<string> Name := Classifications/GebouwOptie/Name[nr_OrgEntity];
 		attribute<string> Label := Name, DialogType = "LabelText";
+		attribute<string> Criterium_expr := ='replace_value(LowerCase(union_data(., '+AsItemList('LocatieSpecifiekeOpties/GebouwOpties/'+Name)+')), ''criteria/always'', '''')';
 	}
-	container GebouwOpties := for_each_ne(GebouwOptie/Name, 'GebouwOptieT(Classifications/GebouwOptie/V/'+GebouwOptie/Name+')');
+	container GebouwOpties := for_each_ne(GebouwOptie/Name, 'GebouwOptieT(Classifications/GebouwOptie/V/'+GebouwOptie/Name+', '+Quote(GebouwOptie/Criterium_expr)+')');
 	
- 	attribute<GebouwOptie> BesteGebouwOptie(BebouwingsObject):= =(#GebouwOptie == 1)? 'const(0[GebouwOptie],BebouwingsObject)' : 'argmin('+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/kosten_j')+')[GebouwOptie]';
+ 	attribute<GebouwOptie> BesteGebouwOptie(BebouwingsObject):= =(#GebouwOptie == 1)? 'const(0[GebouwOptie],BebouwingsObject)' : 'argmin('+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/kosten_or_undefined')+')[GebouwOptie]';
 	
 	attribute<Classifications/SchilLabel> SchilLabel_rel(BebouwingsObject) := ='merge(BesteGebouwOptie, Classifications/SchilLabel, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/SchilLabel_rel')+')';
 	container InstallatiePerProduct := for_each_nedv(Classifications/Product/Name
