@@ -85,6 +85,13 @@ template RestWarmte
 	attribute<GJ_yr>  GJe_Totaal         (PlanRegio) := const(0[GJ_yr], PlanRegio);
 //	attribute<KG_yr>  CO2_e              (PlanRegio) := const(0[KG_yr], PlanRegio);
 
+	attribute<bool> bron_gebruikt(bronnen) := pcount(Results/Restwarmte/Welke_bron_nu) > 0;
+	attribute<gebruikte_bron> gebruikte_bron_rel(bronnen) := value(cumulate(uint32(bron_gebruikt)) - 1, gebruikte_bron);
+
+	unit<uint32> gebruikte_bron := range(uint32, 0, sum(uint32(bron_gebruikt))) {
+		attribute<bronnen> bron_rel := invert(gebruikte_bron_rel);
+	}
+
 	container Results := BeginStatus, IntegrityCheck = "P_Bron <= Bronnen/MWTh_Max * float64(3.00)"
 	{
 		container BebouwingMutatie :=
@@ -114,7 +121,7 @@ template RestWarmte
 			attribute<bronnen> Welke_bron_nu      (PlanRegio) := LastIter/NextState/CurrBron;
 			attribute<bronnen> Welke_bron_gebruik (PlanRegio) := NieuwGebruik ? LastIter/NextState/CurrBron : VorigePeriode/Welke_bron_nu;
 			attribute<string>  Bron_naam          (PlanRegio) := Invoer/RuimtelijkeData/WarmteBronnen/RestWarmte/BronSelecties/J2030/Bronnen/Label[welke_bron_gebruik];
-			attribute<Eur_GJ>  Bron_kmGJ           (PlanRegio) := Invoer/RuimtelijkeData/WarmteBronnen/RestWarmte/BronSelecties/J2030/Bronnen/Km_gj[welke_bron_gebruik];
+			attribute<Eur_GJ>  Bron_kmGJ          (PlanRegio) := Invoer/RuimtelijkeData/WarmteBronnen/RestWarmte/BronSelecties/J2030/Bronnen/Km_gj[welke_bron_gebruik];
 					
 			container jaarlijks
 			{
@@ -314,6 +321,16 @@ template RestWarmte
 				parameter<int16>  PenWidth := 2s        , DialogType = "PenWidth";
 			}
 		}
+		
+		unit<uint32> AfnameGebied := union_unit(BeginStatus/AfnameGebied, gebruikte_bron), DialogType = "Map", DialogData = "Point"
+		{
+			attribute<Eur>       Ki_A  : [];
+			attribute<Eur>       Ki_B  : [];
+			attribute<string>    Label : [];
+			attribute<rdc_meter> Point : [];
+			attribute<Classifications/GebiedsOptie> GebiedsOptie_rel := union_data(., BeginStatus/AfnameGebied/GebiedsOptie_rel, const(Classifications/GebiedsOptie/V/RestWarmte, gebruikte_bron));
+		}
+		
 		attribute<bool>                         WasAllocated             (PlanRegio) := BeginStatus/PlanRegioWarmteAllocatie_REMOVE == Classifications/GebiedsOptie/V/RestWarmte;
 		attribute<bool>                         Alloc_OK                 (PlanRegio) := GebruikRestWarmte || !WasAllocated; // it never stops.
 		attribute<Classifications/GebiedsOptie> PlanRegioWarmteAllocatie_REMOVE (PlanRegio) := 
