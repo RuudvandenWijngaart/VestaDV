@@ -13,7 +13,12 @@ set ITEM2=/LeidraadResultaten/Zichtjaar/PlanRegioResults/NationaleKosten/export_
 set ITEM3=/LeidraadResultaten/Zichtjaar/PlanRegioResults/Aansluitingen/export_csv/result /LeidraadResultaten/Zichtjaar/NLResults/Aansluitingen/export_csv/result
 set ITEMS=%ITEM1% %ITEM2% %ITEM3%
 
-"%exe_path%" /L"%log_dir%\S0_Referentie_StartJaar_Hoofdindicatoren.txt" "%prj_dir%\Runs\S0_Referentie.dms" %ITEMS%
+set ITEM1_SJ=/LeidraadResultaten/StartJaar/PlanRegioResults/Hoofdindicatoren/export_csv/result /LeidraadResultaten/StartJaar/NLResults/Hoofdindicatoren/export_csv/result
+set ITEM2_SJ=/LeidraadResultaten/StartJaar/PlanRegioResults/NationaleKosten/export_csv/result /LeidraadResultaten/StartJaar/NLResults/NationaleKosten/export_csv/result
+set ITEM3_SJ=/LeidraadResultaten/StartJaar/PlanRegioResults/Aansluitingen/export_csv/result /LeidraadResultaten/StartJaar/NLResults/Aansluitingen/export_csv/result
+set ITEMS_SJ=%ITEM1_SJ% %ITEM2_SJ% %ITEM3_SJ%
+
+"%exe_path%" /L"%log_dir%\S0_Referentie_StartJaar_Hoofdindicatoren.txt" "%prj_dir%\Runs\S0_Referentie.dms" %ITEMS_SJ%
 "%exe_path%" /L"%log_dir%\S0_Referentie_R2_2030_Hoofdindicatoren.txt" "%prj_dir%\Runs\S0_Referentie.dms" %ITEMS%
 "%exe_path%" /L"%log_dir%\S1a_AllElectric_lucht_R2_2030_Hoofdindicatoren.txt" "%prj_dir%\Runs\S1a_AllElectric_lucht.dms" %ITEMS%
 "%exe_path%" /L"%log_dir%\S1b_AllElectric_bodem_R2_2030_Hoofdindicatoren.txt" "%prj_dir%\Runs\S1b_AllElectric_bodem.dms" %ITEMS%
