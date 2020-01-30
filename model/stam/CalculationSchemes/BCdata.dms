@@ -57,6 +57,9 @@ template BCdata
 		,	'StartingStateComponent/InstallatiePerProduct/'+Classifications/Product/Name+'[StartingState_rel]'
 		,	BebouwingsObject, Classifications/Installatie
 		);
+		
+		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel(BebouwingsObject) := StartingStateComponent/AfgifteSysteem_rel[StartingState_rel];	
+		
 		attribute<AfnameGebied>  AfnameGebied_rel (BebouwingsObject):= StartingStateComponent/AfnameGebied_rel[StartingState_rel];	
 		
 		attribute<Classifications/GebouwOptie> GebouwOptie_rel (BebouwingsObject) := StartingStateComponent/GebouwOptie_rel[StartingState_rel]; // REMOVE, OBSOLETE, vervangen door Schillabel_rel, InstallatiePerProduct en GebiedsOptie
@@ -66,6 +69,7 @@ template BCdata
 	{
 		attribute<Geography/rdc_grids/m100> gridm100_rel (BebouwingsObject) := point[Geography/rdc_grids/m100];
 		attribute<bool>   IsMeergezins (.) := BebouwingsTypeDomein/IsMeergezins[BebouwingsType];
+		attribute<bool>   IsHoogbouw   (.) := BebouwingsTypeDomein/IsHoogbouw  [BebouwingsType];
 		attribute<Ratio> ResterendFactorBase := = HasResterendFactors
 			? 'MakeDefined(merge(BebouwingsType, Ratio, '+AsItemList('ResterendFactorMaps/'+BebouwingsTypeDomein/ResterendFactorName+'[gridm100_rel]')+'), 1.0)'
 			: 'const(1.0, BebouwingsObject)';
@@ -359,6 +363,17 @@ template BCdata
 		attribute<EUR_yr> Kj_OH_cap (BebouwingsObject) := =replace(KX_cap_Expr, '@X', 'j_OH');
 		attribute<EUR_yr> Kj_Adm_cap(BebouwingsObject) := =replace(KX_cap_Expr, '@X', 'j_Adm');
 		
+		// TODO, OPTIMIZE, CONSIDER bepaling LTAS_vereist, of uberhaupt mogelijk, per SchilLabel.
+		attribute<bool> LTAS_vereist(BebouwingsObject) := 
+			Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVb] == Classifications/AfgifteSysteem/V/LTAS
+		||	Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVp] == Classifications/AfgifteSysteem/V/LTAS;
+		attribute<bool> LTAS_aanwezig(BebouwingsObject) := BeginState/AfgifteSysteem_rel == Classifications/AfgifteSysteem/V/LTAS;
+		
+		attribute<EUR   > Ki_LTAS   (BebouwingsObject) := (LTAS_vereist && not(LTAS_aanwezig))
+			?	(RuimtelijkeVraagComponent/IsHoogbouw ? BC_kentallen/Ki_LTAS_h_asl : BC_kentallen/Ki_LTAS_l_asl) * RuimtelijkeVraagComponent/nrAansluitingen
+				+ BC_kentallen/Ki_LTAS_opp * RuimtelijkeVraagComponent/Oppervlakte
+			:	const(0[EUR], BebouwingsObject);
+		
 		parameter<string> KX_expr := 
 			'add('
 				'VerbruiksOpties/GebouwOptie/K@X_asl[GebouwOptie_rel] * RuimtelijkeVraagComponent/nrAansluitingen,  '
@@ -366,7 +381,8 @@ template BCdata
 				'K@X_cap'
 			+')'
 		,	isHidden = "True";
-
+		
+		
 		attribute<EUR   > Ki_LO    (BebouwingsObject) := =replace(KX_expr, '@X', 'i');
 		attribute<EUR   > Ki30_LO  (BebouwingsObject) := =replace(KX_expr, '@X', 'i30');
 		attribute<EUR   > Ki20_LO  (BebouwingsObject) := =replace(KX_expr, '@X', 'i20');
@@ -374,7 +390,11 @@ template BCdata
 		attribute<EUR_Yr> KJ_OH_LO (BebouwingsObject) := =replace(KX_expr, '@X', 'j_OH');
 		attribute<EUR_Yr> Kj_Adm_LO(BebouwingsObject) := =replace(KX_expr, '@X', 'j_Adm');
 		attribute<EUR   > Ki_GV    (BebouwingsObject) := ='DoelLabels/'+Classifications/DoelLabel/Name[DoelLabel_rel]+'/Ki_GV';
-		attribute<EUR> Ki_totaal(BebouwingsObject) := Ki_LO + Ki_GV;
+		
+		attribute<EUR> Ki_totaal  (BebouwingsObject) := Ki_LO   + Ki_GV + Ki_LTAS;
+		attribute<EUR> Ki30_totaal(BebouwingsObject) := Ki30_LO + Ki_GV + Ki_LTAS;
+		attribute<EUR> Ki20_totaal(BebouwingsObject) := Ki20_LO;
+		attribute<EUR> Ki15_totaal(BebouwingsObject) := Ki15_LO;
 		
 		// metervraag
 		container SPF := for_each_nedv(Classifications/Product/Name
@@ -491,12 +511,14 @@ template BCdata
 		+	prijzen/Pm_gas *  metervraag/gas;
 		
 		attribute<EUR_Yr> Kji_GV  (BebouwingsObject) := Ki_GV   * NcwRefs/_30/AnnualisationFactor;
+		attribute<EUR_Yr> Kji_LTAS(BebouwingsObject) := Ki_LTAS * NcwRefs/_30/AnnualisationFactor;
 		attribute<EUR_Yr> Kji30_LO(BebouwingsObject) := Ki30_LO * NcwRefs/_30/AnnualisationFactor;
 		attribute<EUR_Yr> Kji20_LO(BebouwingsObject) := Ki20_LO * NcwRefs/_20/AnnualisationFactor;
 		attribute<EUR_Yr> Kji15_LO(BebouwingsObject) := Ki15_LO * NcwRefs/_15/AnnualisationFactor;
 		attribute<EUR_Yr> Kji_LO  (BebouwingsObject) := Kji30_LO + Kji20_LO + Kji15_LO;
 		
 		attribute<EUR_Yr> Kmi_GV  (BebouwingsObject) := Ki_GV   * NCW/mr30/AnnualisationFactor;
+		attribute<EUR_Yr> Kmi_LTAS(BebouwingsObject) := Ki_LTAS * NCW/mr30/AnnualisationFactor;
 		attribute<EUR_Yr> Kmi30_LO(BebouwingsObject) := Ki30_LO * NCW/mr30/AnnualisationFactor; // TODO: toepassen AnnualisationFactor_S1, eWP_AnnualisationFactor_eg
 		attribute<EUR_Yr> Kmi20_LO(BebouwingsObject) := Ki20_LO * NCW/mr20/AnnualisationFactor; // TODO: toepassen AnnualisationFactor_S1, eWP_AnnualisationFactor_eg
 		attribute<EUR_Yr> Kmi15_LO(BebouwingsObject) := Ki15_LO * NCW/mr15/AnnualisationFactor; // TODO: toepassen AnnualisationFactor_S1, eWP_AnnualisationFactor_eg
@@ -515,12 +537,14 @@ template BCdata
 		attribute<EUR_Yr> kosten_j(BebouwingsObject) := 
 			  Kji_GV * S_gv * BTW_Factor_gv
 			+ Kji_LO * S_lo * BTW_Factor
+			+ Kji_LTAS      * BTW_Factor
 			+ (Kj_OH_LO + Kj_Adm_LO)* (1.0 - EEA_Opties/S_OenM ) * BTW_Factor
 			+ Kj_verbruik * EIA_Opties/R_SplitIncentiveFactor * BTW_Factor;
 			
 		attribute<EUR_Yr> kosten_m(BebouwingsObject) := 
 			  Kmi_GV
-			+ Kmi_LO 
+			+ Kmi_LO
+			+ Kmi_LTAS
 			+ (Kj_OH_LO + Kj_Adm_LO)
 			+ Km_verbruik;
 			
@@ -716,8 +740,12 @@ template BCdata
 	
 	container Results
 	{
+	
 		attribute<Classifications/GebouwOptie> CurrentOptie (BebouwingsObject) := GebouwOptie/nr_OrgEntity[BesteGebouwOptie];
 		attribute<Classifications/Schillabel > CurrentLabel (BebouwingsObject) := SchilLabel_rel;
+		
+		attribute<bool> LTAS_vereist (BebouwingsObject) := ='merge(BesteGebouwOptie, bool, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/LTAS_vereist')+')';		
+		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel (BebouwingsObject) := LTAS_vereist ? Classifications/AfgifteSysteem/V/LTAS : BeginState/AfgifteSysteem_rel;
 		
 		container Installaties := InstallatiePerProduct
 		{
