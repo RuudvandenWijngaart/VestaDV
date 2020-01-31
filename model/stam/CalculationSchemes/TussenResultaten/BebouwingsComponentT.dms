@@ -54,7 +54,10 @@ template BebouwingsComponentT
 		container InstallatiePerProduct := for_each_nedv(Classifications/Product/Name
 		,	'PrevObject/InstallatiePerProduct/'+Classifications/Product/Name+'[PrevObject_rel]'
 		,	BebouwingsObject, Classifications/Installatie
-		);
+		)
+		{
+			attribute<Classifications/Installatie> Dak (BebouwingsObject) := const(Classifications/Installatie/V/geen, BebouwingsObject); //TODO Maarten
+		}
 		
 		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel(BebouwingsObject) := PrevObject/AfgifteSysteem_rel[PrevObject_rel];	
 		
@@ -267,7 +270,7 @@ template BebouwingsComponentT
 		attribute<string> Label := Name, DialogType = "LabelText";
 		attribute<string> Criterium_expr := ='replace_value(LowerCase(union_data(., '+AsItemList('LocatieSpecifiekeOpties/GebouwOpties/'+Name)+')), ''criteria/always'', '''')';
 	}
-	container GebouwOpties := for_each_ne(GebouwOptie/Name, 'GebouwOptieT(BebouwingsObject, Classifications/GebouwOptie/V/'+GebouwOptie/Name+', '+Quote(GebouwOptie/Criterium_expr)+')');
+	container GebouwOpties := for_each_ne(GebouwOptie/Name, 'GebouwOptieT(RuimtelijkeVraagComponent, Classifications/GebouwOptie/V/'+GebouwOptie/Name+', '+Quote(GebouwOptie/Criterium_expr)+')');
 	
  	attribute<GebouwOptie> BesteGebouwOptie(BebouwingsObject):= =(#GebouwOptie == 1)? 'const(0[GebouwOptie],BebouwingsObject)' : 'argmin('+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/kosten_or_undefined')+')[GebouwOptie]';
  	attribute<Classifications/WarmteOptie> WarmteOptie_res_rel(BebouwingsObject) := Classifications/GebouwOptie/WarmteOptie_rel[GebouwOptie/nr_OrgEntity[BesteGebouwOptie]];
@@ -420,23 +423,13 @@ template BebouwingsComponentT
 		
 	unit<uint32> Results := BebouwingsObjectMetGebouwOptie
 	{
-		// TODO SUBST begin
-		attribute<Classifications/GebouwOptie> CurrentOptie (BebouwingsObject) := GebouwOptie_rel;
-		attribute<Classifications/Schillabel > CurrentLabel (BebouwingsObject) := SchilLabel_rel;
-				
-		container Installaties := BebouwingsObjectMetGebouwOptie/InstallatiePerProduct
-		{
-			attribute<Classifications/Installatie> Dak (BebouwingsObject) := const(Classifications/Installatie/V/geen, BebouwingsObject); //TODO Maarten
-		}
-		// TODO SUBST end
-		
 		container BemeterdeGebouwInput_rel :=  for_each_nedv(Classifications/Product/Name
-			,	replace('merge(CurrentOptie, Classifications/BemeterdeGebouwInput, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/BemeterdeGebouwInput_rel/@P')+')', '@P', Classifications/Product/Name)
+			,	replace('merge(BesteGebouwOptie, Classifications/BemeterdeGebouwInput, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/BemeterdeGebouwInput_rel/@P')+')', '@P', Classifications/Product/Name)
 			,	BebouwingsObject, Classifications/BemeterdeGebouwInput
 			);
 			
 		container SPF := for_each_nedv(Classifications/Product/Name
-			,	replace('merge(CurrentOptie, Float64, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/SPF/@P')+')', '@P', Classifications/Product/Name)
+			,	replace('merge(BesteGebouwOptie, Float64, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/SPF/@P')+')', '@P', Classifications/Product/Name)
 			,	BebouwingsObject, Float64
 		);
 		
@@ -461,14 +454,14 @@ template BebouwingsComponentT
 
 		container Functioneel
 		{
-			attribute<GJ_yr> Vj_RV   (BebouwingsObject) := ='merge(CurrentOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/RV')+')';
-			attribute<GJ_yr> Vj_TW   (BebouwingsObject) := ='merge(CurrentOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/TW')+')';
-			attribute<GJ_yr> Vj_K    (BebouwingsObject) := ='merge(CurrentOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/K')+')';
-			attribute<GJ_yr> Vj_Vent (BebouwingsObject) := Float64(CurrentLabel <= Classifications/SchilLabel/V/B) * RuimtelijkeVraagComponent/functioneel/Ventilatie;
+			attribute<GJ_yr> Vj_RV   (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/RV')+')';
+			attribute<GJ_yr> Vj_TW   (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/TW')+')';
+			attribute<GJ_yr> Vj_K    (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/K')+')';
+			attribute<GJ_yr> Vj_Vent (BebouwingsObject) := Float64(SchilLabel_rel <= Classifications/SchilLabel/V/B) * RuimtelijkeVraagComponent/functioneel/Ventilatie;
 			attribute<GJ_yr> Vj_App  (BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/EA;
 		}
 		container Metervraag := for_each_nedv('Vj_'+Classifications/BemeterdeGebouwInput/Name
-			,	replace('merge(CurrentOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/metervraag/@I')+')', '@I', Classifications/BemeterdeGebouwInput/Name)
+			,	replace('merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/metervraag/@I')+')', '@I', Classifications/BemeterdeGebouwInput/Name)
 			,	BebouwingsObject, GJ_yr
 			);
 			
@@ -482,10 +475,10 @@ template BebouwingsComponentT
 															+   BC_kentallen/Ki_Aansl_g_opp * RuimtelijkeVraagComponent/oppervlakte;
 		
 			//Investeringen
-			attribute<Eur>   Ki30_LO (BebouwingsObject) := ='merge(CurrentOptie, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki30_LO')+')';
-			attribute<Eur>   Ki20_LO (BebouwingsObject) := ='merge(CurrentOptie, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki20_LO')+')';
-			attribute<Eur>   Ki15_LO (BebouwingsObject) := ='merge(CurrentOptie, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki15_LO')+')';
-			attribute<Eur>   Ki_GV   (BebouwingsObject) := ='merge(CurrentOptie, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki_GV')+')';
+			attribute<Eur>   Ki30_LO (BebouwingsObject) := ='merge(BesteGebouwOptie, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki30_LO')+')';
+			attribute<Eur>   Ki20_LO (BebouwingsObject) := ='merge(BesteGebouwOptie, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki20_LO')+')';
+			attribute<Eur>   Ki15_LO (BebouwingsObject) := ='merge(BesteGebouwOptie, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki15_LO')+')';
+			attribute<Eur>   Ki_GV   (BebouwingsObject) := ='merge(BesteGebouwOptie, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki_GV')+')';
 		
 			//Subsidies
 			attribute<Eur>   Oi_s_LO_30 (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject); //TODO Maarten
