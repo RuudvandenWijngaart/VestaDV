@@ -7,7 +7,7 @@
 template KostenBaten
 {
 	// begin case parameters
-	container BebouwingsComponenten;
+	container bebouwing;
 	container EnergiePrijzen;
 	// end case parameters
 
@@ -16,40 +16,34 @@ template KostenBaten
 	container PlanRegioKaarten :=
 		for_each_ne(
 			 Classifications/BebouwingsComponent/name
-			,'CalculationSchemes/NaarPlanRegio(BebouwingsComponenten/'+Classifications/BebouwingsComponent/name+')'
+			,'CalculationSchemes/NaarPlanRegio(bebouwing/'+Classifications/BebouwingsComponent/name+')'
 		);
 
 	container WarmteVraag
 	{
-		attribute<nrAansl>     nrAansluitingen      (PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+Classifications/BebouwingsComponent/Name+'/nrAanslWarmteDeelnemers')+')';
-		attribute<Units/GJ_yr> deelnemers(PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+Classifications/BebouwingsComponent/Name+'/Verbruik/deelnemers')+')';
-		attribute<Units/GJ_yr> deelnemers_RV(PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+Classifications/BebouwingsComponent/Name+'/Verbruik/deelnemers_RV')+')';
-		attribute<Units/GJ_yr> deelnemers_TW(PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+Classifications/BebouwingsComponent/Name+'/Verbruik/deelnemers_TW')+')';
+		attribute<nrAansl>     nrAansluitingen(PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+Classifications/BebouwingsComponent/Name+'/nrAanslWarmteDeelnemers')+')';
+		attribute<Units/GJ_yr> deelnemers     (PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+Classifications/BebouwingsComponent/Name+'/Verbruik/deelnemers')+')';
+		attribute<Units/GJ_yr> deelnemers_RV  (PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+Classifications/BebouwingsComponent/Name+'/Verbruik/deelnemers_RV')+')';
+		attribute<Units/GJ_yr> deelnemers_TW  (PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+Classifications/BebouwingsComponent/Name+'/Verbruik/deelnemers_TW')+')';
 	}
 
 	container Opbrengsten
 	{
 		container EenmaligD := for_each_nedv(
 			 Classifications/BebouwingsComponent/Name
-			,replace('sum(BebouwingsComponenten/@BC@/Opbrengsten/AansluitBijdrageD * float64(BebouwingsComponenten/@BC@/WarmteVraag/kanGebiedsOptie), BebouwingsComponenten/@BC@/PlanRegio_rel)', '@BC@', Classifications/BebouwingsComponent/Name)
+			,replace('sum(Bebouwing/@BC@/Opbrengsten/AansluitBijdrageT * PlanRegioKaarten/@BC@/BeschikbaarheidsFactor, Bebouwing/@BC@/PlanRegio_rel)', '@BC@', Classifications/BebouwingsComponent/Name)
 			,PlanRegio
 			,Eur
 			)
 		{
 			attribute<Eur> Oi_Totaal(PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
 		}
-		container JaarlijksD
+		container JaarlijksD := for_each_nedv(Classifications/BebouwingsComponent/Name
+		,	replace('sum(bebouwing/@BC/Opbrengsten/VastRechtMT_T * PlanRegioKaarten/@BC/BeschikbaarheidsFactor , bebouwing/@BC/PlanRegio_rel)', '@BC', Classifications/BebouwingsComponent/Name)
+		,	PlanRegio, EUR_yr)
 		{
-			attribute<Eur_yr> WarmteVraag     (PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+Classifications/BebouwingsComponent/Name+'/WarmteVraag/deelnemers')+')';
-
-			attribute<Eur_yr> BestaandeWoning (PlanRegio) := sum(BebouwingsComponenten/BestaandeWoning/Opbrengsten/VastRechtMT_T * float64(BebouwingsComponenten/BestaandeWoning/WarmteVraag/kanGebiedsOptie) , PlanRegioKaarten/BestaandeWoning/impl/PlanRegio_rel);
-			attribute<Eur_yr> NieuwbouwWoning (PlanRegio) := sum(BebouwingsComponenten/NieuwbouwWoning/Opbrengsten/VastRechtMT_T * float64(BebouwingsComponenten/NieuwbouwWoning/WarmteVraag/kanGebiedsOptie) , PlanRegioKaarten/NieuwbouwWoning/impl/PlanRegio_rel);
-			attribute<Eur_yr> BestaandeUtil   (PlanRegio) := sum(BebouwingsComponenten/BestaandeUtil/Opbrengsten/VastRechtMT_T   * float64(BebouwingsComponenten/BestaandeUtil/WarmteVraag/kanGebiedsOptie)   , PlanRegioKaarten/BestaandeUtil/impl/PlanRegio_rel);
-			attribute<Eur_yr> NieuwbouwUtil   (PlanRegio) := sum(BebouwingsComponenten/NieuwbouwUtil/Opbrengsten/VastRechtMT_T   * float64(BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/kanGebiedsOptie)   , PlanRegioKaarten/NieuwbouwUtil/impl/PlanRegio_rel);
-			attribute<Eur_yr> BestaandeGlTb   (PlanRegio) := sum(BebouwingsComponenten/BestaandeGlTb/Opbrengsten/VastRechtMT_T   * float64(BebouwingsComponenten/BestaandeGlTb/WarmteVraag/kanGebiedsOptie)   , PlanRegioKaarten/BestaandeGlTb/impl/PlanRegio_rel);
-			attribute<Eur_yr> NieuwbouwGlTb   (PlanRegio) := sum(BebouwingsComponenten/NieuwbouwGlTb/Opbrengsten/VastRechtMT_T   * float64(BebouwingsComponenten/NieuwbouwGlTb/WarmteVraag/kanGebiedsOptie)   , PlanRegioKaarten/NieuwbouwGlTb/impl/PlanRegio_rel);
-
 			attribute<Eur_yr> Oj_VastRecht    (PlanRegio) := ='add('+AsItemList(Classifications/BebouwingsComponent/Name)+')';
+			attribute<Eur_yr> WarmteVraag     (PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+Classifications/BebouwingsComponent/Name+'/WarmteVraag/deelnemers')+')';
 			attribute<Eur_yr> Oj_Totaal       (PlanRegio) := WarmteVraag + Oj_VastRecht;
 		}
 	}
@@ -73,8 +67,8 @@ template KostenBaten
 		container Wonen
 		{
 			
-			container bw := CalculationSchemes/KostenWoningen(BebouwingsComponenten/BestaandeWoning, PlanRegio, false);
-			container nw := CalculationSchemes/KostenWoningen(BebouwingsComponenten/NieuwbouwWoning, PlanRegio, true);
+			container bw := CalculationSchemes/KostenWoningen(bebouwing/BestaandeWoning, PlanRegio, false);
+			container nw := CalculationSchemes/KostenWoningen(bebouwing/NieuwbouwWoning, PlanRegio, true);
 
 			attribute<Eur>		Ki_wd     (PlanRegio)	:=	bw/ki_wd + nw/Ki_wd;
 			attribute<Eur>		Ki_id     (PlanRegio)	:=	bw/ki_id + nw/Ki_id;
@@ -94,60 +88,74 @@ template KostenBaten
 			{
 				attribute<nrAansl> Klein (PlanRegio) := 
 					sum(
-					  BebouwingsComponenten/BestaandeUtil/WarmteVraag/deelnemers/nrAansluitingen 
-						* float64(BebouwingsComponenten/BestaandeUtil/WarmteVraag/KanGebiedsOptie)
-						* float64(BebouwingsComponenten/BestaandeUtil/WarmteVraag/deelnemers/AansluitCapaciteit <= afkapgrens_klein) 
-					, PlanRegioKaarten/BestaandeUtil/impl/PlanRegio_rel
+					  bebouwing/BestaandeUtil/nrAansluitingen 
+						* PlanRegioKaarten/BestaandeUtil/BeschikbaarheidsFactor
+						* float64(bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte <= afkapgrens_klein) 
+					, bebouwing/BestaandeUtil/PlanRegio_rel
 					) + 
 					sum(
-					  BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/deelnemers/nrAansluitingen 
-						* float64(BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/KanGebiedsOptie)
-						* float64(BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/deelnemers/AansluitCapaciteit <= afkapgrens_klein) 
-					, PlanRegioKaarten/NieuwbouwUtil/impl/PlanRegio_rel
+					  bebouwing/NieuwbouwUtil/nrAansluitingen 
+						* PlanRegioKaarten/NieuwbouwUtil/BeschikbaarheidsFactor
+						* float64(bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte <= afkapgrens_klein) 
+					, bebouwing/NieuwbouwUtil/PlanRegio_rel
 					);
 				attribute<nrAansl> Groot (PlanRegio) := 
 					sum(
-					  BebouwingsComponenten/BestaandeUtil/WarmteVraag/deelnemers/nrAansluitingen 
-						* float64(BebouwingsComponenten/BestaandeUtil/WarmteVraag/KanGebiedsOptie)
-						* float64(BebouwingsComponenten/BestaandeUtil/WarmteVraag/deelnemers/AansluitCapaciteit > afkapgrens_klein) 
-					, PlanRegioKaarten/BestaandeUtil/impl/PlanRegio_rel
+					  bebouwing/BestaandeUtil/nrAansluitingen 
+						* PlanRegioKaarten/BestaandeUtil/BeschikbaarheidsFactor
+						* float64(bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte > afkapgrens_klein) 
+					, bebouwing/BestaandeUtil/PlanRegio_rel
 					) + 
 					sum(
-					  BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/deelnemers/nrAansluitingen 
-						* float64(BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/KanGebiedsOptie)
-						* float64(BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/deelnemers/AansluitCapaciteit > afkapgrens_klein) 
-						, PlanRegioKaarten/NieuwbouwUtil/impl/PlanRegio_rel
+					  bebouwing/NieuwbouwUtil/nrAansluitingen 
+						* PlanRegioKaarten/NieuwbouwUtil/BeschikbaarheidsFactor
+						* float64(bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte > afkapgrens_klein) 
+					, bebouwing/NieuwbouwUtil/PlanRegio_rel
 					);
 				attribute<nrAansl> Totaal (PlanRegio) := Klein + Groot;
 			}
 
 			container CapaciteitsVraag
 			{
-				attribute<kW>	Klein (PlanRegio) :=	Vermogens/GTF_u_RVmt * (
-														sum(BebouwingsComponenten/BestaandeUtil/WarmteVraag/deelnemers/AansluitCapaciteit 
-															* float64(BebouwingsComponenten/BestaandeUtil/WarmteVraag/KanGebiedsOptie)
-															* float64(BebouwingsComponenten/BestaandeUtil/WarmteVraag/deelnemers/AansluitCapaciteit <= afkapgrens_klein) 
-															, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)+
-														sum(BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/deelnemers/AansluitCapaciteit 
-															* float64(BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/KanGebiedsOptie)
-															* float64(BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/deelnemers/AansluitCapaciteit <= afkapgrens_klein) 
-															, BebouwingsComponenten/NieuwbouwUtil/PlanRegio_rel));
+				attribute<kW>	Klein (PlanRegio) :=	
+					Vermogens/GTF_u_RVmt * (
+						sum(bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte
+							* PlanRegioKaarten/BestaandeUtil/BeschikbaarheidsFactor
+							* float64(bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte <= afkapgrens_klein) 
+						, bebouwing/BestaandeUtil/PlanRegio_rel
+						) + 
+							sum(bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte
+								* PlanRegioKaarten/NieuwbouwUtil/BeschikbaarheidsFactor
+								* float64(bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte <= afkapgrens_klein) 
+							, bebouwing/NieuwbouwUtil/PlanRegio_rel)
+							
+					);
 															
-				attribute<kW>	Groot (PlanRegio) :=	Vermogens/GTF_u_RVmt * (
-														sum(BebouwingsComponenten/BestaandeUtil/WarmteVraag/deelnemers/AansluitCapaciteit 
-															* float64(BebouwingsComponenten/BestaandeUtil/WarmteVraag/KanGebiedsOptie)
-															* float64(BebouwingsComponenten/BestaandeUtil/WarmteVraag/deelnemers/AansluitCapaciteit > afkapgrens_klein) 
-															, BebouwingsComponenten/BestaandeUtil/PlanRegio_rel)+
-														sum(BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/deelnemers/AansluitCapaciteit 
-															* float64(BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/KanGebiedsOptie)
-															* float64(BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/deelnemers/AansluitCapaciteit > afkapgrens_klein) 
-															, BebouwingsComponenten/NieuwbouwUtil/PlanRegio_rel));
-				attribute<kW> P_ASW		(PlanRegio)	:=	sum(Vermogens/GTF_u_RVmt * 
-															BebouwingsComponenten/BestaandeUtil/WarmteVraag/deelnemers/AansluitCapaciteit ,
-															BebouwingsComponenten/BestaandeUtil/PlanRegio_rel) +
-															sum(Vermogens/GTF_u_RVmt * 
-															BebouwingsComponenten/NieuwbouwUtil/WarmteVraag/deelnemers/AansluitCapaciteit ,
-															BebouwingsComponenten/NieuwbouwUtil/PlanRegio_rel);											
+				attribute<kW>	Groot (PlanRegio) :=	
+					Vermogens/GTF_u_RVmt * (
+						sum(bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte
+							* PlanRegioKaarten/BestaandeUtil/BeschikbaarheidsFactor
+							* float64(bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte > afkapgrens_klein) 
+						, bebouwing/BestaandeUtil/PlanRegio_rel
+						) + 
+							sum(bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte
+								* PlanRegioKaarten/NieuwbouwUtil/BeschikbaarheidsFactor
+								* float64(bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte > afkapgrens_klein) 
+							, bebouwing/NieuwbouwUtil/PlanRegio_rel)
+							
+					);
+					
+				attribute<kW> P_ASW		(PlanRegio)	:=	Vermogens/GTF_u_RVmt * (
+						sum(Vermogens/GTF_u_RVmt * 
+							bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte
+							* PlanRegioKaarten/BestaandeUtil/BeschikbaarheidsFactor
+						,	bebouwing/BestaandeUtil/PlanRegio_rel
+						) + 
+						sum(
+							bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte
+							* PlanRegioKaarten/NieuwbouwUtil/BeschikbaarheidsFactor
+						,	bebouwing/NieuwbouwUtil/PlanRegio_rel)
+					);
 				attribute<kW> Totaal(PlanRegio) := Klein + Groot;
 			}
 			parameter<Eur_kw> Oi_vermeden_gasketel := 0.0[eur_kw];
@@ -185,28 +193,29 @@ template KostenBaten
 
 			container bestaand
 			{
-				attribute<m2> Areaal (PlanRegio) := sum(BebouwingsComponenten/BestaandeGlTb/WarmteVraag/deelnemers/Oppervlakte
-						* float64(BebouwingsComponenten/BestaandeGlTb/WarmteVraag/KanGebiedsOptie)
-						, PlanRegioKaarten/BestaandeGlTb/impl/PlanRegio_rel);
+				attribute<m2> Areaal (PlanRegio) := sum(bebouwing/BestaandeGlTb/Oppervlakte
+						* PlanRegioKaarten/BestaandeGlTb/BeschikbaarheidsFactor
+						, bebouwing/BestaandeGlTb/PlanRegio_rel);
 				
-				attribute<m> SqrtAreaal (PlanRegio) := sum(Sqrt(BebouwingsComponenten/BestaandeGlTb/WarmteVraag/deelnemers/Oppervlakte)
-						* float64(BebouwingsComponenten/BestaandeGlTb/WarmteVraag/KanGebiedsOptie)
-						, PlanRegioKaarten/BestaandeGlTb/impl/PlanRegio_rel);
+				attribute<m> SqrtAreaal (PlanRegio) := sum(Sqrt(bebouwing/BestaandeGlTb/Oppervlakte)
+						* PlanRegioKaarten/BestaandeGlTb/BeschikbaarheidsFactor
+						, bebouwing/BestaandeGlTb/PlanRegio_rel);
 
-				attribute<nrAansl> NrAansluitingen (PlanRegio) :=
-						sum(BebouwingsComponenten/BestaandeGlTb/WarmteVraag/deelnemers/nrAansluitingen
-						* float64(BebouwingsComponenten/BestaandeGlTb/WarmteVraag/KanGebiedsOptie)
-						, PlanRegioKaarten/BestaandeGlTb/impl/PlanRegio_rel);
-
-				attribute<kW> CapaciteitsVraag (PlanRegio) := Vermogens/GTF_t_RVmt * 
-						sum(  BebouwingsComponenten/BestaandeGlTb/WarmteVraag/deelnemers/AansluitCapaciteit
-						* float64(BebouwingsComponenten/BestaandeGlTb/WarmteVraag/KanGebiedsOptie)
-						, BebouwingsComponenten/BestaandeGlTb/PlanRegio_rel);
-				attribute<kW> P_ASW(PlanRegio) :=
-						sum(  BebouwingsComponenten/BestaandeGlTb/WarmteVraag/deelnemers/AansluitCapaciteit, BebouwingsComponenten/BestaandeGlTb/PlanRegio_rel);
+				attribute<nrAansl> NrAansluitingen (PlanRegio) :=sum(bebouwing/BestaandeGlTb/nrAansluitingen
+						* PlanRegioKaarten/BestaandeGlTb/BeschikbaarheidsFactor
+						, bebouwing/BestaandeGlTb/PlanRegio_rel);
+						
+				attribute<kW> P_ASW(            PlanRegio) := sum(bebouwing/BestaandeGlTb/AansluitCapaciteit/Warmte
+						* PlanRegioKaarten/BestaandeGlTb/BeschikbaarheidsFactor
+						, bebouwing/BestaandeGlTb/PlanRegio_rel);
+				attribute<kW> CapaciteitsVraag (PlanRegio) := Vermogens/GTF_t_RVmt * P_ASW;
 
 				attribute<Eur>		Ki_OnderStation		(PlanRegio)	:=	CapaciteitsVraag * Kostenkentallen/K_OS,				Source = "validatiesessies startanalyse 2019"; //TODO bron = FO 4.0
-				attribute<Eur> K_dienstleidingen (PlanRegio) := sum(BebouwingsComponenten/BestaandeGlTb/WarmteVraag/deelnemers/Oppervlakte * K_dienstleiding_m2[BebouwingsComponenten/BestaandeGlTb/BebouwingsType], PlanRegioKaarten/BestaandeGlTb/impl/PlanRegio_rel);
+				attribute<Eur> K_dienstleidingen (PlanRegio) := 
+					sum(bebouwing/BestaandeGlTb/Oppervlakte
+						* PlanRegioKaarten/BestaandeGlTb/BeschikbaarheidsFactor
+						* K_dienstleiding_m2[Bebouwing/BestaandeGlTb/BebouwingsType]
+						, bebouwing/BestaandeGlTb/PlanRegio_rel);
 				attribute<float64> n_Zijwegparen (PlanRegio) := Sqrt(2.0) * SqrtAreaal / GroenteKasLengteFactor, Descr = "F 48";
 				attribute<float64> n_Zijleiding  (PlanRegio) := (n_Zijwegparen + 0.5) * 2.0, Descr = "F 48: estimate average increase of round-up in a 'best' continuous replacement";
 				attribute<MW>      P_Zijleiding  (PlanRegio) : Descr = "F 49: 50% van het piekvermogen wordt door CV-ketels in de OS (dus per kas) geleverd" ,= CapaciteitsVraag / n_Zijleiding / value(1000, kW / MW);
@@ -222,25 +231,31 @@ template KostenBaten
 			}
 			container nieuw
 			{
+				attribute<m2> Areaal (PlanRegio) := sum(bebouwing/NieuwbouwGlTb/Oppervlakte
+						* PlanRegioKaarten/NieuwbouwGlTb/BeschikbaarheidsFactor
+						, bebouwing/NieuwbouwGlTb/PlanRegio_rel);
 				
-				attribute<m2> Areaal     (PlanRegio) := sum(     BebouwingsComponenten/NieuwbouwGlTb/WarmteVraag/deelnemers/Oppervlakte , PlanRegioKaarten/NieuwbouwGlTb/impl/PlanRegio_rel);
-				attribute<m>  SqrtAreaal (PlanRegio) := sum(Sqrt(BebouwingsComponenten/NieuwbouwGlTb/WarmteVraag/deelnemers/Oppervlakte), PlanRegioKaarten/NieuwbouwGlTb/impl/PlanRegio_rel);
+				attribute<m> SqrtAreaal (PlanRegio) := sum(Sqrt(bebouwing/NieuwbouwGlTb/Oppervlakte)
+						* PlanRegioKaarten/NieuwbouwGlTb/BeschikbaarheidsFactor
+						, bebouwing/NieuwbouwGlTb/PlanRegio_rel);
 
-				attribute<nrAansl> NrAansluitingen(PlanRegio) :=
-						sum(  BebouwingsComponenten/NieuwbouwGlTb/WarmteVraag/deelnemers/nrAansluitingen * float64(BebouwingsComponenten/NieuwbouwGlTb/WarmteVraag/KanGebiedsOptie)
-						, PlanRegioKaarten/NieuwbouwGlTb/impl/PlanRegio_rel  );
+				attribute<nrAansl> NrAansluitingen (PlanRegio) :=sum(bebouwing/NieuwbouwGlTb/nrAansluitingen
+						* PlanRegioKaarten/NieuwbouwGlTb/BeschikbaarheidsFactor
+						, bebouwing/NieuwbouwGlTb/PlanRegio_rel);
 						
-				attribute<kW> CapaciteitsVraag(PlanRegio) := Vermogens/GTF_t_RVmt *
-						sum(  BebouwingsComponenten/NieuwbouwGlTb/WarmteVraag/deelnemers/AansluitCapaciteit
-						* float64(BebouwingsComponenten/NieuwbouwGlTb/WarmteVraag/KanGebiedsOptie)
-						, BebouwingsComponenten/NieuwbouwGlTb/PlanRegio_rel);
-				attribute<kW> P_ASW(PlanRegio) :=
-						sum(  BebouwingsComponenten/NieuwbouwGlTb/WarmteVraag/deelnemers/AansluitCapaciteit, BebouwingsComponenten/NieuwbouwGlTb/PlanRegio_rel);
+				attribute<kW> P_ASW(            PlanRegio) := sum(bebouwing/NieuwbouwGlTb/AansluitCapaciteit/Warmte
+						* PlanRegioKaarten/NieuwbouwGlTb/BeschikbaarheidsFactor
+						, bebouwing/NieuwbouwGlTb/PlanRegio_rel);
+				attribute<kW> CapaciteitsVraag (PlanRegio) := Vermogens/GTF_t_RVmt * P_ASW;
+						
 				attribute<Eur>		Ki_OnderStation		(PlanRegio)	:=	CapaciteitsVraag * Kostenkentallen/K_OS,				Source = "validatiesessies startanalyse 2019"; //TODO bron = FO 4.0
-
-				attribute<Eur> K_dienstleidingen (PlanRegio): Source = "F 47b",
-					= sum(BebouwingsComponenten/NieuwbouwGlTb/WarmteVraag/deelnemers/Oppervlakte * K_dienstleiding_m2[BebouwingsComponenten/NieuwbouwGlTb/BebouwingsType], PlanRegioKaarten/NieuwbouwGlTb/impl/PlanRegio_rel);
-
+				attribute<Eur> K_dienstleidingen (PlanRegio):=
+					sum(bebouwing/NieuwbouwGlTb/Oppervlakte
+						* PlanRegioKaarten/NieuwbouwGlTb/BeschikbaarheidsFactor
+						* K_dienstleiding_m2[Bebouwing/NieuwbouwGlTb/BebouwingsType]
+						, bebouwing/NieuwbouwGlTb/PlanRegio_rel)
+				,	 Source = "F 47b";		
+		
 				attribute<float64> n_Zijwegparen (PlanRegio) := Sqrt(2.0) * SqrtAreaal / GroenteKasLengteFactor, Descr = "F 48";
 				attribute<float64> n_Zijleiding  (PlanRegio) := (n_Zijwegparen + 0.5) * 2.0, Descr = "F 48"; // add expected increase of round-up as a 'best' continuous replacement of float64(RoundUp(n_Zijwegparen)) * float64(2)
 
@@ -332,9 +347,9 @@ template KostenBaten
 		attribute<Eur_yr> Kj_lv_adm       (PlanRegio) := Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_lv_Admin * (opbrengsten/JaarlijksD/Oj_VastRecht * 1[yr]);
 		attribute<Eur_yr> Kj_wd_adm       (PlanRegio) := Leercurves/OenM/Curve * (Wonen/Kj_wd_adm + Utiliteit/Kj_Admin + Glastuinbouw/Kj_Admin + SecundairNet/Kj_Admin);
 
-		attribute<nrAansl>nrAansl_d       (PlanRegio) := ='add('+AsItemList(replace('sum(BebouwingsComponenten/@BC@/WarmteVraag/deelnemers/nrAansluitingen, BebouwingsComponenten/@BC@/PlanRegio_rel)', '@BC@', Classifications/BebouwingsComponent/name))+')';
-		attribute<nrAansl>nrAansl_g       (PlanRegio) := ='add('+AsItemList(replace('sum(BebouwingsComponenten/@BC@/WarmteVraag/alle/nrAansluitingen, BebouwingsComponenten/@BC@/PlanRegio_rel)', '@BC@', Classifications/BebouwingsComponent/name))+')';
-		attribute<nrAansl>nrAansl_e       (PlanRegio) := ='add('+AsItemList(replace('sum(BebouwingsComponenten/@BC@/RuimtelijkeVraagComponent/nrAansluitingen, BebouwingsComponenten/@BC@/PlanRegio_rel)', '@BC@', Classifications/BebouwingsComponent/name))+')';
+		attribute<nrAansl>nrAansl_d       (PlanRegio) := ='add('+AsItemList(replace('sum(Bebouwing/@BC@/nrAansluitingen * PlanRegioKaarten/@BC@/BeschikbaarheidsFactor, Bebouwing/@BC@/PlanRegio_rel)', '@BC@', Classifications/BebouwingsComponent/name))+')';
+		attribute<nrAansl>nrAansl_g       (PlanRegio) := ='add('+AsItemList(replace('sum(Bebouwing/@BC@/nrAansluitingen * PlanRegioKaarten/@BC@/BeschikbaarheidsFactor, Bebouwing/@BC@/PlanRegio_rel)', '@BC@', Classifications/BebouwingsComponent/name))+')';
+		attribute<nrAansl>nrAansl_e       (PlanRegio) := ='add('+AsItemList(replace('sum(Bebouwing/@BC@/nrAansluitingen, BebouwingsComponenten/@BC@/PlanRegio_rel)', '@BC@', Classifications/BebouwingsComponent/name))+')';
 		attribute<m>      L_distr_g       (PlanRegio) := nrAansl_g * Kengetallen/Constanten/L_di_gem;
 		attribute<m>      L_distr_e       (PlanRegio) := nrAansl_e * Kengetallen/Constanten/L_di_gem;
 		attribute<m>      L_infra_g       (PlanRegio) := L_distr_g + SecundairNet/L_transport;
