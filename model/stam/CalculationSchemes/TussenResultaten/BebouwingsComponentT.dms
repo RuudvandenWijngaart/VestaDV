@@ -64,13 +64,11 @@ template BebouwingsComponentT
 		attribute<AfnameGebied>  AfnameGebied_rel (BebouwingsObject):= PrevObject/AfnameGebied_rel[PrevObject_rel];	
 		
 		attribute<Classifications/GebouwOptie> GebouwOptie_rel (BebouwingsObject) := PrevObject/GebouwOptie_rel[PrevObject_rel]; // REMOVE, OBSOLETE, vervangen door Schillabel_rel, InstallatiePerProduct en GebiedsOptie
-	}
 
-	unit<uint32> RuimtelijkeVraagComponent := BebouwingsObject
-	{
-		attribute<Geography/rdc_grids/m100> gridm100_rel (BebouwingsObject) := point[Geography/rdc_grids/m100];
+		attribute<Geography/rdc_grids/m100> gridm100_rel (BebouwingsObject) := point[Geography/rdc_grids/m100];		
 		attribute<bool>   IsMeergezins (.) := BebouwingsTypeDomein/IsMeergezins[BebouwingsType];
 		attribute<bool>   IsHoogbouw   (.) := BebouwingsTypeDomein/IsHoogbouw  [BebouwingsType];
+		
 		attribute<Ratio> ResterendFactorBase := = HasResterendFactors
 			? 'MakeDefined(merge(BebouwingsType, Ratio, '+AsItemList('ResterendFactorMaps/'+BebouwingsTypeDomein/ResterendFactorName+'[gridm100_rel]')+'), 1.0)'
 			: 'const(1.0, BebouwingsObject)';
@@ -173,7 +171,8 @@ template BebouwingsComponentT
 				,'@SL@', Classifications/SchilLabel/Name)
 			,	.., GJ_Yr);
 			
-			attribute<GJ_Yr> CurrRV(..) := ='merge(SchilLabel_rel, GJ_Yr, '+AsItemList('RV/'+Classifications/SchilLabel/Name)+')';			
+			attribute<GJ_Yr> CurrRV(..) := ='merge(SchilLabel_rel, GJ_Yr, '+AsItemList('RV/'+Classifications/SchilLabel/Name)+')';	
+			
 			attribute<GJ_yr> Ventilatie(..)	:=	=				
 				'('
 				+	(all(ModelObject/V_Vent_asl == 0[GJ_yr_asl]) ? '' : 'NrAansluitingen * ModelObject/V_Vent_asl + ')
@@ -188,8 +187,6 @@ template BebouwingsComponentT
 		attribute<bool> Always (BebouwingsObject) := const(true,  BebouwingsObject);
 		attribute<bool> Never  (BebouwingsObject) := const(false, BebouwingsObject);
 	}
-
-	attribute<BebouwingsTypeDomein> BebouwingsType (BebouwingsObject) := RuimtelijkeVraagComponent/BebouwingsType;
 
 	container EIA_Opties := ='SpecifiekeInstellingen/Beleid/EIA/E_'+NcwRefBase;
 	container EEA_Opties := SpecifiekeInstellingen/Beleid/EEA/Kosten/Basis;
@@ -270,7 +267,7 @@ template BebouwingsComponentT
 		attribute<string> Label := Name, DialogType = "LabelText";
 		attribute<string> Criterium_expr := ='replace_value(LowerCase(union_data(., '+AsItemList('LocatieSpecifiekeOpties/GebouwOpties/'+Name)+')), ''criteria/always'', '''')';
 	}
-	container GebouwOpties := for_each_ne(GebouwOptie/Name, 'GebouwOptieT(RuimtelijkeVraagComponent, Classifications/GebouwOptie/V/'+GebouwOptie/Name+', '+Quote(GebouwOptie/Criterium_expr)+')');
+	container GebouwOpties := for_each_ne(GebouwOptie/Name, 'GebouwOptieT(BebouwingsObject, Classifications/GebouwOptie/V/'+GebouwOptie/Name+', '+Quote(GebouwOptie/Criterium_expr)+')');
 	
  	attribute<GebouwOptie> BesteGebouwOptie(BebouwingsObject):= =(#GebouwOptie == 1)? 'const(0[GebouwOptie],BebouwingsObject)' : 'argmin('+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/kosten_or_undefined')+')[GebouwOptie]';
  	attribute<Classifications/WarmteOptie> WarmteOptie_res_rel(BebouwingsObject) := Classifications/GebouwOptie/WarmteOptie_rel[GebouwOptie/nr_OrgEntity[BesteGebouwOptie]];
@@ -329,11 +326,11 @@ template BebouwingsComponentT
 
 	container Hoeveelheden
 	{
-		attribute<m2>      ZonneBoiler (BebouwingsObject) := RuimtelijkeVraagComponent/oppervlakte * OpwekkingsOpties/capaciteit/ZonneBoiler * BC_kentallen/R_ZonB_opp  [BebouwingsType];
-		attribute<m2>      Zon_PV      (BebouwingsObject) := RuimtelijkeVraagComponent/oppervlakte * OpwekkingsOpties/capaciteit/Zon_PV      * BC_kentallen/m2dak_m2bvo [BebouwingsType];
+		attribute<m2>      ZonneBoiler (BebouwingsObject) := RuimtelijkeVraagObject/oppervlakte * OpwekkingsOpties/capaciteit/ZonneBoiler * BC_kentallen/R_ZonB_opp  [BebouwingsType];
+		attribute<m2>      Zon_PV      (BebouwingsObject) := BebouwingsObject/oppervlakte * OpwekkingsOpties/capaciteit/Zon_PV      * BC_kentallen/m2dak_m2bvo [BebouwingsType];
 	
-		attribute<nrAansl> mWKK        (BebouwingsObject) := RuimtelijkeVraagComponent/nrAansluitingen * Opwekking/mWKK;
-		attribute<nrAansl> hWP         (BebouwingsObject) := RuimtelijkeVraagComponent/nrAansluitingen * Opwekking/hWP;
+		attribute<nrAansl> mWKK        (BebouwingsObject) := BebouwingsObject/nrAansluitingen * Opwekking/mWKK;
+		attribute<nrAansl> hWP         (BebouwingsObject) := BebouwingsObject/nrAansluitingen * Opwekking/hWP;
 	}
 
 	container BC_kentallen :=	kengetallen/BCkentallen/BC_kentallen(
@@ -452,13 +449,13 @@ template BebouwingsComponentT
 			attribute<nrAansl> Enet_ewp      (BebouwingsObject) := float64(IsAllElectric)                  * RuimtelijkeVraagComponent/nraansluitingen;  // apparatuur en volledig elektrisch verwarmd
 		}
 
-		container Functioneel
+		container Functioneel := BebouwingsObject/Functioneel
 		{
 			attribute<GJ_yr> Vj_RV   (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/RV')+')';
 			attribute<GJ_yr> Vj_TW   (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/TW')+')';
 			attribute<GJ_yr> Vj_K    (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/K')+')';
-			attribute<GJ_yr> Vj_Vent (BebouwingsObject) := Float64(SchilLabel_rel <= Classifications/SchilLabel/V/B) * RuimtelijkeVraagComponent/functioneel/Ventilatie;
-			attribute<GJ_yr> Vj_App  (BebouwingsObject) := RuimtelijkeVraagComponent/Functioneel/EA;
+			attribute<GJ_yr> Vj_Vent (BebouwingsObject) := Float64(SchilLabel_rel <= Classifications/SchilLabel/V/B) * Ventilatie;
+			attribute<GJ_yr> Vj_App  (BebouwingsObject) := Functioneel/EA;
 		}
 		container Metervraag := for_each_nedv('Vj_'+Classifications/BemeterdeGebouwInput/Name
 			,	replace('merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/metervraag/@I')+')', '@I', Classifications/BemeterdeGebouwInput/Name)
