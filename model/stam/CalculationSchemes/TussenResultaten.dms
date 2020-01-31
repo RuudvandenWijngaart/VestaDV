@@ -4,225 +4,54 @@
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
-template TussenResultaten
+container tussenresultaten
 {
-	// begin case parameters
-	parameter<String> RekenstapName;
-	container StateVoorAllocatie;
-	// end case parameters
+	#include <RekenStapT.dms>
+	#include <BebouwingsComponentT.dms>
+	#include <GebouwOptieT.dms>
 	
-	parameter<bool> isStap0 := RekenstapName == 'StartJaar';
-	parameter<Classifications/RekenStap> Rekenstap_rel  := rlookup(RekenstapName, Classifications/rekenstap/name);
-	parameter<units/yr_uint16>           Rekenstap_jaar := Classifications/rekenstap/jaar[Rekenstap_rel];
-	parameter<String> RekenjaarName   := Classifications/rekenjaar/Name[Classifications/RekenStap/rekenjaar_rel          [Rekenstap_rel]];
-	parameter<String> BouwjaarName    := Classifications/Zichtjaar/Name[Classifications/RekenStap/zichtjaar_rel_bebouwing[Rekenstap_rel]];
-	parameter<String> KlimaatjaarName := Classifications/Zichtjaar/Name[Classifications/RekenStap/zichtjaar_rel_klimaat  [Rekenstap_rel]];
-	
-	parameter<Classifications/Zichtjaar> ZichtJaar_rel := rlookup(BouwjaarName, Classifications/zichtjaar/name);
-	parameter<units/yr_uint16>           ZichtJaar_jaar:= Classifications/zichtjaar/jaar[Zichtjaar_rel];
-	parameter<Classifications/RekenJaar> RekenJaar_rel := Classifications/Rekenstap/RekenJaar_rel[Rekenstap_rel];
-	parameter<units/yr_uint16>           RekenJaar_jaar:= Classifications/Rekenstap/Jaar         [Rekenstap_rel];
-	
-	unit<uint32> PlanRegio           := Invoer/SpecifiekeInstellingen/PlanRegio;
-
-	container SpecifiekeInstellingen := ='Invoer/SpecifiekeInstellingen/' + RekenStapName;
-	container VraagKentallen         := SpecifiekeInstellingen/VraagKentallen;
-	container AanbodKentallen        := SpecifiekeInstellingen/AanbodKentallen;
-
-	container Bebouwing              := ='RuimtelijkeData/Bebouwing/' + BouwjaarName;
-
-	unit<uint32> WarmteBronnen       := RuimtelijkeData/WarmteBronnen/RestWarmte/data;
-
-	attribute<Units/Ratio> KlimaatFactorMapPartial 		(Geography/rdc_grids/m100) 		:= = 'Invoer/RuimtelijkeData/klimaat/'+ KlimaatjaarName +'[Units/Ratio]';
-	attribute<Units/Ratio> KlimaatFactorMap 			(Geography/rdc_grids/m100) 		:= MakeDefined(KlimaatFactorMapPartial, mean(KlimaatFactorMapPartial));
-
-	container Voorkeuren := SpecifiekeInstellingen/Voorkeuren
-	{
-		container afweging := ='Invoer/SpecifiekeInstellingen/' + RekenStapName + '/voorkeuren/afweging'
-		{
-			
-		}
-		unit<uint8> ActieveGebiedsOptie_Org := range(uint8, 0b, uint8(GebiedsOpties/aantal)) // te kiezen keten van: { GeoTermie, RestWarmte, ... } LET OP: laatste cijfer moet gelijk zijn aan aantal regels onder 'union_data('
-		{
-			attribute<string> Name := SchemaName;
-
-			attribute<Classifications/GebiedsOptie> GebiedsOptie_rel := =GebiedsOpties/Aantal > 0 
-				? 'union_data(.'+AsList(',GebiedsOpties/Optie'+string(id(.) + 1b), '')+')' 
-				: 'const((0b / 0b)[Classifications/GebiedsOptie], .)';
-			attribute<string> SchemaName := Classifications/GebiedsOptie/Name[GebiedsOptie_rel];
-			attribute<string> code       := Classifications/GebiedsOptie/Code[GebiedsOptie_rel];
-		}
-		unit<uint8> ActieveGebiedsOptie_Ext: = union_unit_uint8(range(UInt8,0b, 1b), ActieveGebiedsOptie_Org) // {  RestWarmte, ... } 
-		{
-			attribute<string> Name: = SchemaName;
-
-			attribute<Classifications/GebiedsOptie> GebiedsOptie_rel := union_data(., Classifications/GebiedsOptie/V/RestWarmte, ActieveGebiedsOptie_Org/GebiedsOptie_rel);
-			attribute<string>                       SchemaName       := union_data(., 'RestWarmte', ActieveGebiedsOptie_Org/SchemaName);
-			attribute<string>                       code             := union_data(., '0', ActieveGebiedsOptie_Org/code);
-		}
-
-		parameter<bool> NewRestWarmte := IsDefined(rlookup(Classifications/GebiedsOptie/V/RestWarmte, ActieveGebiedsOptie_Org/GebiedsOptie_rel)); // is nieuwe allocatie toegestaan
+	template DoelLabelT {
+		unit<uint32> BebouwingsObject;
+		parameter<Classifications/DoelLabel_NaSprong> DoelLabel_rel;
 		
-//		parameter<bool> OldRestWarmte := =NewRestWarmte ? 'false':'StateVoorAllocatie/RestWarmte/CumulatedArcSet/HasArcs'; // moet er toch restwarmte aan?
-		parameter<bool> OldRestWarmte := not(NewRestWarmte);
-//		unit<uint8> ActieveGebiedsOptie := =OldRestWarmte ? 'ActieveGebiedsOptie_Ext' : 'ActieveGebiedsOptie_Org';
-
-		unit<uint8> ActieveGebiedsOptie := =NewRestWarmte ? 'ActieveGebiedsOptie_Org' : 'ActieveGebiedsOptie_Ext';
-		unit<uint8> PlanRegioOptie      := subset(lookup(ActieveGebiedsOptie/GebiedsOptie_rel, Classifications/GebiedsOptie/IsPlanRegioOptie))
-		{
-			attribute<string> name := ActieveGebiedsOptie/name[nr_OrgEntity];
-			attribute<string> code := ActieveGebiedsOptie/code[nr_OrgEntity];
-		}
-		unit<uint8> ClusterOptie := subset(not(lookup(ActieveGebiedsOptie/GebiedsOptie_rel, Classifications/GebiedsOptie/IsPlanRegioOptie)))
-		{
-			attribute<string> name := ActieveGebiedsOptie/name[nr_OrgEntity];
-			attribute<string> code := ActieveGebiedsOptie/code[nr_OrgEntity];
-		}
-	}
-	container Schuiven
-	{		
-		parameter<Ratio> CurveMax       := SpecifiekeInstellingen/RuimtelijkeVraag/Lokaal/Generiek/Kosten/LeercurveMinMaxSchuif;
-		parameter<Ratio> CurveMin       := 1.0 - CurveMax;
-
-		parameter<Ratio> LerenAan       := SpecifiekeInstellingen/RuimtelijkeVraag/Lokaal/Generiek/Kosten/LeercurveGebruikSchuif;
-		parameter<Ratio> LerenUit       := 1.0 - LerenAan;
-
-		parameter<Ratio> KostenMax      : = SpecifiekeInstellingen/RuimtelijkeVraag/Lokaal/Generiek/Kosten/VerbeterMinMaxSchuif;
-		parameter<Ratio> KostenMin      := 1.0 - KostenMax;
-
-		parameter<Ratio> OpbrMax        := SpecifiekeInstellingen/RuimtelijkeVraag/Lokaal/Generiek/Opbrengsten/MinMaxSchuif;
-		parameter<Ratio> OpbrMin        := 1.0 - OpbrMax;
-
-		parameter<Ratio> VerketelingMax := SpecifiekeInstellingen/RuimtelijkeVraag/Lokaal/Generiek/Kosten/IndividueleVerwarmingSchuif;
-		parameter<Ratio> VerketelingMin := 1.0 - VerketelingMax;
-
-		parameter<Ratio> HuurVerlagingBijGebiedsOptie := SpecifiekeInstellingen/RuimtelijkeVraag/Lokaal/Generiek/Opbrengsten/HuurVerlagingBijGebiedsOptieSchuif;
+		unit<uint8>  SchilSprong_set := VerbruiksOpties/SchilSprong_set; // outward ref
+		unit<uint32> SchilSprong_x_MO:= VerbruiksOpties/SchilSprong_set/xMO;
 		
-		parameter<Ratio> LuchtBodemSchuif     := SpecifiekeInstellingen/RuimtelijkeVraag/Lokaal/Generiek/Kosten/LuchtBodemSchuif; // 1.0 = alles LuchtWP, 0.0 = alles BodemWP
-		parameter<Ratio> EfficiencySchuif     := SpecifiekeInstellingen/RuimtelijkeVraag/Lokaal/Generiek/Kosten/EfficiencySchuif; // 1.0 = maximale efficiency, 0.0 = minimale efficiency
+		attribute<Classifications/SchilLabel> Van_rel(BebouwingsObject) := BebouwingsObject/schillabel_rel;
+		parameter<Classifications/SchilLabel> Naar_rel                  := Classifications/DoelLabel_NaSprong/SchilLabel_rel[DoelLabel_rel];
 		
-		//tijdelijke functie TODO: verwijderen
-		parameter<bool> LuchtBodemAlsS1       := SpecifiekeInstellingen/RuimtelijkeVraag/Lokaal/Generiek/Kosten/LuchtBodemAlsS1;
-	}
-	container Vermogens := Invoer/Kengetallen/Vermogens(Schuiven/EfficiencySchuif);
-	
-	container LeerCurves :=
-		for_each_ne(Classifications/leercurves/name,
-					'MaakCurve('
-				'Kengetallen/Leercurves/Optimistisch/'+Classifications/leercurves/name+', Kengetallen/Leercurves/Pessimistisch/'+Classifications/leercurves/name+			
-			')'
+		attribute<SchilSprong_set > SchilSprong_rel    (BebouwingsObject) := rlookup(combine_data(Classifications/SchilSprongCode, Van_rel, Naar_rel), VerbruiksOpties/SchilSprong_set/SchilSprongCode_rel);
+		attribute<SchilSprong_x_MO> SchilSprong_xMO_rel(BebouwingsObject) := combine_data(VerbruiksOpties/schilsprong_set/xMO, SchilSprong_rel, BebouwingsObject/Model_rel);
+		
+		attribute<EUR> Ki_GV (BebouwingsObject) := MakeDefined(
+			SchilSprong_x_MO/Ki_asl[SchilSprong_xMO_rel] * BebouwingsObject/nrAansluitingen +
+			SchilSprong_x_MO/Ki_opp[SchilSprong_xMO_rel] * BebouwingsObject/Oppervlakte    
+		,	0[EUR]
 		);
-
-	container Efficiencies := Invoer/Kengetallen/Efficiency/EfficiencyKentallen(Schuiven/EfficiencySchuif);
-	#include<Prijzen.dms>
-
-	attribute<bool> HeeftResterendFactoren (Classifications/BebouwingsComponent) :=
-		='union_data(
-			Classifications/BebouwingsComponent
-			,' + AsList(Classifications/BebouwingsComponent/IsNieuwbouw 
-				? 'false' 
-				: 'Bebouwing/Has' + Classifications/BebouwingsComponent/name + 'ResterendFactors',
-			',')
-		+')';
-
-	#include<BebouwingsComponenten.dms>
-
-	container NCW: isHidden = "True"
-	{
-		container DV := SpecifiekeInstellingen/DiscontoVoet;
-		container IN := SpecifiekeInstellingen/investering;
-
-		container ow13 := NettoContanteWaarde(DV/ow, IN/BeginOpbrengstJaar, 15[Yr]);
-		container id13 := NettoContanteWaarde(DV/id, IN/BeginOpbrengstJaar, 15[Yr]);
-		container wd13 := NettoContanteWaarde(DV/wd, IN/BeginOpbrengstJaar, 15[Yr]);
-		container pt13 := NettoContanteWaarde(DV/pt, IN/BeginOpbrengstJaar, 15[Yr]);
-		container mr13 := NettoContanteWaarde(DV/mr, IN/BeginOpbrengstJaar, 15[Yr]);
-		
-		container ow28 := NettoContanteWaarde(DV/ow, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-		container id28 := NettoContanteWaarde(DV/id, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-		container wd28 := NettoContanteWaarde(DV/wd, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-		container pt28 := NettoContanteWaarde(DV/pt, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-		container mr28 := NettoContanteWaarde(DV/mr, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-
-		container bw28 := NettoContanteWaarde(DV/E_bw, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-		container nw28 := NettoContanteWaarde(DV/E_nw, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-		container bu28 := NettoContanteWaarde(DV/E_bu, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-		container nu28 := NettoContanteWaarde(DV/E_nu, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-		container bt28 := NettoContanteWaarde(DV/E_bt, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-		container nt28 := NettoContanteWaarde(DV/E_nt, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-
-		container mr50 := NettoContanteWaarde(DV/mr , 0[Yr], 50[Yr]);
-		container bw50 := NettoContanteWaarde(DV/E_bw, 0[Yr], 50[Yr]);
-		container nw50 := NettoContanteWaarde(DV/E_nw, 0[Yr], 50[Yr]);
-		container bu50 := NettoContanteWaarde(DV/E_bu, 0[Yr], 50[Yr]);
-		container nu50 := NettoContanteWaarde(DV/E_nu, 0[Yr], 50[Yr]);
-		container bt50 := NettoContanteWaarde(DV/E_bt, 0[Yr], 50[Yr]);
-		container nt50 := NettoContanteWaarde(DV/E_nt, 0[Yr], 50[Yr]);
-
-		container mr30 := NettoContanteWaarde(DV/mr , 0[Yr], 30[Yr]);
-		container bw30 := NettoContanteWaarde(DV/E_bw, 0[Yr], 30[Yr]);
-		container nw30 := NettoContanteWaarde(DV/E_nw, 0[Yr], 30[Yr]);
-		container bu30 := NettoContanteWaarde(DV/E_bu, 0[Yr], 30[Yr]);
-		container nu30 := NettoContanteWaarde(DV/E_nu, 0[Yr], 30[Yr]);
-		container bt30 := NettoContanteWaarde(DV/E_bt, 0[Yr], 30[Yr]);
-		container nt30 := NettoContanteWaarde(DV/E_nt, 0[Yr], 30[Yr]);
-
-		container mr20 := NettoContanteWaarde(DV/mr , 0[Yr], 20[Yr]);
-		container bw20 := NettoContanteWaarde(DV/E_bw, 0[Yr], 20[Yr]);
-		container nw20 := NettoContanteWaarde(DV/E_nw, 0[Yr], 20[Yr]);
-		container bu20 := NettoContanteWaarde(DV/E_bu, 0[Yr], 20[Yr]);
-		container nu20 := NettoContanteWaarde(DV/E_nu, 0[Yr], 20[Yr]);
-		container bt20 := NettoContanteWaarde(DV/E_bt, 0[Yr], 20[Yr]);
-		container nt20 := NettoContanteWaarde(DV/E_nt, 0[Yr], 20[Yr]);
-		
-		container mr15 := NettoContanteWaarde(DV/mr , 0[Yr], 15[Yr]);
-		container bw15 := NettoContanteWaarde(DV/E_bw, 0[Yr], 15[Yr]);
-		container nw15 := NettoContanteWaarde(DV/E_nw, 0[Yr], 15[Yr]);
-		container bu15 := NettoContanteWaarde(DV/E_bu, 0[Yr], 15[Yr]);
-		container nu15 := NettoContanteWaarde(DV/E_nu, 0[Yr], 15[Yr]);
-		container bt15 := NettoContanteWaarde(DV/E_bt, 0[Yr], 15[Yr]);
-		container nt15 := NettoContanteWaarde(DV/E_nt, 0[Yr], 15[Yr]);
 	}
-
-	container GebiedsAllocatie :=
-		for_each_ne(
-			Voorkeuren/ActieveGebiedsOptie/Name,
-			'CalculationSchemes/AanbodOpties/'+Voorkeuren/ActieveGebiedsOptie/SchemaName+'(
-				'+MakeDefined(Voorkeuren/ActieveGebiedsOptie/Name[ID(Voorkeuren/ActieveGebiedsOptie)-1b]+'/Results', 'Initieel')+',
-				AanbodKentallen/'+Voorkeuren/ActieveGebiedsOptie/SchemaName+', 
-				EnergiePrijzen, RekenJaar_jaar
-			)'
-		)
+	
+	// TODO: heroverwegen per gebiedsoptie. Kijk eerst waar dit gebruikt wordt.
+	template WarmteVraagT 
 	{
-		container Initieel := StateVoorAllocatie
+		unit<uint32> BebouwingsObject;
+		attribute<bool> KanGebiedsoptie (BebouwingsObject) := Classifications/WamteOptie/kanGebiedsOptie[BebouwingsObject/WarmteOptie_rel];
+		
+		container deelnemers
 		{
-			container Bebouwing     := BebouwingsComponenten;
+			attribute<nrAansl>   NrAansluitingen    (BebouwingsObject) := float64(KanGebiedsoptie) * BebouwingsObject/AandeelWarmteVraag * BebouwingsObject/nrAansluitingen;
+			attribute<m2>        Oppervlakte        (BebouwingsObject) := float64(KanGebiedsoptie) * BebouwingsObject/AandeelWarmteVraag * BebouwingsObject/Oppervlakte;
+			attribute<kW>        AansluitCapaciteit (BebouwingsObject) := float64(KanGebiedsoptie) * BebouwingsObject/AandeelWarmteVraag * BebouwingsObject/AansluitCapaciteit/Warmte;
+			attribute<GJ_yr>     Verbruik           (BebouwingsObject) := float64(KanGebiedsoptie) * BebouwingsObject/AandeelWarmteVraag * Verbruik_RV + Verbruik_WW;
+			attribute<GJ_yr>     Verbruik_RV        (BebouwingsObject) := float64(KanGebiedsoptie) * BebouwingsObject/AandeelWarmteVraag * results/Functioneel/Vj_RV;
+			attribute<GJ_yr>     Verbruik_WW        (BebouwingsObject) := float64(KanGebiedsoptie) * BebouwingsObject/AandeelWarmteVraag * results/Functioneel/Vj_TW;
 		}
-		parameter<string> ResultStateName := MakeDefined(last(Voorkeuren/ActieveGebiedsOptie/Name)+'/Results', 'Initieel');
-		container ResultState := =ResultStateName;
-	}
 
-	#include<StateNaAllocatie.dms>
-
-	container AllocatieResultaten :=
-		for_each_ne(Classifications/BebouwingsComponent/Name,
-			'AllocatieResultatenComponent(
-				BebouwingsComponenten/'+Classifications/BebouwingsComponent/Name+'
-				,StateNaAllocatie/Bebouwing/'+Classifications/BebouwingsComponent/Name+'/WarmteAllocatie
-				,StateNaAllocatie/Bebouwing/'+Classifications/BebouwingsComponent/Name+'/KoudeAllocatie
-				,StateNaAllocatie/Bebouwing/'+Classifications/BebouwingsComponent/Name+'/Om_Comfort
-				,'+quote(Classifications/BebouwingsComponent/Name)+'
-			)'
-		), FreeData = "False"
-	{
-		attribute<bool>    heeft_gas                               (PlanRegio) := (aant_g_aansl_woning_per_planregio + aant_g_aansl_util_per_planregio) > 0.0[nraansl];
-		attribute<nrAansl> aant_g_aansl_per_planregio              (PlanRegio) := aant_g_aansl_woning_per_planregio + aant_g_aansl_util_per_planregio + aant_g_aansl_GlTb_per_planregio;
-		attribute<nrAansl> aant_g_aansl_woning_per_planregio       (PlanRegio) := BestaandeWoning/aant_g_aansl_per_planregio + NieuwbouwWoning/aant_g_aansl_per_planregio;
-		attribute<nrAansl> aant_g_aansl_woning_hoogb_per_planregio (PlanRegio) := BestaandeWoning/aant_g_aansl_hoogb_per_planregio + NieuwbouwWoning/aant_g_aansl_hoogb_per_planregio;
-		attribute<nrAansl> aant_g_aansl_woning_laagb_per_planregio (PlanRegio) := BestaandeWoning/aant_g_aansl_laagb_per_planregio + NieuwbouwWoning/aant_g_aansl_laagb_per_planregio;
-		attribute<nrAansl> aant_g_aansl_util_per_planregio         (PlanRegio) := BestaandeUtil/aant_g_aansl_per_planregio + NieuwbouwUtil/aant_g_aansl_per_planregio;
-		attribute<nrAansl> aant_g_aansl_GlTb_per_planregio         (PlanRegio) := BestaandeGlTb/aant_g_aansl_per_planregio + NieuwbouwGlTb/aant_g_aansl_per_planregio;
-		
-		attribute<bool>    GrondroeringInPlanRegio                 (PlanRegio) := ='or('+AsItemList(replace('@BC@/GrondroeringInPlanRegio','@BC@', Classifications/BebouwingsComponent/Name))+')';
+		container alle
+		{
+			attribute<nrAansl>   NrAansluitingen    (BebouwingsObject) := BebouwingsObject/AandeelWarmteVraag * BebouwingsObject/nrAansluitingen;
+			attribute<kW>        AansluitCapaciteit (BebouwingsObject) := BebouwingsObject/AandeelWarmteVraag * BebouwingsObject/AansluitCapaciteit/Warmte;
+			attribute<GJ_yr>     Verbruik           (BebouwingsObject) := BebouwingsObject/AandeelWarmteVraag * results/Functioneel/Vj_RV + results/Functioneel/Vj_TW;
+			attribute<m2>        Oppervlakte        (BebouwingsObject) := BebouwingsObject/AandeelWarmteVraag * BebouwingsObject/Oppervlakte;
+		}
 	}
 }
