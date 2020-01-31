@@ -64,7 +64,7 @@ container CalculationSchemes: Using = "Units;Geography"
 		container AansluitCapaciteit
 		{
 			attribute<kW> Totaal  (Geography/rdc_grids/m100) := sum(impl/RuimtelijkeVraagComponent/AansluitCapaciteit/Warmte,   impl/gridm100_rel);
-			attribute<kW> AardGas (Geography/rdc_grids/m100) := sum(impl/BCdata/WarmteVraag/alle/AansluitCapaciteit, impl/gridm100_rel);
+			attribute<kW> AardGas (Geography/rdc_grids/m100) := sum(impl/WarmteVraagPerObject/alle/AansluitCapaciteit, impl/gridm100_rel);
 			attribute<kW> Overig  (Geography/rdc_grids/m100) := Totaal - AardGas;
 		}
 		container WKO
@@ -81,40 +81,37 @@ container CalculationSchemes: Using = "Units;Geography"
 	Template NaarPlanRegio
 	{
 		// begin case parameters
-		container BCdata;
+		unit<uint32> BO;
 		// end case parameters
 
-		unit<uint32>                           BebouwingsObject                  := BCdata/BebouwingsObject;
-		attribute<Classifications/WarmteOptie> WarmteAllocatie(BebouwingsObject) := BCdata/WarmteAllocatie;
-		unit<uint32>                           PlanRegio                         := Invoer/SpecifiekeInstellingen/PlanRegio;
+		attribute<Classifications/WarmteOptie> WarmteAllocatie(BO) := BO/WarmteOptie_rel; // TODO: wegsubstiueren
+		unit<uint32>                           PR                  := Invoer/SpecifiekeInstellingen/PlanRegio;
+		
+		parameter<Eur_GJ> WarmtePrijs := BO/Warmtewet/WarmtePrijs;
 
-		parameter<Eur_GJ> WarmtePrijs := BCdata/Warmtewet/WarmtePrijs;
+		attribute<float64> BeschikbaarheidsFactor (BO) := float64(Classifications/WarmteOptie/kanGebiedsOptie[BO/WarmteOptie_rel]);
 
-		container impl: IsHidden = "True"
-		{
-			attribute<PlanRegio> PlanRegio_rel          (BebouwingsObject) := BCdata/PlanRegio_rel;
-			attribute<float64>   BeschikbaarheidsFactor (BebouwingsObject) := float64(Classifications/WarmteOptie/kanGebiedsOptie[WarmteAllocatie]);
-		}
-
-		attribute<nrAansl>        nrAanslWarmteDeelnemers      (PlanRegio) := sum(impl/BeschikbaarheidsFactor * BCdata/WarmteVraag/deelnemers/nrAansluitingen,    impl/PlanRegio_rel);
-		attribute<Units/kW>       CapaciteitWarmteDeelnemers   (PlanRegio) := sum(impl/BeschikbaarheidsFactor * BCdata/WarmteVraag/deelnemers/AansluitCapaciteit, impl/PlanRegio_rel);
-		attribute<nrAansl>        nrAansl_totaal               (PlanRegio) := sum(BCdata/RuimtelijkeVraagComponent/nrAansluitingen,                               impl/PlanRegio_rel);
-		attribute<Units/kW>       CapaciteitWarmte_totaal      (PlanRegio) := sum(BCdata/RuimtelijkeVraagComponent/AansluitCapaciteit/Warmte,                     impl/PlanRegio_rel);
-		attribute<Units/m2>       Oppervlak_Deelnemers         (PlanRegio) := sum(BCdata/RuimtelijkeVraagComponent/Oppervlakte * float64(BCdata/WarmteVraag/KanGebiedsOptie), impl/PlanRegio_rel);
-		attribute<Units/m2>       Oppervlak_allen              (PlanRegio) := sum(BCdata/RuimtelijkeVraagComponent/Oppervlakte, impl/PlanRegio_rel);
+		attribute<nrAansl>        nrAanslWarmteDeelnemers      (PR) := sum(BeschikbaarheidsFactor * BO/nrAansluitingen,           BO/PlanRegio_rel);
+		attribute<Units/kW>       CapaciteitWarmteDeelnemers   (PR) := sum(BeschikbaarheidsFactor * BO/AansluitCapaciteit/Warmte, BO/PlanRegio_rel);
+		attribute<Units/m2>       Oppervlak_Deelnemers         (PR) := sum(BeschikbaarheidsFactor * BO/Oppervlakte,               BO/PlanRegio_rel);
+		
+		attribute<nrAansl>        nrAansl_totaal               (PR) := sum(BO/nrAansluitingen,           BO/PlanRegio_rel);
+		attribute<Units/kW>       CapaciteitWarmte_totaal      (PR) := sum(BO/AansluitCapaciteit/Warmte, BO/PlanRegio_rel);
+		attribute<Units/m2>       Oppervlak_allen              (PR) := sum(BO/Oppervlakte,               BO/PlanRegio_rel);
+		
 		container Verbruik
 		{
-			attribute<Units/GJ_yr> deelnemers     (PlanRegio)        := sum(impl/BeschikbaarheidsFactor * BCdata/WarmteVraag/deelnemers/Verbruik, impl/PlanRegio_rel);
-			attribute<Units/GJ_yr> deelnemers_RV  (PlanRegio)        := sum(impl/BeschikbaarheidsFactor * BCdata/WarmteVraag/deelnemers/Verbruik_RV, impl/PlanRegio_rel);
-			attribute<Units/GJ_yr> deelnemers_WW  (PlanRegio)        := sum(impl/BeschikbaarheidsFactor * BCdata/WarmteVraag/deelnemers/Verbruik_WW, impl/PlanRegio_rel);
-			attribute<Units/GJ_yr> deelnemers_obj (BebouwingsObject) := BCdata/WarmteVraag/deelnemers/Verbruik;
-			attribute<Units/GJ_yr> alle           (PlanRegio)        := sum(impl/BeschikbaarheidsFactor * BCdata/WarmteVraag/alle/Verbruik, impl/PlanRegio_rel);
+			attribute<Units/GJ_yr> deelnemers_RV  (PR) := sum(BeschikbaarheidsFactor * BO/AandeelWarmteVraag * BO/Functioneel/Vj_RV, BO/PlanRegio_rel);
+			attribute<Units/GJ_yr> deelnemers_TW  (PR) := sum(BeschikbaarheidsFactor * BO/AandeelWarmteVraag * BO/Functioneel/Vj_TW, BO/PlanRegio_rel);
+			attribute<Units/GJ_yr> deelnemers     (PR) := deelnemers_RV + deelnemers_TW;
+			attribute<Units/GJ_yr> deelnemers_obj (BO) := BeschikbaarheidsFactor * BO/AandeelWarmteVraag * (BO/Functioneel/Vj_RV + BO/Functioneel/Vj_TW);
+			attribute<Units/GJ_yr> alle           (PR) := sum(BeschikbaarheidsFactor * (BO/Functioneel/Vj_RV + BO/Functioneel/Vj_TW), BO/PlanRegio_rel);
 		}
 		container WarmteVraag
 		{
-			attribute<Units/Eur_yr> deelnemers     (PlanRegio)        := WarmtePrijs * Verbruik/deelnemers, Source = "FO v7a F 8-10";
-			attribute<Units/Eur_yr> deelnemers_obj (BebouwingsObject) := WarmtePrijs * Verbruik/deelnemers_obj, Source = "FO v7a F 8-10";
-			attribute<Units/Eur_yr> alle           (PlanRegio)        := WarmtePrijs * Verbruik/alle, Source = "FO v7a F 8-10";
+			attribute<Units/Eur_yr> deelnemers    (PR) := WarmtePrijs * Verbruik/deelnemers, Source = "FO v7a F 8-10";
+			attribute<Units/Eur_yr> deelnemers_obj(BO) := WarmtePrijs * Verbruik/deelnemers_obj, Source = "FO v7a F 8-10";
+			attribute<Units/Eur_yr> alle          (PR) := WarmtePrijs * Verbruik/alle, Source = "FO v7a F 8-10";
 		}
 	}
 

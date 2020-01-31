@@ -9,33 +9,28 @@ template RegionaleRapportage
 	// begin case parameters
 	unit<uint32>               RapportageRegio;
 	parameter<RapportageRegio> RapportageRegio_sel;
-	container                  BebouwingscomponentGebiedsData;
-	parameter<string>          BebouwingscomponentNaam;
+	unit<uint32>               BO;
 	unit<uint8>                RapGroep;
 	parameter<string>          RapGroepNaam;
 	parameter<string>          ExportLabel;
-	unit<Float64>              QuantityUnit;
 	// end  case parameters
 	
-	parameter<string>          ReportRegioNaam           := RapportageRegio/Name[RapportageRegio_sel];
-	container                  BCdata                    := BebouwingscomponentGebiedsData/BCdata;
-	container                  RuimtelijkeVraagComponent := BebouwingscomponentGebiedsData/RuimtelijkeVraagComponent;
-	unit<uint32>               BebouwingsObject          := BebouwingscomponentGebiedsData/BebouwingsObject;
+	parameter<string>          ReportRegioNaam  := RapportageRegio/Name[RapportageRegio_sel];
 
-	attribute<RapportageRegio>                         PlanRegioRapportageRegio_rel           (Invoer/SpecifiekeInstellingen/PlanRegio) := ='PlanRegio/'+RapportageRegio/RegioNaam + '_rel';
-	attribute<Invoer/SpecifiekeInstellingen/PlanRegio> BebouwingscomponentPlanRegio_rel       (BebouwingsObject)                        := BCdata/PlanRegio_rel;
-	attribute<RapportageRegio>                         BebouwingscomponentRapportageRegio_rel (BebouwingsObject)                        := PlanRegioRapportageRegio_rel[ BebouwingscomponentPlanRegio_rel ];
-	attribute<RapGroep>                                BebouwingscomponentRapGroep_rel        (BebouwingsObject)                        := =RapGroepNaam ;
+	attribute<RapportageRegio> PlanRegio_RapportageRegio_rel          (Invoer/SpecifiekeInstellingen/PlanRegio) := ='PlanRegio/'+RapportageRegio/RegioNaam + '_rel';
+	attribute<RapportageRegio> RapportageRegio_rel (BO) := PlanRegio_RapportageRegio_rel[ BO/PlanRegio_rel ];
+	attribute<RapGroep>        RapGroep_rel        (BO) := =RapGroepNaam ;
 
 	parameter<string> ReportFolder := FolderInfo/OutputFolder+'/'+ReportRegioNaam;
 	
 	container impl: isHidden = "True"
 	{
-		unit<uint32> RegioSelectie := Subset(BebouwingscomponentRapportageRegio_rel == RapportageRegio_sel)
+		unit<uint32> RegioSelectie := Subset(RapportageRegio_rel == RapportageRegio_sel)
 		{
-			attribute<RapGroep> BCGroep_rel(RegioSelectie) := BebouwingscomponentRapGroep_rel[nr_OrgEntity];
+			attribute<RapGroep> BCGroep_rel(RegioSelectie) := RapGroep_rel[nr_OrgEntity];
 		}
-		attribute<QuantityUnit> Aantal (RapGroep) := sum(RuimtelijkeVraagComponent/NrModelUnits[RegioSelectie/nr_OrgEntity], RegioSelectie/BCGroep_rel);
+		attribute<nrAansl> nrAansluitingen(RapGroep) := sum(BO/nrAansluitingen[nr_OrgEntity], BCGroep_rel);
+		attribute<m2>      Oppervlakte    (RapGroep) := sum(BO/Oppervlakte    [nr_OrgEntity], BCGroep_rel);
 	}
 
 	#include<BebouwingsRapportage.dms>

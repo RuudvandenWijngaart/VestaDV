@@ -16,7 +16,7 @@ template BebouwingsComponentT
 	unit<uint32>  ModelObject;
 	attribute<bool> SchilSprong_sel(Classifications/SchilSprong);
 	container LocatieSpecifiekeOpties;
-	container VraagKentallen;
+	container VraagKentallenComponent;
 	unit<uint32>  PrevObject;
 
 	unit<uint8> PrijzenAardgas;
@@ -25,6 +25,9 @@ template BebouwingsComponentT
 	parameter<Ratio>  BTW_Factor;
 	parameter<Ratio>  BTW_Factor_gv;
 	// end of case parameters
+	
+	
+	parameter<Classifications/BebouwingsComponent> BC_rel := rlookup(BCname, Classifications/BebouwingsComponent/Name); // TODO: Laat dit de parameter zijn en zoek de rest op.
 	
 	container NcwRefs 
 	{
@@ -43,6 +46,8 @@ template BebouwingsComponentT
 	
 	unit<uint32>  BebouwingsObject := =IsNieuwbouw ? 'union/result' : 'BebouwingsObjectZonderNieuwbouw'
 	{
+		container BebouwingsComponent_UpRef := ..; // TODO: used sporadically, try to avoid this
+		container VraagKentallen := VraagKentallenComponent;
 		attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel (BebouwingsObject) := BebouwingsObject/buurt_rel;
 		attribute<ModelObject> Model_rel     (BebouwingsObject) := rlookup(BebouwingsObject/ModelObjectKey, ModelObject/ModelObjectKey), KeepData = "True";
 		attribute<PrevObject>  PrevObject_rel(BebouwingsObject) := rlookup(BebouwingsObject/code, PrevObject/code);
@@ -76,7 +81,7 @@ template BebouwingsComponentT
 		attribute<Ratio>      ResterendFactor := ResterendFactorBase * float64(IsDefined(PlanRegio_rel));
 		attribute<nrAansl>    nrAansluitingen := ResterendFactor * nrAansluitingen_i;
 		attribute<m2>         Oppervlakte     := ResterendFactor * Oppervlakte_i;
-		
+				
 		// TODO: Optimaliseer domein voor Niet woningen tbv specifiek BCcDomein
 		attribute<string>    BCc (.) :=
 			(BCname == 'BestaandeUtil' || BCname == 'NieuwBouwUtil'  ) ? 'u' :
@@ -218,7 +223,7 @@ template BebouwingsComponentT
 			}
 		}
 		
-		parameter<string> BcCode := rjoin(BcName, Classifications/BebouwingsComponent/Name, Classifications/BebouwingsComponent/BcCode);
+		parameter<string> BcCode := Classifications/BebouwingsComponent/BcCode[BC_rel];
 		unit<uint32> Installatie := Classifications/Installatie {
 			// TODO, MTA: remove const in merge wanneer void domain hier zal worden toegestaan, issue XXX.
 			attribute<EUR_asl> Ki_asl := =replace('(Ki_asl_min_@BC * Schuiven/KostenMin + Ki_asl_max_@BC * Schuiven/KostenMax)* merge(LeerCurve_rel, Float64, '+AsItemList('const(LeerCurves/'+Classifications/LeerCurves/Name+'/Curve, .)')+')', '@BC', BcCode);
@@ -401,23 +406,6 @@ template BebouwingsComponentT
 		attribute<Eur> Ki_Totaal            (BebouwingsObject) := Ki_LokaleOpwekking + Ki_GebouwVerbetering;
 	}
 	
-	container Warmtewet
-	{
-		unit<uint32> GasVerbruikers := subset(results/Aansluitingen/Gnet > 0.0)
-		{
-			attribute<GJ_yr> Vj_gas    := Results/Metervraag/Vj_gas[nr_OrgEntity];
-			attribute<GJ_yr> Vj_warmte := Results/Functioneel/Vj_RV[nr_OrgEntity] + Results/Functioneel/Vj_TW[nr_OrgEntity];
-			//TODO bij Vj_warmte aftrek eventuele installaties die al een deel van de vraag vullen binnen deze groep (bijv Zonneboilers)
-		}
-		parameter<float64> PrijsFactor_impl :=  sum(GasVerbruikers/Vj_gas) / sum(GasVerbruikers/Vj_warmte) * Voorkeuren/MinderDanAndersFactor;
-		parameter<float64> PrijsFactor_corr :=  MakeDefined(PrijsFactor_impl, 1.25);
-		parameter<float64> PrijsFactor      :=  = 'BebouwingsComponenten/'+rjoin(BCname, Classifications/BebouwingsComponent/name, Classifications/BebouwingsComponent/name[Classifications/BebouwingsComponent/Warmtewet_BC_rel])+'/Warmtewet/PrijsFactor_corr';
-
-		parameter<Eur_GJ> WarmtePrijs := = Voorkeuren/IsVasteWarmtePrijs 
-			? 'Voorkeuren/VasteWarmtePrijs'
-			: 'PrijsFactor * PrijzenAardgas/KGJ_eindgebruik_excl[classify(0[GJ_yr], PrijzenAardgas/ClassBreak)]';
-	}
-		
 	unit<uint32> Results := BebouwingsObjectMetGebouwOptie
 	{
 		container BemeterdeGebouwInput_rel :=  for_each_nedv(Classifications/Product/Name
@@ -442,34 +430,69 @@ template BebouwingsComponentT
 			&&	BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/e
 			&&	BemeterdeGebouwInput_rel/TWp == Classifications/BemeterdeGebouwInput/V/e;
 			
-			attribute<nrAansl> Gnet          (BebouwingsObject) := float64(Metervraag/Vj_gas > 0.0[GJ_yr]) * RuimtelijkeVraagComponent/nraansluitingen;
-			attribute<nrAansl> H2net         (BebouwingsObject) := float64(Metervraag/Vj_H2  > 0.0[GJ_yr]) * RuimtelijkeVraagComponent/nraansluitingen;
-			attribute<nrAansl> Enet_app      (BebouwingsObject) := float64(!IsHybride && !IsAllElectric)   * RuimtelijkeVraagComponent/nraansluitingen;  // alleen apparatuur
-			attribute<nrAansl> Enet_hwp      (BebouwingsObject) := float64(IsHybride)                      * RuimtelijkeVraagComponent/nraansluitingen;  // apparatuur en hybride systeem
-			attribute<nrAansl> Enet_ewp      (BebouwingsObject) := float64(IsAllElectric)                  * RuimtelijkeVraagComponent/nraansluitingen;  // apparatuur en volledig elektrisch verwarmd
+			attribute<nrAansl> Gnet          (BebouwingsObject) := float64(Metervraag/Vj_gas > 0.0[GJ_yr]) * nrAansluitingen;
+			attribute<nrAansl> H2net         (BebouwingsObject) := float64(Metervraag/Vj_H2  > 0.0[GJ_yr]) * nrAansluitingen;
+			attribute<nrAansl> Enet_app      (BebouwingsObject) := float64(!IsHybride && !IsAllElectric)   * nrAansluitingen;  // alleen apparatuur
+			attribute<nrAansl> Enet_hwp      (BebouwingsObject) := float64(IsHybride)                      * nrAansluitingen;  // apparatuur en hybride systeem
+			attribute<nrAansl> Enet_ewp      (BebouwingsObject) := float64(IsAllElectric)                  * nrAansluitingen;  // apparatuur en volledig elektrisch verwarmd
 		}
 
 		container Functioneel := BebouwingsObject/Functioneel
 		{
-			attribute<GJ_yr> Vj_RV   (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/RV')+')';
-			attribute<GJ_yr> Vj_TW   (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/TW')+')';
-			attribute<GJ_yr> Vj_K    (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/K')+')';
-			attribute<GJ_yr> Vj_Vent (BebouwingsObject) := Float64(SchilLabel_rel <= Classifications/SchilLabel/V/B) * Ventilatie;
-			attribute<GJ_yr> Vj_App  (BebouwingsObject) := Functioneel/EA;
+			attribute<GJ_yr> Vj_RV    (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/RV')+')';
+			attribute<GJ_yr> Vj_TW    (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/TW')+')';
+			attribute<GJ_yr> Vj_Warmte(BebouwingsObject) := Vj_RV + Vj_TW;
+			attribute<GJ_yr> Vj_K     (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/K')+')';
+			attribute<GJ_yr> Vj_Vent  (BebouwingsObject) := Float64(SchilLabel_rel <= Classifications/SchilLabel/V/B) * Ventilatie;
+			attribute<GJ_yr> Vj_App   (BebouwingsObject) := Functioneel/EA;
 		}
 		container Metervraag := for_each_nedv('Vj_'+Classifications/BemeterdeGebouwInput/Name
 			,	replace('merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/metervraag/@I')+')', '@I', Classifications/BemeterdeGebouwInput/Name)
 			,	BebouwingsObject, GJ_yr
 			);
 			
+		container Opbrengsten
+		{
+			attribute<float64> AansluitTarief (BebouwingsObject) := 
+				  (VraagKentallen/Opbrengsten/AansluitTarief_min[BebouwingsType] * Schuiven/OpbrMin
+				+  VraagKentallen/Opbrengsten/AansluitTarief_max[BebouwingsType] * Schuiven/OpbrMax);
+				
+			parameter<Eur_yr_Aansl>	VastRechtMT :=
+				( VraagKentallen/Opbrengsten/VastRechtMT_Min * Schuiven/OpbrMin 
+				+ VraagKentallen/Opbrengsten/VastRechtMT_Max * Schuiven/OpbrMax);
+			parameter<Eur_yr_Aansl>	VastRechtLT :=
+				( VraagKentallen/Opbrengsten/VastRechtLT_Min * Schuiven/OpbrMin 
+				+ VraagKentallen/Opbrengsten/VastRechtLT_Max * Schuiven/OpbrMax);
+			parameter<Eur_yr_Aansl>	VastRechtK  :=
+				( VraagKentallen/Opbrengsten/VastRechtK_Min  * Schuiven/OpbrMin 
+				+ VraagKentallen/Opbrengsten/VastRechtK_Max  * Schuiven/OpbrMax);
+
+
+			attribute<Eur>	AansluitBijdrageG  (BebouwingsObject) := nrAansluitingen * Kengetallen/Infra/AansluitTarief_bw_g, Descr = "Aansluitbijdrage voor nieuwe aansluiting op het gasnet";
+			attribute<Eur>	AansluitBijdrageE  (BebouwingsObject) := nrAansluitingen * Kengetallen/Infra/AansluitTarief_bw_e, Descr = "Aansluitbijdrage voor nieuwe aansluiting op het elektriciteitsnetnet";
+//REMOVE, varieert per GebiedsOptie			attribute<Eur>	AansluitBijdrageD  (BebouwingsObject) := AansluitTarief  * WarmteVraag/deelnemers/nrAansluitingen,                          Descr = "Aansluitbijdrage voor nieuwe aansluiting op warmtenetten, gecorrigeerd voor deelname";
+			attribute<Eur>	AansluitBijdrageT  (BebouwingsObject) := AansluitTarief  * nrAansluitingen,                       Descr = "Aansluitbijdrage voor nieuwe aansluiting op warmtenetten, niet gecorrigeerd voor deelname";
+			
+			attribute<Eur_yr>	VastRechtBijdrageG (BebouwingsObject) := nrAansluitingen * Kengetallen/Infra/JaarlijksVast_g, Descr = "VastRechtBijdrage voor aansluiting op het gasnet";
+			attribute<Eur_yr>	VastRechtBijdrageE (BebouwingsObject) := nrAansluitingen * Kengetallen/Infra/JaarlijksVast_e, Descr = "VastRechtBijdrage voor aansluiting op het elektriciteitsnetnet";
+//REMOVE, varieert per GebiedsOptie			attribute<Eur_yr>	VastRechtMT_D      (BebouwingsObject) := WarmteVraag/deelnemers/nrAansluitingen    * VastRechtMT,                       Descr = "VastRechtBijdrage voor aansluiting op warmtenetten, gecorrigeerd voor deelname";
+			attribute<Eur_yr>	VastRechtMT_T      (BebouwingsObject) := BebouwingsObject/nrAansluitingen * VastRechtMT,                       Descr = "VastRechtBijdrage voor aansluiting op warmtenetten, niet gecorrigeerd voor deelname";
+//REMOVE, varieert per GebiedsOptie			attribute<Eur_yr>	VastRechtLT_D      (BebouwingsObject) := WarmteVraag/deelnemers/nrAansluitingen    * VastRechtLT,                       Descr = "VastRechtBijdrage voor aansluiting op warmtenetten, gecorrigeerd voor deelname";
+			attribute<Eur_yr>	VastRechtLT_T      (BebouwingsObject) := BebouwingsObject/nrAansluitingen * VastRechtLT,                       Descr = "VastRechtBijdrage voor aansluiting op warmtenetten, niet gecorrigeerd voor deelname";
+//REMOVE, varieert per GebiedsOptie			attribute<Eur_yr>	VastRechtK_D       (BebouwingsObject) := WarmteVraag/deelnemers/nrAansluitingen    * VastRechtK,                        Descr = "VastRechtBijdrage voor aansluiting op warmtenetten, gecorrigeerd voor deelname";
+			attribute<Eur_yr>	VastRechtK_T       (BebouwingsObject) := nrAansluitingen * VastRechtK,                        Descr = "VastRechtBijdrage voor aansluiting op warmtenetten, niet gecorrigeerd voor deelname";
+			
+			attribute<Eur_yr>	HeffingskortingE   (BebouwingsObject) := SpecifiekeInstellingen/Beleid/Heffingskorting * nrAansluitingen;
+		}
+			
 		container Eenmalig
 		{
 			//Aansluitbijdrages
-			attribute<Eur>   Ki_Asl_Enet (BebouwingsObject) :=  BC_kentallen/Ki_Aansl_e_asl * RuimtelijkeVraagComponent/nraansluitingen
-															+   BC_kentallen/Ki_Aansl_e_opp * RuimtelijkeVraagComponent/oppervlakte;
+			attribute<Eur>   Ki_Asl_Enet (BebouwingsObject) :=  BC_kentallen/Ki_Aansl_e_asl * nraansluitingen
+															+   BC_kentallen/Ki_Aansl_e_opp * oppervlakte;
 			attribute<Eur>   Ki_Asl_Gnet (BebouwingsObject) :=  Metervraag/Vj_gas <= 0.0[GJ_yr] ? 0.0[Eur] :
-																BC_kentallen/Ki_Aansl_g_asl * RuimtelijkeVraagComponent/nraansluitingen
-															+   BC_kentallen/Ki_Aansl_g_opp * RuimtelijkeVraagComponent/oppervlakte;
+																BC_kentallen/Ki_Aansl_g_asl * nraansluitingen
+															+   BC_kentallen/Ki_Aansl_g_opp * oppervlakte;
 		
 			//Investeringen
 			attribute<Eur>   Ki30_LO (BebouwingsObject) := ='merge(BesteGebouwOptie, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki30_LO')+')';
@@ -539,5 +562,23 @@ template BebouwingsComponentT
 			attribute<Eur_yr> Kj_OH_LO   (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject); //TODO Maarten
 			attribute<Eur_yr> Kj_Adm_LO  (BebouwingsObject) := const(0.0 [Eur_yr], BebouwingsObject); //TODO Maarten
 		}
+		
+		container Warmtewet
+		{
+			unit<uint32> GasVerbruikers := subset(results/Aansluitingen/Gnet > 0.0)
+			{
+				attribute<GJ_yr> Vj_gas    := Results/Metervraag/Vj_gas[nr_OrgEntity];
+				attribute<GJ_yr> Vj_warmte := Results/Functioneel/Vj_RV[nr_OrgEntity] + Results/Functioneel/Vj_TW[nr_OrgEntity];
+				//TODO bij Vj_warmte aftrek eventuele installaties die al een deel van de vraag vullen binnen deze groep (bijv Zonneboilers)
+			}
+			parameter<float64> PrijsFactor_impl :=  sum(GasVerbruikers/Vj_gas) / sum(GasVerbruikers/Vj_warmte) * Voorkeuren/MinderDanAndersFactor;
+			parameter<float64> PrijsFactor_corr :=  MakeDefined(PrijsFactor_impl, 1.25);
+			parameter<float64> PrijsFactor      :=  = Classifications/BebouwingsComponent/name[Classifications/BebouwingsComponent/Warmtewet_BC_rel[BC_rel]]+'/results/Warmtewet/PrijsFactor_corr';
+
+			parameter<Eur_GJ> WarmtePrijs := = Voorkeuren/IsVasteWarmtePrijs 
+				? 'Voorkeuren/VasteWarmtePrijs'
+				: 'PrijsFactor * PrijzenAardgas/KGJ_eindgebruik_excl[classify(0[GJ_yr], PrijzenAardgas/ClassBreak)]';
+		}
+		
 	}
 }
