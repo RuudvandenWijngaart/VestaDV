@@ -17,7 +17,7 @@ template BCdata
 	attribute<bool> SchilSprong_sel(Classifications/SchilSprong);
 	container LocatieSpecifiekeOpties;
 	container VraagKentallen;
-	container StartingStateComponent;
+	unit<uint32>  PrevObject;
 
 	unit<uint8> PrijzenAardgas;
 
@@ -37,32 +37,30 @@ template BCdata
 
 	unit<uint8> PrijzenElektriciteit := Prijzen/Elektriciteit/Staffel;
 
-	container union := =IsNieuwbouw ? 'CalculationSchemes/BebouwingsOperaties/union(StartingStateComponent/BebouwingsObject, BebouwingsObjectZonderNieuwbouw)' : '..';
-	
-	unit<uint32>  BebouwingsObject := =IsNieuwbouw ? 'union/result' : 'BebouwingsObjectZonderNieuwbouw';
-	unit<uint32>  PrevObject           := StartingStateComponent/BebouwingsObject;
 	unit<uint8>   BebouwingsTypeDomein := BebouwingsObject/BebouwingsTypeDomein;
-
-	attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel (BebouwingsObject) := BebouwingsObject/buurt_rel;
-	attribute<ModelObject> Model_rel        (BebouwingsObject) := rlookup(BebouwingsObject/ModelObjectKey, ModelObject/ModelObjectKey), KeepData = "True";
-	attribute<PrevObject>  StartingState_rel(BebouwingsObject) := rlookup(BebouwingsObject/code, PrevObject/code);
 	
-	container beginState {
+	container union := =IsNieuwbouw ? 'CalculationSchemes/BebouwingsOperaties/union(PrevObject, BebouwingsObjectZonderNieuwbouw)' : '..';
 	
-		unit<uint32>  AfnameGebied         := StateVoorAllocatie/AfnameGebied;
-		attribute<Classifications/SchilLabel>  SchilLabel_rel  (BebouwingsObject) := StartingStateComponent/SchilLabel_rel [StartingState_rel];
-		attribute<Classifications/WarmteOptie> WarmteOptie_rel (BebouwingsObject) := StartingStateComponent/WarmteOptie_rel[StartingState_rel];
+	unit<uint32>  BebouwingsObject := =IsNieuwbouw ? 'union/result' : 'BebouwingsObjectZonderNieuwbouw'
+	{
+		attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel (BebouwingsObject) := BebouwingsObject/buurt_rel;
+		attribute<ModelObject> Model_rel     (BebouwingsObject) := rlookup(BebouwingsObject/ModelObjectKey, ModelObject/ModelObjectKey), KeepData = "True";
+		attribute<PrevObject>  PrevObject_rel(BebouwingsObject) := rlookup(BebouwingsObject/code, PrevObject/code);
+	
+		unit<uint32>  AfnameGebied         := PrevState/AfnameGebied;
+		attribute<Classifications/SchilLabel>  SchilLabel_rel  (BebouwingsObject) := PrevObject/SchilLabel_rel [PrevObject_rel];
+		attribute<Classifications/WarmteOptie> WarmteOptie_rel (BebouwingsObject) := PrevObject/WarmteOptie_rel[PrevObject_rel];
 				
 		container InstallatiePerProduct := for_each_nedv(Classifications/Product/Name
-		,	'StartingStateComponent/InstallatiePerProduct/'+Classifications/Product/Name+'[StartingState_rel]'
+		,	'PrevObject/InstallatiePerProduct/'+Classifications/Product/Name+'[PrevObject_rel]'
 		,	BebouwingsObject, Classifications/Installatie
 		);
 		
-		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel(BebouwingsObject) := StartingStateComponent/AfgifteSysteem_rel[StartingState_rel];	
+		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel(BebouwingsObject) := PrevObject/AfgifteSysteem_rel[PrevObject_rel];	
 		
-		attribute<AfnameGebied>  AfnameGebied_rel (BebouwingsObject):= StartingStateComponent/AfnameGebied_rel[StartingState_rel];	
+		attribute<AfnameGebied>  AfnameGebied_rel (BebouwingsObject):= PrevObject/AfnameGebied_rel[PrevObject_rel];	
 		
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel (BebouwingsObject) := StartingStateComponent/GebouwOptie_rel[StartingState_rel]; // REMOVE, OBSOLETE, vervangen door Schillabel_rel, InstallatiePerProduct en GebiedsOptie
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel (BebouwingsObject) := PrevObject/GebouwOptie_rel[PrevObject_rel]; // REMOVE, OBSOLETE, vervangen door Schillabel_rel, InstallatiePerProduct en GebiedsOptie
 	}
 
 	unit<uint32> RuimtelijkeVraagComponent := BebouwingsObject
@@ -77,8 +75,6 @@ template BCdata
 		attribute<Ratio>      ResterendFactor := ResterendFactorBase * float64(IsDefined(PlanRegio_rel));
 		attribute<nrAansl>    nrAansluitingen := ResterendFactor * nrAansluitingen_i;
 		attribute<m2>         Oppervlakte     := ResterendFactor * Oppervlakte_i;
-		
-		attribute<nrAansl>   nrAansluitingen_per_PlanRegio (Invoer/SpecifiekeInstellingen/PlanRegio) := sum(nrAansluitingen, planregio_rel);
 		
 		// TODO: Optimaliseer domein voor Niet woningen tbv specifiek BCcDomein
 		attribute<string>    BCc (.) :=
@@ -258,11 +254,11 @@ template BCdata
 	template DoelLabelT {
 		parameter<Classifications/DoelLabel_NaSprong> DoelLabel_rel;
 		
-		attribute<Classifications/SchilLabel> Van_rel(BebouwingsObject) := BeginState/schillabel_rel;
+		attribute<Classifications/SchilLabel> Van_rel(BebouwingsObject) := BebouwingsObject/schillabel_rel;
 		parameter<Classifications/SchilLabel> Naar_rel                  := Classifications/DoelLabel_NaSprong/SchilLabel_rel[DoelLabel_rel];
 		
 		attribute<VerbruiksOpties/SchilSprong_set>     SchilSprong_rel    (BebouwingsObject) := rlookup(combine_data(Classifications/SchilSprongCode, Van_rel, Naar_rel), VerbruiksOpties/SchilSprong_set/SchilSprongCode_rel);
-		attribute<VerbruiksOpties/SchilSprong_set/xMO> SchilSprong_xMO_rel(BebouwingsObject) := combine_data(VerbruiksOpties/schilsprong_set/xMO, SchilSprong_rel, Model_rel);
+		attribute<VerbruiksOpties/SchilSprong_set/xMO> SchilSprong_xMO_rel(BebouwingsObject) := combine_data(VerbruiksOpties/schilsprong_set/xMO, SchilSprong_rel, BebouwingsObject/Model_rel);
 		
 		attribute<EUR> Ki_GV (BebouwingsObject) := MakeDefined(
 			VerbruiksOpties/schilsprong_set/xMO/Ki_asl[SchilSprong_xMO_rel] * RuimtelijkeVraagComponent/nrAansluitingen +
@@ -277,6 +273,7 @@ template BCdata
 		}
 	}
 	
+	// TODO: verplaats naar templates.
 	template GebouwOptieT {
 		// Begin case parameters
 		parameter<Classifications/GebouwOptie> GebouwOptie_rel;
@@ -292,17 +289,18 @@ template BCdata
 		parameter<bool> SomsSprong   := (DoelLabel_rel != Classifications/DoelLabel/V/geen);
 		parameter<string> SprongSuffix := AltijdSprong ? '[0[SchilLabelDomain]]' : '';
 		unit<uint32> SchilLabelDomain := =AltijdSprong ? 'range(UInt32, 0, 1)' : 'BebouwingsObject';
+		
 		attribute<Classifications/SchilLabel > SchilLabel_rel(SchilLabelDomain) := 
 			= AltijdSprong ? 'union_data(SchilLabelDomain, SchilLabel_rel_formeel)'
-			: SomsSprong   ? 'min_elem(BeginState/schillabel_rel, SchilLabel_rel_formeel)'
-			:                'BeginState/schillabel_rel'
+			: SomsSprong   ? 'min_elem(BebouwingsObject/schillabel_rel, SchilLabel_rel_formeel)'
+			:                'BebouwingsObject/schillabel_rel'
 			;
 		
 		// InstallatiePerProduct geeft per BebouwingsObject of per SchilLabel voor ieder Product de te kiezen of al aanwezige installatie
 		container InstallatiePerProduct := for_each_nedv(Classifications/Product/Name
 		,   Installatie_rel != Classifications/Installatie/V/geen 
 			? 'const(Classifications/Installatie/V/' + Classifications/Installatie/Name[Installatie_rel] + ', SchilLabelDomain)' 
-			: 'beginState/InstallatiePerProduct/' + Classifications/Product/Name
+			: 'bebouwingsObject/InstallatiePerProduct/' + Classifications/Product/Name
 		,	SchilLabelDomain, Classifications/Installatie
 		);
 
@@ -367,7 +365,7 @@ template BCdata
 		attribute<bool> LTAS_vereist(BebouwingsObject) := 
 			Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVb] == Classifications/AfgifteSysteem/V/LTAS
 		||	Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVp] == Classifications/AfgifteSysteem/V/LTAS;
-		attribute<bool> LTAS_aanwezig(BebouwingsObject) := BeginState/AfgifteSysteem_rel == Classifications/AfgifteSysteem/V/LTAS;
+		attribute<bool> LTAS_aanwezig(BebouwingsObject) := bebouwingsObject/AfgifteSysteem_rel == Classifications/AfgifteSysteem/V/LTAS;
 		
 		attribute<EUR   > Ki_LTAS   (BebouwingsObject) := (LTAS_vereist && not(LTAS_aanwezig))
 			?	(RuimtelijkeVraagComponent/IsHoogbouw ? BC_kentallen/Ki_LTAS_h_asl : BC_kentallen/Ki_LTAS_l_asl) * RuimtelijkeVraagComponent/nrAansluitingen
@@ -573,20 +571,28 @@ template BCdata
 	container GebouwOpties := for_each_ne(GebouwOptie/Name, 'GebouwOptieT(Classifications/GebouwOptie/V/'+GebouwOptie/Name+', '+Quote(GebouwOptie/Criterium_expr)+')');
 	
  	attribute<GebouwOptie> BesteGebouwOptie(BebouwingsObject):= =(#GebouwOptie == 1)? 'const(0[GebouwOptie],BebouwingsObject)' : 'argmin('+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/kosten_or_undefined')+')[GebouwOptie]';
-	
-	attribute<Classifications/SchilLabel> SchilLabel_rel(BebouwingsObject) := ='merge(BesteGebouwOptie, Classifications/SchilLabel, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/SchilLabel_rel')+')';
-	container InstallatiePerProduct := for_each_nedv(Classifications/Product/Name
-		,	replace('merge(BesteGebouwOptie, Classifications/Installatie, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/InstallatiePerProduct/@P')+')', '@P', Classifications/Product/Name)
-		,	BebouwingsObject, Classifications/Installatie
-		);
-	
-	
  	attribute<Classifications/WarmteOptie> WarmteOptie_res_rel(BebouwingsObject) := Classifications/GebouwOptie/WarmteOptie_rel[GebouwOptie/nr_OrgEntity[BesteGebouwOptie]];
+	attribute<bool> LTAS_vereist (BebouwingsObject) := ='merge(BesteGebouwOptie, bool, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/LTAS_vereist')+')';		
+	
+	unit<uint32> BebouwingsObjectMetGebouwOptie := BebouwingsObject
+	{
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel := replace_value(BesteGebouwOptie, Classifications/GebouwOptie/V/geen, BebouwingsObject/GebouwOptie_rel);
+		attribute<Classifications/WarmteOptie> WarmteOptie_rel := 
+			Classifications/WarmteOptie/IsGebiedsOptie[BebouwingsObject/WarmteOptie_rel] || (WarmteOptie_res_rel == Classifications/WarmteOptie/V/geen)
+			?	BebouwingsObject/WarmteOptie_rel
+			:	WarmteOptie_res_rel;
 		
- 	attribute<Classifications/WarmteOptie> WarmteOptie_rel(BebouwingsObject) := 
-		Classifications/WarmteOptie/IsGebiedsOptie[beginState/WarmteOptie_rel] || (WarmteOptie_res_rel == Classifications/WarmteOptie/V/geen)
-		?	beginState/WarmteOptie_rel
-		:	WarmteOptie_res_rel;
+		attribute<Classifications/SchilLabel> SchilLabel_rel := ='merge(BesteGebouwOptie, Classifications/SchilLabel, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/SchilLabel_rel')+')';
+		container InstallatiePerProduct := for_each_nedv(Classifications/Product/Name
+			,	replace('merge(BesteGebouwOptie, Classifications/Installatie, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/InstallatiePerProduct/@P')+')', '@P', Classifications/Product/Name)
+			,	., Classifications/Installatie
+			);
+			
+		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel (BebouwingsObject) := LTAS_vereist ? Classifications/AfgifteSysteem/V/LTAS : BebouwingsObject/AfgifteSysteem_rel;
+			
+		// Extra info
+		attribute<string>	WarmteOptie		(BebouwingsObject)	:=	Classifications/WarmteOptie/name[WarmteOptie_rel];
+	}
 	
 	container statistics {
 		attribute<EUR> Ki_lowest_value  (BebouwingsObject) := ='min_elem('+AsItemList('GebouwOpties/'+GebouwOptie/Name+'kosten_j')+')';
@@ -604,8 +610,8 @@ template BCdata
 		}
 		container org_capaciteit
 		{
-			attribute<Ratio> Zon_PV     (BebouwingsObject) := MakeDefined(StartingStateComponent/OpwekkingsOpties/capaciteit/Zon_PV     [StartingState_rel], 0[Ratio]);
-			attribute<Ratio> ZonneBoiler(BebouwingsObject) := MakeDefined(StartingStateComponent/OpwekkingsOpties/capaciteit/ZonneBoiler[StartingState_rel], 0[Ratio]);
+			attribute<Ratio> Zon_PV     (BebouwingsObject) := MakeDefined(PrevObject/OpwekkingsOpties/capaciteit/Zon_PV     [PrevObject_rel], 0[Ratio]);
+			attribute<Ratio> ZonneBoiler(BebouwingsObject) := MakeDefined(PrevObject/OpwekkingsOpties/capaciteit/ZonneBoiler[PrevObject_rel], 0[Ratio]);
 		}
 		container investering
 		{
@@ -644,9 +650,9 @@ template BCdata
 									BebouwingsTypeDomein);
 	container SchilLabel
 	{
-		attribute<Classifications/SchilLabel> LastValue    (BebouwingsObject) := StartingStateComponent/SchilLabel_rel[StartingState_rel];
+		attribute<Classifications/SchilLabel> LastValue    (BebouwingsObject) := PrevObject/SchilLabel_rel[PrevObject_rel];
 		attribute<Classifications/SchilLabel> CurrValue    (BebouwingsObject) := Sprongen/NaarEnergieLabel;
-		attribute<bool>                       WasChanged   (BebouwingsObject) := StartingStateComponent/EnergieLabel/IsChanged[StartingState_rel];
+		attribute<bool>                       WasChanged   (BebouwingsObject) := PrevObject/EnergieLabel/IsChanged[PrevObject_rel];
 		attribute<bool>                       IsChangedNow (BebouwingsObject) := LastValue != CurrValue;
 		attribute<bool>                       IsChanged    (BebouwingsObject) := WasChanged || IsChangedNow;
 	}
@@ -664,13 +670,11 @@ template BCdata
 		attribute<Ratio> hWP  (BebouwingsObject) := min_elem(OpwekkingsOpties/Capaciteit/hWP,  1.0 - EWV - eWP -mWKK);
 	}
 	
-	attribute<Classifications/WarmteOptie> WarmteAllocatie(BebouwingsObject) := WarmteOptie_rel; // REMOVE, OBOLETE: gebruik WamteOptie_rel direct.
 	// voor info over gebruik hWP etc voor RW gelieve de resulterende InstallatiePerProduct te raadplegen
 	
 	attribute<Eur_yr> KoudeAllocatie(BebouwingsObject) := const( 0[Eur_yr], BebouwingsObject);
 	attribute<Eur_yr> Om_Comfort    (BebouwingsObject) := const( 0[Eur_yr], BebouwingsObject); //placeholders om statenaallocatie te kunnen initialiseren, todo: remove
 	
-	attribute<string>	WarmteOptie		(BebouwingsObject)	:=	Classifications/WarmteOptie/name[WarmteAllocatie];
 	
 	container Kosten
 	{
@@ -692,15 +696,18 @@ template BCdata
 		attribute<Eur> Ki_LokaleOpwekking15 (BebouwingsObject) := Ki_mWKK + Ki_hWP + fractie_afschrijftermijn_15jaar * Ki_eWP;
 		
 		attribute<Eur> Ki_GebouwVerbetering (BebouwingsObject) := RuimtelijkeVraagComponent/nrModelUnits * Sprongen/Ki_gv; // cumulatief
-		attribute<Eur_yr> Kj_gv_incentive   (BebouwingsObject) := Sprongen/Incentive_eigenaar_excl + StartingStateComponent/Kosten/Kj_gv_incentive[StartingState_rel];
+		attribute<Eur_yr> Kj_gv_incentive   (BebouwingsObject) := Sprongen/Incentive_eigenaar_excl + PrevObject/Kosten/Kj_gv_incentive[PrevObject_rel];
 
 		attribute<Eur> Ki_LokaleOpwekking   (BebouwingsObject) := Ki_LokaleOpwekking30 + Ki_LokaleOpwekking15;
 		attribute<Eur> Ki_Totaal            (BebouwingsObject) := Ki_LokaleOpwekking + Ki_GebouwVerbetering;
 	}
 	
-	container WarmteVraag // TODO: heroverwegen per gebiedsoptie. Kijk eerst waar dit gebruikt wordt.
+	// TODO: heroverwegen per gebiedsoptie. Kijk eerst waar dit gebruikt wordt.
+	// TODO: verplaats naar templates.
+	template WarmteVraagT 
 	{
-		attribute<bool> KanGebiedsoptie (BebouwingsObject) := Classifications/GebouwOptie/kanGebiedsOptie[Results/CurrentOptie];
+		unit<uint32> BebouwingsObject;
+		attribute<bool> KanGebiedsoptie (BebouwingsObject) := Classifications/WamteOptie/kanGebiedsOptie[BebouwingsObject/WarmteOptie_rel];
 		
 		container deelnemers
 		{
@@ -737,20 +744,18 @@ template BCdata
 			? 'Voorkeuren/VasteWarmtePrijs'
 			: 'PrijsFactor * PrijzenAardgas/KGJ_eindgebruik_excl[classify(0[GJ_yr], PrijzenAardgas/ClassBreak)]';
 	}
-	
-	container Results
+		
+	unit<uint32> Results := BebouwingsObjectMetGebouwOptie
 	{
-	
-		attribute<Classifications/GebouwOptie> CurrentOptie (BebouwingsObject) := GebouwOptie/nr_OrgEntity[BesteGebouwOptie];
+		// TODO SUBST begin
+		attribute<Classifications/GebouwOptie> CurrentOptie (BebouwingsObject) := GebouwOptie_rel;
 		attribute<Classifications/Schillabel > CurrentLabel (BebouwingsObject) := SchilLabel_rel;
-		
-		attribute<bool> LTAS_vereist (BebouwingsObject) := ='merge(BesteGebouwOptie, bool, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/LTAS_vereist')+')';		
-		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel (BebouwingsObject) := LTAS_vereist ? Classifications/AfgifteSysteem/V/LTAS : BeginState/AfgifteSysteem_rel;
-		
-		container Installaties := InstallatiePerProduct
+				
+		container Installaties := BebouwingsObjectMetGebouwOptie/InstallatiePerProduct
 		{
-			attribute<Classifications/Installatie> Dak (BebouwingsObject) := const(Classifications/Installatie/V/VR, BebouwingsObject); //TODO Maarten
+			attribute<Classifications/Installatie> Dak (BebouwingsObject) := const(Classifications/Installatie/V/geen, BebouwingsObject); //TODO Maarten
 		}
+		// TODO SUBST end
 		
 		container BemeterdeGebouwInput_rel :=  for_each_nedv(Classifications/Product/Name
 			,	replace('merge(CurrentOptie, Classifications/BemeterdeGebouwInput, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/BemeterdeGebouwInput_rel/@P')+')', '@P', Classifications/Product/Name)
@@ -780,6 +785,7 @@ template BCdata
 			attribute<nrAansl> Enet_hwp      (BebouwingsObject) := float64(IsHybride)                      * RuimtelijkeVraagComponent/nraansluitingen;  // apparatuur en hybride systeem
 			attribute<nrAansl> Enet_ewp      (BebouwingsObject) := float64(IsAllElectric)                  * RuimtelijkeVraagComponent/nraansluitingen;  // apparatuur en volledig elektrisch verwarmd
 		}
+
 		container Functioneel
 		{
 			attribute<GJ_yr> Vj_RV   (BebouwingsObject) := ='merge(CurrentOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/RV')+')';

@@ -7,53 +7,54 @@
 template StartingStateComponent
 {
 	// begin case parameters
-	unit<uint32>  BebouwingsObject;
+	unit<uint32>  BebouwingsObjectSrc;
 	unit<uint32> ModelObject;
 	parameter<Classifications/BebouwingsComponent> BebouwingsComponent_rel;
 	// end of case parameters	
 	
-	unit<uint32> AfnameGebied := .../AfnameGebied;
-	
-	attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel  (BebouwingsObject) := BebouwingsObject/buurt_rel;
-	attribute<ModelObject>                             ModelObject_rel(BebouwingsObject) := rlookup(BebouwingsObject/ModelObjectKey, ModelObject/ModelObjectKey);
+	unit<uint32>  results := BebouwingsObjectSrc
+	{	
+		// =============== ongewijzigde attributen uniform voor alle BC
+		attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel   := BebouwingsObjectSrc/buurt_rel;
+		attribute<ModelObject>                             ModelObject_rel := rlookup(BebouwingsObjectSrc/ModelObjectKey, ModelObject/ModelObjectKey);
 
-	attribute<Classifications/SchilLabel>  SchilLabel_rel  (BebouwingsObject) := =(BebouwingsComponent_rel == Classifications/BebouwingsComponent/V/BestaandeWoning) 
-		? 'MakeDefined(BebouwingsObject/SchilLabel_rel, ModelObject/SchilLabel_rel[ ModelObject_rel])' 
-		: 'ModelObject/SchilLabel_rel[ ModelObject_rel]';
+		// =============== attributen die per rekenstap kunnen wijzigen door toepassing van GebouwOpties		
+		attribute<Classifications/SchilLabel>  SchilLabel_rel := =(BebouwingsComponent_rel == Classifications/BebouwingsComponent/V/BestaandeWoning) 
+			? 'MakeDefined(BebouwingsObjectSrc/SchilLabel_rel, ModelObject/SchilLabel_rel[ ModelObject_rel])' 
+			: 'ModelObject/SchilLabel_rel[ ModelObject_rel]';
 	
-	attribute<Classifications/GebouwOptie> GebouwOptie_rel (BebouwingsObject) := ModelObject/StartOptie_rel[ModelObject_rel];
-	attribute<Classifications/WarmteOptie> WarmteOptie_rel (BebouwingsObject) := Classifications/GebouwOptie/WarmteOptie_rel [ GebouwOptie_rel ]; 
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel := ModelObject/StartOptie_rel[ModelObject_rel]; // laast toegepaste optie
+		
+		container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
+			,	'Classifications/GebouwOptie/PerProduct/'+Classifications/Product/name+'[GebouwOptie_rel]'
+			,	., Classifications/Installatie
+		);
 	
-
-	container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
-		,	'Classifications/GebouwOptie/PerProduct/'+Classifications/Product/name+'[GebouwOptie_rel]'
-		,	BebouwingsObject, Classifications/Installatie
-	);
+		// TODO: AfgifteSysteem_rel obv PerformancePerProduct voor ieder schillabel of BebouwingsObject.
+		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel := const(Classifications/AfgifteSysteem/V/MTAS, .);
 	
-	// TODO: AfgifteSysteem_rel obv PerformancePerProduct voor ieder schillabel of BebouwingsObject.
-	attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel(BebouwingsObject) := const(Classifications/AfgifteSysteem/V/MTAS, BebouwingsObject);
-	
-	attribute<AfnameGebied> AfnameGebied_rel(BebouwingsObject) := const((0 / 0)[AfnameGebied], BebouwingsObject);
-
-	container OpwekkingsOpties
-	{
-		container capaciteit
+		container OpwekkingsOpties
 		{
-			attribute<Ratio> Zon_PV      (BebouwingsObject) := const(0[Ratio], BebouwingsObject);
-			attribute<Ratio> ZonneBoiler (BebouwingsObject) := const(0[Ratio], BebouwingsObject);
-			attribute<Ratio> EWV         (BebouwingsObject) := const(0[Ratio], BebouwingsObject);
-			attribute<Ratio> mWKK        (BebouwingsObject) := const(0[Ratio], BebouwingsObject);
-			attribute<Ratio> hWP         (BebouwingsObject) := const(0[Ratio], BebouwingsObject);
+			container capaciteit
+			{
+				attribute<Ratio> Zon_PV      (results) := const(0[Ratio], results);
+				attribute<Ratio> ZonneBoiler (results) := const(0[Ratio], results);
+				attribute<Ratio> EWV         (results) := const(0[Ratio], results);
+				attribute<Ratio> mWKK        (results) := const(0[Ratio], results);
+				attribute<Ratio> hWP         (results) := const(0[Ratio], results);
+			}
 		}
-	}
 
-	container Sprongen
-	{
-		attribute<float64> Ki_gv (BebouwingsObject) := const(0[Eur], BebouwingsObject);
-	}
-
-	container Kosten
-	{
-		attribute<Eur_yr> Kj_gv_incentive (BebouwingsObject) := const(0[Eur_yr], BebouwingsObject);
+		container CumulatieveInvesteringen // Was Sprongen en Kosten, TODO: uitzoeken wat gecomuleerd moet worden en hoe bij te houden per age en (resterende) duration
+		{
+			attribute<float64> Ki_gv (results) := const(0[Eur], results);
+			attribute<Eur_yr> Kj_gv_incentive (results) := const(0[Eur_yr], results);
+		}
+		
+		// =============== attributen die ook per GebiedOptie kunnen wijzigen
+		attribute<Classifications/WarmteOptie> WarmteOptie_rel := Classifications/GebouwOptie/WarmteOptie_rel [ GebouwOptie_rel ];
+		
+		unit<uint32> AfnameGebied := ..../AfnameGebied;
+		attribute<AfnameGebied> AfnameGebied_rel := const((0 / 0)[AfnameGebied], results);
 	}
 }
