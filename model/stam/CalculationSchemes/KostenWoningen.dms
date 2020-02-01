@@ -8,14 +8,13 @@ template KostenWoningen
 {
 	// begin case parameter
 	unit<uint32>	WoonObject;
+	attribute<float64> DeelnameFactor(WoonObject);
 	unit<uint32>    PlanRegio;
 	parameter<bool> IsNieuwbouw;
 	// end case parameters
 
 	attribute<float64>		pand_aandeel	(WoonObject)	:=	WoonObject/Pand_aandeel;
 	attribute<bool>			IsMeergezins	(WoonObject)	:=	WoonObject/BebouwingsTypeDomein/IsMeergezins[WoonObject/BebouwingsType];
-	
-	attribute<bool>		    KanGebiedsOptie (WoonObject)	:=	Classifications/WarmteOptie/KanGebiedsOptie[WoonObject/WarmteOptie_rel];
 	
 	// kosten aansluitleiding
 	attribute<m_aansl>		L_aansl			(WoonObject)	:=	/Invoer/RuimtelijkeData/buislengte/per_buurt/L_aansl_pand[WoonObject/Planregio_rel];
@@ -40,10 +39,10 @@ template KostenWoningen
 	attribute<Eur_yr_Aansl> Kj_hv_w   (WoonObject) := =IsNieuwbouw ? 'const(0[Eur_yr_Aansl], WoonObject)' : '(IsMeergezins ? Schuiven/VerketelingMax : 1.0) * Kengetallen/BCkentallen/HuurverlagingGebiedsOptie * Schuiven/HuurVerlagingBijGebiedsOptie';// ?????
 	attribute<Eur_yr>       Kj_hv_o   (WoonObject) := =IsNieuwbouw ? 'const(0[Eur_yr      ], WoonObject)' : 'Kj_hv_w* NrDeelnemers';
 
-	attribute<nrAansl>	NrDeelnemers	(WoonObject)	:=	WoonObject/nrAansluitingen * float64(KanGebiedsOptie);
-	attribute<kW>		P_ASW			(Planregio)		:=	sum(WoonObject/AansluitCapaciteit/Warmte * float64(KanGebiedsOptie), WoonObject/Planregio_rel);
-	attribute<kW>		P_aansl			(WoonObject)	:=	  WoonObject/AansluitCapaciteit/ASW_RVmt * Vermogens/GTF_w_RVmt
-															+ WoonObject/AansluitCapaciteit/ASW_TWmt * Vermogens/GTF_w_TW;
+	attribute<nrAansl>	NrDeelnemers	(WoonObject)	:=	WoonObject/nrAansluitingen * DeelnameFactor;
+	attribute<kW>		P_ASW			(Planregio)		:=	sum(WoonObject/AansluitCapaciteit/Warmte * DeelnameFactor, WoonObject/Planregio_rel);
+	attribute<kW>		P_aansl			(WoonObject)	:=	( WoonObject/AansluitCapaciteit/ASW_RVmt * Vermogens/GTF_w_RVmt
+															+ WoonObject/AansluitCapaciteit/ASW_TWmt * Vermogens/GTF_w_TW) * DeelnameFactor;
 
 	attribute<kw>		P_sec			(Planregio)		:=	sum(P_aansl, WoonObject/Planregio_rel);
 	attribute<Eur>     Ki_ge_bruto    (WoonObject) := Ki_ge_ov_o + Ki_ge_pm_o;

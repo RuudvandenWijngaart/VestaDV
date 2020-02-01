@@ -7,13 +7,13 @@
 template WKOWoningData
 {
 	// begin case parameters
-	container BCdata;
-	parameter<Eur_GJ> WarmtePrijs;
+	unit<uint32> BO;
 	unit<uint8> Type;
 	container KostenBase;
 	parameter<bool> KoudeBeschikbaar;
-	
 	// end case parameters
+	
+	parameter<Eur_GJ> WarmtePrijs :=BO/WarmteWet/WarmtePrijs;
 
 	unit<uint32>		BebouwingsObject						:=	BCdata/BebouwingsObject;
 	attribute<bool>		IsAppt				(BebouwingsObject)	:=	Type/IsMeergezins[BCdata/RuimtelijkeVraagComponent/BebouwingsType];
@@ -27,14 +27,14 @@ template WKOWoningData
 	attribute<GJ_yr> V_Koude    (BebouwingsObject) := KoudeBeschikbaar ? float64(BCdata/WarmteVraag/kanGebiedsOptie) * BCdata/results/Functioneel/Vj_K : const(0[GJ_Yr], BebouwingsObject), Descr = "metervraag naar koude indien koude geleverd wordt";
 	
 	attribute<float64>    SPF_ind_rv  (BebouwingsObject) := 
-		BcData/results/CurrentLabel <= /Classifications/Schillabel/V/A ? Efficiency/SPF_ind_A_rv :
-		BcData/results/CurrentLabel <= /Classifications/Schillabel/V/B ? Efficiency/SPF_ind_B_rv :
-		BcData/results/CurrentLabel <= /Classifications/Schillabel/V/E ? Efficiency/SPF_ind_CE_rv : 1.0, Descr = "Efficientie van de individuele warmtepomp voor eigen ruimteverwarming";
+		BO/schilLabel_rel <= /Classifications/Schillabel/V/A ? Efficiency/SPF_ind_A_rv :
+		BO/schilLabel_rel <= /Classifications/Schillabel/V/B ? Efficiency/SPF_ind_B_rv :
+		BO/schilLabel_rel <= /Classifications/Schillabel/V/E ? Efficiency/SPF_ind_CE_rv : 1.0, Descr = "Efficientie van de individuele warmtepomp voor eigen ruimteverwarming";
 		
 	attribute<float64>    AEO_ind_rv  (BebouwingsObject) := 
-		BcData/results/CurrentLabel <= /Classifications/Schillabel/V/A ? Efficiency/AEO_ind_A_rv :
-		BcData/results/CurrentLabel <= /Classifications/Schillabel/V/B ? Efficiency/AEO_ind_B_rv :
-		BcData/results/CurrentLabel <= /Classifications/Schillabel/V/E ? Efficiency/AEO_ind_CE_rv : 1.0, Descr = "Aandeel eigen opwekking, afhankelijk van schillabel";
+		BO/schilLabel_rel <= /Classifications/Schillabel/V/A ? Efficiency/AEO_ind_A_rv :
+		BO/schilLabel_rel <= /Classifications/Schillabel/V/B ? Efficiency/AEO_ind_B_rv :
+		BO/schilLabel_rel <= /Classifications/Schillabel/V/E ? Efficiency/AEO_ind_CE_rv : 1.0, Descr = "Aandeel eigen opwekking, afhankelijk van schillabel";
 	
 	//volumevraag gebouwzijde
 	attribute<GJ_yr>	V_id_RV			(BebouwingsObject)	:= V_RV * AEO_ind_rv,						Descr = "Aandeel van de eigen volumevraag naar ruimteverwarming dat in het gebouw wordt opgewekt";
@@ -99,9 +99,9 @@ template WKOWoningData
 		attribute<Eur_woning>	Ki_id_afleverset	(BebouwingsObject)	:= (T_sec <= 55[Celsius]) ? 0[Eur_woning] : Kostenkentallen/Ki_afleverset * Pand_aandeel,			Descr = "inpandige afleverset, met indidivuele verketeling verrekend";
 		attribute<Eur>			Ki_id_wv			(BebouwingsObject)	:= (Ki_id_inpandig + Ki_id_afleverset) * nr_won,	Descr = "inpandige afleverset en inpandig leidingwerk met individuele verketeling verrekend";
 		attribute<Eur>			Ki_id_EigenOpwek	(BebouwingsObject)	:= 
-			(BcData/results/CurrentLabel <= Classifications/Schillabel/V/A ) ? ((T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_Booster : 0.0[eur]) :
-			(BcData/results/CurrentLabel <= Classifications/Schillabel/V/B ) ? ((T_sec <= 35[Celsius]) ? Kostenkentallen/Ki_eWP_B : (T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_booster : 0.0[eur]) :
-			(BcData/results/CurrentLabel <= Classifications/Schillabel/V/E ) ? ((T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_eWP_CDE : 0.0[eur]) 
+			(BO/schilLabel_rel <= Classifications/Schillabel/V/A ) ? ((T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_Booster : 0.0[eur]) :
+			(BO/schilLabel_rel <= Classifications/Schillabel/V/B ) ? ((T_sec <= 35[Celsius]) ? Kostenkentallen/Ki_eWP_B : (T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_booster : 0.0[eur]) :
+			(BO/schilLabel_rel <= Classifications/Schillabel/V/E ) ? ((T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_eWP_CDE : 0.0[eur]) 
 			: 1000000.0[eur],																								Descr = "investeringskosten voor eigen opwekkingsinstallatie, afhankelijk van temperatuurniveau en schillabel";
 		
 		attribute<Eur_aansl>	K_LTAS_asl			(BebouwingsObject)	:= IsAppt ? BCdata/BC_kentallen/Ki_LTAS_h_asl : BCdata/BC_kentallen/Ki_LTAS_l_asl;
