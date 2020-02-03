@@ -14,7 +14,7 @@ template RestWarmte
 	// end case parameters
 
 	unit<uint32> PlanRegio := Invoer/SpecifiekeInstellingen/PlanRegio;
-	container KostenBaten := CalculationSchemes/KostenBaten(BeginStatus/Bebouwing, invoer/Energieprijzen);
+	container KostenBaten := CalculationSchemes/KostenBaten(BeginStatus/Bebouwing, false);
 
 	unit<uint32> Bronnen := ='/Invoer/RuimtelijkeData/WarmteBronnen/RestWarmte/BronSelecties/' + RekenStapName + '/Bronnen'
 	{
@@ -80,7 +80,7 @@ template RestWarmte
 	attribute<G_GJ>   SO2_GJb            (PlanRegio) := Bronnen/SO2_GJ[LastIter/NextState/CurrBron];
 	attribute<G_GJ>   VOS_GJb            (PlanRegio) := Bronnen/VOS_GJ[LastIter/NextState/CurrBron];
 	attribute<G_GJ>   TS_GJb             (PlanRegio) := Bronnen/TS_GJ [LastIter/NextState/CurrBron];
-//	attribute<KG_yr>  CO2_Primair        (PlanRegio) := KostenBaten/Vj_WarmtePrimairD * MakeDefined(CO2_GJb, 0[KG_GJ]);
+//	attribute<KG_yr>  CO2_Primair        (PlanRegio) := KostenBaten/V_WarmtePrimairD * MakeDefined(CO2_GJb, 0[KG_GJ]);
 //	attribute<KG_yr>  CO2                (PlanRegio) := KostenBaten/CO2_BijstookD + CO2_Primair;
 	attribute<GJ_yr>  GJe_Totaal         (PlanRegio) := const(0[GJ_yr], PlanRegio);
 //	attribute<KG_yr>  CO2_e              (PlanRegio) := const(0[KG_yr], PlanRegio);
@@ -91,15 +91,19 @@ template RestWarmte
 	unit<uint32> gebruikte_bron := range(uint32, 0, sum(uint32(bron_gebruikt))) {
 		attribute<bronnen> bron_rel := invert(gebruikte_bron_rel);
 	}
-
+	unit<uint32> NewAfnameGebied := union_unit(BeginStatus/AfnameGebied, gebruikte_bron)
+	{
+		attribute<Classifications/GebiedsOptie> GebiedsOptie_rel := union_data(., BeginStatus/AfnameGebied/GebiedsOptie_rel, const(Classifications/GebiedsOptie/V/RestWarmte, gebruikte_bron));
+	}
+	
 	container Results := BeginStatus, IntegrityCheck = "P_Bron <= Bronnen/MWTh_Max * float64(3.00)"
 	{
 		container BebouwingMutatie :=
 			for_each_ne(Classifications/BebouwingsComponent/Name
-				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name+', Classifications/GebiedsOptie/V/RestWarmte, .../GebruikRestWarmte, AfnameGebied)'
+				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name+', Classifications/GebiedsOptie/V/RestWarmte, .../GebruikRestWarmte, BeginStatus/AfnameGebied)'
 			);
-		container Bebouwing :=
-			for_each_nex(Classifications/BebouwingsComponent/Name, 'BebouwingMutatie/'+Classifications/BebouwingsComponent/Name+'/result', uint32);
+		container Bebouwing := for_each_nex(Classifications/BebouwingsComponent/Name, 'BebouwingMutatie/'+Classifications/BebouwingsComponent/Name+'/results', uint32);
+		unit<uint32> AfnameGebied := NewAfnameGebied;
 				
 		container Factoren
 		{
@@ -268,7 +272,7 @@ template RestWarmte
 			container Verbruik
 			{
 				attribute<Gj_yr>	V_id_gas		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
-				attribute<Gj_yr>	V_wd_gas		(PlanRegio)		:=	GebruikRestWarmte ? (1d - P_vol) * KostenBaten/KostenD/Bijstook/Vj_Bijstook : 0[GJ_yr];
+				attribute<Gj_yr>	V_wd_gas		(PlanRegio)		:=	GebruikRestWarmte ? (1d - P_vol) * KostenBaten/KostenD/Bijstook/V_Bijstook : 0[GJ_yr];
 				attribute<Gj_yr>	V_ow_gas		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
 				
 				attribute<Gj_yr>	V_id_elek		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
@@ -279,7 +283,7 @@ template RestWarmte
 				attribute<Gj_yr>	V_wd_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
 				attribute<Gj_yr>	V_pt_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen primair transport bij LT netten
 				
-				attribute<Gj_yr>	V_warmte		(PlanRegio)		:=	GebruikRestWarmte ? KostenBaten/KostenD/Vj_Warmte : 0[GJ_Yr];
+				attribute<Gj_yr>	V_warmte		(PlanRegio)		:=	GebruikRestWarmte ? KostenBaten/KostenD/V_Warmte : 0[GJ_Yr];
 				attribute<Gj_yr>	V_koude			(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen koude bij RW.
 				
 				// generieke netto warmte onttrekking:
@@ -326,14 +330,6 @@ template RestWarmte
 			}
 		}
 		
-		unit<uint32> AfnameGebied := union_unit(BeginStatus/AfnameGebied, gebruikte_bron), DialogType = "Map", DialogData = "Point"
-		{
-			attribute<Eur>       Ki_A  : [];
-			attribute<Eur>       Ki_B  : [];
-			attribute<string>    Label : [];
-			attribute<rdc_meter> Point : [];
-			attribute<Classifications/GebiedsOptie> GebiedsOptie_rel := union_data(., BeginStatus/AfnameGebied/GebiedsOptie_rel, const(Classifications/GebiedsOptie/V/RestWarmte, gebruikte_bron));
-		}
 		
 		attribute<bool>                         WasAllocated             (PlanRegio) := BeginStatus/PlanRegioWarmteAllocatie_REMOVE == Classifications/GebiedsOptie/V/RestWarmte;
 		attribute<bool>                         Alloc_OK                 (PlanRegio) := GebruikRestWarmte || !WasAllocated; // it never stops.

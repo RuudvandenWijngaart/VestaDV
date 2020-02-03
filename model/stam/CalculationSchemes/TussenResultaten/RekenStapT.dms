@@ -124,7 +124,27 @@ template RekenStapT
 			',')
 		+')';
 
-	#include<BebouwingsComponenten.dms>
+	// TODO: onderzoek of het aantal parameters hier niet wat naar beneden kan; er is veel samengevoegd en geabstraheerd; maak daar gebruik van.
+	container BebouwingsComponenten :=
+		for_each_ne(Classifications/BebouwingsComponent/name,
+			'BebouwingsComponentT('
+				'Bebouwing/'+ Classifications/BebouwingsComponent/name +','
+				+ quote(Classifications/BebouwingsComponent/name)+','
+				+ string(Classifications/BebouwingsComponent/IsNieuwbouw)+','
+				+ string(HeeftResterendFactoren)+','
+				+(HeeftResterendFactoren ? 'Bebouwing/'+ Classifications/BebouwingsComponent/name +'ResterendFactors' : 'Bebouwing')+','
+				'invoer/Kengetallen/Bebouwing/'+ Classifications/BebouwingsComponent/name +'/results,'
+				'Classifications/SchilSprong/'+Classifications/BebouwingsComponent/SchilSprong_sel+','
+				'SpecifiekeInstellingen/RuimtelijkeVraag/Lokaal/'+ Classifications/BebouwingsComponent/name +','
+				'VraagKentallen/'+ Classifications/BebouwingsComponent/name +','
+				'PrevState/Bebouwing/'+ Classifications/BebouwingsComponent/name +','
+				'Prijzen/AardGas/'+(Classifications/BebouwingsComponent/IsGlastuinbouw ? 'Glastuinbouw' : 'Staffel')+','
+				+ quote(Classifications/BebouwingsComponent/NcwRefBase)+','
+				+'1.0 '+(Classifications/BebouwingsComponent/DraagtBTW ? '+ SpecifiekeInstellingen/VAT    / 100[Percent]' : '')+','
+				+'1.0 '+(Classifications/BebouwingsComponent/DraagtBTW ? '+ SpecifiekeInstellingen/VAT_gv / 100[Percent]' : '')
+			+')'
+		);
+
 
 	container NCW: isHidden = "True"
 	{
@@ -183,20 +203,21 @@ template RekenStapT
 		container nt15 := NettoContanteWaarde(DV/E_nt, 0[Yr], 15[Yr]);
 	}
 
+	container StateMetGebouwOpties := PrevState
+	{
+		container Bebouwing := for_each_nex(Classifications/BebouwingsComponent/Name, 'BebouwingsComponenten/'+Classifications/BebouwingsComponent/Name+'/results', uint32);
+	}
+	
 	container GebiedsAllocatie :=
 		for_each_ne(
 			Voorkeuren/ActieveGebiedsOptie/Name,
 			'CalculationSchemes/AanbodOpties/'+Voorkeuren/ActieveGebiedsOptie/SchemaName+'(
-				'+MakeDefined(Voorkeuren/ActieveGebiedsOptie/Name[ID(Voorkeuren/ActieveGebiedsOptie)-1b]+'/Results', 'Initieel')+',
+				'+MakeDefined(Voorkeuren/ActieveGebiedsOptie/Name[ID(Voorkeuren/ActieveGebiedsOptie)-1b]+'/Results', 'StateMetGebouwOpties')+',
 				AanbodKentallen/'+Voorkeuren/ActieveGebiedsOptie/SchemaName+', 
 				EnergiePrijzen, RekenJaar_jaar
 			)'
 		)
 	{
-		container Initieel := PrevState
-		{
-			container Bebouwing := for_each_nex(Classifications/BebouwingsComponent/Name, 'BebouwingsComponenten/'+Classifications/BebouwingsComponent/Name+'/results', uint32);
-		}
 		parameter<string> ResultStateName := MakeDefined(last(Voorkeuren/ActieveGebiedsOptie/Name)+'/Results', 'Initieel');
 		container ResultState := =ResultStateName;
 	}
@@ -205,13 +226,13 @@ template RekenStapT
 
 	container AllocatieResultaten :=
 		for_each_ne(Classifications/BebouwingsComponent/Name,
-			'AllocatieResultatenComponent(
-				BebouwingsComponenten/'+Classifications/BebouwingsComponent/Name+'
-				,StateNaAllocatie/Bebouwing/'+Classifications/BebouwingsComponent/Name+'/WarmteAllocatie
-				,StateNaAllocatie/Bebouwing/'+Classifications/BebouwingsComponent/Name+'/KoudeAllocatie
-				,StateNaAllocatie/Bebouwing/'+Classifications/BebouwingsComponent/Name+'/Om_Comfort
-				,'+quote(Classifications/BebouwingsComponent/Name)+'
-			)'
+			replace(
+				'AllocatieResultatenComponent('
+					'StateNaAllocatie/bebouwing/@BC,'
+					'StateNaAllocatie/HerKostenBaten/WarmteVraag/@BC, '
+					'''@BC'''
+				')'
+			,'@BC', Classifications/BebouwingsComponent/Name)
 		), FreeData = "False"
 	{
 		attribute<bool>    heeft_gas                               (PlanRegio) := (aant_g_aansl_woning_per_planregio + aant_g_aansl_util_per_planregio) > 0.0[nraansl];

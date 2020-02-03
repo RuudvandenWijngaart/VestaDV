@@ -16,7 +16,7 @@ template GeoThermie
 	unit<uint32> PlanRegio := Invoer/SpecifiekeInstellingen/PlanRegio;
 	container TypeInfo     := Kengetallen/WarmteBronnen/GeoThermie/TypeInfo;
 
-	container KostenBaten := CalculationSchemes/KostenBaten(BeginStatus/Bebouwing, invoer/Energieprijzen);
+	container KostenBaten := CalculationSchemes/KostenBaten(BeginStatus/Bebouwing, false);
 
 	
 	
@@ -74,16 +74,16 @@ template GeoThermie
 		attribute<Eur_yr>	Oj_pt_EEA       (PlanRegio) :=	SpecifiekeInstellingen/Beleid/EEA/pt * (Kj_pt_adm + Kj_pt_oh);
 		attribute<Eur_yr>	Oj_ow_EEA       (PlanRegio) :=	MakeDefined(SpecifiekeInstellingen/Beleid/EEA/ow[TypeInfo/TypeInfoList_rel], 0.0) * (Kj_ow_adm + Kj_ow_oh);
 		
-		attribute<Eur_yr>	Kj_WarmteWaarde (PlanRegio) :=	TypeInfo/P_vol * KostenBaten/Vj_WarmtePrimairD * K_GJ;
-		attribute<Eur_yr>	Km_WarmteWaarde (PlanRegio) :=	TypeInfo/P_vol * KostenBaten/Vj_WarmtePrimairD * Km_GJ;
-		attribute<Eur_yr>	Oj_SDE          (PlanRegio) :=	TypeInfo/P_vol * KostenBaten/Vj_WarmtePrimairD * SpecifiekeInstellingen/Beleid/EEA/SDE[TypeInfo/TypeInfoList_rel];
+		attribute<Eur_yr>	Kj_WarmteWaarde (PlanRegio) :=	TypeInfo/P_vol * KostenBaten/V_WarmtePrimairD * K_GJ;
+		attribute<Eur_yr>	Km_WarmteWaarde (PlanRegio) :=	TypeInfo/P_vol * KostenBaten/V_WarmtePrimairD * Km_GJ;
+		attribute<Eur_yr>	Oj_SDE          (PlanRegio) :=	TypeInfo/P_vol * KostenBaten/V_WarmtePrimairD * SpecifiekeInstellingen/Beleid/EEA/SDE[TypeInfo/TypeInfoList_rel];
 	}
 	attribute<Eur>			Oi_Totaal       (PlanRegio) :=	KostenBaten/Oi_Aansluitbijdrage;
 	attribute<Eur>			Ki_Totaal       (PlanRegio) :=	KostenBaten/Ki_wd_bruto + Kosten/Ki_Totaal; // eenmalige bruto maatschappelijke investeringskosten (dus zonder aftrenk van aansluitbijdrage)
 	attribute<Eur>			Ki_Netto        (PlanRegio) :=	Ki_Totaal - NCW/ow28/StartDiscountFactor * Oi_Totaal; // : eenmalige investering minus netto aansluitbijdrage
 	attribute<Eur_yr>		Km_Totaal       (PlanRegio) :=	KostenBaten/Km_TotaalD + Kosten/Km_Totaal; // jaarlijkse bruto kosten zonder aftrek van vastrecht en verbruiksvergoeding
 	attribute<Eur_yr>		Oji_Netto       (PlanRegio) :=	KostenBaten/Oji_NettoD  - Kosten/Km_Totaal; // Rentabiliteit: jaarlijkse opbrengst
-	attribute<kg_yr>		CO2_Primair     (PlanRegio) :=	TypeInfo/P_vol * KostenBaten/Vj_WarmtePrimairD * CO2_GJb;
+	attribute<kg_yr>		CO2_Primair     (PlanRegio) :=	TypeInfo/P_vol * KostenBaten/V_WarmtePrimairD * CO2_GJb;
 	attribute<kg_yr>		CO2             (PlanRegio) :=	(1d - TypeInfo/P_vol) * KostenBaten/CO2_BijstookD + CO2_Primair;
 	attribute<GJ_yr>		GJe_Totaal      (PlanRegio) :=	const(0[GJ_yr], PlanRegio);
 	attribute<KG_yr>		CO2_e           (PlanRegio) :=	const(0[KG_yr], PlanRegio);
@@ -109,12 +109,9 @@ template GeoThermie
 	{
 		container BebouwingMutatie :=
 			for_each_ne(Classifications/BebouwingsComponent/Name
-				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name+', Classifications/GebiedsOptie/V/GeoThermie, .../GebruikOptie, AfnameGebied)'
+				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name+', Classifications/GebiedsOptie/V/GeoThermie, .../GebruikOptie, BeginStatus/AfnameGebied)'
 			);
-		container Bebouwing :=
-			for_each_ne(Classifications/BebouwingsComponent/Name
-				, 'BebouwingMutatie/'+Classifications/BebouwingsComponent/Name+'/result'
-			);
+		container Bebouwing := for_each_nex(Classifications/BebouwingsComponent/Name, 'BebouwingMutatie/'+Classifications/BebouwingsComponent/Name+'/results', uint32);
 				
 		container Factoren
 		{
@@ -289,20 +286,20 @@ template GeoThermie
 			container Verbruik
 			{
 				attribute<Gj_yr>	V_id_gas		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
-				attribute<Gj_yr>	V_wd_gas		(PlanRegio)		:=	GebruikOptie ? (1d - TypeInfo/P_vol) * KostenBaten/KostenD/Bijstook/Vj_Bijstook : 0[GJ_Yr];
+				attribute<Gj_yr>	V_wd_gas		(PlanRegio)		:=	GebruikOptie ? (1d - TypeInfo/P_vol) * KostenBaten/KostenD/Bijstook/V_Bijstook : 0[GJ_Yr];
 				attribute<Gj_yr>	V_ow_gas		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
 				
 				attribute<Gj_yr>	V_id_elek		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
 				attribute<Gj_yr>	V_wd_elek		(PlanRegio)		:=	GebruikOptie ? KostenBaten/KostenD/SecundairNet/V_wd_elek : 0[GJ_Yr];
 				
 				// TODO: gebruik /Invoer/Kengetallen/WarmteBronnen/MetaData/RekenTypes/GeoThermie/Elektriciteit_Factor en EH, en CO2 van elektriciteit
-				attribute<Gj_yr>	V_ow_elek		(PlanRegio)		:=	GebruikOptie ? TypeInfo/P_vol * KostenBaten/Vj_WarmtePrimairD * Factoren/Elektriciteit : 0[gj_yr];
+				attribute<Gj_yr>	V_ow_elek		(PlanRegio)		:=	GebruikOptie ? TypeInfo/P_vol * KostenBaten/V_WarmtePrimairD * Factoren/Elektriciteit : 0[gj_yr];
 				
 				attribute<Gj_yr>	V_id_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // niet specifiek benoemd, alles in WD, TODO: specifiek maken
 				attribute<Gj_yr>	V_wd_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
 				attribute<Gj_yr>	V_pt_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen primair transport bij LT netten
 				
-				attribute<Gj_yr>	V_warmte		(PlanRegio)		:=	GebruikOptie ? KostenBaten/KostenD/Vj_Warmte : 0[GJ_yr];
+				attribute<Gj_yr>	V_warmte		(PlanRegio)		:=	GebruikOptie ? KostenBaten/KostenD/V_Warmte : 0[GJ_yr];
 				attribute<Gj_yr>	V_koude			(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen koude bij RW.
 				
 				// generieke netto warmte onttrekking:
@@ -321,7 +318,7 @@ template GeoThermie
 				
 				attribute<KG_yr>	CO2_id_elek		(PlanRegio)		:=	Verbruik/V_id_elek * prijzen/Elektriciteit/CO2_GJ;
 				attribute<KG_yr>	CO2_wd_elek		(PlanRegio)		:=	Verbruik/V_wd_elek * prijzen/Elektriciteit/CO2_GJ;
-				attribute<KG_yr>	CO2_ow_elek		(PlanRegio)		:=	GebruikOptie ? TypeInfo/P_vol * KostenBaten/Vj_WarmtePrimairD * MakeDefined(CO2_GJb, 0[KG_GJ]) : 0[kg_yr];				
+				attribute<KG_yr>	CO2_ow_elek		(PlanRegio)		:=	GebruikOptie ? TypeInfo/P_vol * KostenBaten/V_WarmtePrimairD * MakeDefined(CO2_GJb, 0[KG_GJ]) : 0[kg_yr];				
 			}
 
 		}
