@@ -20,15 +20,24 @@ template AllocatieResultatenComponent
 	attribute<bool>                                   VeroorzaaktGrondroering          (BO) := Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie];
 	attribute<bool>                                   GrondroeringInPlanRegio          (PlanRegio)        := sum(VeroorzaaktGrondroering ? 1 : 0, BO/PlanRegio_rel) > 0;
  
-	attribute<nrAansl>   nrAsl_e_app  (PlanRegio) := sum(BO/Aansluitingen/Enet_app, BO/Planregio_rel);
-	attribute<nrAansl>   nrAsl_e_ewp  (PlanRegio) := sum(BO/Aansluitingen/Enet_ewp, BO/Planregio_rel);
-	attribute<nrAansl>   nrAsl_e_hwp  (PlanRegio) := sum(BO/Aansluitingen/Enet_hwp, BO/Planregio_rel);
+// 	attribute<nrAansl>   nrAsl_e_app  (PlanRegio) := sum(BO/Aansluitingen/Enet_app, BO/Planregio_rel);
+// 	attribute<nrAansl>   nrAsl_e_ewp  (PlanRegio) := sum(BO/Aansluitingen/Enet_ewp, BO/Planregio_rel);
+// 	attribute<nrAansl>   nrAsl_e_hwp  (PlanRegio) := sum(BO/Aansluitingen/Enet_hwp, BO/Planregio_rel);
 	
 	attribute<kw> CapaciteitsvraagE (PlanRegio) :=  sum(BO/AansluitCapaciteit/GTF_Enet * 
 		( BO/AansluitCapaciteit/ASW_Eapp * float64(BO/Aansluitingen/Enet_app > 0.0[nrAansl])
 		+ BO/AansluitCapaciteit/ASW_Ehwp * float64(BO/Aansluitingen/Enet_ewp > 0.0[nrAansl])
 		+ BO/AansluitCapaciteit/ASW_Eewp * float64(BO/Aansluitingen/Enet_hwp > 0.0[nrAansl]) ), BO/Planregio_rel);
 
+	container Aansluitingen
+	{
+		attribute<nrAansl>   nrAsl_gas    (PlanRegio) := sum(BO/nrAansluitingen * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie])), BO/Planregio_rel) - nrAsl_e_ewp;
+		attribute<nrAansl>   nrAsl_H2net  (PlanRegio) := sum(BO/nrAansluitingen * float64(aandelen/WaterstofWP), BO/Planregio_rel)
+													   + sum(BO/nrAansluitingen * float64(aandelen/WaterstofHR), BO/Planregio_rel);
+		attribute<nrAansl>   nrAsl_e_app  (PlanRegio) := sum(BO/Aansluitingen/Enet_app, BO/Planregio_rel);
+		attribute<nrAansl>   nrAsl_e_ewp  (PlanRegio) := sum(BO/Aansluitingen/Enet_ewp, BO/Planregio_rel);
+		attribute<nrAansl>   nrAsl_e_hwp  (PlanRegio) := sum(BO/Aansluitingen/Enet_hwp, BO/Planregio_rel) + sum(BO/nrAansluitingen * float64(aandelen/WaterstofWP), BO/Planregio_rel);
+	}
 	container Aandelen := for_each_nedv(Classifications/GebiedsOptie/name, 'WarmteAllocatie == Classifications/WarmteOptie/V/'+Classifications/GebiedsOptie/name+'', BO, bool);
 
 	container MeterVraag := for_each_nedv(Classifications/GebiedsOptie/name, 'float64(Aandelen/'+Classifications/GebiedsOptie/name+') * (BO/Functioneel/V_RV + BO/Functioneel/V_TW)', BO, GJ_yr)
