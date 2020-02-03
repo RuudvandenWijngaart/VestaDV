@@ -23,31 +23,16 @@ template TEO
 	parameter<bool>		KoudeBeschikbaar  :=	false        ,	Descr = "wordt er collectief koude geleverd ja/nee";
 
 	container		Bebouwing             :=	BeginStatus/Bebouwing;
-	container		KostenBaten           :=	CalculationSchemes/KostenBaten(bebouwing, Energieprijzen, false);  // TODO: check necessity: hier geen PlanRegio attributen gebruiken
+	container		KostenBaten           :=	CalculationSchemes/KostenBaten(bebouwing, false);  // TODO: check necessity: hier geen PlanRegio attributen gebruiken
 	container		Efficiency            :=	Kengetallen/Efficiency/Efficiency_LT(T_ow, T_sec);
 	container		Kostenkentallen       :=	Kengetallen/Kosten_LT(Leercurves/Inpand/Curve, Leercurves/eWPww/Curve, Leercurves/LTnet/Curve, Leercurves/MTnet/Curve);
 
-	container BestaandeWoningData :=	WKOWoningData(
-											bebouwing/BestaandeWoning, 
-											bebouwing/BestaandeWoning/BebouwingsTypeDomein,
-											KostenBaten/KostenD/Wonen/bw,
-											KoudeBeschikbaar);
-
-	container NieuwbouwWoningData :=	WKOWoningData(
-											bebouwing/NieuwbouwWoning, 
-											bebouwing/NieuwbouwWoning/BebouwingsTypeDomein,
-											KostenBaten/KostenD/Wonen/nw,
-											KoudeBeschikbaar);
-
-	container BestaandeUtilData :=		WKOUtilData(
-											bebouwing/BestaandeUtil, 
-											KoudeBeschikbaar);
-	
-	container NieuwbouwUtilData :=		WKOUtilData(
-											bebouwing/NieuwbouwUtil, 
-											KoudeBeschikbaar);
-	
-	container CandidateSets := for_each_ne(WkoComponent/Name, 'TEOData('+WkoComponent/Name+'Data, '+Quote(WkoComponent/Name)+', T_sec)');
+	container BestaandeWoningData := WKOWoningData(bebouwing/BestaandeWoning, KostenBaten/WarmteVraag/BestaandeWoning, false, KoudeBeschikbaar, KostenBaten/KostenD/Wonen/bw);
+	container NieuwbouwWoningData := WKOWoningData(bebouwing/NieuwbouwWoning, KostenBaten/WarmteVraag/NieuwbouwWoning, true , KoudeBeschikbaar, KostenBaten/KostenD/Wonen/nw);
+	container BestaandeUtilData   := WKOUtilData  (bebouwing/BestaandeUtil,   KostenBaten/WarmteVraag/BestaandeUtil  , false, KoudeBeschikbaar);	
+	container NieuwbouwUtilData   := WKOUtilData  (bebouwing/NieuwbouwUtil,   KostenBaten/WarmteVraag/NieuwbouwUtil  , true , KoudeBeschikbaar);
+		
+	container CandidateSets := for_each_ne(WkoComponent/Name, replace('TEOData(bebouwing/@WC, @WCData, ''@WC'', T_sec)', '@WC', WkoComponent/Name));
 
 	unit <uint32> UnitedCandidates := ='union_unit('+AsItemList('CandidateSets/'+WkoComponent/Name+'/AllowedObjects')+')'
 	,	DialogType = "Map"
@@ -146,16 +131,19 @@ template TEO
 		attribute<rdc_meter> point := Selected/Point[nr_OrgEntity];	
 		attribute<.>         Partitioning (UnitedCandidates) := invert(nr_OrgEntity)[Selected/Partitioning];
 	}
+	unit<uint32> NewAfnameGebied := union_unit(BeginStatus/AfnameGebied, RendabelCluster) {
+		attribute<Classifications/GebiedsOptie> GebiedsOptie_rel := union_data(., BeginStatus/AfnameGebied/GebiedsOptie_rel, const(Classifications/GebiedsOptie/V/TEO, RendabelCluster));
+	}
 
 	attribute<uint32> NrAllowedObjects          (WkoComponent) := ='union_data(WkoComponent, '+AsItemList('#CandidateSets/'+WkoComponent/Name+'/AllowedObjects')+')';
-	attribute<uint32> NrAllObjects              (WkoComponent) := ='union_data(WkoComponent, '+AsItemList('#CandidateSets/'+WkoComponent/Name+'/BebouwingsObject')+')';
+	attribute<uint32> NrAllObjects              (WkoComponent) := ='union_data(WkoComponent, '+AsItemList('#CandidateSets/'+WkoComponent/Name+'/BO')+')';
 	attribute<uint32> CumulNrPrevAllowedObjects (WkoComponent) := cumulate(NrAllowedObjects)-NrAllowedObjects;
 	attribute<uint32> CumulNrPrevAllObjects     (WkoComponent) := cumulate(NrAllObjects)-NrAllObjects;
 	
-	unit<uint32> AllObjects := ='union_unit('+AsItemList('ObjectResults/'+WkoComponent/Name+'/BebouwingsObject')+')'
+	unit<uint32> AllObjects := ='union_unit('+AsItemList('ObjectResults/'+WkoComponent/Name+'/BO')+')'
 	{
-		attribute<string>   Label       := ='union_data(., ' + asItemList('bebouwing/' + WkoComponent/Name + '/BebouwingsObject/Label') + ')', DialogType = "LabelText";
-		attribute<RendabelCluster> Cluster_rel := ='union_data(., ' + AsItemList('ObjectResults/'+WkoComponent/Name+'/Cluster_rel')+')';
+		attribute<string>   Label       := ='union_data(., ' + asItemList('bebouwing/' + WkoComponent/Name + '/Label') + ')', DialogType = "LabelText";
+		attribute<RendabelCluster> Cluster_rel := ='union_data(., ' + AsItemList('ObjectResults/'+WkoComponent/Name+'/Cluster_Rel')+')';
 		attribute<kw>		P_sec          :=	='union_data(., ' + AsItemList('ObjectResults/'+WkoComponent/Name+'/WkoData/P_sec')+')';
 		
 		attribute<Eur>		Ki_ow_gebied      :=	scalesum(max_elem(P_sec, 1[kw]), Cluster_rel, Selected/Ki_ow		[RendabelCluster/Selected_rel]);
@@ -178,7 +166,7 @@ template TEO
 	container ObjectResults :=
 		for_each_ne(WkoComponent/Name, 
 			'WkoResults('
-				'UnitedCandidates, RendabelCluster, CandidateSets/'+WkoComponent/Name+',Classifications/WarmteOptie/V/TEO,'
+				'UnitedCandidates, RendabelCluster, NewAfnameGebied, CandidateSets/'+WkoComponent/Name+',Classifications/WarmteOptie/V/TEO,'
 				'CumulNrPrevAllowedObjects['+string(id(WkoComponent))+'[WkoComponent]],'
 				'CumulNrPrevAllObjects['+string(id(WkoComponent))+'[WkoComponent]]'
 			')'
@@ -189,11 +177,13 @@ template TEO
 	container Results := BeginStatus
 	{
 		container Bebouwing :=
-			for_each_ne(Classifications/BebouwingsComponent/Name
+			for_each_nex(Classifications/BebouwingsComponent/Name
 				, Classifications/BebouwingsComponent/KanWKO 
 					? 'ObjectResults/'+Classifications/BebouwingsComponent/Name+'/Result' 
 					: 'BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name
+				,	uint32
 			);
+		unit<uint32> AfnameGebied := NewAfnameGebied;
 			
 		container TEO
 		{

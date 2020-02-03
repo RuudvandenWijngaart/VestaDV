@@ -16,15 +16,13 @@ template LtResults
 	parameter<uint32> NrPrevAllObjects;
 	// end case parameters
 
-	container WkoDataComponent          := WkoData/WkoDataComponent;
+	container DataComponent          := WkoData/DataComponent;
 	parameter<string> ComponentNaam     := WkoData/ComponentNaam;
 
-	container BeginStatusComponent      := ='BeginStatus/bebouwing/'+ComponentNaam;
+	unit<uint32> BebouwingsObject       := DataComponent/BO;
 
-	container BCdata                    := WkoDataComponent/BCdata;
-	container RuimtelijkeVraagComponent := BCdata/RuimtelijkeVraagComponent;
-	unit<uint32> BebouwingsObject       := BCdata/BebouwingsObject;
 	unit<uint32> PlanRegio              := Invoer/SpecifiekeInstellingen/PlanRegio;
+	attribute<PlanRegio> Planregio_rel(BebouwingsObject) := BebouwingsObject/Planregio_rel;
 
 	unit<uint32> AllowedObjects := WkoData/AllowedObjects
 	{
@@ -35,31 +33,32 @@ template LtResults
 	// TODO: rename WKO->ClusterOptie
 	
 	attribute<UnitedCandidates> UnitedCandidates_rel (BebouwingsObject) := AllowedObjects/UnitedCandidates_rel[invert(AllowedObjects/nr_OrgEntity)];
-	attribute<Cluster> Cluster_RelNow (BebouwingsObject) := Cluster/per_UnitedCandidates[UnitedCandidates_rel];
-	attribute<bool>    HadWarmte      (BebouwingsObject) := not(Classifications/WarmteOptie/kanGebiedsOptie[BeginStatusComponent/WarmteAllocatie]);
+	attribute<Cluster> Cluster_Rel    (BebouwingsObject) := Cluster/per_UnitedCandidates[UnitedCandidates_rel];
 	
-	attribute<bool>    StartThis      (BebouwingsObject) := IsDefined(Cluster_RelNow), IntegrityCheck = "not(and(HadWarmte, IsDefined(Cluster_RelNow)))";
-	attribute<bool>    WasThis        (BebouwingsObject) := (BeginStatusComponent/WarmteAllocatie == WarmteOptie_rel);
+	attribute<bool>    HadWarmte      (BebouwingsObject) := not(Classifications/WarmteOptie/kanGebiedsOptie[BebouwingsObject/WarmteOptie_rel]);
+	
+	attribute<bool>    StartThis      (BebouwingsObject) := IsDefined(Cluster_Rel), IntegrityCheck = "not(and(HadWarmte, IsDefined(Cluster_Rel)))";
+	attribute<bool>    WasThis        (BebouwingsObject) := (BebouwingsObject/WarmteOptie_rel == WarmteOptie_rel);
 	attribute<bool>    HasThis        (BebouwingsObject) := StartThis || WasThis;
 
 	//volumevraag voor eerder gedane allocatie
 	container Eerder {
-		attribute<GJ_yr>	V_Warmte   (BebouwingsObject) := WkoData/WkoDataComponent/V_Warmte    * float64(WasThis);
-		attribute<GJ_yr>	V_Koude    (BebouwingsObject) := WkoData/WkoDataComponent/V_Koude     * float64(WasThis);
-		attribute<GJ_yr>	V_id_W_elek(BebouwingsObject) := WkoData/WkoDataComponent/V_id_W_elek * float64(WasThis);
-		attribute<GJ_yr>	V_id_K_elek(BebouwingsObject) := WkoData/WkoDataComponent/V_id_K_elek * float64(WasThis);
-		attribute<GJ_yr>	V_id_elek  (BebouwingsObject) := WkoData/WkoDataComponent/V_id_elek   * float64(WasThis);
+		attribute<GJ_yr>	V_Warmte   (BebouwingsObject) := WkoData/DataComponent/V_Warmte    * float64(WasThis);
+		attribute<GJ_yr>	V_Koude    (BebouwingsObject) := WkoData/DataComponent/V_Koude     * float64(WasThis);
+		attribute<GJ_yr>	V_id_W_elek(BebouwingsObject) := WkoData/DataComponent/V_id_W_elek * float64(WasThis);
+		attribute<GJ_yr>	V_id_K_elek(BebouwingsObject) := WkoData/DataComponent/V_id_K_elek * float64(WasThis);
+		attribute<GJ_yr>	V_id_elek  (BebouwingsObject) := WkoData/DataComponent/V_id_elek   * float64(WasThis);
 	}
 	
 	//volumevraag na nieuwe allocatie
 	container Nieuw {
-		attribute<GJ_yr>	V_Warmte   (BebouwingsObject) := WkoData/WkoDataComponent/V_Warmte    * float64(StartThis);
-		attribute<GJ_yr>	V_Koude    (BebouwingsObject) := WkoData/WkoDataComponent/V_Koude     * float64(StartThis);
-		attribute<GJ_yr>	V_id_W_elek(BebouwingsObject) := WkoData/WkoDataComponent/V_id_W_elek * float64(StartThis);
-		attribute<GJ_yr>	V_id_K_elek(BebouwingsObject) := WkoData/WkoDataComponent/V_id_K_elek * float64(StartThis);
-		attribute<GJ_yr>	V_id_elek  (BebouwingsObject) := WkoData/WkoDataComponent/V_id_elek   * float64(StartThis);
+		attribute<GJ_yr>	V_Warmte   (BebouwingsObject) := WkoData/DataComponent/V_Warmte    * float64(StartThis);
+		attribute<GJ_yr>	V_Koude    (BebouwingsObject) := WkoData/DataComponent/V_Koude     * float64(StartThis);
+		attribute<GJ_yr>	V_id_W_elek(BebouwingsObject) := WkoData/DataComponent/V_id_W_elek * float64(StartThis);
+		attribute<GJ_yr>	V_id_K_elek(BebouwingsObject) := WkoData/DataComponent/V_id_K_elek * float64(StartThis);
+		attribute<GJ_yr>	V_id_elek  (BebouwingsObject) := WkoData/DataComponent/V_id_elek   * float64(StartThis);
 
-		attribute<kW>		P_Warmte   (BebouwingsObject) := BCdata/WarmteVraag/deelnemers/AansluitCapaciteit * float64(StartThis);
+		attribute<kW>		P_Warmte   (BebouwingsObject) := BebouwingsObject/AansluitCapaciteit/Warmte * float64(StartThis);
 	}
 	
 	container BC
@@ -228,13 +227,13 @@ template LtResults
 		}
 	}
 
-	container Result := BCdata
+	unit<uint32> Result := BebouwingsObject
 	{
-		unit<uint32> BebouwingsObject := BCdata/BebouwingsObject;
-
-		attribute<Classifications/WarmteOptie> WarmteAllocatie (BebouwingsObject) := StartThis ? WarmteOptie_rel                         : BeginStatusComponent/WarmteAllocatie;
-		attribute<Eur_yr>                      KoudeAllocatie  (BebouwingsObject) := StartThis ? WkoDataComponent/Opbrengsten/Oj_Koude   : BeginStatusComponent/KoudeAllocatie;
-		attribute<Eur_yr>                      Om_comfort      (BebouwingsObject) := StartThis ? WkoDataComponent/Opbrengsten/Om_comfort : BeginStatusComponent/Om_comfort;
-		attribute<Cluster>                     WkoCluster_rel  (BebouwingsObject) := StartThis ? Cluster_relnow                          : BeginStatusComponent/WkoCluster_rel;
+		unit<uint32> AfnameGebied := NewAfnameGebied;
+		
+		attribute<Classifications/WarmteOptie> WarmteOptie_rel := StartThis ? ../WarmteOptie_rel : BebouwingsObject/WarmteOptie_rel;
+		attribute<Eur_yr>                      KoudeAllocatie  := StartThis ? DataComponent/Opbrengsten/Oj_Koude   : BebouwingsObject/KoudeAllocatie;
+		attribute<Eur_yr>                      Om_comfort      := StartThis ? DataComponent/Opbrengsten/Om_comfort : BebouwingsObject/Om_comfort;
+		attribute<AfnameGebied>  AfnameGebied_rel := StartThis ? Cluster_rel + #BeginState/AfnameGebied : BebouwingsObject/AfnameGebied_rel;
 	}
 }

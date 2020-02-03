@@ -78,39 +78,47 @@ container CalculationSchemes: Using = "Units;Geography"
 		}
 	}
 
-	Template NaarPlanRegio //TODO: wegsubstitueren en rechtstreeks opnemen in KostenBaten.
+	template WarmteVraagT
+	{
+		unit<uint32> BO;	
+		attribute<float64> BeschikbaarheidsFactor(BO); // := float64(Classifications/WarmteOptie/kanGebiedsOptie[BO/WarmteOptie_rel]);
+		
+		attribute<nrAansl>   nrAansluitingen    (BO) := BeschikbaarheidsFactor * BO/nrAansluitingen;
+		attribute<m2>        Oppervlakte        (BO) := BeschikbaarheidsFactor * BO/Oppervlakte;
+		attribute<kW>        AansluitCapaciteit (BO) := BeschikbaarheidsFactor * BO/AansluitCapaciteit/Warmte;
+		attribute<GJ_yr>     V_RV               (BO) := BeschikbaarheidsFactor * BO/Functioneel/V_RV;
+		attribute<GJ_yr>     V_TW               (BO) := BeschikbaarheidsFactor * BO/Functioneel/V_TW;
+		attribute<GJ_yr>     V_K                (BO) := BeschikbaarheidsFactor * BO/Functioneel/V_K;
+		attribute<GJ_yr>     V_Warmte           (BO) := V_RV + V_TW;
+		attribute<EUR_yr>    Oj_Warmte          (BO) := V_Warmte * BO/WarmteWet/WarmtePrijs, Source = "FO v7a F 8-10";
+		attribute<EUR_yr>    Oj_VastRechtMT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtMT_T;
+		attribute<EUR_yr>    Oj_VastRechtLT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtLT_T;
+		attribute<EUR_yr>    Oj_VastRechtK      (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtK_T;
+		attribute<EUR>       Oi_AansluitBijdrage(BO) := BeschikbaarheidsFactor * BO/Opbrengsten/AansluitBijdrageT;
+}
+	
+	Template NaarPlanRegio
 	{
 		// begin case parameters
 		unit<uint32> BO;
-		attribute<float64> BeschikbaarheidsFactor (BO);
+		container WarmteVraagComponent;
+		unit<uint32> PR := Invoer/SpecifiekeInstellingen/PlanRegio;
 		// end case parameters
 
-//REMOVE ?		attribute<Classifications/WarmteOptie> WarmteAllocatie(BO) := BO/WarmteOptie_rel; // TODO: wegsubstiueren
-		unit<uint32>                           PR                  := Invoer/SpecifiekeInstellingen/PlanRegio;
 		
-		parameter<Eur_GJ> WarmtePrijs := BO/Warmtewet/WarmtePrijs;
-
-
-		attribute<nrAansl>        nrAanslWarmteDeelnemers      (PR) := sum(BeschikbaarheidsFactor * BO/nrAansluitingen,           BO/PlanRegio_rel);
-		attribute<Units/kW>       CapaciteitWarmteDeelnemers   (PR) := sum(BeschikbaarheidsFactor * BO/AansluitCapaciteit/Warmte, BO/PlanRegio_rel);
-		attribute<Units/m2>       Oppervlak_Deelnemers         (PR) := sum(BeschikbaarheidsFactor * BO/Oppervlakte,               BO/PlanRegio_rel);
+		attribute<nrAansl> nrAansluitingen    (PR) := sum(WarmteVraagComponent/nrAansluitingen   , BO/PlanRegio_rel);
+		attribute<kW>      AanslujitCapaciteit(PR) := sum(WarmteVraagComponent/AansluitCapaciteit, BO/PlanRegio_rel);
+		attribute<m2>      Oppervlakte        (PR) := sum(WarmteVraagComponent/Oppervlakte       , BO/PlanRegio_rel);
 		
-		attribute<nrAansl>        nrAansl_totaal               (PR) := sum(BO/nrAansluitingen,           BO/PlanRegio_rel);
-		attribute<Units/kW>       CapaciteitWarmte_totaal      (PR) := sum(BO/AansluitCapaciteit/Warmte, BO/PlanRegio_rel);
-		attribute<Units/m2>       Oppervlak_allen              (PR) := sum(BO/Oppervlakte,               BO/PlanRegio_rel);
+		attribute<GJ_yr>  V_RV    (PR) := sum(WarmteVraagComponent/V_RV, BO/PlanRegio_rel);
+		attribute<GJ_yr>  V_TW    (PR) := sum(WarmteVraagComponent/V_TW, BO/PlanRegio_rel);
+		attribute<GJ_yr>  V_Warmte(PR) := V_RV + V_TW;
+		attribute<GJ_yr>  V_K     (PR) := sum(WarmteVraagComponent/V_K , BO/PlanRegio_rel);
 		
-		container Verbruik
-		{
-			attribute<Units/GJ_yr> deelnemers_RV  (PR) := sum(BeschikbaarheidsFactor * BO/AandeelWarmteVraag * BO/Functioneel/Vj_RV, BO/PlanRegio_rel);
-			attribute<Units/GJ_yr> deelnemers_TW  (PR) := sum(BeschikbaarheidsFactor * BO/AandeelWarmteVraag * BO/Functioneel/Vj_TW, BO/PlanRegio_rel);
-			attribute<Units/GJ_yr> deelnemers     (PR) := deelnemers_RV + deelnemers_TW;
-			attribute<Units/GJ_yr> alle           (PR) := sum(BeschikbaarheidsFactor * (BO/Functioneel/Vj_RV + BO/Functioneel/Vj_TW), BO/PlanRegio_rel);
-		}
-		container WarmteVraag
-		{
-			attribute<Units/Eur_yr> deelnemers    (PR) := WarmtePrijs * Verbruik/deelnemers, Source = "FO v7a F 8-10";
-			attribute<Units/Eur_yr> alle          (PR) := WarmtePrijs * Verbruik/alle, Source = "FO v7a F 8-10";
-		}
+		attribute<EUR_yr> Oj_Warmte(PR) := V_Warmte * BO/WarmteWet/WarmtePrijs, Source = "FO v7a F 8-10";
+//TODO		attribute<EUR_yr> Oj_Koude(PR)  := V_K      * BO/WarmteWet/KoudePrijs, Source = "FO v7a F 8-10";
+		attribute<EUR_yr> Oj_VastRechtMT     (PR) := sum(WarmteVraagComponent/Oj_VastRechtMT, BO/PlanRegio_rel);
+		attribute<EUR>    Oi_AansluitBijdrage(PR) := sum(WarmteVraagComponent/Oi_AansluitBijdrage, BO/PlanRegio_rel);
 	}
 
 	#include <EnergiePrijzen.dms>
@@ -138,7 +146,7 @@ container CalculationSchemes: Using = "Units;Geography"
 		attribute<MW> Capaciteit (BebouwingsComponent);
 		// begin case parameters
 
-		parameter<Ratio> a                 := 1.25; // omwegfactor
+		parameter<Ratio> a := 1.25; // omwegfactor
 
 		attribute<Eur_m> K_min (BebouwingsComponent) := Capaciteit > 0[MW] ? 400[Eur_m] + 210[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.5 : 0[Eur_m], Source = "validatiesessies startanalyse 2019"; // TODO: bron = FO 4.0
 		attribute<Eur_m> K_max (BebouwingsComponent) := Capaciteit > 0[MW] ? 800[Eur_m] + 200[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.6 : 0[Eur_m], Source = "validatiesessies startanalyse 2019"; // TODO: bron = FO 4.0

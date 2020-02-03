@@ -25,8 +25,8 @@ Template LtWarmtenetImpl
 	parameter<string> GebiedsOptie_name := 'LT'+string(T_ow)+'_'+string(T_sec);
 	parameter<Classifications/WarmteOptie> WarmteOptie_rel := ='Classifications/WarmteOptie/V/'+GebiedsOptie_name;
 	
-	container BebouwingsComponenten := BeginStatus/Bebouwing;
-	container KostenBaten := CalculationSchemes/KostenBaten(BebouwingsComponenten, invoer/Energieprijzen, false); // TODO: check necessity: hier geen PlanRegio attributen gebruiken
+	container bebouwing := BeginStatus/Bebouwing;
+	container KostenBaten := CalculationSchemes/KostenBaten(bebouwing, false); // TODO: check necessity: hier geen PlanRegio attributen gebruiken
 
 	unit<uint8>  WkoComponent       := Classifications/WkoComponent;
 	unit<uint32> PlanRegio          := Invoer/SpecifiekeInstellingen/PlanRegio;
@@ -143,37 +143,13 @@ Template LtWarmtenetImpl
 		attribute<.>		per_UnitedCandidates(UnitedCandidates) :=	Selected/BronCluster_rel[invert(Selected/nr_OrgEntity)];
 	}
 	
-	container BestaandeWoningData :=
-		WKOWoningData(
-			BebouwingsComponenten/BestaandeWoning, 
-			BebouwingsComponenten/BestaandeWoning/BebouwingsTypeDomein,
-			KostenBaten/KostenD/Wonen/bw,
-			KoudeBeschikbaar
-		);
-
-	container NieuwbouwWoningData :=
-		WKOWoningData(
-			BebouwingsComponenten/NieuwbouwWoning, 
-			BebouwingsComponenten/NieuwbouwWoning/BebouwingsTypeDomein,
-			KostenBaten/KostenD/Wonen/nw,
-			KoudeBeschikbaar
-		);
-
-	container BestaandeUtilData :=
-		WKOUtilData(
-			BebouwingsComponenten/BestaandeUtil, 
-			KoudeBeschikbaar
-		);
+	container BestaandeWoningData := WKOWoningData(bebouwing/BestaandeWoning, KostenBaten/WarmteVraag/BestaandeWoning, false, KoudeBeschikbaar, KostenBaten/KostenD/Wonen/bw);
+	container NieuwbouwWoningData := WKOWoningData(bebouwing/NieuwbouwWoning, KostenBaten/WarmteVraag/NieuwbouwWoning, true , KoudeBeschikbaar, KostenBaten/KostenD/Wonen/nw);
+	container BestaandeUtilData   := WKOUtilData  (bebouwing/BestaandeUtil,   KostenBaten/WarmteVraag/BestaandeUtil  , false, KoudeBeschikbaar);	
+	container NieuwbouwUtilData   := WKOUtilData  (bebouwing/NieuwbouwUtil,   KostenBaten/WarmteVraag/NieuwbouwUtil  , true , KoudeBeschikbaar);
 	
-	container NieuwbouwUtilData :=
-		WKOUtilData(
-			BebouwingsComponenten/NieuwbouwUtil, 
-			KoudeBeschikbaar
-		);
-	
-	parameter<string> geschiktExpr := 'BcData/energielabel/CurrValue <= Classifications/energielabel/V/LabelE';
-	container CandidateSets := for_each_ne(WkoComponent/Name, 
-		'LtData('+WkoComponent/Name+'Data, '+Quote(WkoComponent/Name)+', T_sec, false, '+Quote(geschiktExpr)+')');
+	parameter<string> geschiktExpr := 'BO/SchilLabel_ref <= Classifications/energielabel/V/LabelE';
+	container CandidateSets := for_each_ne(WkoComponent/Name, replace('LtData(bebouwing/@WC, @WCData, ''@WC'', T_sec, false, '+Quote(geschiktExpr)+')', '@WC', WkoComponent/Name));
 	
 	//samenvoeging bestaande woningen, nieuwbouwwoningen, bestaande utiliteit, nieuwbouwutiliteit
 	unit <uint32> UnitedCandidates := ='union_unit('+AsItemList('CandidateSets/'+WkoComponent/Name+'/AllowedObjects')+')'
@@ -311,16 +287,22 @@ Template LtWarmtenetImpl
 			attribute<..>        MST_rel := Feature/MST_rel[nr_OrgEntity];
 		}
 	}
+	unit<uint32> NewAfnameGebied := union_unit(BeginStatus/AfnameGebied, RendabelCluster) {
+		attribute<Classifications/GebiedsOptie> GebiedsOptie_rel := union_data(., 
+			BeginStatus/AfnameGebied/GebiedsOptie_rel, 
+			const(rlookup(WarmteOptie_rel, Classifications/GebiedsOptie/WarmteOptie_rel), RendabelCluster)
+		);
+	}
 	
 	attribute<uint32> NrAllowedObjects          (WkoComponent)	:= ='union_data(WkoComponent, '+AsItemList('#CandidateSets/'+WkoComponent/Name+'/AllowedObjects')+')';
-	attribute<uint32> NrAllObjects              (WkoComponent)	:= ='union_data(WkoComponent, '+AsItemList('#CandidateSets/'+WkoComponent/Name+'/BebouwingsObject')+')';
+	attribute<uint32> NrAllObjects              (WkoComponent)	:= ='union_data(WkoComponent, '+AsItemList('#CandidateSets/'+WkoComponent/Name+'/BO')+')';
 	attribute<uint32> CumulNrPrevAllowedObjects (WkoComponent)	:= cumulate(NrAllowedObjects)-NrAllowedObjects;
 	attribute<uint32> CumulNrPrevAllObjects     (WkoComponent)	:= cumulate(NrAllObjects)-NrAllObjects;
 
 	unit<uint32> AllObjects := ='union_unit('+AsItemList('ObjectResults/'+WkoComponent/Name+'/BebouwingsObject')+')'
 	{
-		attribute<string>		Label					:= ='union_data(., ' + asItemList('BebouwingsComponenten/' + WkoComponent/Name + '/BebouwingsObject/Label') + ')', DialogType = "LabelText";
-		attribute<RendabelCluster>	RendabelCluster_rel	:= ='union_data(., ' + AsItemList('ObjectResults/'+WkoComponent/Name+'/Cluster_relNow')+')';
+		attribute<string>		Label					:= ='union_data(., ' + asItemList('bebouwing/' + WkoComponent/Name + '/Label') + ')', DialogType = "LabelText";
+		attribute<RendabelCluster>	RendabelCluster_rel	:= ='union_data(., ' + AsItemList('ObjectResults/'+WkoComponent/Name+'/RendabelCluster_rel')+')';
 		attribute<BronCluster>	Cluster_rel				:= RendabelCluster/nr_OrgEntity[RendabelCluster_rel];
 		attribute<Eur_yr>		Kj_totaal				:= ='union_data(., ' + AsItemList('ObjectResults/'+WkoComponent/Name+'/WkoData/Kj_totaal')+')';
 		
@@ -354,12 +336,14 @@ Template LtWarmtenetImpl
 	container Results := BeginStatus
 	{
 		container Bebouwing :=
-			for_each_ne(Classifications/BebouwingsComponent/Name
+			for_each_nex(Classifications/BebouwingsComponent/Name
 				, Classifications/BebouwingsComponent/KanWKO 
 					? 'ObjectResults/'+Classifications/BebouwingsComponent/Name+'/Result' 
 					: 'BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name
+				,	uint32
 			);
-			
+		unit<uint32> AfnameGebied := NewAfnameGebied;
+		
 		container LtWarmte := BeginStatus/LtWarmte
 		{
 			unit<uint32> bron := BeginStatus/LtWarmte/bron {

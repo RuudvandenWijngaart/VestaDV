@@ -8,7 +8,6 @@ template KostenBaten
 {
 	// begin case parameters
 	container bebouwing;
-	container EnergiePrijzen;
 	parameter<bool> alleObjecten; // false = alleen Classifications/WarmteOptie/KanGebiedsOptie[bebouwing/@BC/WarmteOptie_rel]
 	// end case parameters
 
@@ -20,69 +19,45 @@ template KostenBaten
 			,	'@BC', BCname)
 		,	bebouwing, BCname, float64
 		);
-	container PerObject {
-			
-		container nrAansluitingen := for_each_nednv( BCname
-			,	replace('bebouwing/@BC/nrAansluitingen * beschikbaarF/@BC', '@BC', BCname)
-			,	bebouwing, BCname, nrAansl
-			);
-
-		container Oppervlakte := for_each_nednv( BCname
-			,	replace('bebouwing/@BC/Oppervlakte* beschikbaarF/@BC', '@BC', BCname)
-			,	bebouwing, BCname, m2
-			);
-
-		container Vj_RV := for_each_nednv( BCname
-			,	replace('bebouwing/@BC/Functioneel/Vj_RV * beschikbaarF/@BC', '@BC', BCname)
-			,	bebouwing, BCname, GJ_yr
-			);
-
-		container Vj_TW := for_each_nednv( BCname
-			,	replace('bebouwing/@BC/Functioneel/Vj_TW * beschikbaarF/@BC', '@BC', BCname)
-			,	bebouwing, BCname, GJ_yr
-			);
-
-		container Vj_Warmte := for_each_nednv( BCname
-			,	replace('Vj_RV/@BC Vj_TW/@BC', '@BC', BCname)
-			,	bebouwing, BCname, GJ_yr
-			);
-			
-		container WarmteVraag := for_each_nednv( BCname
-			,	replace('bebouwing/@BC/Warmtewet/WarmtePrijs* Vj_Warmte/@BC', '@BC', BCname)
-			,	bebouwing, BCname, EUR_yr
-			);
-	}
+		
+	container WarmteVraag := for_each_ne(BCname, replace('CalculationSchemes/WarmteVraagT(bebouwing/@BC, beschikbaarF/@BC)', '@BC', BCname));
+	
 	unit<uint32> PlanRegio := Invoer/SpecifiekeInstellingen/PlanRegio;
 	
 	//TODO: consider vervanging PlanRegioKaarten door bovenstaande
-	container PlanRegioKaarten := for_each_ne(BCname, 'CalculationSchemes/NaarPlanRegio(bebouwing/'+BCname+', beschikbaarF/'+BCname+')');
+	container PlanRegioKaarten := for_each_ne(BCname, 'CalculationSchemes/NaarPlanRegio(bebouwing/'+BCname+', WarmteVraag/'+BCname+', PlanRegio)');
 
-	container WarmteVraag
+	container WarmteVraagPerPlanRegio
 	{
-		attribute<nrAansl>     nrAansluitingen(PlanRegio) := ='add('+AsItemList('sum(PerObject/nrAansluitingen/'+BCname+', bebouwing/'+BCname+'/PlanRegio_rel)')+')';
-		attribute<Units/GJ_yr> deelnemers     (PlanRegio) := ='add('+AsItemList('sum(PerObject/Vj_Warmte/'      +BCname+', bebouwing/'+BCname+'/PlanRegio_rel)')+')';
-		attribute<Units/GJ_yr> deelnemers_RV  (PlanRegio) := ='add('+AsItemList('sum(PerObject/Vj_RW/'          +BCname+', bebouwing/'+BCname+'/PlanRegio_rel)')+')';
-		attribute<Units/GJ_yr> deelnemers_TW  (PlanRegio) := ='add('+AsItemList('sum(PerObject/Vj_TW/'          +BCname+', bebouwing/'+BCname+'/PlanRegio_rel)')+')';		
+		attribute<nrAansl>     nrAansluitingen(PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+BCname+'/nrAansluitingen')+')';
+		attribute<Units/GJ_yr > V_Warmte      (PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+BCname+'/V_Warmte'       )+')';
+		attribute<Units/GJ_yr > V_RV          (PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+BCname+'/V_RW'           )+')';
+		attribute<Units/GJ_yr > V_TW          (PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+BCname+'/V_TW'           )+')';
+		attribute<Units/GJ_yr > V_K           (PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+BCname+'/V_K'            )+')';
+		attribute<Units/EUR_yr> Oj_Warmte     (PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+BCname+'/Oj_Warmte'      )+')';
+		attribute<Units/EUR_yr> Oj_VastRechtMT(PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+BCname+'/Oj_VastRechtMT' )+')';
+		attribute<Units/EUR_yr> Oj_VastRechtLT(PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+BCname+'/Oj_VastRechtLT' )+')';
+		attribute<Units/EUR_yr> Oj_VastRechtK (PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+BCname+'/Oj_VastRechtK ' )+')';
+		attribute<Units/EUR   > Oi_Aansluitbijdrage(PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+BCname+'/Oi_Aansluitbijdrage' )+')';
 	}
 
 	container Opbrengsten
 	{
-		container EenmaligD := for_each_nedv(
-			 BCname
+		container EenmaligD := for_each_nedv(BCname
 			,replace('sum(Bebouwing/@BC@/Opbrengsten/AansluitBijdrageT * beschikbaarF/@BC@, Bebouwing/@BC@/PlanRegio_rel)', '@BC@', BCname)
-			,PlanRegio
-			,Eur
+			,PlanRegio, Eur
 			)
 		{
 			attribute<Eur> Oi_Totaal(PlanRegio) := ='add('+AsItemList(BCname)+')';
 		}
-		container JaarlijksD := for_each_nedv(BCname
+		container JaarlijksD 
+/*REMOVE?		:= for_each_nedv(BCname
 		,	replace('sum(bebouwing/@BC/Opbrengsten/VastRechtMT_T * beschikbaarF/@BC , bebouwing/@BC/PlanRegio_rel)', '@BC', BCname)
-		,	PlanRegio, EUR_yr)
+		,	PlanRegio, EUR_yr) */
 		{
-			attribute<Eur_yr> Oj_VastRecht    (PlanRegio) := ='add('+AsItemList(BCname)+')';
-			attribute<Eur_yr> WarmteVraag     (PlanRegio) := ='add('+AsItemList('PlanRegioKaarten/'+BCname+'/WarmteVraag/deelnemers')+')';
-			attribute<Eur_yr> Oj_Totaal       (PlanRegio) := WarmteVraag + Oj_VastRecht;
+			attribute<Eur_yr> Oj_VastRecht(PlanRegio) := WarmteVraagPerPlanRegio/Oj_VastRechtMT;
+			attribute<Eur_yr> Oj_Warmte   (PlanRegio) := WarmteVraagPerPlanRegio/Oj_Warmte;
+			attribute<Eur_yr> Oj_Totaal   (PlanRegio) := Oj_Warmte + Oj_VastRecht;
 		}
 	}
 
@@ -90,12 +65,12 @@ template KostenBaten
 	{
 		parameter<Eur_GJ>			AardGasPrijs              :=	Prijzen/AardGas/Bijstook/KGJ_eindgebruik_excl;
 		parameter<Eur_GJ>			AardGasPrijs_m            :=	Prijzen/AardGas/Bijstook/KGJ_maatschappelijk;
-		attribute<NrWoningen>		nr_won        (PlanRegio) :=	(PlanRegioKaarten/BestaandeWoning/nrAanslWarmteDeelnemers + PlanRegioKaarten/NieuwbouwWoning/nrAanslWarmteDeelnemers) * 1[NrWoningen / NrAansl], Source = "Lw1, FO v7a F 76", Descr = "Aantal woningen";
-		attribute<Units/nrAansl>	Lu            (PlanRegio) :=	PlanRegioKaarten/BestaandeUtil/nrAanslWarmteDeelnemers + PlanRegioKaarten/NieuwbouwUtil/nrAanslWarmteDeelnemers, Descr = "Omvang utiliteitsbouw"; // ?????
-		attribute<units/m2>			opp_gltb      (PlanRegio) :=	PlanRegioKaarten/BestaandeGlTb/Oppervlak_Deelnemers + PlanRegioKaarten/NieuwbouwGlTb/Oppervlak_Deelnemers, Source = "Lt, FO v7a C1.3", Descr = "Omvang glastuinbouw";
-		attribute<units/GJ_yr>		V_Warmte_w    (PlanRegio) :=	PlanRegioKaarten/BestaandeWoning/Verbruik/deelnemers + PlanRegioKaarten/NieuwbouwWoning/Verbruik/deelnemers              , Source = "Lq2, FO v7a C1.3", Descr = "Warmtevraag woningen";
-		attribute<units/GJ_yr>		V_Warmte_u    (PlanRegio) :=	PlanRegioKaarten/BestaandeUtil/Verbruik/deelnemers + PlanRegioKaarten/NieuwbouwUtil/Verbruik/deelnemers                  , Source = "Lq4, FO v7a C1.3", Descr = "Warmtevraag utiliteitsbouw";
-		attribute<units/GJ_yr>		V_Warmte_gltb (PlanRegio) :=	PlanRegioKaarten/BestaandeGlTb/Verbruik/deelnemers + PlanRegioKaarten/NieuwbouwGlTb/Verbruik/deelnemers                  , Source = "Lq6, FO v7a C1.3", Descr = "Warmtevraag glastuinbouw";
+		attribute<NrWoningen>		nr_won        (PlanRegio) :=	(PlanRegioKaarten/BestaandeWoning/nrAansluitingen + PlanRegioKaarten/NieuwbouwWoning/nrAansluitingen) * 1[NrWoningen / NrAansl], Source = "Lw1, FO v7a F 76", Descr = "Aantal woningen";
+		attribute<Units/nrAansl>	Lu            (PlanRegio) :=	PlanRegioKaarten/BestaandeUtil/nrAansluitingen + PlanRegioKaarten/NieuwbouwUtil/nrAansluitingen, Descr = "Omvang utiliteitsbouw"; // ?????
+		attribute<units/m2>			opp_gltb      (PlanRegio) :=	PlanRegioKaarten/BestaandeGlTb/Oppervlakte + PlanRegioKaarten/NieuwbouwGlTb/Oppervlakte, Source = "Lt, FO v7a C1.3", Descr = "Omvang glastuinbouw";
+		attribute<units/GJ_yr>		V_Warmte_w    (PlanRegio) :=	PlanRegioKaarten/BestaandeWoning/V_Warmte + PlanRegioKaarten/NieuwbouwWoning/V_Warmte, Source = "Lq2, FO v7a C1.3", Descr = "Warmtevraag woningen";
+		attribute<units/GJ_yr>		V_Warmte_u    (PlanRegio) :=	PlanRegioKaarten/BestaandeUtil/V_Warmte+ PlanRegioKaarten/NieuwbouwUtil/V_Warmte, Source = "Lq4, FO v7a C1.3", Descr = "Warmtevraag utiliteitsbouw";
+		attribute<units/GJ_yr>		V_Warmte_gltb (PlanRegio) :=	PlanRegioKaarten/BestaandeGlTb/V_Warmte+ PlanRegioKaarten/NieuwbouwGlTb/V_Warmte, Source = "Lq6, FO v7a C1.3", Descr = "Warmtevraag glastuinbouw";
 	}
 
 	container Kostenkentallen := Kengetallen/Kosten_MT(LeerCurves/MTnet/curve, LeerCurves/OenM/curve, LeerCurves/Inpand/curve);
@@ -322,7 +297,7 @@ template KostenBaten
 			attribute<Eur_yr>	Kj_Onderhoud   (PlanRegio)	:=	(K_hoofdleiding + K_zijleiding) * Kengetallen/Onderhoud/R_Sec_onderhoud + K_WOS * Kengetallen/Onderhoud/R_WOS_onderhoud;
 			attribute<Eur_yr>	Kj_Admin       (PlanRegio)	:=	(K_hoofdleiding + K_zijleiding) * Kengetallen/Onderhoud/R_Sec_admin     + K_WOS * Kengetallen/Onderhoud/R_WOS_admin;
 			
-			attribute<GJ_yr>	V_wd_elek      (PlanRegio)	:=	Vj_warmte * Efficiencies/Pompenergie_Wnet,								Descr = "elektriciteitsverbruik distributiepompen";	
+			attribute<GJ_yr>	V_wd_elek      (PlanRegio)	:=	V_warmte * Efficiencies/Pompenergie_Wnet,								Descr = "elektriciteitsverbruik distributiepompen";	
 			attribute<Eur_yr>	Kj_wd_elek     (PlanRegio)	:=	V_wd_elek * Prijzen_elec/KGJ_eindgebruik_excl	[wd_gebruiksgrootteklasse_rel],	Descr = "jaarlijkse elektriciteitskosten collectief eindgebruiker";
 			attribute<Eur_yr>	Km_wd_elek     (PlanRegio)	:=	V_wd_elek * Prijzen_elec/KGJ_maatschappelijk	[wd_gebruiksgrootteklasse_rel],	Descr = "jaarlijkse elektriciteitskosten collectief maatschappelijk";
 			attribute<Eur_yr>	Kj_wd_elek_EH  (PlanRegio)	:=	V_wd_elek * Prijzen_elec/KGJ_EnergieHeffing		[wd_gebruiksgrootteklasse_rel],	Descr = "energieheffing over elektriciteitsverbruik pompenergie";
@@ -334,21 +309,21 @@ template KostenBaten
 			attribute<kw>		P_transport    (PlanRegio)	:=	SecundairNet/P_sec;
 			attribute<kw>		P_ASW          (PlanRegio)	:=	SecundairNet/P_sec;												
 		}
-		
-		attribute<GJ_yr>	Vj_WarmteVraag    (PlanRegio) :=	V_Warmte_w + V_Warmte_u + V_Warmte_gltb;
-		attribute<GJ_yr>	Vj_Warmte         (PlanRegio) :=	Vj_WarmteVraag / (1d - Efficiencies/Leidingverlies_LT * Leercurves/Verl/Curve);
-		attribute<GJ_yr>	Vj_LeidingVerlies (PlanRegio) :=	Vj_Warmte - Vj_WarmteVraag;
-		attribute<GJ_yr>	Vj_WarmtePrimair  (PlanRegio) :=	Vj_Warmte;
+
+		attribute<GJ_yr>	V_WarmteVraag    (PlanRegio) :=	V_Warmte_w + V_Warmte_u + V_Warmte_gltb;
+		attribute<GJ_yr>	V_Warmte         (PlanRegio) :=	V_WarmteVraag / (1d - Efficiencies/Leidingverlies_LT * Leercurves/Verl/Curve);
+		attribute<GJ_yr>	V_LeidingVerlies (PlanRegio) :=	V_Warmte - V_WarmteVraag;
+		attribute<GJ_yr>	V_WarmtePrimair  (PlanRegio) :=	V_Warmte;
 
 		container Bijstook
 		{
-			attribute<GJ_yr>	Vj_Vraag      (PlanRegio) :=	Vj_Warmte,													Descr = "volumevraag naar warmte die jaarlijks wordt geleverd uit de hulpketel";
-			attribute<GJ_yr>	Vj_Bijstook   (PlanRegio) :=	Vj_Vraag * Efficiencies/Efficiency_piekketel,		Descr = "volumevraag naar warmte uit hulpketel na correctie voor efficientiefactor", Source = "FO v7a F 35";
-			attribute<GJ_yr>	Vj_Verlies    (PlanRegio) :=	Vj_Bijstook - Vj_Vraag,										Descr = "gedeelte van de benodigde energie in de hulpketel dat verloren gaat in de omzetting naar warmte";
-			attribute<Eur_yr>	Kj_wd_gas     (PlanRegio) :=	AardGasPrijs                                * Vj_Bijstook,	Descr = "eindgebruikerskosten voor inkoop aardgas voor bijstook ik hulpketels";
-			attribute<Eur_yr>	Km_wd_gas     (PlanRegio) :=	AardGasPrijs_m                              * Vj_Bijstook,	Descr = "maatschappelijke kosten voor inkoop aardgas voor bijstook in hulpketels";
-			attribute<Eur_yr>	Kj_wd_gas_EH  (PlanRegio) :=	prijzen/Aardgas/Bijstook/KGJ_EnergieHeffing * Vj_Bijstook,	Descr = "energiebelasting betaald over inkoop aardgas voor bijstook in hulpketels door eindgebruikers, als onderdeel van Kj_wd_gas";
-			attribute<Eur_yr>	Kj_wd_gas_CO2 (PlanRegio) :=	prijzen/Aardgas/Bijstook/KGJ_CO2Heffing     * Vj_Bijstook,	Descr = "CO2 heffing betaald over inkoop aardgas voor bijstook in hulpketels door eindgebruikers, als onderdeel van Kj_wd_gas";
+			attribute<GJ_yr>	V_Vraag       (PlanRegio) :=	V_Warmte,													Descr = "volumevraag naar warmte die jaarlijks wordt geleverd uit de hulpketel";
+			attribute<GJ_yr>	V_Bijstook    (PlanRegio) :=	V_Vraag * Efficiencies/Efficiency_piekketel,		Descr = "volumevraag naar warmte uit hulpketel na correctie voor efficientiefactor", Source = "FO v7a F 35";
+			attribute<GJ_yr>	V_Verlies     (PlanRegio) :=	V_Bijstook - V_Vraag,										Descr = "gedeelte van de benodigde energie in de hulpketel dat verloren gaat in de omzetting naar warmte";
+			attribute<Eur_yr>	Kj_wd_gas     (PlanRegio) :=	AardGasPrijs                                * V_Bijstook,	Descr = "eindgebruikerskosten voor inkoop aardgas voor bijstook ik hulpketels";
+			attribute<Eur_yr>	Km_wd_gas     (PlanRegio) :=	AardGasPrijs_m                              * V_Bijstook,	Descr = "maatschappelijke kosten voor inkoop aardgas voor bijstook in hulpketels";
+			attribute<Eur_yr>	Kj_wd_gas_EH  (PlanRegio) :=	prijzen/Aardgas/Bijstook/KGJ_EnergieHeffing * V_Bijstook,	Descr = "energiebelasting betaald over inkoop aardgas voor bijstook in hulpketels door eindgebruikers, als onderdeel van Kj_wd_gas";
+			attribute<Eur_yr>	Kj_wd_gas_CO2 (PlanRegio) :=	prijzen/Aardgas/Bijstook/KGJ_CO2Heffing     * V_Bijstook,	Descr = "CO2 heffing betaald over inkoop aardgas voor bijstook in hulpketels door eindgebruikers, als onderdeel van Kj_wd_gas";
 		}
 
 		attribute<Eur>    Ki_id           (PlanRegio) := Wonen/Ki_id + Utiliteit/Ki_Totaal + Glastuinbouw/Ki_Totaal, Source = "FO v7a F 2";
@@ -423,6 +398,6 @@ template KostenBaten
 	attribute<Eur_yr> Km_totaalD          (PlanRegio) := KostenD/Km_Totaal;
 	
 	attribute<MW>     CapaciteitsVraagD   (PlanRegio) := KostenD/PrimairNet/P_transport * 0.001 [mw / kw];
-	attribute<GJ_yr>  Vj_WarmtePrimairD   (PlanRegio) := KostenD/Vj_WarmtePrimair;
-	attribute<KG_yr>  CO2_BijstookD       (PlanRegio) := Prijzen/AardGas/CO2_GJ * KostenD/Bijstook/Vj_Bijstook;
+	attribute<GJ_yr>  V_WarmtePrimairD    (PlanRegio) := KostenD/V_WarmtePrimair;
+	attribute<KG_yr>  CO2_BijstookD       (PlanRegio) := Prijzen/AardGas/CO2_GJ * KostenD/Bijstook/V_Bijstook;
 }

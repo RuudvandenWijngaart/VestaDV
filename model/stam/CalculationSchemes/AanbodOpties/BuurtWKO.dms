@@ -24,44 +24,29 @@ template BuurtWKO
 	parameter<bool>		KoudeBeschikbaar  :=	false        ,	Descr = "wordt er collectief koude geleverd ja/nee";
 
 	container		bebouwing             :=	BeginStatus/Bebouwing;
-	container		KostenBaten           :=	CalculationSchemes/KostenBaten(bebouwing, Energieprijzen, false);
+	container		KostenBaten           :=	CalculationSchemes/KostenBaten(bebouwing, false);
 	container		Efficiency            :=	Kengetallen/Efficiency/Efficiency_LT(T_ow, T_sec);
 	container		Kostenkentallen       :=	Kengetallen/Kosten_LT(Leercurves/Inpand/Curve, Leercurves/eWPww/Curve, Leercurves/LTnet/Curve, Leercurves/MTnet/Curve);
 	
-	container BestaandeWoningData :=	WKOWoningData(
-											bebouwing/BestaandeWoning, 
-											bebouwing/BestaandeWoning/BebouwingsTypeDomein,
-											KostenBaten/KostenD/Wonen/bw,
-											KoudeBeschikbaar);
-
-	container NieuwbouwWoningData :=	WKOWoningData(
-											bebouwing/NieuwbouwWoning, 
-											bebouwing/NieuwbouwWoning/BebouwingsTypeDomein,
-											KostenBaten/KostenD/Wonen/nw,
-											KoudeBeschikbaar);
-
-	container BestaandeUtilData :=		WKOUtilData(
-											bebouwing/BestaandeUtil, 
-											KoudeBeschikbaar);
+	container BestaandeWoningData := WKOWoningData(bebouwing/BestaandeWoning, KostenBaten/WarmteVraag/BestaandeWoning, false, KoudeBeschikbaar, KostenBaten/KostenD/Wonen/bw);
+	container NieuwbouwWoningData := WKOWoningData(bebouwing/NieuwbouwWoning, KostenBaten/WarmteVraag/NieuwbouwWoning, true , KoudeBeschikbaar, KostenBaten/KostenD/Wonen/nw);
+	container BestaandeUtilData   := WKOUtilData  (bebouwing/BestaandeUtil,   KostenBaten/WarmteVraag/BestaandeUtil  , false, KoudeBeschikbaar);	
+	container NieuwbouwUtilData   := WKOUtilData  (bebouwing/NieuwbouwUtil,   KostenBaten/WarmteVraag/NieuwbouwUtil  , true , KoudeBeschikbaar);
 	
-	container NieuwbouwUtilData :=		WKOUtilData(
-											bebouwing/NieuwbouwUtil, 
-											KoudeBeschikbaar);
-	
-	container CandidateSets := for_each_ne(WkoComponent/Name, 'WKOData('+WkoComponent/Name+'Data, '+Quote(WkoComponent/Name)+', T_sec)');
+	container CandidateSets := for_each_ne(WkoComponent/Name, replace('WKOData(bebouwing/@WC, @WCData, ''@WC'', T_sec)', '@WC', WkoComponent/Name));
 	
 	container BuurtSelected
 	{		
-		attribute<Eur_yr>   CoMr_bw           (PlanRegio) := sum(CandidateSets/BestaandeWoning/Contributiemarge, CandidateSets/BestaandeWoning/Planregio_rel);
-		attribute<Eur_yr>   CoMr_nw           (PlanRegio) := sum(CandidateSets/NieuwbouwWoning/Contributiemarge, CandidateSets/NieuwbouwWoning/Planregio_rel);
-		attribute<Eur_yr>   CoMr_bu           (PlanRegio) := sum(CandidateSets/BestaandeUtil/Contributiemarge, CandidateSets/BestaandeUtil/Planregio_rel);
-		attribute<Eur_yr>   CoMr_nu           (PlanRegio) := sum(CandidateSets/NieuwbouwUtil/Contributiemarge, CandidateSets/NieuwbouwUtil/Planregio_rel);
+		attribute<Eur_yr>   CoMr_bw           (PlanRegio) := sum(CandidateSets/BestaandeWoning/Contributiemarge, bebouwing/BestaandeWoning/Planregio_rel);
+		attribute<Eur_yr>   CoMr_nw           (PlanRegio) := sum(CandidateSets/NieuwbouwWoning/Contributiemarge, bebouwing/NieuwbouwWoning/Planregio_rel);
+		attribute<Eur_yr>   CoMr_bu           (PlanRegio) := sum(CandidateSets/BestaandeUtil/Contributiemarge, bebouwing/BestaandeUtil/Planregio_rel);
+		attribute<Eur_yr>   CoMr_nu           (PlanRegio) := sum(CandidateSets/NieuwbouwUtil/Contributiemarge, bebouwing/NieuwbouwUtil/Planregio_rel);
 		attribute<Eur_yr>	Contributiemarge  (PlanRegio) := CoMr_bw + CoMr_nw + CoMr_bu + CoMr_nu;		
 		
-		attribute<KW>   	PW_bw             (PlanRegio) := sum(CandidateSets/BestaandeWoning/P_sec, CandidateSets/BestaandeWoning/Planregio_rel);
-		attribute<KW>   	PW_nw             (PlanRegio) := sum(CandidateSets/NieuwbouwWoning/P_sec, CandidateSets/NieuwbouwWoning/Planregio_rel);
-		attribute<KW>   	PW_bu             (PlanRegio) := sum(CandidateSets/BestaandeUtil/P_sec, CandidateSets/BestaandeUtil/Planregio_rel);
-		attribute<KW>   	PW_nu             (PlanRegio) := sum(CandidateSets/NieuwbouwUtil/P_sec, CandidateSets/NieuwbouwUtil/Planregio_rel);
+		attribute<KW>   	PW_bw             (PlanRegio) := sum(CandidateSets/BestaandeWoning/P_sec, bebouwing/BestaandeWoning/Planregio_rel);
+		attribute<KW>   	PW_nw             (PlanRegio) := sum(CandidateSets/NieuwbouwWoning/P_sec, bebouwing/NieuwbouwWoning/Planregio_rel);
+		attribute<KW>   	PW_bu             (PlanRegio) := sum(CandidateSets/BestaandeUtil/P_sec, bebouwing/BestaandeUtil/Planregio_rel);
+		attribute<KW>   	PW_nu             (PlanRegio) := sum(CandidateSets/NieuwbouwUtil/P_sec, bebouwing/NieuwbouwUtil/Planregio_rel);
 		attribute<KW>   	P_sec             (PlanRegio) := PW_bw + PW_nw + PW_bu + PW_nu;		
 		attribute<m2>		AreaProxy         (PlanRegio) := Invoer/RuimtelijkeData/StudieGebied/buurt/Overigen_r_land_com * Invoer/RuimtelijkeData/StudieGebied/buurt/Area;
 		
@@ -107,12 +92,18 @@ template BuurtWKO
 	attribute<Bool> StartThis (PlanRegio) := Buurtselected/NewGebruik;
 	attribute<Bool> HasThis   (PlanRegio) := Buurtselected/GebruikOptie;
 	
+	unit<uint32> RendabelCluster := subset(StartThis);
+	
+	unit<uint32> NewAfnameGebied := union_unit(BeginStatus/AfnameGebied, RendabelCluster) {
+		attribute<Classifications/GebiedsOptie> GebiedsOptie_rel := union_data(., BeginStatus/AfnameGebied/GebiedsOptie_rel, const(Classifications/GebiedsOptie/V/BuurtWKO, RendabelCluster));
+	}
+	
 	unit <uint32> UnitedCandidates := ='union_unit('+AsItemList('CandidateSets/'+WkoComponent/Name+'/AllowedObjects')+')'
 	,	DialogType = "Map"
 	,	DialogData = "Point"
 	{
 		attribute<string>    Label           := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/AllowedObjects/Label') + ')', DialogType = "LabelText";
-		attribute<Planregio> Planregio_rel   := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/Planregio_rel  [CandidateSets/' + WkoComponent/Name + '/AllowedObjects/nr_OrgEntity]') + ')';
+//REMOVE		attribute<Planregio> Planregio_rel   := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/Planregio_rel  [CandidateSets/' + WkoComponent/Name + '/AllowedObjects/nr_OrgEntity]') + ')';
 		
 		
 		attribute<Eur>       Ki_ge_pm        := ='union_data(., ' + asItemList('CandidateSets/' + WkoComponent/Name + '/Ki_ge_pm      [CandidateSets/' + WkoComponent/Name + '/AllowedObjects/nr_OrgEntity]') + ')';
@@ -175,12 +166,9 @@ template BuurtWKO
 	
 		container BebouwingMutatie :=
 			for_each_ne(Classifications/BebouwingsComponent/Name
-				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name+', Classifications/GebiedsOptie/V/BuurtWKO, BuurtSelected/GebruikOptie, AfnameGebied)'
+				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name+', Classifications/GebiedsOptie/V/BuurtWKO, BuurtSelected/GebruikOptie, BeginStatus/AfnameGebied)'
 			);
-		container Bebouwing :=
-			for_each_ne(Classifications/BebouwingsComponent/Name
-				, 'BebouwingMutatie/'+Classifications/BebouwingsComponent/Name+'/result'
-			);
+		container Bebouwing := for_each_nex(Classifications/BebouwingsComponent/Name, 'BebouwingMutatie/'+Classifications/BebouwingsComponent/Name+'/results', uint32);
 		
 		container BuurtWKO
 		{
@@ -189,21 +177,21 @@ template BuurtWKO
 
 			container Eenmalig
 			{
-				attribute<Eur>		Ki_ge_pm    (PlanRegio) :=	float64(StartThis) *                            sum(UnitedCandidates/Ki_ge_pm, UnitedCandidates/Planregio_rel);
-				attribute<Eur>		Ki_ge_ov    (PlanRegio) :=	float64(StartThis) *                            sum(UnitedCandidates/Ki_ge_ov, UnitedCandidates/Planregio_rel);
-				attribute<Eur>		Ki_ow       (PlanRegio) :=	float64(StartThis) * (BuurtSelected/Ki_ow +     sum(UnitedCandidates/Ki_ow, UnitedCandidates/Planregio_rel));
-				attribute<Eur>		Ki_wd       (PlanRegio) :=	float64(StartThis) * (BuurtSelected/Ki_wd +     sum(UnitedCandidates/Ki_wd, UnitedCandidates/Planregio_rel));
-				attribute<Eur>		Ki_id       (PlanRegio) :=	float64(StartThis) *                            sum(UnitedCandidates/Ki_id, UnitedCandidates/Planregio_rel);
-				attribute<Eur>		Ki_pt       (PlanRegio) :=	const(0[EUR], PlanRegio); // geen primair transport bij WKO
-				attribute<Eur>		Oi_lv_aansl (PlanRegio) :=	float64(StartThis) *                            sum(UnitedCandidates/Oi_lv_aansl, UnitedCandidates/Planregio_rel);
+				attribute<Eur> Ki_ge_pm    (PlanRegio) := float64(StartThis) *                            sum(UnitedCandidates/Ki_ge_pm, UnitedCandidates/Planregio_rel);
+				attribute<Eur> Ki_ge_ov    (PlanRegio) := float64(StartThis) *                            sum(UnitedCandidates/Ki_ge_ov, UnitedCandidates/Planregio_rel);
+				attribute<Eur> Ki_ow       (PlanRegio) := float64(StartThis) * (BuurtSelected/Ki_ow +     sum(UnitedCandidates/Ki_ow, UnitedCandidates/Planregio_rel));
+				attribute<Eur> Ki_wd       (PlanRegio) := float64(StartThis) * (BuurtSelected/Ki_wd +     sum(UnitedCandidates/Ki_wd, UnitedCandidates/Planregio_rel));
+				attribute<Eur> Ki_id       (PlanRegio) := float64(StartThis) *                            sum(UnitedCandidates/Ki_id, UnitedCandidates/Planregio_rel);
+				attribute<Eur> Ki_pt       (PlanRegio) := const(0[EUR], PlanRegio); // geen primair transport bij WKO
+				attribute<Eur> Oi_lv_aansl (PlanRegio) := float64(StartThis) *                            sum(UnitedCandidates/Oi_lv_aansl, UnitedCandidates/Planregio_rel);
 				
-				attribute<Eur>		Oi_ow_EIA   (PlanRegio) :=	float64(StartThis) * (BuurtSelected/Oi_ow_EIA + sum(UnitedCandidates/Oi_ow_EIA, UnitedCandidates/Planregio_rel));
-				attribute<Eur>		Oi_wd_EIA   (PlanRegio) :=	float64(StartThis) * (BuurtSelected/Oi_wd_EIA + sum(UnitedCandidates/Oi_wd_EIA, UnitedCandidates/Planregio_rel));
-				attribute<Eur>		Oi_id_EIA   (PlanRegio) :=	float64(StartThis) *                            sum(UnitedCandidates/Oi_id_EIA, UnitedCandidates/Planregio_rel);
-				attribute<Eur>		Oi_ge_EIA   (PlanRegio) :=	float64(StartThis) *                            sum(UnitedCandidates/Oi_ge_EIA, UnitedCandidates/Planregio_rel);
-				attribute<Eur>		Oi_pt_EIA   (PlanRegio) :=	const(0[EUR], PlanRegio); // geen primair transport bij WKO
-				attribute<Eur> Ki_wd_Gnet     (PlanRegio) := const(0[EUR], PlanRegio);
-				attribute<Eur>		Ki_id_lo      (PlanRegio) :=	const(0[EUR], PlanRegio);
+				attribute<Eur> Oi_ow_EIA   (PlanRegio) := float64(StartThis) * (BuurtSelected/Oi_ow_EIA + sum(UnitedCandidates/Oi_ow_EIA, UnitedCandidates/Planregio_rel));
+				attribute<Eur> Oi_wd_EIA   (PlanRegio) := float64(StartThis) * (BuurtSelected/Oi_wd_EIA + sum(UnitedCandidates/Oi_wd_EIA, UnitedCandidates/Planregio_rel));
+				attribute<Eur> Oi_id_EIA   (PlanRegio) := float64(StartThis) *                            sum(UnitedCandidates/Oi_id_EIA, UnitedCandidates/Planregio_rel);
+				attribute<Eur> Oi_ge_EIA   (PlanRegio) := float64(StartThis) *                            sum(UnitedCandidates/Oi_ge_EIA, UnitedCandidates/Planregio_rel);
+				attribute<Eur> Oi_pt_EIA   (PlanRegio) := const(0[EUR], PlanRegio); // geen primair transport bij WKO
+				attribute<Eur> Ki_wd_Gnet  (PlanRegio) := const(0[EUR], PlanRegio);
+				attribute<Eur> Ki_id_lo    (PlanRegio) := const(0[EUR], PlanRegio);
 			}
 			
 			container Jaarlijks

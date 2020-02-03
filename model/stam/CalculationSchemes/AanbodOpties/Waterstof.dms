@@ -24,7 +24,9 @@ template Waterstof
 	container Emissie := Kengetallen/H2kentallen/Emissies;
 	
 	//GEBOUWNIVEAU BEREKENINGEN
-	container CandidateSets := for_each_ne(H2Component/Name, 'WaterstofData(BebouwingsComponenten/'+H2Component/Name+', Optie)');
+	container CandidateSets := for_each_ne(H2Component/Name, 
+		'WaterstofData(BeginStatus/bebouwing/'+H2Component/Name+', '+string(H2Component/IsNieuwbouw)+', '+string(IsDefined(strpos(H2Component/Name,'Woning')))+', Optie)'
+	);
 
 	//SAMENVOEGING BEREKENINGEN GEBOUWNIVEAU NAAR PLANREGIO
 	container Vraag
@@ -137,15 +139,22 @@ template Waterstof
 	attribute<bool>		NewGebruik   (PlanRegio) :=		Rendabel && not(HeeftOptie);
 	attribute<bool>		InGebruik    (PlanRegio) :=		OldGebruik || NewGebruik;
 
+	unit<uint32> RendabelCluster := subset(NewGebruik);
+	unit<uint32> NewAfnameGebied := union_unit(BeginStatus/AfnameGebied, RendabelCluster)
+	{
+		attribute<Classifications/GebiedsOptie> GebiedsOptie_rel := union_data(., BeginStatus/AfnameGebied/GebiedsOptie_rel, const(Optie, RendabelCluster));
+	}
+	
 	//ADMINISTRATIE RESULTATEN
 	container Results := BeginStatus
 	{
 		container BebouwingMutatie :=
 			for_each_ne(Classifications/BebouwingsComponent/Name
-				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name+', Optie, .../InGebruik, AfnameGebied)'
+				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/'+Classifications/BebouwingsComponent/Name+', Optie, .../InGebruik, BeginStatus/AfnameGebied)'
 			);
 		container Bebouwing :=
 			for_each_nex(Classifications/BebouwingsComponent/Name, 'BebouwingMutatie/'+Classifications/BebouwingsComponent/Name+'/results', uint32);
+		unit<uint32> AfnameGebied := NewAfnameGebied;
 		attribute<Classifications/GebiedsOptie> PlanRegioWarmteAllocatie_REMOVE (PlanRegio) :=
 			../InGebruik
 				? Optie
