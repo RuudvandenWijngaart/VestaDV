@@ -1,0 +1,85 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                                           //
+//                         (C) VESTA 2019 - Planbureau voor de Leefomgeving                                  //
+//                                                                                                           //
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                                           //
+//Bij gebruik van het Vesta-model zie:                                                                       //
+//https://github.com/RuudvandenWijngaart/VestaDV/wiki/F.1-Installatie-Instructies#vraag-vanuit-het-vesta-team//
+//                                                                                                           //
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+container S3e_B_TEO
+{
+	#include <%projDir%/model/Units.dms>
+	#include <%projDir%/model/Geography.dms>
+	#include <%projDir%/model/Classifications.dms>
+
+	// Hier kun je meer of minder rekenstappen per jaar gaan definieren. Pas dan ook de onderstaande attribuutdata aan.
+	// Waarschijnlijk moet de eerste rekenstap wel verwijzen naar het eerste zichtjaar en moeten volgende rekenstappen niet naar eerdere jaren verwijzen.	
+	unit<uint8> rekenstap: nrofrows = 4
+	{
+		attribute<units/yr_uint16> Jaar  : [2019, 2030, 2030, 2030];
+		
+		// bij label en name kun je eigen rekenstappen opgeven. Deze namen moeten overeen komen met:
+		// - namen van subitems van in Invoer/SpecifiekeInstellingen
+		attribute<string>          Label := string(ID(.))+'_'+string(Jaar);
+		attribute<string>          Name  := id(.) == 0b ? 'StartJaar' : 'R' + Label; 
+	}
+	
+	container Invoer
+	{
+		// Gemeentes als selectie: 'NL' or a set of municipality codes, 
+//		parameter<string> StudieGebied: ['NL'];
+		parameter<string> StudieGebied: ['GM0344'];  // Utrecht
+//		parameter<string> StudieGebied: ['GM0402'];  // Hilversum
+//		parameter<string> StudieGebied: ['GM0995'];  // Lelystad
+//		parameter<string> StudieGebied: ['GM0088'];  // Schiermonnikoog, geen warmtebronnen
+//		parameter<string> StudieGebied: ['GM0448'];  // Texel, 1 warmtebron
+//		parameter<string> StudieGebied: ['GM0453,GM0375,GM0396'];
+
+		// OR RES als selectie
+//		parameter<string> RES_StudieGebied : ['RESU10_U16'];
+//		parameter<string> RES_StudieGebied : ['RESNoordHollandZuid']; // Deze RES geeft problemen wegens doorsnijding van bestaande warmtenetten.
+//		parameter<string> StudieGebied     := Geography/RegioIndelingen/Energieregio/GM_code_list[rlookup(RES_StudieGebied, Geography/RegioIndelingen/Energieregio/name)];
+		
+		// Include Invoer and defaults settings section, similar for each run
+		#include <%projDir%/model/RuimtelijkeData.dms>
+		#include <%projDir%/model/Kengetallen.dms>
+		
+		#include <%projDir%/model/EnergiePrijzen.dms>
+
+		container DefaultInstellingen
+		{
+			#include <%projDir%/Runs/DefaultSettings/Basis.dms>
+			#include <%projDir%/Runs/DefaultSettings/Rekenstap.dms>
+			#include <%projDir%/Runs/DefaultSettings/Rekenstap_Doeniks.dms>
+			#include <%projDir%/Runs/DefaultSettings/Rekenstap_AllesB_TEO.dms>
+			#include <%projDir%/Runs/DefaultSettings/Rekenstap_AllesWP_TEO.dms>
+			#include <%projDir%/Runs/DefaultSettings/Leidraad.dms>
+		}
+		
+		container SpecifiekeInstellingen := DefaultInstellingen/Basis
+		{
+			parameter<string> prijzenbron := '20190909_Energieprijzen_KEV2019', Descr = "Energieprijzen in het basispad van de Klimaat en Energie Verkenning 2019 (PBL)";
+			parameter<bool> HasStartingArcSet := true;
+			
+			container StartJaar := DefaultInstellingen/Basis;
+			
+			// Per rekenstap kun je hier specifieke instelling overrulen. De lijst van rekenstappen wordt gedefinieerd bij rekenstap
+			container R1_2030 := DefaultInstellingen/Rekenstap_Doeniks/Stap_1;
+			container R2_2030 := DefaultInstellingen/Rekenstap_AllesB_TEO/Stap_1;
+			container R3_2030 := DefaultInstellingen/Rekenstap_AllesWP_TEO/Stap_1;
+		}
+	}
+
+	#include <%projDir%/model/stam.dms>
+	#include <%projDir%/model/BeginSituatie.dms>
+	#include <%projDir%/model/TussenResultaten.dms>
+	#include <%projDir%/model/Resultaten.dms>
+	#include <%projDir%/model/LeidraadResultaten.dms>
+	#include <%projDir%/model/ConfigSettings.dms>
+	#include <%projDir%/model/ExportSettings.dms>
+}
