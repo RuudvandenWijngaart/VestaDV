@@ -4,7 +4,14 @@ REM Sluit GUI-variant(GeoDmsGui.exe) af bij aanroepen van GeoDmsRun.exe (indien 
 REM Resultaten worden weggeschreven in: n:/LD/%confignaam%/results/...
 REM Bij nogmaals runnen worden bestanden gewoon overschreven
 
-Call path/set.bat
+REM aanpassingen voor machine specifieke paden
+set prj_dir=N:\PD\_Folckert\VestaDV_GeneralisatieConversie
+set log_dir=N:\log_folckert
+set exe_dir=N:\prog\ObjectVision\GeoDms7207
+
+REM einde aanpassingen voor machine specifieke paden
+
+set exe_path=%exe_dir%\GeoDMSRun.exe
 
 "%exe_path%" /L"%log_dir%\StatischAll.txt" "%prj_dir%\Runs\S1a_B_LuchtWP.dms" /LeidraadResultaten/StartJaar/PlanRegioResults/Statisch/export_csv/result
 
@@ -48,3 +55,5 @@ set ITEMS=%ITEM1% %ITEM2% %ITEM3%
 "%exe_path%" /L"%log_dir%\S5b_GG_B_HR.txt"       "%prj_dir%\Runs\S5b_GG_B_HR.dms"       %ITEMS%
 "%exe_path%" /L"%log_dir%\S5c_GG_D_hWP.txt"      "%prj_dir%\Runs\S5c_GG_D_hWP"          %ITEMS%
 "%exe_path%" /L"%log_dir%\S5d_GG_D_HR.txt"       "%prj_dir%\Runs\S5d_GG_D_HR"           %ITEMS%
+
+pause Totaal klaar
