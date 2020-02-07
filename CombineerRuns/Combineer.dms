@@ -1,0 +1,154 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container Vergelijking: using = "Units"
+{
+	unit<uint32> PlanRegio          := Invoer/SpecifiekeInstellingen/PlanRegio		, isHidden = "true";
+	unit<uint8> Variant : nrofrows = 25
+	{
+		attribute<string> label :
+			['S1a_B_luchtWP'    , 'S1b_B_bodemWP'
+			,'S2a_B_Restwarmte' , 'S2b_B_Geo_contour', 'S2c_B_Geo_overal' , 'S2d_D_Restwarmte' , 'S2e_D_Geo_contour' , 'S2f_D_Geo_overal'
+			,'S3a_B_LT30_30'    , 'S3b_B_LT30_70'    , 'S3c_B_BuurtWKO'   , 'S3d_B_WKO'        , 'S3e_B_TEO'         , 'S3f_D_LT30_70'    , 'S3g_D_TEO'   , 'S3h_D_BuurtWKO'
+			,'S4a_H2_B_hWP'     , 'S4b_H2_B_HR'      , 'S4c_H2_D_hWP'     , 'S4d_H2_D_HR'
+			,'S5a_GG_B_hWP'     , 'S5b_GG_B_HR'      , 'S5c_GG_D_hWP'     , 'S5d_GG_D_HR'
+			,'uitgesloten'] , DialogType = "LabelText";
+		attribute<string> name :
+			['s1a','s1b'
+			,'s2a','s2b','s2c','s2d','s2e','s2f'
+			,'s3a','s3b','s3c','s3d','s3e','s3f','s3g','s3h'
+			,'s4a','s4b','s4c','s4d'
+			,'s5a','s5b','s5c','s5d'
+			,'geen'];
+		attribute<uint32> Color : DialogType = "BrushColor",
+			[rgb(128,240,141),rgb(020,175,039)
+			,rgb(244,170,202),rgb(223,075,142),rgb(167,020,083),rgb(114,014,056),rgb(167,020,083),rgb(114,014,056)
+			,rgb(173,207,250),rgb(092,160,243),rgb(039,130,239),rgb(013,085,174),rgb(010,066,135),rgb(039,130,239),rgb(013,085,174),rgb(010,066,135)
+			,rgb(228,222,092),rgb(130,124,021),rgb(228,222,092),rgb(130,124,021)
+			,rgb(228,222,092),rgb(130,124,021),rgb(228,222,092),rgb(130,124,021)
+			,rgb(192,192,193)];
+		attribute<uint32> PenColor : DialogType = "PenColor",
+			[rgb(128,240,141),rgb(020,175,039)
+			,rgb(244,170,202),rgb(223,075,142),rgb(167,020,083),rgb(114,014,056),rgb(167,020,083),rgb(114,014,056)
+			,rgb(173,207,250),rgb(092,160,243),rgb(039,130,239),rgb(013,085,174),rgb(010,066,135),rgb(039,130,239),rgb(013,085,174),rgb(010,066,135)
+			,rgb(228,222,092),rgb(130,124,021),rgb(228,222,092),rgb(130,124,021)
+			,rgb(228,222,092),rgb(130,124,021),rgb(228,222,092),rgb(130,124,021)
+			,rgb(192,192,192)];
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+
+	unit<uint8> Strategie : nrofrows = 6
+	{
+		attribute<string> label: ['S1_WP','S2_MT','S3_LT','S4_H2','S5_GG','uitgesloten'] , DialogType = "LabelText";
+		attribute<string> name : ['S1','S2','S3','S4','S5','geen'];
+		attribute<uint32> Color : DialogType = "BrushColor",
+		[
+			 rgb(020,175,039),rgb(167,020,083)
+			,rgb(039,130,239),rgb(228,222,092)
+			,rgb(130,124,021),rgb(226,037,241)
+		];
+		attribute<uint32> PenColor : DialogType = "PenColor",
+		[
+			 rgb(020,175,039),rgb(167,020,083)
+			,rgb(039,130,239),rgb(228,222,092)
+			,rgb(130,124,021),rgb(226,037,241)
+		];
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+
+	container data := for_each_ne(Variant/name, replace('ImportResults(Variant/V/@C)','@C',Variant/name));
+	
+	template ImportResults
+	{
+		//case parameters
+		parameter<Variant> VC;
+		//end
+		
+		unit<uint32> Hoofdindicatoren
+		:	StorageName     = "='%LocalDataProjDir%/results/' + Variant/label[VC] + '/R1_2030/hoofdindicatoren.csv'"
+		,	StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True"
+		{
+			attribute<string> CODE := substr(_BU_CODE_, 1, 10);
+		}
+		unit<uint32> Nationalekosten
+		:	StorageName     = "='%LocalDataProjDir%/results/' + Variant/label[VC] + '/R1_2030/nationalekosten.csv'"
+		,	StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True"
+		{
+			attribute<string> CODE := substr(_BU_CODE_, 1, 10);
+		}
+		unit<uint32> Aansluitingen
+		:	StorageName     = "='%LocalDataProjDir%/results/' + Variant/label[VC] + '/R1_2030/aansluitingen.csv'"
+		,	StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True"
+		{
+			attribute<string> CODE := substr(_BU_CODE_, 1, 10);
+		}
+		container results := TransLate(Hoofdindicatoren,Nationalekosten,Aansluitingen);
+	}
+	
+	template TransLate:= Invoer/RuimtelijkeData/Studiegebied/buurt
+	,	DialogType = "map"
+	,	DialogData = "geometry"
+	{
+		//case parameters
+		unit<uint32> Hoofdindicatoren;
+		unit<uint32> Nationalekosten;
+		unit<uint32> Aansluitingen;
+		//end
+		
+		attribute<string>     BU_CODE                              (Planregio):= Invoer/RuimtelijkeData/StudieGebied/buurt/BU_CODE ;
+		attribute<string>     V01_Strategievariant                 (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_V01_Strategievariant_)[string];
+		attribute<GJ_yr_WEQ>  H01_Vraag_totaal                     (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H01_Vraag_totaal___giga_J_per_Woning_yr__)[GJ_yr_WEQ];
+		attribute<GJ_yr_WEQ>  H02_Vraag_RV                         (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H02_Vraag_RV___giga_J_per_Woning_yr__)[GJ_yr_WEQ];
+		attribute<GJ_yr_WEQ>  H03_Vraag_TW                         (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H03_Vraag_TW___giga_J_per_Woning_yr__)[GJ_yr_WEQ];
+		attribute<GJ_yr_WEQ>  H04_Vraag_Vent                       (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H04_Vraag_Vent___giga_J_per_Woning_yr__)[GJ_yr_WEQ];
+		attribute<GJ_yr_WEQ>  H05_Vraag_K                          (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H05_Vraag_K___giga_J_per_Woning_yr__)[GJ_yr_WEQ];
+		attribute<GJ_yr_WEQ>  H06_Vraag_App                        (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H06_Vraag_App___giga_J_per_Woning_yr__)[GJ_yr_WEQ];
+		attribute<GJ_yr_ha>   H07_vraag_tot_ha                     (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H07_vraag_tot_ha__100_kilo_J_per_m_2_yr__)[GJ_yr_ha];
+		attribute<GJ_yr_WEQ>  H08_Input_totaal                     (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H08_Input_totaal___giga_J_per_Woning_yr__)[GJ_yr_WEQ];
+		attribute<GJ_yr_WEQ>  H09_Input_aardgas                    (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H09_Input_aardgas___giga_J_per_Woning_yr__)[GJ_yr_WEQ];
+		attribute<GJ_yr_WEQ>  H10_Input_duurzaamgas                (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H10_Input_duurzaamgas___giga_J_per_Woning_yr__)[GJ_yr_WEQ];
+		attribute<GJ_yr_WEQ>  H11_Input_elektriciteit              (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H11_Input_elektriciteit___giga_J_per_Woning_yr__)[GJ_yr_WEQ];
+		attribute<GJ_yr_WEQ>  H12_input_MTwarmtebronnen            (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H12_input_MTwarmtebronnen___giga_J_per_Woning_yr__)[GJ_yr_WEQ];
+		attribute<GJ_yr_WEQ>  H13_input_LTwarmtebronnen            (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H13_input_LTwarmtebronnen___giga_J_per_Woning_yr__)[GJ_yr_WEQ];
+		attribute<GJ_yr_WEQ>  H14_Saldo_Omgevingswarmte            (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H14_Saldo_Omgevingswarmte___giga_J_per_Woning_yr__)[GJ_yr_WEQ];
+		
+		attribute<ton_yr>     H15_CO2_reductie                     (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H15_CO2_reductie___mega_g_per_yr__)[ton_yr];
+		attribute<Eur_yr>     H16_Nat_abskosten                    (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H16_Nat_abskosten__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_ton>    H17_Nat_meerkost_CO2                 (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H17_Nat_meerkost_CO2___micro_Euro_per_g__)[Eur_ton];
+		attribute<Eur_yr_WEQ> H18_Nat_meerkost_WEQ                 (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H18_Nat_meerkost_WEQ__Euro_per_Woning_yr__)[Eur_yr_WEQ];
+		attribute<Eur_m3>     H19_waarde_hernieuwbaar_gas          (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H19_waarde_hernieuwbaar_gas__Euro_per_m_3__)[Eur_m3];
+		attribute<string>     H20_beschikbaarheid_hernieuwbaar_gas (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H20_beschikbaarheid_hernieuwbaar_gas_)[string];
+
+		attribute<Eur_yr>     K01_Enet_verzwaren                   (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K01_Enet_verzwaren__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K02_Gnet_verwijderen                 (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K02_Gnet_verwijderen__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K03_Gnet_aanpassen                   (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K03_Gnet_aanpassen__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K04_Wnet_buurt                       (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K04_Wnet_buurt__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K05_Wnet_pand                        (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K05_Wnet_pand__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K06_Wnet_transport                   (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K06_Wnet_transport__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K07_Wnet_opwekking                   (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K07_Wnet_opwekking__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K08_Gebouw_schil                     (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K08_Gebouw_schil__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K09_Gebouw_installatie               (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K09_Gebouw_installatie__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K10_Totaal_Kapitaalslasten           (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K10_Totaal_Kapitaalslasten__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K11_Inkoop_Warmte                    (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K11_Inkoop_Warmte__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K12_Inkoop_Gas                       (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K12_Inkoop_Gas__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K13_Inkoop_Elek                      (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K13_Inkoop_Elek__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K14_Gebouw_OenM                      (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K14_Gebouw_OenM__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K15_Wnet_OenM                        (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K15_Wnet_OenM__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K16_Enet_Gnet_OenM                   (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K16_Enet_Gnet_OenM__Euro_per_yr__)[Eur_yr];
+		attribute<Eur_yr>     K17_Totaal_VariabeleKosten           (Planregio):= rjoin(BU_CODE, NationaleKosten/CODE, NationaleKosten/_K17_Totaal_VariabeleKosten__Euro_per_yr__)[Eur_yr];
+		
+		attribute<nrAansl>    A01_Aansl_aardgas                    (Planregio):= rjoin(BU_CODE, Aansluitingen/CODE, Aansluitingen/_A01_Aansl_aardgas__Aansluiting__)[nrAansl];
+		attribute<nrAansl>    A02_Aansl_eWP                        (Planregio):= rjoin(BU_CODE, Aansluitingen/CODE, Aansluitingen/_A02_Aansl_eWP__Aansluiting__)[nrAansl];
+		attribute<nrAansl>    A03_Aansl_MT                         (Planregio):= rjoin(BU_CODE, Aansluitingen/CODE, Aansluitingen/_A03_Aansl_MT__Aansluiting__)[nrAansl];
+		attribute<nrAansl>    A04_Aansl_LT                         (Planregio):= rjoin(BU_CODE, Aansluitingen/CODE, Aansluitingen/_A04_Aansl_LT__Aansluiting__)[nrAansl];
+		attribute<nrAansl>    A05_Aansl_hWP_HG                     (Planregio):= rjoin(BU_CODE, Aansluitingen/CODE, Aansluitingen/_A05_Aansl_hWP_HG__Aansluiting__)[nrAansl];
+		attribute<nrAansl>    A06_Aansl_HR_HG                      (Planregio):= rjoin(BU_CODE, Aansluitingen/CODE, Aansluitingen/_A06_Aansl_HR_HG__Aansluiting__)[nrAansl];
+	}
+	
+}
