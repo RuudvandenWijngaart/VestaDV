@@ -203,12 +203,11 @@ container PlanregioResults
 			attribute<GJ_yr_WEQ> H13_input_LTwarmtebronnen := round(makedefined(extensief/H13_input_LTwarmtebronnen / nrWEQ, 0[GJ_yr_WEQ]))[GJ_yr_WEQ];
 			attribute<GJ_yr_WEQ> H14_saldo_omgevingswarmte := round(makedefined(extensief/H14_saldo_omgevingswarmte / nrWEQ, 0[GJ_yr_WEQ]))[GJ_yr_WEQ];
 			
-			attribute<ton_yr> H15_CO2_reductie :=
-				round(
+			attribute<ton_yr> H15_CO2_uitstoot :=round(
 					statisch/uitgesloten_bool
 						? 0[ton_yr]
 						: makedefined(
-							 NationaleKosten/TotaalUitstoot/Delta_CO2 //verschil in CO2 uitstoot tov startjaar
+							NationaleKosten/TotaalUitstoot/New_CO2_ton
 							,0[ton_yr])
 				)[ton_yr];
 
@@ -217,7 +216,7 @@ container PlanregioResults
 					statisch/uitgesloten_bool
 						? 0[Eur_yr] 
 						: makedefined(
-							 NationaleKosten/TotaalUitstoot/Delta_nat_kosten //nationale meerkosten ten opzichte van startjaar
+							 NationaleKosten/TotaalUitstoot/Delta_nat_kosten  //nationale meerkosten ten opzichte van startjaar
 							,0[Eur_yr])
 				)[Eur_yr];
 
@@ -248,6 +247,7 @@ container PlanregioResults
 		{
 			attribute<string>  BU_CODE              := Statisch/table/I01_buurtcode;
 			attribute<string>  V01_Strategievariant := const(Variantcode, Planregio);
+			
 			attribute<Eur_yr> K01_Enet_verzwaren :=
 				round(
 					statisch/Uitgesloten_bool
@@ -359,7 +359,6 @@ container PlanregioResults
 					: makedefined(
 						 R_AardG * StateNaAllocatie/totaal/jaarlijks/ow/Kj_ow_productie //productie warmte nieuwe warmtenetten
 						+ WarmteBestaand/Kj_ow_productie
-						- Origkosten/table/K11_Inkoop_Warmte
 						,0[Eur_yr])
 				)[Eur_yr];
 
@@ -373,7 +372,6 @@ container PlanregioResults
 							+ R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Km_id_gas //waterstof H2 opties
 							+ WarmteBestaand/Kj_wd_gas
 							+ R_AardG * maatschappelijk/gebouwen/AardGasVerbruik/Km_Totaal
-							- Origkosten/table/K12_Inkoop_Gas
 							,0[Eur_yr])
 				)[Eur_yr];
 
@@ -389,7 +387,6 @@ container PlanregioResults
 							+ WarmteBestaand/Kj_wd_elek
 							+ R_AardG * maatschappelijk/gebouwen/ElektriciteitsVraag/Km_Totaal
 							+ WarmteBestaand/Kj_elek_gebouw
-							- Origkosten/table/K13_Inkoop_Elek
 							,0[Eur_yr])
 				)[Eur_yr];
 
@@ -401,7 +398,6 @@ container PlanregioResults
 							  R_AardG * maatschappelijk/LokaleEnergieProductie/Kj_Onderhoud //onderhoud lodake opwekkingsinstallaties
 							+ R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Kj_id_LO_oh  //onderhoudskosten gebouwinstallaties gebiedsopties
 							+ R_AardG * maatschappelijk/LokaleEnergieProductie/Kj_Admin //administratie lokale opwekkingsinstallaties
-							- Origkosten/table/K14_Gebouw_OenM
 							,0[Eur_yr])
 				)[Eur_yr];
 
@@ -427,7 +423,6 @@ container PlanregioResults
 							+ WarmteBestaand/Kj_pt_adm
 							+ WarmteBestaand/Kj_ow_oh
 							+ WarmteBestaand/Kj_ow_adm
-							- Origkosten/table/K15_Wnet_OenM
 							,0[Eur_yr])
 				)[Eur_yr];
 
@@ -441,13 +436,16 @@ container PlanregioResults
 							+ R_AardG * Netwerken/Elektriciteit/Kj_oh	//onderhoudskosten elektriciteitsnet
 							+ WarmteBestaand/Kj_enet_oh
 							+ R_AardG * StateNaAllocatie/totaal/jaarlijks/wd/Kj_wd_Gnet_oh
-							- Origkosten/table/K16_Enet_Gnet_OenM
 							,0[Eur_yr])
 				)[Eur_yr];
 				
 			attribute<eur_yr> K17_Totaal_VariabeleKosten :=
 				  K11_Inkoop_Warmte + K12_Inkoop_Gas + K13_Inkoop_Elek
 				+ K14_Gebouw_OenM   + K15_Wnet_OenM  + K16_Enet_Gnet_OenM;
+				
+			attribute<eur_yr> K18_Extra_VariabeleKosten := 
+				  K17_Totaal_VariabeleKosten
+				- Ref2030/PlanregioResults/NationaleKosten/Table/K17_Totaal_VariabeleKosten;
 		}
 		parameter<string> OutputFolder := '%localDataProjDir%/Results/' + Expand( . , '%configName%') + '/'+ 'Leidraad';
 		unit<uint32> variable := SubItem_PropValues(table,'name');
@@ -466,12 +464,13 @@ container PlanregioResults
 				+ table/K08_Gebouw_schil           
 				+ table/K09_Gebouw_installatie     
 				
-				+ table/K11_Inkoop_Warmte          
-				+ table/K12_Inkoop_Gas             
-				+ table/K13_Inkoop_Elek            
-				+ table/K14_Gebouw_OenM            
-				+ table/K15_Wnet_OenM              
-				+ table/K16_Enet_Gnet_OenM         ;
+				+ table/K17_Totaal_VariabeleKosten
+				- Origkosten/table/K11_Inkoop_Warmte
+				- Origkosten/table/K12_Inkoop_Gas
+				- Origkosten/table/K13_Inkoop_Elek
+				- Origkosten/table/K14_Gebouw_OenM
+				- Origkosten/table/K15_Wnet_OenM
+				- Origkosten/table/K16_Enet_Gnet_OenM;
 
 			attribute<ton_yr> Orig_CO2_ton (Planregio) := OrigKosten/Orig_CO2_ton;
 
@@ -482,8 +481,7 @@ container PlanregioResults
 					 + EnergyResults/CO2/GebiedsOpties/totaal    / 1000.0[kg_yr / ton_yr];
 
 			attribute<ton_yr> Delta_CO2        (Planregio) := Orig_CO2_ton - New_CO2_ton;
-			//attribute<Eur_yr> Orig_nat_kosten  (Planregio) := OrigKosten/TotaalUitstoot/Natkosten_abs;
-			attribute<Eur_yr> Delta_nat_kosten (Planregio) := Natkosten_abs;// - Orig_nat_kosten;
+			attribute<Eur_yr> Delta_nat_kosten (Planregio) := Natkosten_abs;
 		}
 	}
 	
