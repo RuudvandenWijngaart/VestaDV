@@ -27,7 +27,8 @@ template AllocatieResultatenComponent
 	attribute<kw> CapaciteitsvraagE (PlanRegio) :=  sum(BO/AansluitCapaciteit/GTF_Enet * 
 		( BO/AansluitCapaciteit/ASW_Eapp * float64(Aansluitingen/PerBO/nrAsl_e_app > 0.0[nrAansl])
 		+ BO/AansluitCapaciteit/ASW_Ehwp * float64(Aansluitingen/PerBO/nrAsl_e_hwp > 0.0[nrAansl])
-		+ BO/AansluitCapaciteit/ASW_Eewp * float64(Aansluitingen/PerBO/nrAsl_e_ewp > 0.0[nrAansl]) ), BO/Planregio_rel);
+		+ BO/AansluitCapaciteit/ASW_Eewp * float64(Aansluitingen/PerBO/nrAsl_e_ewp > 0.0[nrAansl]) 
+		+ BO/AansluitCapaciteit/ASW_Eewp * float64(Aansluitingen/PerBO/nrAsl_LT_WP > 0.0[nrAansl]) ), BO/Planregio_rel);
 
 	container Aansluitingen
 	{
@@ -35,15 +36,25 @@ template AllocatieResultatenComponent
 		{
 			attribute<nrAansl> nrAsl_gas   (BO) := BO/nrAansluitingen * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie])) - nrAsl_e_ewp;
 			attribute<nrAansl> nrAsl_H2net (BO) := BO/nrAansluitingen * float64(aandelen/WaterstofWP) + BO/nrAansluitingen * float64(aandelen/WaterstofHR);
-			attribute<nrAansl> nrAsl_e_app (BO) := BO/Aansluitingen/Enet_app - BO/nrAansluitingen * float64(aandelen/WaterstofWP);
+			attribute<nrAansl> nrAsl_e_app (BO) :=
+				  BO/Aansluitingen/Enet_app
+				- BO/nrAansluitingen * float64(aandelen/WaterstofWP)
+				- BO/nrAansluitingen * float64(nrAsl_LT_WP != 0.0[nrAansl]);
 			attribute<nrAansl> nrAsl_e_ewp (BO) := BO/Aansluitingen/Enet_ewp * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie]));
 			attribute<nrAansl> nrAsl_e_hwp (BO) := BO/Aansluitingen/Enet_hwp + BO/nrAansluitingen * float64(aandelen/WaterstofWP);
+			attribute<nrAansl> nrAsl_LT_WP (BO) :=
+				  BO/nrAansluitingen * float64(aandelen/Lt15_30)
+				+ BO/nrAansluitingen * float64(aandelen/Lt15_50)
+				+ BO/nrAansluitingen * float64(aandelen/Lt30_30)
+				+ BO/nrAansluitingen * float64(aandelen/Lt30_50)
+				+ BO/nrAansluitingen * float64(aandelen/WKO);
 		}
 		attribute<nrAansl>   nrAsl_gas    (PlanRegio) := sum(PerBO/nrAsl_gas,   BO/Planregio_rel);
 		attribute<nrAansl>   nrAsl_H2net  (PlanRegio) := sum(PerBO/nrAsl_H2net, BO/Planregio_rel);
 		attribute<nrAansl>   nrAsl_e_app  (PlanRegio) := sum(PerBO/nrAsl_e_app, BO/Planregio_rel);
 		attribute<nrAansl>   nrAsl_e_ewp  (PlanRegio) := sum(PerBO/nrAsl_e_ewp, BO/Planregio_rel);
 		attribute<nrAansl>   nrAsl_e_hwp  (PlanRegio) := sum(PerBO/nrAsl_e_hwp, BO/Planregio_rel);
+		attribute<nrAansl>   nrAsl_LT_WP  (PlanRegio) := sum(PerBO/nrAsl_LT_WP, BO/Planregio_rel);
 	}
 	container Aandelen := for_each_nedv(Classifications/GebiedsOptie/name, 'WarmteAllocatie == Classifications/WarmteOptie/V/'+Classifications/GebiedsOptie/name+'', BO, bool);
 
