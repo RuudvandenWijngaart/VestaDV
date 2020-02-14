@@ -69,6 +69,24 @@ container Vergelijking: using = "Units"
 			,true,true,true,true
 			];
 	}
+	unit<uint8> S1Variant   := subset(Variant/Strategie_rel == 0[Strategie] && Variant/InViewer)
+	{
+		attribute<string> label := Variant/label[nr_OrgEntity];
+		attribute<string> name  := Variant/name[nr_OrgEntity];
+		container V             := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+	unit<uint8> S2Variant   := subset(Variant/Strategie_rel == 1[Strategie] && Variant/InViewer)
+	{
+		attribute<string> label := Variant/label[nr_OrgEntity];
+		attribute<string> name  := Variant/name[nr_OrgEntity];
+		container V             := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+	unit<uint8> S3Variant   := subset(Variant/Strategie_rel == 2[Strategie] && Variant/InViewer)
+	{
+		attribute<string> label := Variant/label[nr_OrgEntity];
+		attribute<string> name  := Variant/name[nr_OrgEntity];
+		container V             := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
 	unit<uint8> ViewerVariant   := subset(Variant/InViewer)
 	{
 		attribute<string> label := Variant/label[nr_OrgEntity];
@@ -100,7 +118,7 @@ container Vergelijking: using = "Units"
 	}
 	unit<uint8> Strategie : nrofrows = 6
 	{
-		attribute<string> label: ['S1_WP','S2_MT','S3_LT','S4_H2','S5_GG','uitgesloten'] , DialogType = "LabelText";
+		attribute<string> label: ['S1_WP','S2_MT','S3_LT','S4_GG','S5_H2','uitgesloten'] , DialogType = "LabelText";
 		attribute<string> name : ['S1','S2','S3','S4','S5','geen'];
 		attribute<uint32> Color : DialogType = "BrushColor",
 		[
@@ -153,7 +171,30 @@ container Vergelijking: using = "Units"
 		{
 			attribute<string> CODE := substr(_BU_CODE_, 1, 10);
 		}
-		container results := TransLate(Hoofdindicatoren,Nationalekosten,Aansluitingen,Hulpvariabelen);
+		container Preresults := TransLate(Hoofdindicatoren,Nationalekosten,Aansluitingen,Hulpvariabelen);
+		container results    := Preresults
+		{
+			container Checks
+			{
+				attribute<bool> s3aGeenLT   (PlanRegio) := VC == Variant/V/s3a && Preresults/A04_Aansl_LT < 1[nrAansl];
+				attribute<bool> s3bGeenLT   (PlanRegio) := VC == Variant/V/s3b && Preresults/A04_Aansl_LT < 1[nrAansl];
+				attribute<bool> s3cGeenLT   (PlanRegio) := VC == Variant/V/s3c && Preresults/A04_Aansl_LT < 1[nrAansl];
+				attribute<bool> s3dGeenLT   (PlanRegio) := VC == Variant/V/s3d && Preresults/A04_Aansl_LT < 1[nrAansl];
+				attribute<bool> s3eGeenLT   (PlanRegio) := VC == Variant/V/s3e && Preresults/A04_Aansl_LT < 1[nrAansl];
+				attribute<bool> s3fGeenLT   (PlanRegio) := VC == Variant/V/s3f && Preresults/A04_Aansl_LT < 1[nrAansl];
+				attribute<bool> s3gGeenLT   (PlanRegio) := VC == Variant/V/s3g && Preresults/A04_Aansl_LT < 1[nrAansl];
+				attribute<bool> s3hGeenLT   (PlanRegio) := VC == Variant/V/s3h && Preresults/A04_Aansl_LT < 1[nrAansl];
+				attribute<bool> s2aGeenMT   (PlanRegio) := VC == Variant/V/s2a && (Preresults/A01_Aansl_aardgas + Preresults/A02_Aansl_eWP + Preresults/A04_Aansl_LT + Preresults/A05_Aansl_hWP_HG + Preresults/A06_Aansl_HR_HG) > 0.0[nrAansl];
+				attribute<bool> s2dGeenMT   (PlanRegio) := VC == Variant/V/s2d && (Preresults/A01_Aansl_aardgas + Preresults/A02_Aansl_eWP + Preresults/A04_Aansl_LT + Preresults/A05_Aansl_hWP_HG + Preresults/A06_Aansl_HR_HG) > 0.0[nrAansl];
+				attribute<bool> Uitgesloten (PlanRegio) := Preresults/nrWEQ < 1 [nrWoningen];
+				attribute<bool> FullStadV   (PlanRegio) := VC != Variant/V/s2a && VC != Variant/V/s2d && Preresults/R_stadV > 0.99[Ratio];
+				attribute<bool> geenWEQ     (PlanRegio) := Preresults/Uitgesloten == 'True';
+				
+				attribute<bool> ChecksFailed (PlanRegio) := s3aGeenLT || s3bGeenLT || s3cGeenLT || s3dGeenLT || s3eGeenLT || s3fGeenLT || s3gGeenLT || s3hGeenLT || s2aGeenMT || s2dGeenMT || Uitgesloten || geenWEQ || FullStadV;
+			}
+			attribute<Eur_yr>  H16_Nat_abskosten    (Planregio):= Checks/ChecksFailed ? (0/0)[eur_yr]  : Preresults/H16_Nat_abskosten;
+			attribute<Eur_ton> H17_Nat_meerkost_CO2 (Planregio):= Checks/ChecksFailed ? (0/0)[eur_ton] : Preresults/H17_Nat_meerkost_CO2;
+		}
 	}
 	
 	template TransLate:= Invoer/RuimtelijkeData/Studiegebied/buurt
@@ -298,10 +339,12 @@ container Vergelijking: using = "Units"
 				attribute<GJ_yr>	VerbruikGJ  := ../Verbruik[nr_orgentity];
 				attribute<m3_yr>	VerbruikM3  := VerbruikGJ / Invoer/Kengetallen/Constanten/GasEnergie;
 				attribute<Eur_m3>	Gaswaarde   := Besparing / VerbruikM3;
+				attribute<Eur_m3> InvertedWaarde := makedefined(0d - Gaswaarde, 0[eur_m3]);
+
+				parameter<m3> MaxVolume := 5000000[m3]; //TODO invoer waarde
 				
-				parameter<m3> MaxVolume := 50000000[m3]; //TODO invoer waarde
-				
-				parameter<Eur_m3> Orientatiewaarde := makedefined(nth_element_weighted(Gaswaarde, MaxVolume, VerbruikM3), 0[eur_m3]);
+				parameter<Eur_m3> InvertedOrientatiewaarde := makedefined(nth_element_weighted( InvertedWaarde, MaxVolume, VerbruikM3), 0[eur_m3]);
+				parameter<Eur_m3> Orientatiewaarde :=  makedefined(0d - InvertedOrientatiewaarde, 0[eur_m3]);
 				
 				attribute<bool>		Beschikbaarheid := Gaswaarde >= Orientatiewaarde;
 			}
@@ -311,9 +354,31 @@ container Vergelijking: using = "Units"
 		attribute<Bool>   Beschikbaarheid_GG (PlanRegio) := GG/Gasvragers/Beschikbaarheid[invert(GG/Gasvragers/nr_OrgEntity)];
 		attribute<Bool>   Beschikbaarheid_H2 (PlanRegio) := H2/Gasvragers/Beschikbaarheid[invert(H2/Gasvragers/nr_OrgEntity)];
 	}
-	attribute<Variant>        BesteVariant        (PlanRegio) := ='argmin('+AsItemList('H17/'+Variant/Name+'')+')[Variant]';
-	attribute<ViewerVariant>  BesteViewerVariant  (PlanRegio) := ='argmin('+AsItemList('H17/'+ViewerVariant/Name+'')+')[ViewerVariant]';
-	attribute<GasloosVariant> BesteGasloosVariant (PlanRegio) := ='argmin('+AsItemList('H17/'+GasloosVariant/Name+'')+')[GasloosVariant]';
-	attribute<GGVariant>      BesteGGVariant      (PlanRegio) := ='argmin('+AsItemList('H17/'+GGVariant/Name+'')+')[GGVariant]';
-	attribute<variant>        ViewerBeschikbaar   (PlanRegio) := Gaswaarde/Beschikbaarheid_GG ? GGVariant/nr_orgentity[BesteGGVariant] : GasloosVariant/nr_orgentity[BesteGasloosVariant];	
+	attribute<Variant>        BesteVariant           (PlanRegio) := ='argmin('+AsItemList('H17/'+Variant/Name+'')+')[Variant]';
+	attribute<ViewerVariant>  BesteViewerVariant     (PlanRegio) := ='argmin('+AsItemList('H17/'+ViewerVariant/Name+'')+')[ViewerVariant]';
+	attribute<GasloosVariant> BesteGasloosVariant    (PlanRegio) := ='argmin('+AsItemList('H17/'+GasloosVariant/Name+'')+')[GasloosVariant]';
+	attribute<GGVariant>      BesteGGVariant         (PlanRegio) := ='argmin('+AsItemList('H17/'+GGVariant/Name+'')+')[GGVariant]';
+	attribute<variant>        BesteViewerBeschikbaar (PlanRegio) := Gaswaarde/Beschikbaarheid_GG ? GGVariant/nr_orgentity[BesteGGVariant] : GasloosVariant/nr_orgentity[BesteGasloosVariant];	
+	
+	container ConstructStrategie
+	{
+		attribute<S1Variant>        S1var (PlanRegio) := ='argmin('+AsItemList('H17/'+S1variant/Name+'')+')[S1Variant]';
+		attribute<S2Variant>        S2var (PlanRegio) := ='argmin('+AsItemList('H17/'+S2variant/Name+'')+')[S2Variant]';
+		attribute<S3Variant>        S3var (PlanRegio) := ='argmin('+AsItemList('H17/'+S3variant/Name+'')+')[S3Variant]';
+		attribute<GGVariant>        S4var (PlanRegio) := ='argmin('+AsItemList('H17/'+GGvariant/Name+'')+')[GGVariant]';
+		attribute<H2Variant>        S5var (PlanRegio) := ='argmin('+AsItemList('H17/'+H2variant/Name+'')+')[H2Variant]';
+		
+		attribute<eur_ton> S1H17 (PlanRegio) := ='merge(S1var, Eur_ton, '+AsItemList('H17/'+S1Variant/Name+'')+')';
+		attribute<eur_ton> S2H17 (PlanRegio) := ='merge(S2var, Eur_ton, '+AsItemList('H17/'+S2Variant/Name+'')+')';
+		attribute<eur_ton> S3H17 (PlanRegio) := ='merge(S3var, Eur_ton, '+AsItemList('H17/'+S3Variant/Name+'')+')';
+		attribute<eur_ton> S4H17 (PlanRegio) := ='merge(S4var, Eur_ton, '+AsItemList('H17/'+GGVariant/Name+'')+')';
+		attribute<eur_ton> S5H17 (PlanRegio) := ='merge(S5var, Eur_ton, '+AsItemList('H17/'+H2Variant/Name+'')+')';
+	}
+	attribute<variant>        BesteS1variant (PlanRegio) := IsNull(ConstructStrategie/S1H17) ? (0/0)[variant] : S1Variant/nr_orgentity[ConstructStrategie/S1var];
+	attribute<variant>        BesteS2variant (PlanRegio) := IsNull(ConstructStrategie/S2H17) ? (0/0)[variant] : S2Variant/nr_orgentity[ConstructStrategie/S2var];
+	attribute<variant>        BesteS3variant (PlanRegio) := IsNull(ConstructStrategie/S3H17) ? (0/0)[variant] : S3Variant/nr_orgentity[ConstructStrategie/S3var];
+	attribute<variant>        BesteS4variant (PlanRegio) := IsNull(ConstructStrategie/S4H17) ? (0/0)[variant] : GGVariant/nr_orgentity[ConstructStrategie/S4var];
+	attribute<variant>        BesteS5variant (PlanRegio) := IsNull(ConstructStrategie/S5H17) ? (0/0)[variant] : H2Variant/nr_orgentity[ConstructStrategie/s5var];
+	
+	attribute<strategie> ViewerStrategie (PlanRegio) := data/s5d/results/Uitgesloten == 'True' ? Strategie/V/geen : Variant/Strategie_rel[BesteViewerBeschikbaar];
 }

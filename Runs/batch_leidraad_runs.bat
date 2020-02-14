@@ -18,7 +18,8 @@ set exe_path=%exe_dir%\GeoDMSRun.exe
 set ITEM1=/LeidraadResultaten/Zichtjaar/PlanRegioResults/Hoofdindicatoren/export_csv/result
 set ITEM2=/LeidraadResultaten/Zichtjaar/PlanRegioResults/NationaleKosten/export_csv/result
 set ITEM3=/LeidraadResultaten/Zichtjaar/PlanRegioResults/Aansluitingen/export_csv/result
-set ITEMS=%ITEM1% %ITEM2% %ITEM3%
+set ITEM4=/LeidraadResultaten/Zichtjaar/PlanRegioResults/Hulpvariabelen/export_csv/result
+set ITEMS=%ITEM1% %ITEM2% %ITEM3% %ITEM4%
 
 "%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\S1a_B_LuchtWP.dms"     /LeidraadResultaten/Startjaar/PlanRegioResults/Hoofdindicatoren/export_csv/result
 "%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\S1a_B_LuchtWP.dms"     /LeidraadResultaten/Startjaar/PlanRegioResults/NationaleKosten/export_csv/result
@@ -46,14 +47,15 @@ set ITEMS=%ITEM1% %ITEM2% %ITEM3%
 "%exe_path%" /L"%log_dir%\S3g_D_BuurtWKO.txt"    "%prj_dir%\Runs\S3g_D_BuurtWKO.dms"    %ITEMS%
 "%exe_path%" /L"%log_dir%\S3h_D_TEO.txt"         "%prj_dir%\Runs\S3h_D_TEO.dms"         %ITEMS%
 
-"%exe_path%" /L"%log_dir%\S4a_H2_B_hWP.txt"      "%prj_dir%\Runs\S4a_H2_B_hWP.dms"      %ITEMS%
-"%exe_path%" /L"%log_dir%\S4b_H2_B_HR.txt"       "%prj_dir%\Runs\S4b_H2_B_HR.dms"       %ITEMS%
-"%exe_path%" /L"%log_dir%\S4c_H2_D_hWP.txt"      "%prj_dir%\Runs\S4c_H2_D_hWP.dms"      %ITEMS%
-"%exe_path%" /L"%log_dir%\S4d_H2_D_HR.txt"       "%prj_dir%\Runs\S4d_H2_D_HR.dms"       %ITEMS%
+"%exe_path%" /L"%log_dir%\S4a_GG_B_hWP.txt"      "%prj_dir%\Runs\S4a_GG_B_hWP.dms"      %ITEMS%
+"%exe_path%" /L"%log_dir%\S4b_GG_B_HR.txt"       "%prj_dir%\Runs\S4b_GG_B_HR.dms"       %ITEMS%
+"%exe_path%" /L"%log_dir%\S4c_GG_D_hWP.txt"      "%prj_dir%\Runs\S4c_GG_D_hWP.dms"      %ITEMS%
+"%exe_path%" /L"%log_dir%\S4d_GG_D_HR.txt"       "%prj_dir%\Runs\S4d_GG_D_HR.dms"       %ITEMS%
 
-"%exe_path%" /L"%log_dir%\S5a_GG_B_hWP.txt"      "%prj_dir%\Runs\S5a_GG_B_hWP.dms"      %ITEMS%
-"%exe_path%" /L"%log_dir%\S5b_GG_B_HR.txt"       "%prj_dir%\Runs\S5b_GG_B_HR.dms"       %ITEMS%
-"%exe_path%" /L"%log_dir%\S5c_GG_D_hWP.txt"      "%prj_dir%\Runs\S5c_GG_D_hWP.dms"      %ITEMS%
-"%exe_path%" /L"%log_dir%\S5d_GG_D_HR.txt"       "%prj_dir%\Runs\S5d_GG_D_HR.dms"       %ITEMS%
+"%exe_path%" /L"%log_dir%\S5a_H2_B_hWP.txt"      "%prj_dir%\Runs\S5a_H2_B_hWP.dms"      %ITEMS%
+"%exe_path%" /L"%log_dir%\S5b_H2_B_HR.txt"       "%prj_dir%\Runs\S5b_H2_B_HR.dms"       %ITEMS%
+"%exe_path%" /L"%log_dir%\S5c_H2_D_hWP.txt"      "%prj_dir%\Runs\S5c_H2_D_hWP.dms"      %ITEMS%
+"%exe_path%" /L"%log_dir%\S5d_H2_D_HR.txt"       "%prj_dir%\Runs\S5d_H2_D_HR.dms"       %ITEMS%
+
 
 pause Totaal klaar
