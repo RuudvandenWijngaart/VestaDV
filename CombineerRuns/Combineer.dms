@@ -31,20 +31,20 @@ container Vergelijking: using = "Units"
 			,3,3,3,3
 			,4,4,4,4
 			];
-		attribute<uint32> Color : DialogType = "BrushColor",
-			[rgb(128,240,141),rgb(020,175,039)
-			,rgb(244,170,202),rgb(223,075,142),rgb(167,020,083),rgb(114,014,056),rgb(167,020,083),rgb(114,014,056)
-			,rgb(173,207,250),rgb(092,160,243),rgb(039,130,239),rgb(013,085,174),rgb(010,066,135),rgb(039,130,239),rgb(013,085,174),rgb(010,066,135)
-			,rgb(228,222,092),rgb(130,124,021),rgb(228,222,092),rgb(130,124,021)
-			,rgb(228,222,092),rgb(130,124,021),rgb(228,222,092),rgb(130,124,021)
-			];
-		attribute<uint32> PenColor : DialogType = "PenColor",
-			[rgb(128,240,141),rgb(020,175,039)
-			,rgb(244,170,202),rgb(223,075,142),rgb(167,020,083),rgb(114,014,056),rgb(167,020,083),rgb(114,014,056)
-			,rgb(173,207,250),rgb(092,160,243),rgb(039,130,239),rgb(013,085,174),rgb(010,066,135),rgb(039,130,239),rgb(013,085,174),rgb(010,066,135)
-			,rgb(228,222,092),rgb(130,124,021),rgb(228,222,092),rgb(130,124,021)
-			,rgb(228,222,092),rgb(130,124,021),rgb(228,222,092),rgb(130,124,021)
-			];
+// 		attribute<uint32> Color : DialogType = "BrushColor",
+// 			[rgb(128,240,141),rgb(020,175,039)
+// 			,rgb(244,170,202),rgb(223,075,142),rgb(167,020,083),rgb(114,014,056),rgb(167,020,083),rgb(114,014,056)
+// 			,rgb(173,207,250),rgb(092,160,243),rgb(039,130,239),rgb(013,085,174),rgb(010,066,135),rgb(039,130,239),rgb(013,085,174),rgb(010,066,135)
+// 			,rgb(228,222,092),rgb(130,124,021),rgb(228,222,092),rgb(130,124,021)
+// 			,rgb(228,222,092),rgb(130,124,021),rgb(228,222,092),rgb(130,124,021)
+// 			];
+// 		attribute<uint32> PenColor : DialogType = "PenColor",
+// 			[rgb(128,240,141),rgb(020,175,039)
+// 			,rgb(244,170,202),rgb(223,075,142),rgb(167,020,083),rgb(114,014,056),rgb(167,020,083),rgb(114,014,056)
+// 			,rgb(173,207,250),rgb(092,160,243),rgb(039,130,239),rgb(013,085,174),rgb(010,066,135),rgb(039,130,239),rgb(013,085,174),rgb(010,066,135)
+// 			,rgb(228,222,092),rgb(130,124,021),rgb(228,222,092),rgb(130,124,021)
+// 			,rgb(228,222,092),rgb(130,124,021),rgb(228,222,092),rgb(130,124,021)
+// 			];
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 		attribute<bool> InViewer :
 			[true,true
@@ -53,7 +53,7 @@ container Vergelijking: using = "Units"
 			,true,true,true,true
 			,false,false,false,false
 			];
-		attribute<bool> Gasloos := !IsGG && !IsH2;
+		attribute<bool> Gasloos := !IsGG && !IsH2 && InViewer;
 		attribute<bool> IsGG :
 			[false,false
 			,false,false,false,false,false,false
@@ -77,12 +77,12 @@ container Vergelijking: using = "Units"
 		attribute<bool> Gasloos := Variant/Gasloos[nr_OrgEntity];
 		attribute<Strategie> Strategie_rel := Variant/Strategie_rel[nr_OrgEntity];
 	}
-	unit<uint8> GasloosVariant  := subset(ViewerVariant/Gasloos)
+	unit<uint8> GasloosVariant  := subset(Variant/Gasloos)
 	{
-		attribute<string> label := ViewerVariant/label[nr_OrgEntity];
-		attribute<string> name  := ViewerVariant/name[nr_OrgEntity];
+		attribute<string> label := Variant/label[nr_OrgEntity];
+		attribute<string> name  := Variant/name[nr_OrgEntity];
 		container V             := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
-		attribute<Strategie> Strategie_rel := ViewerVariant/Strategie_rel[nr_OrgEntity];
+		attribute<Strategie> Strategie_rel := Variant/Strategie_rel[nr_OrgEntity];
 	}
 	unit<uint8> H2variant  := subset(Variant/IsH2)
 	{
@@ -146,7 +146,14 @@ container Vergelijking: using = "Units"
 		{
 			attribute<string> CODE := substr(_BU_CODE_, 1, 10);
 		}
-		container results := TransLate(Hoofdindicatoren,Nationalekosten,Aansluitingen);
+		unit<uint32> Hulpvariabelen
+		:	StorageName     = "='%LocalDataProjDir%/results/' + Variant/label[VC] + '/Leidraad/hulpvariabelen.csv'"
+		,	StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True"
+		{
+			attribute<string> CODE := substr(_BU_CODE_, 1, 10);
+		}
+		container results := TransLate(Hoofdindicatoren,Nationalekosten,Aansluitingen,Hulpvariabelen);
 	}
 	
 	template TransLate:= Invoer/RuimtelijkeData/Studiegebied/buurt
@@ -157,6 +164,7 @@ container Vergelijking: using = "Units"
 		unit<uint32> Hoofdindicatoren;
 		unit<uint32> Nationalekosten;
 		unit<uint32> Aansluitingen;
+		unit<uint32> Hulpvariabelen;
 		//end
 		
 		attribute<string>     BU_CODE                              (Planregio):= Invoer/RuimtelijkeData/StudieGebied/buurt/BU_CODE;
@@ -208,6 +216,12 @@ container Vergelijking: using = "Units"
 		attribute<nrAansl>    A04_Aansl_LT                         (Planregio):= rjoin(BU_CODE, Aansluitingen/CODE, Aansluitingen/_A04_Aansl_LT__Aansluiting__)[nrAansl];
 		attribute<nrAansl>    A05_Aansl_hWP_HG                     (Planregio):= rjoin(BU_CODE, Aansluitingen/CODE, Aansluitingen/_A05_Aansl_hWP_HG__Aansluiting__)[nrAansl];
 		attribute<nrAansl>    A06_Aansl_HR_HG                      (Planregio):= rjoin(BU_CODE, Aansluitingen/CODE, Aansluitingen/_A06_Aansl_HR_HG__Aansluiting__)[nrAansl];
+		
+		attribute<nrWoningen> nrWEQ                                (Planregio):= rjoin(BU_CODE, Hulpvariabelen/CODE, Hulpvariabelen/_nrWEQ__Woning__)[nrWoningen];
+		attribute<Ratio>      R_StadV                              (Planregio):= rjoin(BU_CODE, Hulpvariabelen/CODE, Hulpvariabelen/_R_StadV_)[Ratio];
+		attribute<GJ_yr>      VraagH2                              (Planregio):= rjoin(BU_CODE, Hulpvariabelen/CODE, Hulpvariabelen/_VraagH2___giga_J_per_yr__)[GJ_yr];
+		attribute<GJ_yr>      VraagGG                              (Planregio):= rjoin(BU_CODE, Hulpvariabelen/CODE, Hulpvariabelen/_VraagGG___giga_J_per_yr__)[GJ_yr];
+		attribute<string>     Uitgesloten                          (Planregio):= rjoin(BU_CODE, Hulpvariabelen/CODE, Hulpvariabelen/_Uitgesloten_)[string];
 	}
 	
 	container Combines 
@@ -243,46 +257,63 @@ container Vergelijking: using = "Units"
 			container A06 := for_each_nedv(Variant/name, replace('data/@C/results/A06_Aansl_HR_HG','@C',Variant/name), PlanRegio, nrAansl);
 		}
 	}
+	container H16 := for_each_nedv(Variant/name, replace('data/@C/results/H16_Nat_abskosten','@C',Variant/name), PlanRegio, Eur_yr);
 	container H17 := for_each_nedv(Variant/name, replace('data/@C/results/H17_Nat_meerkost_CO2','@C',Variant/name), PlanRegio, Eur_ton);
 
 	container Gaswaarde
 	{
 		attribute<GasloosVariant> BesteGasloosVariant 	  (PlanRegio) := ='argmin('+AsItemList('H17/'+GasloosVariant/Name+'')+')[GasloosVariant]';
-		attribute<Eur_ton>        BesteGasloosVariantH17  (PlanRegio) := ='merge(BesteGasloosVariant, Eur_ton, '+AsItemList('H17/'+GasloosVariant/Name[BesteGasloosVariant]+'')+')';
+		attribute<Eur_yr>         BesteGasloosVariantH16  (PlanRegio) := ='merge(BesteGasloosVariant, Eur_yr, '+AsItemList('H16/'+GasloosVariant/Name[BesteGasloosVariant]+'')+')';
 		
 		container H2
 		{
 			attribute<H2Variant>    BesteH2variant      (PlanRegio) := ='argmin('+AsItemList('H17/'+H2Variant/Name+'')+')[H2Variant]';
-			attribute<Eur_ton> 		BesteH2variantH17   (PlanRegio) := ='merge(BesteH2variant, Eur_ton, '+AsItemList('H17/'+H2Variant/Name[BesteH2variant]+'')+')';
-			attribute<Eur_ton>		Besparing			(PlanRegio) := BesteGasloosVariantH17 - BesteH2variantH17;
-			unit<uint32> Gasvragers := subset(Besparing > 0.0[eur_ton])
+			attribute<Eur_yr> 		BesteH2variantH16   (PlanRegio) := ='merge(BesteH2variant, Eur_yr, '+AsItemList('H16/'+H2Variant/Name[BesteH2variant]+'')+')';
+			attribute<GJ_yr> 		Verbruik            (PlanRegio) := ='merge(BesteH2variant, GJ_yr, '+AsItemList('data/'+H2Variant/Name[BesteH2variant]+'/results/VraagH2')+')';
+			attribute<Eur_yr>		Besparing			(PlanRegio) := BesteGasloosVariantH16 - BesteH2variantH16;
+			unit<uint32> Gasvragers := subset(Besparing > 0.0[eur_yr])
 			{
-				attribute<Eur_ton>	Besparing := ../Besparing[nr_orgentity];
-				attribute<m3>		Verbruik  := const(1000[m3], Planregio);
+				attribute<Eur_yr>	Besparing := ../Besparing[nr_orgentity];
+				attribute<GJ_yr>	VerbruikGJ  := ../Verbruik[nr_orgentity];
+				attribute<m3_yr>	VerbruikM3  := VerbruikGJ / Invoer/Kengetallen/Constanten/GasEnergie; //TODO invoeren omrekenfactor H2-m3
+				attribute<Eur_m3>	Gaswaarde   := Besparing / VerbruikM3;
+				
+				parameter<m3> MaxVolume := 50000000[m3]; //TODO invoer waarde
+				
+				parameter<Eur_m3> Orientatiewaarde := makedefined(nth_element_weighted(Gaswaarde, MaxVolume, VerbruikM3), 0[eur_m3]);
+				
+				attribute<bool>		Beschikbaarheid := Gaswaarde >= Orientatiewaarde;
 			}
 		}
 		
 		container GG
 		{
 			attribute<GGVariant>    BesteGGvariant      (PlanRegio) := ='argmin('+AsItemList('H17/'+GGVariant/Name+'')+')[GGVariant]';
-			attribute<Eur_ton> 		BesteGGvariantH17   (PlanRegio) := ='merge(BesteGGvariant, Eur_ton, '+AsItemList('H17/'+GGVariant/Name[BesteGGvariant]+'')+')';
-			attribute<Eur_ton>		Besparing			(PlanRegio) := BesteGasloosVariantH17 - BesteGGvariantH17;
-			unit<uint32> Gasvragers := subset(Besparing > 0.0[eur_ton])
+			attribute<Eur_yr> 		BesteGGvariantH16   (PlanRegio) := ='merge(BesteGGvariant, Eur_yr, '+AsItemList('H16/'+GGVariant/Name[BesteGGvariant]+'')+')';
+			attribute<GJ_yr> 		Verbruik            (PlanRegio) := ='merge(BesteGGvariant, GJ_yr, '+AsItemList('data/'+GGVariant/Name[BesteGGvariant]+'/results/VraagGG')+')';
+			attribute<Eur_yr>		Besparing			(PlanRegio) := BesteGasloosVariantH16 - BesteGGvariantH16;
+			unit<uint32> Gasvragers := subset(Besparing > 0.0[eur_yr])
 			{
-				attribute<Eur_ton>	Besparing := ../Besparing[nr_orgentity];
-				attribute<m3>		Verbruik  := const(1000[m3], Planregio);
+				attribute<Eur_yr>	Besparing   := ../Besparing[nr_orgentity];
+				attribute<GJ_yr>	VerbruikGJ  := ../Verbruik[nr_orgentity];
+				attribute<m3_yr>	VerbruikM3  := VerbruikGJ / Invoer/Kengetallen/Constanten/GasEnergie;
+				attribute<Eur_m3>	Gaswaarde   := Besparing / VerbruikM3;
+				
+				parameter<m3> MaxVolume := 50000000[m3]; //TODO invoer waarde
+				
+				parameter<Eur_m3> Orientatiewaarde := makedefined(nth_element_weighted(Gaswaarde, MaxVolume, VerbruikM3), 0[eur_m3]);
+				
+				attribute<bool>		Beschikbaarheid := Gaswaarde >= Orientatiewaarde;
 			}
 		}
+		attribute<Eur_m3> GasWaarde_GG       (PlanRegio) := makedefined(GG/Gasvragers/GasWaarde[invert(GG/Gasvragers/nr_OrgEntity)], 0.0[eur_m3]);
+		attribute<Eur_m3> GasWaarde_H2       (PlanRegio) := makedefined(H2/Gasvragers/GasWaarde[invert(H2/Gasvragers/nr_OrgEntity)], 0.0[eur_m3]);
+		attribute<Bool>   Beschikbaarheid_GG (PlanRegio) := GG/Gasvragers/Beschikbaarheid[invert(GG/Gasvragers/nr_OrgEntity)];
+		attribute<Bool>   Beschikbaarheid_H2 (PlanRegio) := H2/Gasvragers/Beschikbaarheid[invert(H2/Gasvragers/nr_OrgEntity)];
 	}
-	attribute<Variant> BesteVariant (PlanRegio) := ='argmin('+AsItemList('H17/'+Variant/Name+'')+')[Variant]';
-	attribute<ViewerVariant> BesteViewerVariant (PlanRegio) := ='argmin('+AsItemList('H17/'+ViewerVariant/Name+'')+')[ViewerVariant]';
+	attribute<Variant>        BesteVariant        (PlanRegio) := ='argmin('+AsItemList('H17/'+Variant/Name+'')+')[Variant]';
+	attribute<ViewerVariant>  BesteViewerVariant  (PlanRegio) := ='argmin('+AsItemList('H17/'+ViewerVariant/Name+'')+')[ViewerVariant]';
 	attribute<GasloosVariant> BesteGasloosVariant (PlanRegio) := ='argmin('+AsItemList('H17/'+GasloosVariant/Name+'')+')[GasloosVariant]';
-	
-	attribute<GGVariant> BesteGGvariant (PlanRegio) := ='argmin('+AsItemList('H17/'+GGVariant/Name+'')+')[GGVariant]';
-	
-
-	
-	attribute<Eur_ton> BesteGasloosH17 (PlanRegio) := ='merge(BesteGasloosVariant, Eur_ton, '+AsItemList('H17/'+GasloosVariant/Name[BesteGasloosVariant]+'')+')';
-	
-	
+	attribute<GGVariant>      BesteGGVariant      (PlanRegio) := ='argmin('+AsItemList('H17/'+GGVariant/Name+'')+')[GGVariant]';
+	attribute<variant>        ViewerBeschikbaar   (PlanRegio) := Gaswaarde/Beschikbaarheid_GG ? GGVariant/nr_orgentity[BesteGGVariant] : GasloosVariant/nr_orgentity[BesteGasloosVariant];	
 }

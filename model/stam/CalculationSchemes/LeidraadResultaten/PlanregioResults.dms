@@ -14,6 +14,30 @@ container PlanregioResults
 	attribute<string>     IsWater  (Planregio) := Invoer/RuimtelijkeData/StudieGebied/buurt/IsWater;
 	parameter<bool>       Groengas             := Tussenresultaten/Voorkeuren/Afweging/IsGroenGas;
 
+	container Hulpvariabelen
+	{
+		unit<uint32>  table := PlanRegio
+		{
+			attribute<string>     BU_CODE   := Statisch/table/I01_buurtcode;
+			attribute<nrWoningen> nrWEQ     := .../nrWEQ;
+			attribute<Ratio>      R_StadV   := .../R_StadV;
+			attribute<GJ_yr>      VraagH2   := StateNaAllocatie/Totaal/Verbruik/V_H2;
+			attribute<GJ_yr>      VraagGG    := 
+					(Statisch/Uitgesloten_bool || !GroenGas || nrWEQ == 0[nrWoningen])
+						? 0[GJ_yr] 
+						: makedefined(
+								  R_AardG * sum(Allocatie/BestaandeWoning/metervraag/Aardgas, bebouwing/BestaandeWoning/PlanRegio_rel)
+								+ R_AardG * sum(Allocatie/BestaandeUtil/metervraag/Aardgas, bebouwing/BestaandeUtil/PlanRegio_rel)
+							,0[GJ_yr]);
+			attribute<string> Uitgesloten := string(Statisch/uitgesloten_bool);
+		}
+		parameter<string> OutputFolder := '%localDataProjDir%/Results/' + Expand( . , '%configName%') + '/'+ 'Leidraad';
+		unit<uint32>      variable     := SubItem_PropValues(table,'name');
+		container         export_csv   := Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), OutputFolder+'/Hulpvariabelen.csv');
+	}
+
+
+	
 	//Statische indicatoren per buurt. Met Statisch wordt bedoeld dat resultaten niet verschillen per run.
 	container Statisch
 	{
