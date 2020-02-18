@@ -88,13 +88,14 @@ template GebouwOptieT {
 	attribute<EUR_yr> Kj_OH_cap (BebouwingsObject) := =replace(KX_cap_Expr, '@X', 'j_OH');
 	attribute<EUR_yr> Kj_Adm_cap(BebouwingsObject) := =replace(KX_cap_Expr, '@X', 'j_Adm');
 	
-	// TODO, OPTIMIZE, CONSIDER bepaling LTAS_vereist, of uberhaupt mogelijk, per SchilLabel.
-	attribute<bool> LTAS_vereist(BebouwingsObject) := 
-		Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVb] == Classifications/AfgifteSysteem/V/LTAS
-	||	Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVp] == Classifications/AfgifteSysteem/V/LTAS;
-	attribute<bool> LTAS_aanwezig(BebouwingsObject) := bebouwingsObject/AfgifteSysteem_rel == Classifications/AfgifteSysteem/V/LTAS;
+	attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel := max_elem(
+		BebouwingsObject/AfgifteSysteem_rel
+	,	Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVb]
+	,	Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVp]
+	);
 	
-	attribute<EUR   > Ki_LTAS   (BebouwingsObject) := (LTAS_vereist && not(LTAS_aanwezig))
+	attribute<EUR   > Ki_LTAS   (BebouwingsObject) := 
+		(AfgifteSysteem_rel >= Classifications/AfgifteSysteem/V/LTAS) && (BebouwingsObject/AfgifteSysteem_rel < Classifications/AfgifteSysteem/V/LTAS)
 		?	(BebouwingsObject/IsHoogbouw ? BebouwingsObject/BCkentallen/Ki_LTAS_h_asl : BebouwingsObject/BCkentallen/Ki_LTAS_l_asl) * BebouwingsObject/nrAansluitingen
 			+ BebouwingsObject/BCkentallen/Ki_LTAS_opp * BebouwingsObject/Oppervlakte
 		:	const(0[EUR], BebouwingsObject);
