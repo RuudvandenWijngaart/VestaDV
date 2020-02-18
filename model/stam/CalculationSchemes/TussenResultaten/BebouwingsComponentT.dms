@@ -287,25 +287,22 @@ template BebouwingsComponentT
 	}
 	container GebouwOpties := for_each_ne(GebouwOptie/Name, 'GebouwOptieT(BebouwingsObject, Classifications/GebouwOptie/V/'+GebouwOptie/Name+', '+Quote(GebouwOptie/Criterium_expr)+')');
 	
- 	attribute<GebouwOptie> BesteGebouwOptie(BebouwingsObject):= =(#GebouwOptie == 1)? 'const(0[GebouwOptie],BebouwingsObject)' : 'argmin('+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/kosten_or_undefined')+')[GebouwOptie]';
- 	attribute<Classifications/WarmteOptie> WarmteOptie_res_rel(BebouwingsObject) := Classifications/GebouwOptie/WarmteOptie_rel[GebouwOptie/nr_OrgEntity[BesteGebouwOptie]];
-	attribute<bool> LTAS_vereist (BebouwingsObject) := ='merge(BesteGebouwOptie, bool, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/LTAS_vereist')+')';		
-	
 	unit<uint32> BebouwingsObjectMetGebouwOptie := BebouwingsObject
 	{
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel := replace_value(BesteGebouwOptie, Classifications/GebouwOptie/V/geen, BebouwingsObject/GebouwOptie_rel);
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel := =(#GebouwOptie == 1)? 'const(0[GebouwOptie],BebouwingsObject)' : 'argmin('+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/kosten_or_undefined')+')[GebouwOptie]';
 		attribute<Classifications/WarmteOptie> WarmteOptie_rel := 
-			Classifications/WarmteOptie/IsGebiedsOptie[BebouwingsObject/WarmteOptie_rel] || (WarmteOptie_res_rel == Classifications/WarmteOptie/V/geen)
+			Classifications/WarmteOptie/IsGebiedsOptie[BebouwingsObject/WarmteOptie_rel]
 			?	BebouwingsObject/WarmteOptie_rel
-			:	WarmteOptie_res_rel;
+			:	Classifications/GebouwOptie/WarmteOptie_rel[GebouwOptie/nr_OrgEntity[GebouwOptie_rel]];
 		
-		attribute<Classifications/SchilLabel> SchilLabel_rel := ='merge(BesteGebouwOptie, Classifications/SchilLabel, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/SchilLabel_rel')+')';
+		attribute<Classifications/SchilLabel> SchilLabel_rel := ='merge(GebouwOptie_rel, Classifications/SchilLabel, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/SchilLabel_rel')+')';
 		container InstallatiePerProduct := for_each_nedv(Classifications/Product/Name
-			,	replace('merge(BesteGebouwOptie, Classifications/Installatie, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/InstallatiePerProduct/@P')+')', '@P', Classifications/Product/Name)
+			,	replace('merge(GebouwOptie_rel, Classifications/Installatie, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/InstallatiePerProduct/@P')+')', '@P', Classifications/Product/Name)
 			,	., Classifications/Installatie
 			);
 			
-		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel (BebouwingsObject) := LTAS_vereist ? Classifications/AfgifteSysteem/V/LTAS : BebouwingsObject/AfgifteSysteem_rel;
+		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel (BebouwingsObject) := 
+			='merge(GebouwOptie_rel, AfgifteSysteem_rel, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/AfgifteSysteem_rel')+')';		
 			
 		// Extra info
 		attribute<string>	WarmteOptie		(BebouwingsObject)	:=	Classifications/WarmteOptie/name[WarmteOptie_rel];
@@ -422,12 +419,12 @@ template BebouwingsComponentT
 	unit<uint32> Results := BebouwingsObjectMetGebouwOptie
 	{
 		container BemeterdeGebouwInput_rel :=  for_each_nedv(Classifications/Product/Name
-			,	replace('merge(BesteGebouwOptie, Classifications/BemeterdeGebouwInput, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/BemeterdeGebouwInput_rel/@P')+')', '@P', Classifications/Product/Name)
+			,	replace('merge(GebouwOptie_rel, Classifications/BemeterdeGebouwInput, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/BemeterdeGebouwInput_rel/@P')+')', '@P', Classifications/Product/Name)
 			,	BebouwingsObject, Classifications/BemeterdeGebouwInput
 			);
 			
 		container SPF := for_each_nedv(Classifications/Product/Name
-			,	replace('merge(BesteGebouwOptie, Float64, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/SPF/@P')+')', '@P', Classifications/Product/Name)
+			,	replace('merge(GebouwOptie_rel, Float64, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/SPF/@P')+')', '@P', Classifications/Product/Name)
 			,	BebouwingsObject, Float64
 		);
 		
@@ -452,15 +449,15 @@ template BebouwingsComponentT
 
 		container Functioneel := BebouwingsObject/Functioneel
 		{
-			attribute<GJ_yr> V_RV    (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/RV')+')';
-			attribute<GJ_yr> V_TW    (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/TW')+')';
+			attribute<GJ_yr> V_RV    (BebouwingsObject) := ='merge(GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/RV')+')';
+			attribute<GJ_yr> V_TW    (BebouwingsObject) := ='merge(GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/TW')+')';
 			attribute<GJ_yr> V_Warmte(BebouwingsObject) := V_RV + V_TW;
-			attribute<GJ_yr> V_K     (BebouwingsObject) := ='merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/K')+')';
+			attribute<GJ_yr> V_K     (BebouwingsObject) := ='merge(GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/K')+')';
 			attribute<GJ_yr> V_Vent  (BebouwingsObject) := Float64(SchilLabel_rel <= Classifications/SchilLabel/V/B) * Ventilatie;
 			attribute<GJ_yr> V_App   (BebouwingsObject) := Functioneel/EA;
 		}
 		container Metervraag := for_each_nedv('V_'+Classifications/BemeterdeGebouwInput/Name
-			,	replace('merge(BesteGebouwOptie, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/metervraag/@I')+')', '@I', Classifications/BemeterdeGebouwInput/Name)
+			,	replace('merge(GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/metervraag/@I')+')', '@I', Classifications/BemeterdeGebouwInput/Name)
 			,	BebouwingsObject, GJ_yr
 			)
 		{
@@ -507,10 +504,10 @@ template BebouwingsComponentT
 															+   BC_kentallen/Ki_Aansl_g_opp * oppervlakte;
 		
 			//Investeringen
-			attribute<Eur>   Ki30_LO (BebouwingsObject) := ='merge(BesteGebouwOptie, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki30_LO')+')';
-			attribute<Eur>   Ki20_LO (BebouwingsObject) := ='merge(BesteGebouwOptie, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki20_LO')+')';
-			attribute<Eur>   Ki15_LO (BebouwingsObject) := ='merge(BesteGebouwOptie, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki15_LO')+')';
-			attribute<Eur>   Ki_GV   (BebouwingsObject) := ='merge(BesteGebouwOptie, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki_GV')+')';
+			attribute<Eur>   Ki30_LO (BebouwingsObject) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki30_LO')+')';
+			attribute<Eur>   Ki20_LO (BebouwingsObject) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki20_LO')+')';
+			attribute<Eur>   Ki15_LO (BebouwingsObject) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki15_LO')+')';
+			attribute<Eur>   Ki_GV   (BebouwingsObject) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki_GV')+')';
 		
 			//Subsidies
 			attribute<Eur>   Oi_s_LO_30 (BebouwingsObject) := const(0.0 [Eur], BebouwingsObject); //TODO Maarten
@@ -572,8 +569,8 @@ template BebouwingsComponentT
 			attribute<Eur_yr> Kj_biomassa  (BebouwingsObject) := metervraag/V_biomassa * invoer/energieprijzen/Overig/results/Biomassa[rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)]; 
 		
 			//Onderhoud installaties
-			attribute<Eur_yr> Kj_OH_LO   (BebouwingsObject) := ='merge(BesteGebouwOptie, Eur_yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Kj_OH_LO')+')';
-			attribute<Eur_yr> Kj_Adm_LO  (BebouwingsObject) := ='merge(BesteGebouwOptie, Eur_yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Kj_adm_LO')+')';
+			attribute<Eur_yr> Kj_OH_LO   (BebouwingsObject) := ='merge(GebouwOptie_rel, Eur_yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Kj_OH_LO')+')';
+			attribute<Eur_yr> Kj_Adm_LO  (BebouwingsObject) := ='merge(GebouwOptie_rel, Eur_yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Kj_adm_LO')+')';
 		}
 		
 		container Warmtewet
