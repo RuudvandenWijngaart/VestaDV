@@ -7,7 +7,7 @@
 template AllocatieResultatenComponent
 {
 	// begin case parameters
-	unit<uint32> BO;
+	unit<uint32> BO_base;
 	container WarmteVraagComponent;
 	parameter<string>                      BebouwingsComponent_name;
 	// end case parameters
@@ -19,10 +19,41 @@ template AllocatieResultatenComponent
 	attribute<Classifications/WoningtypeBestaand>     BebouwingsType                   (BO) := BO/BebouwingsType;
 	attribute<bool>                                   VeroorzaaktGrondroering          (BO) := Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie];
 	attribute<bool>                                   GrondroeringInPlanRegio          (PlanRegio)        := sum(VeroorzaaktGrondroering ? 1 : 0, BO/PlanRegio_rel) > 0;
- 
-// 	attribute<nrAansl>   nrAsl_e_app  (PlanRegio) := sum(BO/Aansluitingen/Enet_app, BO/Planregio_rel);
-// 	attribute<nrAansl>   nrAsl_e_ewp  (PlanRegio) := sum(BO/Aansluitingen/Enet_ewp, BO/Planregio_rel);
-// 	attribute<nrAansl>   nrAsl_e_hwp  (PlanRegio) := sum(BO/Aansluitingen/Enet_hwp, BO/Planregio_rel);
+
+	unit<uint32> BO := BO_base
+	{
+		container BemeterdeGebouwInput_rel :=  for_each_nedv(Classifications/Product/Name
+			,	replace('merge(GebouwOptie_rel, Classifications/BemeterdeGebouwInput, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/BemeterdeGebouwInput_rel/@P')+')', '@P', Classifications/Product/Name)
+			,	BO, Classifications/BemeterdeGebouwInput
+			);
+			
+		container SPF := for_each_nedv(Classifications/Product/Name
+			,	replace('merge(GebouwOptie_rel, Float64, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/SPF/@P')+')', '@P', Classifications/Product/Name)
+			,	BO, Float64
+		);
+		container Aansluitingen
+		{
+			attribute<bool>    IsHybride     (BO) :=
+			(	BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e
+			&&	BemeterdeGebouwInput_rel/RVp != Classifications/BemeterdeGebouwInput/V/e)
+			|| aandelen/WaterstofWP;
+			
+			attribute<bool>    IsAllElectric (BO) := 
+			((	BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e
+			&&	BemeterdeGebouwInput_rel/RVp == Classifications/BemeterdeGebouwInput/V/e
+			&&	BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/e
+			&&	BemeterdeGebouwInput_rel/TWp == Classifications/BemeterdeGebouwInput/V/e)
+			|| aandelen/Lt15_30 || aandelen/Lt15_50 || aandelen/Lt30_30 || aandelen/Lt30_50 || aandelen/WKO)
+			&& not(IsHybride);
+			
+			attribute<nrAansl> Gnet          (BO) := float64(Metervraag/V_gas > 0.0[GJ_yr]) * nrAansluitingen * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie]));
+			attribute<nrAansl> H2net         (BO) := nrAansluitingen * float64(aandelen/WaterstofWP || aandelen/WaterstofHR);
+			
+			attribute<nrAansl> Enet_app      (BO) := float64((Enet_hwp + Enet_ewp) == 0.0[nrAansl]) * nrAansluitingen;  // alleen apparatuur
+			attribute<nrAansl> Enet_hwp      (BO) := float64(IsHybride) * nrAansluitingen;  // apparatuur en hybride systeem
+			attribute<nrAansl> Enet_ewp      (BO) := float64(IsAllElectric) * nrAansluitingen;  // apparatuur en volledig elektrisch verwarmd
+		}
+	}
 	
 	attribute<kw> CapaciteitsvraagE (PlanRegio) :=  sum(BO/AansluitCapaciteit/GTF_Enet * 
 		( BO/AansluitCapaciteit/ASW_Eapp * float64(Aansluitingen/PerBO/nrAsl_e_app > 0.0[nrAansl])
@@ -34,20 +65,12 @@ template AllocatieResultatenComponent
 	{
 		container PerBO
 		{
-			attribute<nrAansl> nrAsl_gas   (BO) := BO/nrAansluitingen * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie])) - nrAsl_e_ewp;
-			attribute<nrAansl> nrAsl_H2net (BO) := BO/nrAansluitingen * float64(aandelen/WaterstofWP) + BO/nrAansluitingen * float64(aandelen/WaterstofHR);
-			attribute<nrAansl> nrAsl_e_app (BO) :=
-				  BO/Aansluitingen/Enet_app
-				- BO/nrAansluitingen * float64(aandelen/WaterstofWP)
-				- BO/nrAansluitingen * float64(nrAsl_LT_WP != 0.0[nrAansl]);
-			attribute<nrAansl> nrAsl_e_ewp (BO) := BO/Aansluitingen/Enet_ewp * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie]));
-			attribute<nrAansl> nrAsl_e_hwp (BO) := BO/Aansluitingen/Enet_hwp + BO/nrAansluitingen * float64(aandelen/WaterstofWP);
-			attribute<nrAansl> nrAsl_LT_WP (BO) :=
-				  BO/nrAansluitingen * float64(aandelen/Lt15_30)
-				+ BO/nrAansluitingen * float64(aandelen/Lt15_50)
-				+ BO/nrAansluitingen * float64(aandelen/Lt30_30)
-				+ BO/nrAansluitingen * float64(aandelen/Lt30_50)
-				+ BO/nrAansluitingen * float64(aandelen/WKO);
+			attribute<nrAansl> nrAsl_gas   (BO) := BO/Aansluitingen/Gnet;
+			attribute<nrAansl> nrAsl_H2net (BO) := BO/Aansluitingen/H2net;
+			attribute<nrAansl> nrAsl_e_app (BO) := BO/Aansluitingen/Enet_app;
+			attribute<nrAansl> nrAsl_e_ewp (BO) := BO/Aansluitingen/Enet_ewp;
+			attribute<nrAansl> nrAsl_e_hwp (BO) := BO/Aansluitingen/Enet_hwp;
+			attribute<nrAansl> nrAsl_LT_WP (BO) := BO/Aansluitingen/Enet_ewp * float64(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie]);
 		}
 		attribute<nrAansl>   nrAsl_gas    (PlanRegio) := sum(PerBO/nrAsl_gas,   BO/Planregio_rel);
 		attribute<nrAansl>   nrAsl_H2net  (PlanRegio) := sum(PerBO/nrAsl_H2net, BO/Planregio_rel);
