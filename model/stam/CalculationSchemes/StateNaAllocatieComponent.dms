@@ -1,0 +1,268 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2019 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+template StateNaAllocatieComponent
+{
+	// begin case parameters
+	unit<uint32> BO_base;
+//REMOVE	container WarmteVraagComponent;
+//	parameter<string>                      BebouwingsComponent_name;
+	// end case parameters
+/*	
+	attribute<Classifications/WarmteOptie> WarmteAllocatie (BO) := BO/WarmteOptie_rel; // TODO: substitute
+
+	container                                         VraagKentallen                                      := BO/VraagKentallen;
+	unit<uint32>                                      PlanRegio                                           := Invoer/SpecifiekeInstellingen/PlanRegio;
+	attribute<Classifications/WoningtypeBestaand>     BebouwingsType                   (BO) := BO/BebouwingsType;
+	attribute<bool>                                   VeroorzaaktGrondroering          (BO) := Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie];
+	attribute<bool>                                   GrondroeringInPlanRegio          (PlanRegio)        := sum(VeroorzaaktGrondroering ? 1 : 0, BO/PlanRegio_rel) > 0;
+*/
+	unit<uint32> BO := BO_base
+	{
+/* REMOVE	
+		container BemeterdeGebouwInput_rel :=  for_each_nedv(Classifications/Product/Name
+			,	replace('merge(GebouwOptie_rel, Classifications/BemeterdeGebouwInput, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/BemeterdeGebouwInput_rel/@P')+')', '@P', Classifications/Product/Name)
+			,	BO, Classifications/BemeterdeGebouwInput
+			);
+			
+		container SPF := for_each_nedv(Classifications/Product/Name
+			,	replace('merge(GebouwOptie_rel, Float64, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/SPF/@P')+')', '@P', Classifications/Product/Name)
+			,	BO, Float64
+		);
+		container Aansluitingen
+		{
+			attribute<bool>    IsHybride     (BO) :=
+			(	BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e
+			&&	BemeterdeGebouwInput_rel/RVp != Classifications/BemeterdeGebouwInput/V/e)
+			|| aandelen/WaterstofWP;
+			
+			attribute<bool>    IsAllElectric (BO) := 
+			((	BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e
+			&&	BemeterdeGebouwInput_rel/RVp == Classifications/BemeterdeGebouwInput/V/e
+			&&	BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/e
+			&&	BemeterdeGebouwInput_rel/TWp == Classifications/BemeterdeGebouwInput/V/e)
+			|| aandelen/Lt15_30 || aandelen/Lt15_50 || aandelen/Lt30_30 || aandelen/Lt30_50 || aandelen/WKO)
+			&& not(IsHybride);
+			
+			attribute<nrAansl> Gnet          (BO) := float64(Metervraag/V_gas > 0.0[GJ_yr]) * nrAansluitingen * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie]));
+			attribute<nrAansl> H2net         (BO) := nrAansluitingen * float64(aandelen/WaterstofWP || aandelen/WaterstofHR);
+			
+			attribute<nrAansl> Enet_app      (BO) := float64((Enet_hwp + Enet_ewp) == 0.0[nrAansl]) * nrAansluitingen;  // alleen apparatuur
+			attribute<nrAansl> Enet_hwp      (BO) := float64(IsHybride) * nrAansluitingen;  // apparatuur en hybride systeem
+			attribute<nrAansl> Enet_ewp      (BO) := float64(IsAllElectric) * nrAansluitingen;  // apparatuur en volledig elektrisch verwarmd
+		}
+		container Functioneel
+		{
+			attribute<GJ_yr> V_RV    (BO) := ='merge(GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/RV')+')';
+			attribute<GJ_yr> V_TW    (BO) := ='merge(GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/TW')+')';
+			attribute<GJ_yr> V_Warmte(BO) := V_RV + V_TW;
+			attribute<GJ_yr> V_K     (BO) := ='merge(GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/K')+')';
+			attribute<GJ_yr> V_Vent  (BO) := Float64(SchilLabel_rel <= Classifications/SchilLabel/V/B) * BO_base/Functioneel/Ventilatie;
+			attribute<GJ_yr> V_App   (BO) := BO_base/Functioneel/EA;
+		}
+		container Opbrengsten
+		{
+			attribute<float64> AansluitTarief (BO) := 
+				  (VraagKentallen/Opbrengsten/AansluitTarief_min[BebouwingsType] * Schuiven/OpbrMin
+				+  VraagKentallen/Opbrengsten/AansluitTarief_max[BebouwingsType] * Schuiven/OpbrMax);
+				
+			parameter<Eur_yr_Aansl>	VastRechtMT :=
+				( VraagKentallen/Opbrengsten/VastRechtMT_Min * Schuiven/OpbrMin 
+				+ VraagKentallen/Opbrengsten/VastRechtMT_Max * Schuiven/OpbrMax);
+			parameter<Eur_yr_Aansl>	VastRechtLT :=
+				( VraagKentallen/Opbrengsten/VastRechtLT_Min * Schuiven/OpbrMin 
+				+ VraagKentallen/Opbrengsten/VastRechtLT_Max * Schuiven/OpbrMax);
+			parameter<Eur_yr_Aansl>	VastRechtK  :=
+				( VraagKentallen/Opbrengsten/VastRechtK_Min  * Schuiven/OpbrMin 
+				+ VraagKentallen/Opbrengsten/VastRechtK_Max  * Schuiven/OpbrMax);
+
+
+			attribute<Eur>	AansluitBijdrageG  (BO) := nrAansluitingen * Kengetallen/Infra/AansluitTarief_bw_g, Descr = "Aansluitbijdrage voor nieuwe aansluiting op het gasnet";
+			attribute<Eur>	AansluitBijdrageE  (BO) := nrAansluitingen * Kengetallen/Infra/AansluitTarief_bw_e, Descr = "Aansluitbijdrage voor nieuwe aansluiting op het elektriciteitsnetnet";
+			attribute<Eur>	AansluitBijdrageT  (BO) := AansluitTarief  * nrAansluitingen,                       Descr = "Aansluitbijdrage voor nieuwe aansluiting op warmtenetten, niet gecorrigeerd voor deelname";
+			
+			attribute<Eur_yr>	VastRechtBijdrageG (BO) := nrAansluitingen * Kengetallen/Infra/JaarlijksVast_g, Descr = "VastRechtBijdrage voor aansluiting op het gasnet";
+			attribute<Eur_yr>	VastRechtBijdrageE (BO) := nrAansluitingen * Kengetallen/Infra/JaarlijksVast_e, Descr = "VastRechtBijdrage voor aansluiting op het elektriciteitsnetnet";
+			attribute<Eur_yr>	VastRechtMT_T      (BO) := nrAansluitingen * VastRechtMT,                       Descr = "VastRechtBijdrage voor aansluiting op warmtenetten, niet gecorrigeerd voor deelname";
+			attribute<Eur_yr>	VastRechtLT_T      (BO) := nrAansluitingen * VastRechtLT,                       Descr = "VastRechtBijdrage voor aansluiting op warmtenetten, niet gecorrigeerd voor deelname";
+			attribute<Eur_yr>	VastRechtK_T       (BO) := nrAansluitingen * VastRechtK,                        Descr = "VastRechtBijdrage voor aansluiting op warmtenetten, niet gecorrigeerd voor deelname";
+			
+			attribute<Eur_yr>	HeffingskortingE   (BO) := SpecifiekeInstellingen/Beleid/Heffingskorting * nrAansluitingen;
+		}
+REMOVE */			
+		container Metervraag := for_each_nedv('V_'+Classifications/BemeterdeGebouwInput/Name
+			,	replace('merge(GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/metervraag/@I')+')', '@I', Classifications/BemeterdeGebouwInput/Name)
+			,	BO, GJ_yr
+			)
+		{
+			attribute<GJ_yr> V_app (BO) := Functioneel/V_App * 1.0[Ratio]; //TODO Relateren aan energieefficiency apparatuur
+		}
+		container Eenmalig
+		{
+			//Aansluitbijdrages
+			attribute<Eur>   Ki_Asl_Enet (BO) :=  BC_kentallen/Ki_Aansl_e_asl * nraansluitingen
+															+   BC_kentallen/Ki_Aansl_e_opp * oppervlakte;
+			attribute<Eur>   Ki_Asl_Gnet (BO) :=  Metervraag/V_gas <= 0.0[GJ_yr] ? 0.0[Eur] :
+																BC_kentallen/Ki_Aansl_g_asl * nraansluitingen
+															+   BC_kentallen/Ki_Aansl_g_opp * oppervlakte;
+		
+			//Investeringen
+			attribute<Eur>   Ki30_LO (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki30_LO')+')';
+			attribute<Eur>   Ki20_LO (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki20_LO')+')';
+			attribute<Eur>   Ki15_LO (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki15_LO')+')';
+			attribute<Eur>   Ki_GV   (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Ki_GV')+')';
+		
+			//Subsidies
+			attribute<Eur>   Oi_s_LO_30 (BO) := const(0.0 [Eur], BO); //TODO Maarten
+			attribute<Eur>   Oi_s_LO_20 (BO) := const(0.0 [Eur], BO); //TODO Maarten
+			attribute<Eur>   Oi_s_LO_15 (BO) := const(0.0 [Eur], BO); //TODO Maarten
+			attribute<Eur>   Oi_s_GV    (BO) := const(0.0 [Eur], BO); //TODO Maarten
+		}
+		container Kapitaallasten
+		{
+			container PrevResults := BO_base/Kapitaallasten/PrevResults;
+			
+			//Aansluitbijdrages
+			attribute<Eur_yr> Kji_Asl_Enet (BO) := PrevResults/Kji_Asl_Enet + Eenmalig/Ki_Asl_Enet * NcwRefs/_50/AnnualisationFactor;
+			attribute<Eur_yr> Kmi_Asl_Enet (BO) := PrevResults/Kmi_Asl_Enet + Eenmalig/Ki_Asl_Enet * NCW/mr50/AnnualisationFactor;
+			attribute<Eur_yr> Kji_Asl_Gnet (BO) := PrevResults/Kji_Asl_Gnet + Eenmalig/Ki_Asl_Gnet * NcwRefs/_50/AnnualisationFactor;
+			attribute<Eur_yr> Kmi_Asl_Gnet (BO) := PrevResults/Kmi_Asl_Gnet + Eenmalig/Ki_Asl_Gnet * NCW/mr50/AnnualisationFactor;
+			
+			//Investeringen			
+			attribute<Eur_yr> Kji30_LO (BO) := PrevResults/Kji30_LO + Eenmalig/Ki30_LO * NcwRefs/_30/AnnualisationFactor;
+			attribute<Eur_yr> Kmi30_LO (BO) := PrevResults/Kmi30_LO + Eenmalig/Ki30_LO * NCW/mr30/AnnualisationFactor;
+			attribute<Eur_yr> Kji20_LO (BO) := PrevResults/Kji20_LO + Eenmalig/Ki20_LO * NcwRefs/_20/AnnualisationFactor;
+			attribute<Eur_yr> Kmi20_LO (BO) := PrevResults/Kmi20_LO + Eenmalig/Ki20_LO * NCW/mr20/AnnualisationFactor;
+			attribute<Eur_yr> Kji15_LO (BO) := Eenmalig/Ki15_LO * NcwRefs/_15/AnnualisationFactor;
+			attribute<Eur_yr> Kmi15_LO (BO) := Eenmalig/Ki15_LO * NCW/mr15/AnnualisationFactor;
+			attribute<Eur_yr> Kji_gv   (BO) := PrevResults/Kji_gv   + Eenmalig/Ki_gv   * NcwRefs/_30/AnnualisationFactor;
+			attribute<Eur_yr> Kmi_gv   (BO) := PrevResults/Kmi_gv   + Eenmalig/Ki_gv   * NCW/mr30/AnnualisationFactor;
+			
+			//Subsidies
+			attribute<Eur_yr> Oji_s_LO_30 (BO) := PrevResults/Oji_s_LO_30 + Eenmalig/Oi_s_LO_30 * NcwRefs/_30/AnnualisationFactor;
+			attribute<Eur_yr> Oji_s_LO_20 (BO) := PrevResults/Oji_s_LO_20 + Eenmalig/Oi_s_LO_20 * NcwRefs/_20/AnnualisationFactor;
+			attribute<Eur_yr> Oji_s_LO_15 (BO) := PrevResults/Oji_s_LO_15 + Eenmalig/Oi_s_LO_15 * NcwRefs/_15/AnnualisationFactor;
+			attribute<Eur_yr> Oji_s_gv    (BO) := PrevResults/Oji_s_gv    + Eenmalig/Oi_s_gv    * NcwRefs/_30/AnnualisationFactor;
+		}
+/* REMOVE		
+		container Jaarlijks
+		{
+			//Vastrecht en korting
+			attribute<Eur_yr> Kj_vastrecht_E (BO) := Opbrengsten/VastRechtBijdrageE;
+			attribute<Eur_yr> Kj_vastrecht_G (BO) := Metervraag/V_gas <= 0.0[GJ_yr] ? 0.0[Eur_yr] : Opbrengsten/VastRechtBijdrageG;
+			attribute<Eur_yr> Oj_Hkorting_E  (BO) := Opbrengsten/HeffingskortingE;
+			
+			//Elektriciteit
+			attribute<classifications/gebruiksgrootteklasse> e_gebruiksgrootteklasse_rel (BO) := classify(Metervraag/V_e, Prijzen/Elektriciteit/Staffel/ClassBreak);
+			attribute<Eur_yr> Kj_e       (BO) := Metervraag/V_e * Prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl[e_gebruiksgrootteklasse_rel];
+			attribute<Eur_yr> Km_e       (BO) := Metervraag/V_e * Prijzen/Elektriciteit/Staffel/KGJ_maatschappelijk [e_gebruiksgrootteklasse_rel];
+			attribute<Eur_yr> Kj_e_EH    (BO) := Metervraag/V_e * Prijzen/Elektriciteit/Staffel/KGJ_EnergieHeffing[e_gebruiksgrootteklasse_rel];
+			attribute<Eur_yr> Kj_e_CO2   (BO) := Metervraag/V_e * Prijzen/Elektriciteit/Staffel/KGJ_CO2Heffing[e_gebruiksgrootteklasse_rel];
+
+			//Gas
+			attribute<classifications/gebruiksgrootteklasse> g_gebruiksgrootteklasse_rel (BO) := classify(Metervraag/V_gas, Prijzen/Aardgas/Staffel/ClassBreak);
+			attribute<Eur_yr> Kj_gas     (BO) := Metervraag/V_gas * Prijzen/Aardgas/Staffel/KGJ_eindgebruik_excl[e_gebruiksgrootteklasse_rel];
+			attribute<Eur_yr> Km_gas     (BO) := Metervraag/V_gas * Prijzen/Aardgas/Staffel/KGJ_maatschappelijk [e_gebruiksgrootteklasse_rel];
+			attribute<Eur_yr> Kj_gas_EH  (BO) := Metervraag/V_gas * Prijzen/Aardgas/Staffel/KGJ_EnergieHeffing[e_gebruiksgrootteklasse_rel];
+			attribute<Eur_yr> Kj_gas_CO2 (BO) := Metervraag/V_gas * Prijzen/Aardgas/Staffel/KGJ_CO2Heffing[e_gebruiksgrootteklasse_rel];
+			//Overige dragers TODO: linken aan eventuele verbruiken
+			attribute<Eur_yr> Kj_H2        (BO) := Metervraag/V_H2       * invoer/energieprijzen/Overig/results/Waterstof [rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
+			
+			attribute<Eur_yr> Kj_kolen     (BO) := const(0.0 [Eur_yr], BO); //TODO relateren verbruik en : invoer/energieprijzen/Overig/results/Kolen_Excl[rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
+			attribute<Eur_yr> Kj_kolen_CO2 (BO) := const(0.0 [Eur_yr], BO); //TODO relateren verbruik en : invoer/energieprijzen/Overig/results/Kolen_CO2 [rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
+			attribute<Eur_yr> Kj_pellets   (BO) := metervraag/V_pellets  * invoer/energieprijzen/Overig/results/Pellets [rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)];
+			attribute<Eur_yr> Kj_biomassa  (BO) := metervraag/V_biomassa * invoer/energieprijzen/Overig/results/Biomassa[rlookup(RekenJaar_jaar,invoer/energieprijzen/Overig/results/jaar)]; 
+		
+			//Onderhoud installaties
+			attribute<Eur_yr> Kj_OH_LO   (BO) := ='merge(GebouwOptie_rel, Eur_yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Kj_OH_LO')+')';
+			attribute<Eur_yr> Kj_Adm_LO  (BO) := ='merge(GebouwOptie_rel, Eur_yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Kj_adm_LO')+')';
+		}
+REMOVE */		
+	}
+/* REMOVE	
+	attribute<kw> CapaciteitsvraagE (PlanRegio) :=  sum(BO/AansluitCapaciteit/GTF_Enet * 
+		( BO/AansluitCapaciteit/ASW_Eapp * float64(BO/Aansluitingen/Enet_app > 0.0[nrAansl])
+		+ BO/AansluitCapaciteit/ASW_Ehwp * float64(BO/Aansluitingen/Enet_hwp > 0.0[nrAansl])
+		+ BO/AansluitCapaciteit/ASW_Eewp * float64(BO/Aansluitingen/Enet_ewp > 0.0[nrAansl]) ), BO/Planregio_rel);
+
+	container Aansluitingen
+	{
+		attribute<nrAansl>   nrAsl_gas    (PlanRegio) := sum(BO/Aansluitingen/Gnet,   BO/Planregio_rel);
+		attribute<nrAansl>   nrAsl_H2net  (PlanRegio) := sum(BO/Aansluitingen/H2net, BO/Planregio_rel);
+		attribute<nrAansl>   nrAsl_e_app  (PlanRegio) := sum(BO/Aansluitingen/Enet_app, BO/Planregio_rel);
+		attribute<nrAansl>   nrAsl_e_ewp  (PlanRegio) := sum(BO/Aansluitingen/Enet_ewp * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie])), BO/Planregio_rel);
+		attribute<nrAansl>   nrAsl_e_hwp  (PlanRegio) := sum(BO/Aansluitingen/Enet_hwp, BO/Planregio_rel);
+		attribute<nrAansl>   nrAsl_LT_WP  (PlanRegio) := sum(BO/Aansluitingen/Enet_ewp * float64(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie]), BO/Planregio_rel);
+	}
+	container Aandelen := for_each_nedv(Classifications/GebiedsOptie/name, 'WarmteAllocatie == Classifications/WarmteOptie/V/'+Classifications/GebiedsOptie/name+'', BO, bool);
+
+	container MeterVraag := for_each_nedv(Classifications/GebiedsOptie/name, 'float64(Aandelen/'+Classifications/GebiedsOptie/name+') * (BO/Functioneel/V_RV + BO/Functioneel/V_TW)', BO, GJ_yr)
+	{
+		attribute<GJ_yr> Aardgas       (BO) := BO/Metervraag/V_gas * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie]));
+		attribute<GJ_yr> Elektriciteit (BO) := BO/Metervraag/V_e + BO/Metervraag/V_app;
+		attribute<GJ_yr> Waterstof     (BO) := BO/Metervraag/V_H2;
+		attribute<GJ_yr> Pellets       (BO) := const(0.0[gj_yr], BO); //TODO: vraag opnemen, bijv. BO/Metervraag/V_pellets;
+		attribute<GJ_yr> Biomassa      (BO) := const(0.0[gj_yr], BO); //TODO: vraag opnemen, bijv. BO/Metervraag/V_biomassa;
+		attribute<GJ_yr> Kolen         (BO) := const(0.0[gj_yr], BO); //TODO: vraag opnemen, bijv. BO/Metervraag/V_kolen;
+		attribute<GJ_yr> Wind          (BO) := const(0.0[gj_yr], BO); //TODO: vraag opnemen, bijv. BO/Metervraag/V_wind;
+		attribute<GJ_yr> Zon           (BO) := const(0.0[gj_yr], BO); //TODO: vraag opnemen, bijv. BO/Metervraag/V_zon;
+		attribute<GJ_yr> Koude         (BO) := BO/Functioneel/V_K * float64(Aandelen/WKO);
+		attribute<GJ_yr> Warmte_LT     (BO) := BO/Functioneel/V_Warmte * float64(Classifications/WarmteOptie/IsLT[BO/WarmteOptie_rel]);
+		attribute<GJ_yr> Warmte_MT     (BO) := BO/Functioneel/V_Warmte * float64(Classifications/WarmteOptie/IsMT[BO/WarmteOptie_rel]);
+		attribute<GJ_yr> GebiedsOptie  (BO) := ='add('+AsItemList(Classifications/GebiedsOptie/name)+')';
+	}
+
+	container AardGas 
+	{
+		attribute<bool>    heeft_gas        (BO) := Metervraag/Aardgas > 0.0[GJ_yr];
+		attribute<nrAansl> nrAansl_gas      (BO) := float64(heeft_gas) * BO/nrAansluitingen;
+		attribute<Eur>     AansluitBijdrage (BO) := BO/Opbrengsten/AansluitBijdrageG   * float64(heeft_gas);
+		attribute<Eur_yr>  VastRecht        (BO) := BO/Opbrengsten/VastRechtBijdrageG  * float64(heeft_gas);
+
+		unit<uint8> ggk := Prijzen/Aardgas/Staffel; // gebruiksgrootte klasse
+		attribute<ggk>    ggk_rel          (BO) := classify(MeterVraag/AardGas, ggk/ClassBreak);
+		attribute<Eur_yr> eindgebruik_excl (BO) := MeterVraag/AardGas * ggk/KGJ_eindgebruik_excl[ggk_rel];
+		attribute<Eur_yr> maatschappelijk  (BO) := MeterVraag/AardGas * ggk/KGJ_maatschappelijk [ggk_rel];
+		attribute<Eur_yr> netwerk          (BO) := MeterVraag/AardGas * ggk/KGJ_netwerk         [ggk_rel];
+		attribute<Eur_yr> EnergieHeffing   (BO) := MeterVraag/AardGas * ggk/KGJ_EnergieHeffing  [ggk_rel];
+		attribute<Eur_yr> CO2Heffing       (BO) := MeterVraag/AardGas * ggk/KGJ_CO2Heffing      [ggk_rel];
+	}
+	
+	container Vastrecht
+	{	
+		attribute<Eur_yr> Kj_Vastrecht_MT(BO) := float64(Classifications/WarmteOptie/IsMT[BO/WarmteOptie_rel]) * BO/Opbrengsten/VastRechtMT_T;			
+		attribute<Eur_yr> Kj_Vastrecht_LT(BO) := float64(Classifications/WarmteOptie/IsLT[BO/WarmteOptie_rel]) * BO/Opbrengsten/VastRechtLT_T;
+		attribute<Eur_yr> Kj_Vastrecht_K (BO) := float64(WarmteAllocatie == Classifications/WarmteOptie/V/WKO) * BO/Opbrengsten/VastRechtK_T;
+			
+		attribute<Eur_yr>Kj_Vastrecht    (BO) := Kj_Vastrecht_MT + Kj_Vastrecht_LT + Kj_Vastrecht_K;
+	}
+	
+	attribute<nrAansl> aant_g_aansl_per_planregio        (PlanRegio) := sum((BO/Aansluitingen/Gnet + BO/Aansluitingen/H2net), BO/PlanRegio_rel);
+	attribute<nrAansl> aant_g_aansl_hoogb_per_planregio  (PlanRegio) := sum((BO/Aansluitingen/Gnet + BO/Aansluitingen/H2net) * float64( BO/IsMeergezins), BO/PlanRegio_rel);
+	attribute<nrAansl> aant_g_aansl_laagb_per_planregio  (PlanRegio) := sum((BO/Aansluitingen/Gnet + BO/Aansluitingen/H2net) * float64(!BO/IsMeergezins), BO/PlanRegio_rel);
+	
+	container Elektriciteit
+	{
+		attribute<Eur>    AansluitBijdrage (BO) := BO/Opbrengsten/AansluitBijdrageE;
+		attribute<Eur_yr> VastRecht        (BO) := BO/Opbrengsten/VastRechtBijdrageE;
+		attribute<Eur_yr> Heffingskorting  (BO) := BO/Opbrengsten/HeffingskortingE;
+
+		unit<uint8> ggk := Prijzen/Elektriciteit/Staffel; // gebruiksgrootte klasse
+		attribute<ggk>    ggk_rel          (BO) := classify(MeterVraag/Elektriciteit, ggk/ClassBreak);
+		attribute<Eur_yr> eindgebruik_excl (BO) := MeterVraag/Elektriciteit * ggk/KGJ_eindgebruik_excl[ggk_rel];
+		attribute<Eur_yr> maatschappelijk  (BO) := MeterVraag/Elektriciteit * ggk/KGJ_maatschappelijk [ggk_rel];
+		attribute<Eur_yr> netwerk          (BO) := MeterVraag/Elektriciteit * ggk/KGJ_netwerk         [ggk_rel];
+		attribute<Eur_yr> EnergieHeffing   (BO) := MeterVraag/Elektriciteit * ggk/KGJ_EnergieHeffing  [ggk_rel] - Heffingskorting;
+		attribute<Eur_yr> CO2Heffing       (BO) := MeterVraag/Elektriciteit * ggk/KGJ_CO2Heffing      [ggk_rel];
+	}
+	container CO2
+	{
+		attribute<KG_yr> AardGas           (BO) := MeterVraag/AardGas       * prijzen/AardGas/CO2_GJ;
+		attribute<KG_yr> Elektriciteit     (BO) := MeterVraag/Elektriciteit * prijzen/Elektriciteit/CO2_GJ;
+	}
+REMOVE */	
+}
+
