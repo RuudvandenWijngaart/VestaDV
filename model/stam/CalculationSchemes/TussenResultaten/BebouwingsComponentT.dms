@@ -283,39 +283,40 @@ template BebouwingsComponentT
 	
 	attribute<bool> GebouwOptie_sel(Classifications/GebouwOptie) := ='union_data(Classifications/GebouwOptie, '+AsItemList(GebouwOptie_sel_Expr)+')';
 	
-	unit<uint8> GebouwOptie := subset(GebouwOptie_sel) {
+	unit<uint8> BcGebouwOptie := subset(GebouwOptie_sel) {
 		attribute<string> Name := Classifications/GebouwOptie/Name[nr_OrgEntity];
 		attribute<string> Label := Name, DialogType = "LabelText";
 		attribute<string> Criterium_expr := ='replace_value(LowerCase(union_data(., '+AsItemList('LocatieSpecifiekeOpties/GebouwOpties/'+Name)+')), ''criteria/always'', '''')';
 	}
-	container GebouwOpties := for_each_ne(GebouwOptie/Name, 'GebouwOptieT(BO, Classifications/GebouwOptie/V/'+GebouwOptie/Name+', '+Quote(GebouwOptie/Criterium_expr)+')');
+	container GebouwOpties := for_each_ne(BcGebouwOptie/Name, 'GebouwOptieT(BO, Classifications/GebouwOptie/V/'+BcGebouwOptie/Name+', '+Quote(BcGebouwOptie/Criterium_expr)+')');
 	
 	unit<uint32> BebouwingsObjectMetGebouwOptie := BO
 	{
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel := =(#GebouwOptie == 1)? 'const(0[GebouwOptie],BO)' : 'argmin('+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/kosten_or_undefined')+')[GebouwOptie]';
+		unit<uint8> BcGebouwOptie := BebouwingsComponent_UpRef/BcGebouwOptie;
+		attribute<BcGebouwOptie> GebouwOptie_rel := =(#BcGebouwOptie == 1)? 'const(0[BcGebouwOptie],BO)' : 'argmin('+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/kosten_or_undefined')+')[BcGebouwOptie]';
 		attribute<Classifications/WarmteOptie> WarmteOptie_rel := 
 			Classifications/WarmteOptie/IsGebiedsOptie[BO/WarmteOptie_rel]
 			?	BO/WarmteOptie_rel
-			:	Classifications/GebouwOptie/WarmteOptie_rel[GebouwOptie/nr_OrgEntity[GebouwOptie_rel]];
+			:	Classifications/GebouwOptie/WarmteOptie_rel[BcGebouwOptie/nr_OrgEntity[GebouwOptie_rel]];
 		
-		attribute<Classifications/SchilLabel> SchilLabel_rel := ='merge(GebouwOptie_rel, Classifications/SchilLabel, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/SchilLabel_rel')+')';
+		attribute<Classifications/SchilLabel> SchilLabel_rel := ='merge(GebouwOptie_rel, Classifications/SchilLabel, '+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/SchilLabel_rel')+')';
 		container InstallatiePerProduct := for_each_nedv(Classifications/Product/Name
-			,	replace('merge(GebouwOptie_rel, Classifications/Installatie, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/InstallatiePerProduct/@P')+')', '@P', Classifications/Product/Name)
+			,	replace('merge(GebouwOptie_rel, Classifications/Installatie, '+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/InstallatiePerProduct/@P')+')', '@P', Classifications/Product/Name)
 			,	., Classifications/Installatie
 			);
 			
 		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel (BO) := 
-			='merge(GebouwOptie_rel, Classifications/AfgifteSysteem, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/AfgifteSysteem_rel')+')';		
+			='merge(GebouwOptie_rel, Classifications/AfgifteSysteem, '+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/AfgifteSysteem_rel')+')';		
 			
 		// Extra info
 		attribute<string>	WarmteOptie		(BO)	:=	Classifications/WarmteOptie/name[WarmteOptie_rel];
 	}
 	container Kapitaallasten := results/Kapitaallasten;
 	container statistics {
-		attribute<EUR> Ki_lowest_value  (BO) := ='min_elem('+AsItemList('GebouwOpties/'+GebouwOptie/Name+'kosten_j')+')';
-		attribute<EUR> Ki_lowest_index  (BO) := ='argmin  ('+AsItemList('GebouwOpties/'+GebouwOptie/Name+'kosten_j')+')';
-		attribute<EUR> Ki_highest_value (BO) := ='max_elem('+AsItemList('GebouwOpties/'+GebouwOptie/Name+'kosten_j')+')';
-		attribute<EUR> Ki_highest_index (BO) := ='argmax  ('+AsItemList('GebouwOpties/'+GebouwOptie/Name+'kosten_j')+')';
+		attribute<EUR> Ki_lowest_value  (BO) := ='min_elem('+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'kosten_j')+')';
+		attribute<EUR> Ki_lowest_index  (BO) := ='argmin  ('+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'kosten_j')+')';
+		attribute<EUR> Ki_highest_value (BO) := ='max_elem('+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'kosten_j')+')';
+		attribute<EUR> Ki_highest_index (BO) := ='argmax  ('+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'kosten_j')+')';
 	}
 		
 	container OpwekkingsOpties
@@ -400,9 +401,8 @@ REMOVE */
 
 	container Functioneel2
 	{
-		attribute<GJ_yr> V_RV    (BO) := ='merge(BebouwingsObjectMetGebouwOptie/GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/RV')+')';
-		attribute<GJ_yr> V_TW    (BO) := ='merge(BebouwingsObjectMetGebouwOptie/GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/TW')+')';
-		attribute<GJ_yr> V_K     (BO) := ='merge(BebouwingsObjectMetGebouwOptie/GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Functioneel/K')+')';
+		attribute<GJ_yr> V_RV    (BO) := ='merge(BebouwingsObjectMetGebouwOptie/GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/Functioneel/RV')+')';
+		attribute<GJ_yr> V_TW    (BO) := ='merge(BebouwingsObjectMetGebouwOptie/GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/Functioneel/TW')+')';
 		attribute<GJ_yr> V_Warmte(BO):=  V_RV + V_TW;
 	}
 	container Opbrengsten
@@ -437,7 +437,7 @@ REMOVE */
 		
 	unit<uint32> Results := BebouwingsObjectMetGebouwOptie
 	{
-		unit<uint8> GebouwOptie := BebouwingsComponent_UpRef/GebouwOptie;
+		unit<uint8> BcGebouwOptie := BebouwingsComponent_UpRef/BcGebouwOptie;
 		container GebouwOpties  := BebouwingsComponent_UpRef/GebouwOpties;
 		container BC_kentallen  := BebouwingsComponent_UpRef/BC_kentallen;	
 		container Functioneel   := BebouwingsComponent_UpRef/BO/Functioneel;	
@@ -470,7 +470,7 @@ REMOVE */
 
 		container Warmtewet := Functioneel2
 		{
-			attribute<GJ_yr> V_gas   (BO) := ='merge(GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+GebouwOptie/Name+'/Metervraag/gas')+')';
+			attribute<GJ_yr> V_gas   (BO) := ='merge(GebouwOptie_rel, GJ_Yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/Metervraag/gas')+')';
 			
 			unit<uint32> GasVerbruikers := subset(V_Gas > 0.0[gj_yr])
 			{
