@@ -174,11 +174,34 @@ template WKOResults
 		parameter<Classifications/Warmteoptie> Optie := ../WarmteOptie_rel;
 		attribute<bool> Toewijzing := Classifications/WarmteOptie/kanGebiedsOptie[BO/WarmteOptie_rel] && StartThis;
 			
+		parameter<string> BCname := Componentnaam;
+		attribute<string> s1_name := Invoer/RuimtelijkeData/leidraad_oktober_2019/buurt/S1_variant_keuze[BO/Planregio_rel]; // TODO: liever code attribuut dan string.
+		parameter<bool> LTvsEWP := (Componentnaam == 'BestaandeUtil' ||  Componentnaam == 'BestaandeWoning') && Voorkeuren/Afweging/LTversusWP;
+		
+		attribute<bool> S1isS1a     := s1_name == 's1a';
+		attribute<bool> S1isS1b     := not(S1isS1a);
+		attribute<bool> isWoning    := const(Componentnaam == 'BestaandeWoning' , .);
+		
+		attribute<Bool> Util_G_bWP := (Componentnaam == 'BestaandeUtil'  )   && BO/AansluitCapaciteit/RV >= 100 kW && S1isS1b;
+		attribute<Bool> Util_K_bWP := (Componentnaam == 'BestaandeUtil'  )   && not(Util_G_bWP) && S1isS1b;
+		attribute<Bool> Util_l_WP := not(isWoning) && S1isS1a;
+		
+		attribute<bool> Woon_LeWP := isWoning && S1isS1a;
+		attribute<bool> Woon_BeWP := isWoning && S1isS1b;
+		
+		attribute<BcGebouwOptie> GebouwOptie_Alternatief :=
+			Util_G_bWP ? BebouwingsComponenten/BestaandeUtil/BcGebouwOptie/V/BeWPuG  :
+			Util_K_bWP ? BebouwingsComponenten/BestaandeUtil/BcGebouwOptie/V/BeWPuK  :
+			Util_l_WP  ? BebouwingsComponenten/BestaandeUtil/BcGebouwOptie/V/LeWPu   :
+			Woon_LeWP  ? BebouwingsComponenten/BestaandeWoning/BcGebouwOptie/V/LeWPw :
+			Woon_BeWP  ? BebouwingsComponenten/BestaandeWoning/BcGebouwOptie/V/BeWPw 
+			           : BO/GebouwOptie_rel;
+		
 			unit<uint8> BcGebouwOptie := BO/BcGebouwOptie;
 			parameter<BcGebouwOptie> Gebieds_BcGebouwOptie_rel := invert(BcGebouwOptie/nr_OrgEntity)[Classifications/GebiedsOptie/GebouwOptie_rel[GebiedsOptie_rel]], IntegrityCheck = "IsDefined(this)";
 		
-			attribute<BcGebouwOptie> GebouwOptie_rel := StartThis ? Gebieds_BcGebouwOptie_rel : BO/GebouwOptie_rel;
-			
+//			attribute<BcGebouwOptie> GebouwOptie_rel := StartThis ? Gebieds_BcGebouwOptie_rel : BO/GebouwOptie_rel;
+			attribute<BcGebouwOptie> GebouwOptie_rel := StartThis ? Gebieds_BcGebouwOptie_rel : LTvsEWP ? GebouwOptie_Alternatief : BO/GebouwOptie_rel;
 			attribute<Classifications/WarmteOptie> WarmteOptie_rel (BO) := 
 				Toewijzing
 				?	Optie
