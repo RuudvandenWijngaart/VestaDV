@@ -20,6 +20,11 @@ container WarmteBronnen
 		attribute<Eur_GJ>        K_Gas_GJ         (classifications/rekenjaar) := AardGas/results/GrootGebruik/eindgebruik_excl[aardgas_tabel_rel];
 		attribute<Eur_GJ>        Km_Gas_GJ        (classifications/rekenjaar) := AardGas/results/GrootGebruik/maatschappelijk [aardgas_tabel_rel];
 		
+		unit<uint32> groengas_tabel := groengas/Table;
+		attribute<groengas_tabel> groengas_tabel_rel(classifications/rekenjaar) := rlookup(classifications/rekenjaar/values, UInt16(groengas_tabel/jaar));
+		attribute<Eur_GJ>        K_GrGas_GJ         (classifications/rekenjaar) := groengas/results/GrootGebruik/eindgebruik_excl[groengas_tabel_rel];
+		attribute<Eur_GJ>        Km_GrGas_GJ        (classifications/rekenjaar) := groengas/results/GrootGebruik/maatschappelijk [groengas_tabel_rel];
+		
 		unit<uint32> elek_tabel := Elektriciteit/Table;
 		
 		attribute<elek_tabel>    elek_tabel_rel   (classifications/rekenjaar) := rlookup(classifications/rekenjaar/values, UInt16(elek_tabel/jaar));
@@ -122,6 +127,7 @@ container WarmteBronnen
 		}
 		container RekenTypes
 		{
+			attribute<bool>   IsGroenGas (classifications/rekenstap) := ='union_data(classifications/rekenstap, '+AsItemList('SpecifiekeInstellingen/'+classifications/RekenStap/name+'/Voorkeuren/Afweging/IsGroenGas')+')';
 			container STEG
 			{
 				// obv (0.20/0.30) * M10[Eur/GJ];
@@ -134,7 +140,6 @@ container WarmteBronnen
 				
 				attribute<Eur_GJ> K_GJ       (classifications/rekenstap) := (0.20/0.30) * prijzen/K_Gas_GJ [classifications/rekenstap/rekenjaar_rel];
 				attribute<Eur_GJ> Km_GJ_Def  (classifications/rekenstap) := (0.20/0.30) * prijzen/Km_Gas_GJ[classifications/rekenstap/rekenjaar_rel]; //default kosten in STEG op basis van stoken (groen)gas
-				attribute<bool>   IsGroenGas (classifications/rekenstap) := ='union_data(classifications/rekenstap, '+AsItemList('SpecifiekeInstellingen/'+classifications/RekenStap/name+'/Voorkeuren/Afweging/IsGroenGas')+')';
 				attribute<Eur_GJ> Km_GJ      (classifications/rekenstap) := IsGroenGas ? Km_GJ_Bws : Km_GJ_Def;
 			}
 			
@@ -165,8 +170,13 @@ container WarmteBronnen
 					parameter<float64> Ondergrond    := 0.0;
 					parameter<float64> Opwekking     := 0.0;
 				}
-				attribute<Eur_GJ>  K_GJ  (classifications/rekenstap) := (Factoren/Aardgas * prijzen/K_Gas_GJ  + Factoren/Elektriciteit * prijzen/ElekEnGros_GJ)[classifications/rekenstap/rekenjaar_rel]; // en gros prijs als opbrengst, dit is excl distributiekosten
-				attribute<Eur_GJ>  Km_GJ (classifications/rekenstap) := (Factoren/Aardgas * prijzen/Km_Gas_GJ + Factoren/Elektriciteit * prijzen/Km_Elek_GJ   )[classifications/rekenstap/rekenjaar_rel];
+				attribute<eur_GJ> K_Gas  (classifications/rekenstap) := IsGroenGas  ? prijzen/K_GrGas_GJ [classifications/rekenstap/rekenjaar_rel] : prijzen/K_Gas_GJ [classifications/rekenstap/rekenjaar_rel];
+				attribute<eur_GJ> Km_Gas  (classifications/rekenstap) := IsGroenGas ? prijzen/Km_GrGas_GJ[classifications/rekenstap/rekenjaar_rel] : prijzen/Km_Gas_GJ[classifications/rekenstap/rekenjaar_rel];
+				
+				attribute<Eur_GJ>  K_GJ  (classifications/rekenstap) :=
+					Factoren/Aardgas * K_Gas  + (Factoren/Elektriciteit * prijzen/ElekEnGros_GJ)[classifications/rekenstap/rekenjaar_rel]; // en gros prijs als opbrengst, dit is excl distributiekosten
+				attribute<Eur_GJ>  Km_GJ (classifications/rekenstap) :=
+					Factoren/Aardgas * Km_Gas + (Factoren/Elektriciteit * prijzen/Km_Elek_GJ   )[classifications/rekenstap/rekenjaar_rel];
 			}
 			container HulpKetel := Gasmotor;
 			container Industrie
@@ -211,8 +221,13 @@ container WarmteBronnen
 					parameter<float64> Ondergrond    := 0.0;
 					parameter<float64> Opwekking     := 0.0;
 				}
-				attribute<Eur_GJ>  K_GJ  (classifications/rekenstap) := (Factoren/Biogas * prijzen/K_Gas_GJ  + Factoren/Elektriciteit * prijzen/ElekEnGros_GJ)[classifications/rekenstap/rekenjaar_rel]; // en gros prijs als opbrengst, dit is excl distributiekosten
-				attribute<Eur_GJ>  Km_GJ (classifications/rekenstap) := (Factoren/Biogas * prijzen/Km_Gas_GJ + Factoren/Elektriciteit * prijzen/Km_Elek_GJ   )[classifications/rekenstap/rekenjaar_rel]; 
+				attribute<eur_GJ> K_Gas   (classifications/rekenstap) := IsGroenGas ? prijzen/K_GrGas_GJ [classifications/rekenstap/rekenjaar_rel] : prijzen/K_Gas_GJ [classifications/rekenstap/rekenjaar_rel];
+				attribute<eur_GJ> Km_Gas  (classifications/rekenstap) := IsGroenGas ? prijzen/Km_GrGas_GJ[classifications/rekenstap/rekenjaar_rel] : prijzen/Km_Gas_GJ[classifications/rekenstap/rekenjaar_rel];
+				
+				attribute<Eur_GJ>  K_GJ  (classifications/rekenstap) := 
+					Factoren/Biogas * K_Gas  + (Factoren/Elektriciteit * prijzen/ElekEnGros_GJ)[classifications/rekenstap/rekenjaar_rel]; // en gros prijs als opbrengst, dit is excl distributiekosten
+				attribute<Eur_GJ>  Km_GJ (classifications/rekenstap) := 
+					Factoren/Biogas * Km_Gas + (Factoren/Elektriciteit * prijzen/Km_Elek_GJ   )[classifications/rekenstap/rekenjaar_rel]; 
 			}
 		}
 	}
