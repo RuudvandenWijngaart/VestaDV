@@ -26,123 +26,143 @@ container DataPakketExport: isHidden = "True"
 
 		unit<uint32> BestaandWoonUtil_in_DataPakket := BestaandWoonUtil
 		{
-			attribute<string>   D1_identificatie      := union_data(.,/Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/identificatie,Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/identificatie);
-			attribute<string>   D2_bebouwingscomponent:= union_data(., const('wonen',Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied), const('utiliteit',/Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied));
-			attribute<m>        D3_RD_X               := PointRow(BestaandWoonUtil/geometry)[m];
-			attribute<m>        D4_RD_Y               := PointCol(BestaandWoonUtil/geometry)[m];
+			attribute<string>	D1_identificatie      := union_data(.,/Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/identificatie,Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/identificatie);
+			attribute<string>	D2_bebouwingscomponent:= union_data(., const('wonen',Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied), const('utiliteit',/Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied));
+			attribute<m>		D3_RD_X               := PointRow(BestaandWoonUtil/geometry)[m];
+			attribute<m>		D4_RD_Y               := PointCol(BestaandWoonUtil/geometry)[m];
+			attribute<Units/m2>	D5_Oppervlakte        := union_data(.,/Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/oppervlakte,Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/oppervlakte);
 
 			attribute<String>	I01_BU_CODE        := Invoer/RuimtelijkeData/StudieGebied/buurt/BU_CODE[BestaandWoonUtil/Buurt_rel];
-			attribute<nrAansl>  I11_nrAansluitingen:= union_data(.,BebouwingsComponenten/BestaandeWoning/RuimtelijkeVraagComponent/nrAansluitingen,BebouwingsComponenten/BestaandeUtil/RuimtelijkeVraagComponent/nrAansluitingen);
 
-			attribute<GJ_yr>	H01_warmtetotaal   := add(H02_Vraag_aardgas, H03_Vraag_groengas, H05_Vraag_MTwarmte, H06_Vraag_LTwarmte, H04_Vraag_elekwarmte);
+			attribute<GJ_yr>	H01_Vraag_totaal   := add(H02_Vraag_RV, H03_Vraag_TW, H04_Vraag_Vent, H05_Vraag_K, H06_Vraag_App);
 
-			attribute<GJ_yr>	H02_Vraag_aardgas  := !BestaandWoonUtil/Uitgesloten_bool ? makedefined((
-													 Groengas ? 0 [GJ_yr] : (
+			attribute<GJ_yr>	H02_Vraag_RV       := ( BestaandWoonUtil/Uitgesloten_bool) 
+													? 0[ GJ_yr ] 
+													: makedefined( 
+													 union_data(.,Allocatie/BestaandeWoning/BO/Functioneel/V_RV,
+													              Allocatie/BestaandeUtil/BO/Functioneel/V_RV)
+													,0[ GJ_yr ]);
+
+			attribute<GJ_yr>	H03_Vraag_TW  := ( BestaandWoonUtil/Uitgesloten_bool) 
+													? 0[ GJ_yr ] 
+													: makedefined( 
+													 union_data(.,Allocatie/BestaandeWoning/BO/Functioneel/V_TW,
+													              Allocatie/BestaandeUtil/BO/Functioneel/V_TW)
+													,0[ GJ_yr ]);
+
+			attribute<GJ_yr>	H04_Vraag_Vent  := ( BestaandWoonUtil/Uitgesloten_bool) 
+													? 0[ GJ_yr ] 
+													: makedefined( 
+													 union_data(.,Allocatie/BestaandeWoning/BO/Functioneel/V_Vent,
+													              Allocatie/BestaandeUtil/BO/Functioneel/V_Vent)
+													,0[ GJ_yr ]);
+
+			attribute<GJ_yr>	H05_Vraag_K     := ( BestaandWoonUtil/Uitgesloten_bool) 
+													? 0[ GJ_yr ] 
+													: makedefined( 
+													 union_data(.,Allocatie/BestaandeWoning/BO/Functioneel/V_K * float64(Allocatie/BestaandeWoning/Aandelen/WKO),
+													              Allocatie/BestaandeUtil/BO/Functioneel/V_K)
+													,0[ GJ_yr ]);
+
+			attribute<GJ_yr>	H06_Vraag_App      := ( BestaandWoonUtil/Uitgesloten_bool) 
+													? 0[ GJ_yr ] 
+													: makedefined( 
+													 union_data(.,Allocatie/BestaandeWoning/BO/Functioneel/V_App,
+													              Allocatie/BestaandeUtil/BO/Functioneel/V_App)
+													,0[ GJ_yr ]);	
+
+			attribute<GJ_yr>	H09_Input_aardgas := (BestaandWoonUtil/Uitgesloten_bool || GroenGas)
+													? 0[GJ_yr] 
+													: makedefined( 
 													 union_data(.,Allocatie/BestaandeWoning/Metervraag/Aardgas,
 													              Allocatie/BestaandeUtil/Metervraag/Aardgas)
-													))
-													, 0.0[GJ_yr]) : 0.0[GJ_yr][GJ_yr];
-
-			attribute<GJ_yr>	H03_Vraag_groengas	:= !BestaandWoonUtil/Uitgesloten_bool ? makedefined((
-													   Groengas ? (
-													union_data(.,Allocatie/BestaandeWoning/Metervraag/Aardgas,
-													             Allocatie/BestaandeUtil/Metervraag/Aardgas)
-													)
-													: 0 [GJ_yr])
-													, 0.0[GJ_yr]) : 0.0[GJ_yr][GJ_yr];
-
-			attribute<GJ_yr>	H04_Vraag_elekwarmte := !BestaandWoonUtil/Uitgesloten_bool ? makedefined((
-													    union_data(.,Allocatie/BestaandeWoning/Metervraag/eWP, Allocatie/BestaandeUtil/Metervraag/eWP)
-													  + union_data(.,Allocatie/BestaandeWoning/Metervraag/hWP, Allocatie/BestaandeUtil/Metervraag/hWP)
-													  )
-													  , 0.0[GJ_yr]) : 0.0[GJ_yr][GJ_yr];
-
-			attribute<GJ_yr>	H05_Vraag_MTwarmte := !BestaandWoonUtil/Uitgesloten_bool ? makedefined(max_elem(
-													((union_data(.,BebouwingsComponenten/BestaandeWoning/DragerOpties/Warmte/Warmte,BebouwingsComponenten/BestaandeUtil/DragerOpties/Warmte/Warmte)
-													)),
-													(union_data(.,Allocatie/BestaandeWoning/Metervraag/WarmteMT,Allocatie/BestaandeUtil/Metervraag/WarmteMT)
-													))
-													, 0.0[GJ_yr]) : 0.0[GJ_yr][GJ_yr];
-
-			attribute<GJ_yr>	H06_Vraag_LTwarmte := !BestaandWoonUtil/Uitgesloten_bool ? makedefined((
-													union_data(.,Allocatie/BestaandeWoning/Metervraag/WarmteLT, Allocatie/BestaandeUtil/Metervraag/WarmteLT)
-													)
-													, 0.0[GJ_yr]) : 0.0[GJ_yr][GJ_yr];
+													,0[GJ_yr]);
 													
-			attribute<GJ_yr>	H08_Vraag_koude    := !BestaandWoonUtil/Uitgesloten_bool ? makedefined((
-												   union_data(.,BebouwingsComponenten/BestaandeWoning/Functioneel/Koude,
-												                BebouwingsComponenten/BestaandeUtil/Functioneel/Koude)
-												)
-												, 0.0[GJ_yr]) : 0.0[GJ_yr][GJ_yr];
+			attribute<GJ_yr>	H10_Input_duurzaamgas := (BestaandWoonUtil/Uitgesloten_bool || !GroenGas)
+													? 0[GJ_yr] 
+													: makedefined( 
+													 union_data(.,Allocatie/BestaandeWoning/Metervraag/Aardgas,
+													              Allocatie/BestaandeUtil/Metervraag/Aardgas)
+													,0[GJ_yr]);
 
-			attribute<GJ_yr>	H09_Vraag_elektotaal := !BestaandWoonUtil/Uitgesloten_bool ? makedefined(
-													(union_data(.,Allocatie/BestaandeUtil/Metervraag/elektriciteit, Allocatie/BestaandeWoning/Metervraag/elektriciteit)
-													- (union_data(.,Allocatie/BestaandeWoning/Metervraag/eWP,Allocatie/BestaandeUtil/Metervraag/eWP))
-													- (union_data(.,Allocatie/BestaandeWoning/Metervraag/hWP,Allocatie/BestaandeUtil/Metervraag/hWP))
-													)
-													, 0.0[GJ_yr]) : 0.0[GJ_yr][GJ_yr];
+			attribute<GJ_yr>	H11_Input_elektriciteit := (BestaandWoonUtil/Uitgesloten_bool)
+													? 0[GJ_yr] 
+													: makedefined( 
+													 union_data(.,Allocatie/BestaandeWoning/Metervraag/Elektriciteit,
+													              Allocatie/BestaandeUtil/Metervraag/Elektriciteit)
+													,0[GJ_yr]);
+
+			//TODO uitzoeken met Folckert wordt verwezen naar LT voor planregio
+			attribute<GJ_yr> H12_input_MTwarmtebronnen := (BestaandWoonUtil/Uitgesloten_bool)
+													? 0[GJ_yr] 
+													: makedefined( 
+													 union_data(.,Allocatie/BestaandeWoning/Metervraag/Warmte_MT,
+													              Allocatie/BestaandeUtil/Metervraag/Warmte_MT)
+													,0[GJ_yr]);
+
+			attribute<GJ_yr> H13_input_LTwarmtebronnen := (BestaandWoonUtil/Uitgesloten_bool)
+													? 0[GJ_yr] 
+													: makedefined( 
+													 union_data(.,Allocatie/BestaandeWoning/Metervraag/Warmte_LT,
+													              Allocatie/BestaandeUtil/Metervraag/Warmte_LT)
+													,0[GJ_yr]);
+
+			attribute<GJ_yr> H14_Saldo_Omgevingswarmte := (BestaandWoonUtil/Uitgesloten_bool)
+													? 0[GJ_yr] 
+													: makedefined( 
+													H01_Vraag_totaal - H09_Input_aardgas - H10_Input_duurzaamgas - H11_Input_elektriciteit - H12_input_MTwarmtebronnen - H13_input_LTwarmtebronnen
+													,0[GJ_yr]);
+
 
 			attribute<string> C08_Warmteoptie := Classifications/WarmteOptie/name[union_data(., Allocatie/BestaandeWoning/WarmteAllocatie, Allocatie/BestaandeUtil/WarmteAllocatie)];
 
-			attribute<string> C09_Elabel      := Classifications/energielabel/name[union_data(.,BebouwingsComponenten/BestaandeWoning/energielabel/CurrValue ,
-			                                                                                    BebouwingsComponenten/BestaandeUtil/energielabel/CurrValue)];
+			attribute<string> C09_Elabel      := Classifications/schillabel/name[union_data(.,BebouwingsComponenten/BestaandeWoning/BebouwingsObjectMetGebouwOptie/SchilLabel_rel ,
+												BebouwingsComponenten/BestaandeUtil/BebouwingsObjectMetGebouwOptie/SchilLabel_rel)];
+
 			attribute<string> C10_Model_rel   := replace(union_data(
 				.
-				, Invoer/Kengetallen/Bebouwing/BestaandeWoning/Table/Label[BebouwingsComponenten/BestaandeWoning/Model_rel]
-				, Invoer/Kengetallen/Bebouwing/BestaandeUtil/Table/Label[BebouwingsComponenten/BestaandeUtil/Model_rel]
+				, Invoer/Kengetallen/Bebouwing/BestaandeWoning/results/Label[BebouwingsComponenten/BestaandeWoning/BO/Model_rel]
+				, Invoer/Kengetallen/Bebouwing/BestaandeUtil/results/Label[BebouwingsComponenten/BestaandeUtil/BO/Model_rel]
 				), ',', ' &');
-				
-			attribute<Eur_yr>	K07_Gebouw_schil := !BestaandWoonUtil/Uitgesloten_bool ? makedefined((
-													(union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_GebouwVerbetering,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_GebouwVerbetering)) * /TussenResultaten/StartJaar/NCW/mr30/AnnualisationFactor
-													)
-													, 0.0[Eur_yr]) : 0.0[Eur_yr][Eur_yr];
-																			
-			attribute<Eur_yr>	K08_Gebouw_installatie := !BestaandWoonUtil/Uitgesloten_bool ? makedefined((
-													(union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_LokaleOpwekking30,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_LokaleOpwekking30)) * NCW/mr30/AnnualisationFactor + 
-													(union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_LokaleOpwekking15,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_LokaleOpwekking15)) * NCW/mr15/AnnualisationFactor
-													)
-													, 0.0[Eur_yr]) : 0.0[Eur_yr][Eur_yr];
 
-			attribute<Eur_yr>	K12_Gebouw_OenM := !BestaandWoonUtil/Uitgesloten_bool ? makedefined((
-			//Deel maatschappelijk/LokaleEnergieProductie/Kj_Onderhoud
-													(
-													((union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_LokaleOpwekking30,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_LokaleOpwekking30)) + 
-													(union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_LokaleOpwekking15,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_LokaleOpwekking15)) -
-													(union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_eWP,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_eWP)) +
-													(union_data(.,Allocatie/BestaandeWoning/Kosten/Ki_HR, Allocatie/BestaandeUtil/Kosten/Ki_HR))) * Kengetallen/Onderhoud/R_LO_onderhoud + 
-													(union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_eWP,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_eWP)) * Kengetallen/Onderhoud/R_LO_EWP_onderhoud
-													)
-													 + 
-			//Deel maatschappelijk/LokaleEnergieProductie/Kj_Admin
-													(
-													((union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_LokaleOpwekking30,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_LokaleOpwekking30)) + 
-													(union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_LokaleOpwekking15,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_LokaleOpwekking15)) -
-													(union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_eWP,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_eWP)) +
-													(union_data(.,Allocatie/BestaandeWoning/Kosten/Ki_HR,Allocatie/BestaandeUtil/Kosten/Ki_HR))) * Kengetallen/Onderhoud/R_LO_admin + 
-													(union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_eWP,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_eWP)) * Kengetallen/Onderhoud/R_LO_EWP_admin
-													)
-													 + 
-													
-			//	Deel maatschappelijk/gebouwen/Kj_Onderhoud 			
-													(
-													(union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_GebouwVerbetering,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_GebouwVerbetering)) * Kengetallen/Onderhoud/R_GV_onderhoud
-													)
-													 + 
-			//	Deel maatschappelijk/gebouwen/Kj_Admin 			
-													(
-													((union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_LokaleOpwekking30,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_LokaleOpwekking30)) + 
-													(union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_LokaleOpwekking15,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_LokaleOpwekking15)) -
-													(union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_eWP,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_eWP)) +
-													(union_data(.,Allocatie/BestaandeWoning/Kosten/Ki_HR,Allocatie/BestaandeUtil/Kosten/Ki_HR))) * Kengetallen/Onderhoud/R_LO_admin + 
-													(union_data(.,BebouwingsComponenten/BestaandeWoning/Kosten/Ki_eWP,BebouwingsComponenten/BestaandeUtil/Kosten/Ki_eWP)) * Kengetallen/Onderhoud/R_LO_EWP_admin
-													)
-													
-													)
-													, 0.0[Eur_yr]) : 0.0[Eur_yr][Eur_yr];
-		}
-		
+			attribute<Eur_yr> K08_Gebouw_schil :=
 
-		
+					BestaandWoonUtil/Uitgesloten_bool  || IsStap0 || IsReferentie
+						? 0[Eur_yr] 
+						: makedefined(
+									union_data(.,Allocatie/BestaandeWoning/BO/KapitaalLasten/Kmi_gv,
+									Allocatie/BestaandeUtil/BO/KapitaalLasten/Kmi_gv)
+							//- Origkosten/table/K08_Gebouw_schil --> 0
+							,0[Eur_yr])
+				[Eur_yr];
+
+			attribute<Eur_yr> K09_Gebouw_installatie :=
+					BestaandWoonUtil/Uitgesloten_bool || IsStap0 || IsReferentie
+					? 0[Eur_yr] 
+					: makedefined(
+						(union_data(.,Allocatie/BestaandeWoning/BO/Eenmalig/Ki30_LO,
+						Allocatie/BestaandeUtil/BO/Eenmalig/Ki30_LO) * NCW/mr30/AnnualisationFactor +
+						union_data(.,Allocatie/BestaandeWoning/BO/Eenmalig/Ki20_LO,
+						Allocatie/BestaandeUtil/BO/Eenmalig/Ki20_LO) * NCW/mr20/AnnualisationFactor +
+						union_data(.,Allocatie/BestaandeWoning/BO/Eenmalig/Ki15_LO,
+						Allocatie/BestaandeUtil/BO/Eenmalig/Ki15_LO) * NCW/mr15/AnnualisationFactor)
+						//- Origkosten/table/K09_Gebouw_installatie //TODO uitzoeken met Folckert te complex
+					,0[Eur_yr])
+				[Eur_yr];
+
+			attribute<Eur_yr> K14_Gebouw_OenM :=
+					BestaandWoonUtil/Uitgesloten_bool
+					? 0[Eur_yr] 
+					: makedefined(
+						(union_data(.,Allocatie/BestaandeWoning/BO/Jaarlijks/KJ_OH_LO,
+						Allocatie/BestaandeUtil/BO/Jaarlijks/KJ_OH_LO) +
+						//Kj_id_LO_oh -->0//onderhoudskosten gebouwinstallaties gebiedsopties
+						union_data(.,Allocatie/BestaandeWoning/BO/Jaarlijks/Kj_Adm_LO,
+						Allocatie/BestaandeUtil/BO/Jaarlijks/Kj_Adm_LO))
+					,0[Eur_yr])
+				[Eur_yr];	
+		}		
+
 		unit<uint32> variable := SubItem_PropValues(BestaandWoonUtil_in_DataPakket,'name');
 		container export_csv_nl := Rapportage/WriteTable32ToCSV(BestaandWoonUtil_in_DataPakket, AsList(variable/name, ';'), FolderInfo/OutputFolder+'/Datapakket.csv');
 		
@@ -162,30 +182,34 @@ container DataPakketExport: isHidden = "True"
 
 			unit<uint32> table:= Subset(BestaandWoonUtil/GM_code == GM_code)
 			{
-				attribute<string>  D1_identificatie       := BestaandWoonUtil_in_DataPakket/D1_identificatie[Nr_OrgEntity];
-				attribute<string>  D2_bebouwingscomponent := BestaandWoonUtil_in_DataPakket/D2_bebouwingscomponent[Nr_OrgEntity];
-				attribute<m>       D3_RD_X                := BestaandWoonUtil_in_DataPakket/D3_RD_X[Nr_OrgEntity];
-				attribute<m>       D4_RD_Y                := BestaandWoonUtil_in_DataPakket/D4_RD_Y[Nr_OrgEntity];
+				attribute<string>  D1_identificatie          := BestaandWoonUtil_in_DataPakket/D1_identificatie[Nr_OrgEntity];
+				attribute<string>  D2_bebouwingscomponent    := BestaandWoonUtil_in_DataPakket/D2_bebouwingscomponent[Nr_OrgEntity];
+				attribute<m>       D3_RD_X                   := BestaandWoonUtil_in_DataPakket/D3_RD_X[Nr_OrgEntity];
+				attribute<m>       D4_RD_Y                   := BestaandWoonUtil_in_DataPakket/D4_RD_Y[Nr_OrgEntity];
+				attribute<Units/m2>D5_Oppervlakte            := BestaandWoonUtil_in_DataPakket/D5_Oppervlakte[Nr_OrgEntity];
 
-				attribute<String>  I01_BU_CODE            := BestaandWoonUtil_in_DataPakket/I01_BU_CODE[Nr_OrgEntity];
-				attribute<nrAansl> I11_nrAansluitingen    := BestaandWoonUtil_in_DataPakket/I11_nrAansluitingen[Nr_OrgEntity];
+				attribute<String>  I01_BU_CODE               := BestaandWoonUtil_in_DataPakket/I01_BU_CODE[Nr_OrgEntity];
 				
-				attribute<GJ_yr>   H01_warmtetotaal       := BestaandWoonUtil_in_DataPakket/H01_warmtetotaal[Nr_OrgEntity];
-				attribute<GJ_yr>   H02_Vraag_aardgas      := BestaandWoonUtil_in_DataPakket/H02_Vraag_aardgas[Nr_OrgEntity];
-				attribute<GJ_yr>   H03_Vraag_groengas     := BestaandWoonUtil_in_DataPakket/H03_Vraag_groengas[Nr_OrgEntity];
-				attribute<GJ_yr>   H04_Vraag_elekwarmte   := BestaandWoonUtil_in_DataPakket/H04_Vraag_elekwarmte[Nr_OrgEntity];
-				attribute<GJ_yr>   H05_Vraag_MTwarmte     := BestaandWoonUtil_in_DataPakket/H05_Vraag_MTwarmte[Nr_OrgEntity];
-				attribute<GJ_yr>   H06_Vraag_LTwarmte     := BestaandWoonUtil_in_DataPakket/H06_Vraag_LTwarmte[Nr_OrgEntity];
-				attribute<GJ_yr>   H08_Vraag_koude        := BestaandWoonUtil_in_DataPakket/H08_Vraag_koude[Nr_OrgEntity];
-				attribute<GJ_yr>   H09_Vraag_elektotaal   := BestaandWoonUtil_in_DataPakket/H09_Vraag_elektotaal[Nr_OrgEntity];
+				attribute<GJ_yr>   H01_Vraag_totaal          := BestaandWoonUtil_in_DataPakket/H01_Vraag_totaal[Nr_OrgEntity];
+				attribute<GJ_yr>   H02_Vraag_RV              := BestaandWoonUtil_in_DataPakket/H02_Vraag_RV[Nr_OrgEntity];
+				attribute<GJ_yr>   H03_Vraag_TW              := BestaandWoonUtil_in_DataPakket/H03_Vraag_TW[Nr_OrgEntity];
+				attribute<GJ_yr>   H04_Vraag_Vent            := BestaandWoonUtil_in_DataPakket/H04_Vraag_Vent[Nr_OrgEntity];
+				attribute<GJ_yr>   H05_Vraag_K               := BestaandWoonUtil_in_DataPakket/H05_Vraag_K[Nr_OrgEntity];
+				attribute<GJ_yr>   H06_Vraag_App             := BestaandWoonUtil_in_DataPakket/H06_Vraag_App[Nr_OrgEntity];
+				attribute<GJ_yr>   H09_Input_aardgas         := BestaandWoonUtil_in_DataPakket/H09_Input_aardgas[Nr_OrgEntity];
+				attribute<GJ_yr>   H10_Input_duurzaamgas     := BestaandWoonUtil_in_DataPakket/H10_Input_duurzaamgas[Nr_OrgEntity];
+				attribute<GJ_yr>   H11_Input_elektriciteit   := BestaandWoonUtil_in_DataPakket/H11_Input_elektriciteit[Nr_OrgEntity];
+				attribute<GJ_yr>   H12_input_MTwarmtebronnen := BestaandWoonUtil_in_DataPakket/H12_input_MTwarmtebronnen[Nr_OrgEntity];
+				attribute<GJ_yr>   H13_input_LTwarmtebronnen := BestaandWoonUtil_in_DataPakket/H13_input_LTwarmtebronnen[Nr_OrgEntity];
+				attribute<GJ_yr>   H14_Saldo_Omgevingswarmte := BestaandWoonUtil_in_DataPakket/H14_Saldo_Omgevingswarmte[Nr_OrgEntity];
 
-				attribute<string>  C08_Warmteoptie        := BestaandWoonUtil_in_DataPakket/C08_Warmteoptie[Nr_OrgEntity];
-				attribute<string>  C09_Elabel             := BestaandWoonUtil_in_DataPakket/C09_Elabel[Nr_OrgEntity];
-				attribute<string>  C10_Model_rel          := BestaandWoonUtil_in_DataPakket/C10_Model_rel[Nr_OrgEntity];
+				attribute<string>  C08_Warmteoptie           := BestaandWoonUtil_in_DataPakket/C08_Warmteoptie[Nr_OrgEntity];
+				attribute<string>  C09_Elabel                := BestaandWoonUtil_in_DataPakket/C09_Elabel[Nr_OrgEntity];
+				attribute<string>  C10_Model_rel             := BestaandWoonUtil_in_DataPakket/C10_Model_rel[Nr_OrgEntity];
 				
-				attribute<Eur_yr>  K07_Gebouw_schil       := BestaandWoonUtil_in_DataPakket/K07_Gebouw_schil[Nr_OrgEntity];
-				attribute<Eur_yr>  K08_Gebouw_installatie := BestaandWoonUtil_in_DataPakket/K08_Gebouw_installatie[Nr_OrgEntity];
-				attribute<Eur_yr>  K12_Gebouw_OenM        := BestaandWoonUtil_in_DataPakket/K12_Gebouw_OenM[Nr_OrgEntity];
+				attribute<Eur_yr>  K08_Gebouw_schil          := BestaandWoonUtil_in_DataPakket/K08_Gebouw_schil[Nr_OrgEntity];
+				attribute<Eur_yr>  K09_Gebouw_installatie    := BestaandWoonUtil_in_DataPakket/K09_Gebouw_installatie[Nr_OrgEntity];
+				attribute<Eur_yr>  K14_Gebouw_OenM           := BestaandWoonUtil_in_DataPakket/K14_Gebouw_OenM[Nr_OrgEntity];
 			}
 
 			container export_csv := 
