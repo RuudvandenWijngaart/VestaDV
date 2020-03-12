@@ -13,25 +13,22 @@ template KostenWoningen
 	parameter<bool> IsNieuwbouw;
 	// end case parameters
 
-	attribute<pand_asl>		pand_aandeel	(WoonObject)	:=	WoonObject/Pand_aandeel;
-	attribute<bool>			IsMeergezins	(WoonObject)	:=	WoonObject/BebouwingsTypeDomein/IsMeergezins[WoonObject/BebouwingsType];
+	attribute<pand_asl>	 pand_aandeel	(WoonObject) :=	WoonObject/Pand_aandeel;
+	attribute<bool>		 IsMeergezins	(WoonObject) :=	WoonObject/BebouwingsTypeDomein/IsMeergezins[WoonObject/BebouwingsType];
 	
 	// kosten aansluitleiding
-	attribute<m_pand>		L_aansl			(WoonObject)	:=	/Invoer/RuimtelijkeData/buislengte/per_buurt/L_aansl_pand[WoonObject/Planregio_rel];
-	container				LeidingKosten					:=	BuisKostenBC(WoonObject, WoonObject/AansluitCapaciteit/warmte * 0.001[ MW / kW]);
-	attribute<EUR_m>		K_aansl_m		(WoonObject)	:=	Leidingkosten/K_m;	
-	attribute<Eur_Aansl>	Ki_wd_w			(WoonObject)	:=	L_aansl * K_aansl_m * pand_aandeel;
-
-	// vermeden gasketel
-	parameter<Eur_Aansl> Oi_vermeden_gasketel := 0.0[eur_aansl];
+	attribute<m_pand>	 L_aansl		(WoonObject) :=	/Invoer/RuimtelijkeData/buislengte/per_buurt/L_aansl_pand[WoonObject/Planregio_rel];
+	container			 LeidingKosten				 :=	BuisKostenBC(WoonObject, WoonObject/AansluitCapaciteit/warmte * 0.001[ MW / kW]);
+	attribute<EUR_m>	 K_aansl_m		(WoonObject) :=	Leidingkosten/K_m;	
+	attribute<Eur_Aansl> Ki_wd_w		(WoonObject) :=	L_aansl * K_aansl_m * pand_aandeel;
 
 	// eenmalige kosten, zie FO tabellen 5..7
-	attribute<Eur_Aansl> Ki_id_fa (WoonObject) :=
+	attribute<Eur_Aansl> Ki_id_fa       (WoonObject) :=
 		IsMeergezins ? Schuiven/VerketelingMin * Kostenkentallen/Ki_id_metBlok
 					 + Schuiven/VerketelingMax * Kostenkentallen/Ki_id_geenBlok + Kostenkentallen/Ki_afleverset 
 		: Kostenkentallen/Ki_id_grondgeb + Kostenkentallen/Ki_afleverset ; // inpandige leidingen gestapelde woningen
 		
-	parameter<Eur_Aansl> Ki_id_va              := 0[Eur_Aansl] * float64(!IsNieuwbouw); // extra inpandige leidingen nieuwbouw
+	parameter<Eur_Aansl> Ki_id_va                  := 0[Eur_Aansl] * float64(!IsNieuwbouw); // extra inpandige leidingen nieuwbouw
 
 	// kosten voor projectmanagement en door huurder ervaren en door eigenaar vergoedde ongerief
 	attribute<Eur_Aansl> Ki_ge_ov_w   (WoonObject) := =IsNieuwbouw ? 'const(0[Eur_Aansl], WoonObject)' : 'IsMeergezins ? Schuiven/VerketelingMin * 0[Eur_Aansl] + Schuiven/VerketelingMax * Kostenkentallen/K_Ov             : Kostenkentallen/K_Ov';             // woon-ongerief
@@ -44,12 +41,12 @@ template KostenWoningen
 	attribute<Eur_yr_Aansl> Kj_hv_w   (WoonObject) := =IsNieuwbouw ? 'const(0[Eur_yr_Aansl], WoonObject)' : '(IsMeergezins ? Schuiven/VerketelingMax : 1.0) * Kengetallen/BCkentallen/HuurverlagingGebiedsOptie * Schuiven/HuurVerlagingBijGebiedsOptie';// ?????
 	attribute<Eur_yr>       Kj_hv_o   (WoonObject) := =IsNieuwbouw ? 'const(0[Eur_yr      ], WoonObject)' : 'Kj_hv_w* NrDeelnemers';
 
-	attribute<nrAansl>	NrDeelnemers	(WoonObject)	:=	WoonObject/nrAansluitingen * DeelnameFactor;
-	attribute<kW>		P_ASW			(Planregio)		:=	sum(WoonObject/AansluitCapaciteit/Warmte * DeelnameFactor, WoonObject/Planregio_rel);
-	attribute<kW>		P_aansl			(WoonObject)	:=	( WoonObject/AansluitCapaciteit/ASW_RVmt * Vermogens/GTF_w_RVmt
-															+ WoonObject/AansluitCapaciteit/ASW_TWmt * Vermogens/GTF_w_TW) * DeelnameFactor;
+	attribute<nrAansl>	NrDeelnemers  (WoonObject) := WoonObject/nrAansluitingen * DeelnameFactor;
+	attribute<kW>		P_ASW		  (Planregio)  := sum(WoonObject/AansluitCapaciteit/Warmte * DeelnameFactor, WoonObject/Planregio_rel);
+	attribute<kW>		P_aansl		  (WoonObject) := ( WoonObject/AansluitCapaciteit/ASW_RVmt * Vermogens/GTF_w_RVmt
+													  + WoonObject/AansluitCapaciteit/ASW_TWmt * Vermogens/GTF_w_TW) * DeelnameFactor;
 
-	attribute<kw>		P_sec			(Planregio)		:=	sum(P_aansl, WoonObject/Planregio_rel);
+	attribute<kw>	   P_sec		  (Planregio)  := sum(P_aansl, WoonObject/Planregio_rel);
 	attribute<Eur>     Ki_ge_bruto    (WoonObject) := Ki_ge_ov_o + Ki_ge_pm_o;
 	attribute<Eur>     Oi_ge_subsidie (WoonObject) := Ki_ge_ov_o * SpecifiekeInstellingen/Beleid/EIA/E_bw/Rs_OngeriefsVergoeding + Ki_ge_pm_o * SpecifiekeInstellingen/Beleid/EIA/E_bw/Rs_ProjectManagement;
 	attribute<Eur>     Ki_ge_netto    (WoonObject) := Ki_ge_bruto - Oi_ge_subsidie;
@@ -60,9 +57,9 @@ template KostenWoningen
 
 	container Onderstation
 	{
-		attribute<kW>	P_vraag_blokverwarming (PlanRegio)	:=	P_sec * Schuiven/VerketelingMin;
-		attribute<Eur>	Ki_wd_OS               (PlanRegio)	:=	P_sec * Kostenkentallen/K_OS;
-		attribute<Eur>	Ki_wd_Vergoeding       (PlanRegio)	:=	P_vraag_blokverwarming * Kostenkentallen/KetelVergoeding;
+		attribute<kW>	P_vraag_blokverwarming (PlanRegio) := P_sec * Schuiven/VerketelingMin;
+		attribute<Eur>	Ki_wd_OS               (PlanRegio) := P_sec * Kostenkentallen/K_OS;
+		attribute<Eur>	Ki_wd_Vergoeding       (PlanRegio) := P_vraag_blokverwarming * Kostenkentallen/KetelVergoeding;
 	}
 
 	attribute<Eur> Ki_wd_sec     (PlanRegio) := sum(Ki_wd_w*NrDeelnemers, WoonObject/Planregio_rel);
