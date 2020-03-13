@@ -94,9 +94,13 @@ template WKOWoningData
 	container Kosten
 	{
 		//Investeringskosten binnen gebouw
-		attribute<pand_asl> Pand_aandeel   (BO)	:= IsAppt ? (Schuiven/VerketelingMax * BO/pand_aandeel +  value(Schuiven/VerketelingMin, units/pand_asl)) : 1.0[units/pand_asl], Descr = "verrekening individuele verketeling";
-		attribute<Eur_asl> Ki_id_inpandig  (BO)	:= IsAppt ? Kostenkentallen/Ki_inpandig * Pand_aandeel : 0 [Eur_asl],	Descr = "inpandig leidingwerk bij gestapelde bouw";
-		attribute<Eur_asl> Ki_id_afleverset(BO)	:= (T_sec <= 55[Celsius]) ? 0[Eur_asl] : Kostenkentallen/Ki_afleverset * Pand_aandeel,			Descr = "inpandige afleverset, met indidivuele verketeling verrekend";
+		attribute<pand_asl> Pand_aandeel   (BO)	:= IsAppt ? BO/pand_aandeel : 1.0[units/pand_asl];
+		//IsAppt ? (Schuiven/VerketelingMax * BO/pand_aandeel +  value(Schuiven/VerketelingMin, units/pand_asl)) : 1.0[units/pand_asl];
+		attribute<Eur_asl> Ki_id_inpandig  (BO)	:=
+			IsAppt ? Schuiven/VerketelingMin * Kostenkentallen/Ki_inpand_hoog_metblok
+			       + Schuiven/VerketelingMin * Kostenkentallen/Ki_inpand_hoog_geenblok
+			: Kostenkentallen/Ki_inpand_laag,	Descr = "inpandig leidingwerk";
+		attribute<Eur_asl> Ki_id_afleverset(BO)	:= =(T_sec <= 55[Celsius]) ? 'const(0[Eur_asl],BO)' : 'const(Kostenkentallen/Ki_afleverset, BO)',			Descr = "inpandige afleverset, met indidivuele verketeling verrekend";
 		attribute<Eur>     Ki_id_wv        (BO)	:= (Ki_id_inpandig + Ki_id_afleverset) * nr_won,	Descr = "inpandige afleverset en inpandig leidingwerk met individuele verketeling verrekend";
 		attribute<Eur>     Ki_id_EigenOpwek(BO)	:= 
 			(BO/schilLabel_rel <= Classifications/Schillabel/V/A ) ? ((T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_Booster : 0.0[eur]) :
@@ -124,7 +128,7 @@ template WKOWoningData
 		attribute<m_pand>		L_aansl				(BO)	:= /Invoer/RuimtelijkeData/buislengte/per_buurt/L_aansl_pand[BO/PlanRegio_rel];
 		container				LeidingKosten							:=	BuisKostenBC(BO, P_sec * 0.001[ MW / kW]);
 		attribute<Eur_m>		K_aansl_m			(BO)	:=	Leidingkosten/K_m;	
-		attribute<Eur>			Ki_wd_aansluiting	(BO)	:=	L_aansl * K_aansl_m * BO/pand_aandeel * BO/nrAansluitingen, Descr = "Investeringskosten aansluitleidingen van pand tot OS";
+		attribute<Eur>			Ki_wd_aansluiting	(BO)	:=	L_aansl * K_aansl_m * pand_aandeel * BO/nrAansluitingen, Descr = "Investeringskosten aansluitleidingen van pand tot OS";
 		attribute<Eur>			Ki_wd				(BO)	:= Ki_wd_OS + Ki_wd_aansluiting,					Descr = "Investeringskosten wijkdistributie exclusief distributieleidingen";
 		
 		//Jaarlijkse kosten elektriciteitsverbruik
