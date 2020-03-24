@@ -7,6 +7,38 @@
 container Vergelijking: using = "Units"
 {
 	unit<uint32> PlanRegio          := Invoer/SpecifiekeInstellingen/PlanRegio		, isHidden = "true";
+	parameter<bool> IncludeGa := SharedInvoer/IncludeGA;
+	
+	container Gevoeligheidsanalyses
+	{
+		parameter<string> G01_name := '_K_hoog';
+		parameter<string> G02_name := '_K_laag';
+		parameter<string> G03_name := '_E_laag';
+		parameter<string> G04_name := '_E_hoog';
+		container G01_Import := for_each_ne(Class/Variant/name, replace('ImportOneGA(Class/Variant/V/@C' + ',G01_name' + ')','@C',Class/Variant/name));
+		container G02_Import := for_each_ne(Class/Variant/name, replace('ImportOneGA(Class/Variant/V/@C' + ',G02_name' + ')','@C',Class/Variant/name));
+		container G03_Import := for_each_ne(Class/Variant/name, replace('ImportOneGA(Class/Variant/V/@C' + ',G03_name' + ')','@C',Class/Variant/name));
+		container G04_Import := for_each_ne(Class/Variant/name, replace('ImportOneGA(Class/Variant/V/@C' + ',G04_name' + ')','@C',Class/Variant/name));
+		
+		template ImportOneGA
+		{
+			//case parameters
+			parameter<Class/Variant> VC;
+			parameter<string> extension;
+			//end
+			
+			unit<uint32> Hoofdindicatoren
+			:	StorageName     = "='%LocalDataProjDir%'+extension+'/results/' + Class/Variant/label[VC] + '/hoofdindicatoren.csv'"
+			,	StorageType     = "gdal.vect"
+			,	StorageReadOnly = "True"
+			{
+				attribute<string> CODE := substr(_BU_CODE_, 1, 10);
+			}
+			attribute<string>     BU_CODE              (Planregio):= Invoer/RuimtelijkeData/StudieGebied/buurt/BU_CODE;
+			attribute<Eur_ton>    H17_Nat_meerkost_CO2 (Planregio):= rjoin(BU_CODE, hoofdindicatoren/CODE, hoofdindicatoren/_H17_Nat_meerkost_CO2___micro_Euro_per_g__)[Eur_ton];
+		}
+	}
+	
 	container Class
 	{
 		unit<uint8> Variant : nrofrows = 24
@@ -224,6 +256,17 @@ container Vergelijking: using = "Units"
 			}
 			attribute<Eur_yr>  H16_Nat_meerkost     (Planregio):= Checks/ChecksFailed ? (0/0)[eur_yr]  : Preresults/H16_Nat_meerkost;
 			attribute<Eur_ton> H17_Nat_meerkost_CO2 (Planregio):= Checks/ChecksFailed ? (0/0)[eur_ton] : Preresults/H17_Nat_meerkost_CO2;
+			
+			parameter<string> G01_expr := 'Gevoeligheidsanalyses/G01_Import/'+Class/Variant/name[VC]+'/H17_Nat_meerkost_CO2';
+			parameter<string> G02_expr := 'Gevoeligheidsanalyses/G02_Import/'+Class/Variant/name[VC]+'/H17_Nat_meerkost_CO2';
+			parameter<string> G03_expr := 'Gevoeligheidsanalyses/G03_Import/'+Class/Variant/name[VC]+'/H17_Nat_meerkost_CO2';
+			parameter<string> G04_expr := 'Gevoeligheidsanalyses/G04_Import/'+Class/Variant/name[VC]+'/H17_Nat_meerkost_CO2';
+			
+			attribute<Eur_ton>    G01_Nat_meerkost_CO2_Kost_Reductie_Hoog  (Planregio):= =IncludeGA ? G01_expr : 'Preresults/G01_Nat_meerkost_CO2_Kost_Reductie_Hoog';
+			attribute<Eur_ton>    G02_Nat_meerkost_CO2_Kost_Reductie_Laag  (Planregio):= =IncludeGA ? G02_expr : 'Preresults/G02_Nat_meerkost_CO2_Kost_Reductie_Laag';
+			attribute<Eur_ton>    G03_Nat_meerkost_CO2_En_Prijzen_Laag     (Planregio):= =IncludeGA ? G03_expr : 'Preresults/G03_Nat_meerkost_CO2_En_Prijzen_Laag';
+			attribute<Eur_ton>    G04_Nat_meerkost_CO2_En_Prijzen_Hoog	   (Planregio):= =IncludeGA ? G04_expr : 'Preresults/G04_Nat_meerkost_CO2_En_Prijzen_Hoog';
+			
 		}
 	}
 	
