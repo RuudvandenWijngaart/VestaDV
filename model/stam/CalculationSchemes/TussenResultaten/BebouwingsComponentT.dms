@@ -27,7 +27,7 @@ template BebouwingsComponentT
 	// end of case parameters
 	
 	
-	parameter<Classifications/BebouwingsComponent> BC_rel := rlookup(BCname, Classifications/BebouwingsComponent/Name); // TODO: Laat dit de parameter zijn en zoek de rest op.
+	parameter<Classifications/BebouwingsComponent> BC_rel := rlookup(BCname, Classifications/BebouwingsComponent/Name); // TODO_OV: Laat dit de parameter zijn en zoek de rest op.
 	
 	container NcwRefs 
 	{
@@ -46,7 +46,7 @@ template BebouwingsComponentT
 	
 	unit<uint32>  BO := =IsNieuwbouw ? 'union/result' : 'BebouwingsObjectZonderNieuwbouw'
 	{
-		container BebouwingsComponent_UpRef := ..; // TODO: used sporadically, try to avoid this
+		container BebouwingsComponent_UpRef := ..; // TODO_OV: used sporadically, try to avoid this
 		container NcwRefs := BebouwingsComponent_UpRef/NcwRefs;
 		container Opbrengsten := BebouwingsComponent_UpRef/Opbrengsten;
 		container VraagKentallen := VraagKentallenComponent;
@@ -65,7 +65,7 @@ template BebouwingsComponentT
 		,	BO, Classifications/Installatie
 		)
 		{
-			attribute<Classifications/Installatie> Dak (BO) := const(Classifications/Installatie/V/geen, BO); //TODO Maarten
+			attribute<Classifications/Installatie> Dak (BO) := const(Classifications/Installatie/V/geen, BO); //TODO_OV
 		}
 		
 		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel(BO) := PrevObject/AfgifteSysteem_rel[PrevObject_rel];	
@@ -86,7 +86,7 @@ template BebouwingsComponentT
 		attribute<nrAansl>    nrAansluitingen := ResterendFactor * nrAansluitingen_i;
 		attribute<m2>         Oppervlakte     := ResterendFactor * Oppervlakte_i;
 				
-		// TODO: Optimaliseer domein voor Niet woningen tbv specifiek BCcDomein
+		// TODO_OV: Optimaliseer domein voor Niet woningen tbv specifiek BCcDomein
 		attribute<string>    BCc (.) :=
 			(BCname == 'BestaandeUtil' || BCname == 'NieuwBouwUtil'  ) ? 'u' :
 			(BCname == 'BestaandeGLTB' || BCname == 'NieuwBouwGLTB'  ) ? 't' :
@@ -174,7 +174,7 @@ template BebouwingsComponentT
 			attribute<GJ_yr>	EA(..) := (nrAansluitingen * ModelObject/V_EA_asl [Model_rel] + Oppervlakte * ModelObject/V_EA_opp [Model_rel])
 						* DragerSpecifiekeOpties/ElektrischeApparatuur;
 			
-			// TODO, OPTIMIZE, V_RV_asl/@SL@ alleen meenemen indien niet allemaal 0, zoals bij utiliteiten wel het geval is
+			// TODO_OV, OPTIMIZE, V_RV_asl/@SL@ alleen meenemen indien niet allemaal 0, zoals bij utiliteiten wel het geval is
 			container RV := for_each_nedv(Classifications/SchilLabel/Name
 			,	replace(
 					'(nrAansluitingen * ModelObject/V_RV_asl/@SL@[Model_rel] + Oppervlakte * ModelObject/V_RV_opp/@SL@[Model_rel])'
@@ -301,7 +301,7 @@ template BebouwingsComponentT
 		
 		parameter<string> BcCode := Classifications/BebouwingsComponent/BcCode[BC_rel];
 		unit<uint32> Installatie := Classifications/Installatie {
-			// TODO, MTA: remove const in merge wanneer void domain hier zal worden toegestaan, issue XXX.
+			// TODO_OV, MTA: remove const in merge wanneer void domain hier zal worden toegestaan, issue XXX.
 			attribute<EUR_asl> Ki_asl := =replace('(Ki_asl_min_@BC * Schuiven/KostenMin + Ki_asl_max_@BC * Schuiven/KostenMax)* merge(LeerCurve_rel, Float64, '+AsItemList('const(LeerCurves/'+Classifications/LeerCurves/Name+'/Curve, .)')+')', '@BC', BcCode);
 			attribute<EUR_kW>  Ki_cap := =replace('(Ki_cap_min_@BC * Schuiven/KostenMin + Ki_cap_max_@BC * Schuiven/KostenMax)* merge(LeerCurve_rel, Float64, '+AsItemList('const(LeerCurves/'+Classifications/LeerCurves/Name+'/Curve, .)')+')', '@BC', BcCode);
 			attribute<EUR_m2>  Ki_opp := =replace('(Ki_opp_min_@BC * Schuiven/KostenMin + Ki_opp_max_@BC * Schuiven/KostenMax)* merge(LeerCurve_rel, Float64, '+AsItemList('const(LeerCurves/'+Classifications/LeerCurves/Name+'/Curve, .)')+')', '@BC', BcCode);
@@ -373,46 +373,7 @@ template BebouwingsComponentT
 		attribute<string>	WarmteOptie		(BO)	:=	Classifications/WarmteOptie/name[WarmteOptie_rel];
 	}
 	container Kapitaallasten := results/Kapitaallasten;
-	container statistics {
-		attribute<EUR> Ki_lowest_value  (BO) := ='min_elem('+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'kosten_j')+')';
-		attribute<EUR> Ki_lowest_index  (BO) := ='argmin  ('+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'kosten_j')+')';
-		attribute<EUR> Ki_highest_value (BO) := ='max_elem('+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'kosten_j')+')';
-		attribute<EUR> Ki_highest_index (BO) := ='argmax  ('+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'kosten_j')+')';
-	}
-		
-	container OpwekkingsOpties
-	{
-		container bereidheid
-		{
-			attribute<Ratio> Zon_PV     (BO) := const(LocatieSpecifiekeOpties/OpwekkingF/Zon_PV,      BO);
-			attribute<Ratio> ZonneBoiler(BO) := const(LocatieSpecifiekeOpties/OpwekkingF/ZonneBoiler, BO);
-		}
-		container org_capaciteit
-		{
-			attribute<Ratio> Zon_PV     (BO) := MakeDefined(PrevObject/OpwekkingsOpties/capaciteit/Zon_PV     [PrevObject_rel], 0[Ratio]);
-			attribute<Ratio> ZonneBoiler(BO) := MakeDefined(PrevObject/OpwekkingsOpties/capaciteit/ZonneBoiler[PrevObject_rel], 0[Ratio]);
-		}
-		container investering
-		{
-			attribute<Ratio> Zon_PV     (BO) := median(0.0, bereidheid/Zon_PV      - org_capaciteit/Zon_PV,      1.0[Ratio] - org_capaciteit/Zon_PV);
-			attribute<Ratio> ZonneBoiler(BO) := median(0.0, bereidheid/ZonneBoiler - org_capaciteit/ZonneBoiler, 1.0[Ratio] - org_capaciteit/ZonneBoiler);
-		}
-		container capaciteit
-		{
-			attribute<Ratio> Zon_PV     (BO) := org_capaciteit/Zon_PV      + investering/Zon_PV;
-			attribute<Ratio> ZonneBoiler(BO) := org_capaciteit/ZonneBoiler + investering/ZonneBoiler;
-		}
-	}
-/* REMOVE
-	container Hoeveelheden
-	{
-		attribute<m2>      ZonneBoiler (BO) := RuimtelijkeVraagObject/oppervlakte * OpwekkingsOpties/capaciteit/ZonneBoiler * BC_kentallen/R_ZonB_opp  [BebouwingsType];
-		attribute<m2>      Zon_PV      (BO) := BO/oppervlakte * OpwekkingsOpties/capaciteit/Zon_PV      * BC_kentallen/m2dak_m2bvo [BebouwingsType];
-	
-		attribute<nrAansl> mWKK        (BO) := BO/nrAansluitingen * Opwekking/mWKK;
-		attribute<nrAansl> hWP         (BO) := BO/nrAansluitingen * Opwekking/hWP;
-	}
-*/
+
 	container BC_kentallen :=	kengetallen/BCkentallen/BC_kentallen(
 									Schuiven/LuchtBodemSchuif,
 									Schuiven/EfficiencySchuif,
@@ -430,7 +391,7 @@ template BebouwingsComponentT
 		// voor info over gebruik hWP etc voor RW gelieve de resulterende InstallatiePerProduct te raadplegen
 	
 	attribute<Eur_yr> KoudeAllocatie(BO) := const( 0[Eur_yr], BO);
-	attribute<Eur_yr> Om_Comfort    (BO) := const( 0[Eur_yr], BO); //placeholders om statenaallocatie te kunnen initialiseren, todo: remove
+	attribute<Eur_yr> Om_Comfort    (BO) := const( 0[Eur_yr], BO); //placeholders om statenaallocatie te kunnen initialiseren, TODO_OV: remove
 	
 	container Functioneel2
 	{
