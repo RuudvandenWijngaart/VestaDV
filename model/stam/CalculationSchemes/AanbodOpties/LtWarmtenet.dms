@@ -26,8 +26,28 @@ Template LtWarmtenetImpl
 	parameter<Classifications/WarmteOptie> WarmteOptie_rel := ='Classifications/WarmteOptie/V/'+GebiedsOptie_name;
 	
 	container bebouwing := BeginStatus/Bebouwing;
-	container KostenBaten := CalculationSchemes/KostenBaten(bebouwing); // TODO: check necessity: hier geen PlanRegio attributen gebruiken
-
+	container KostenBaten
+	{
+		attribute<string> BCname(Classifications/WkoComponent) := Classifications/WkoComponent/name;
+		container beschikbaarF := for_each_nednv( BCname
+			,	replace('float64(Classifications/WarmteOptie/KanGebiedsOptie[bebouwing/@BC/WarmteOptie_rel])', '@BC', BCname)
+			,	bebouwing, BCname, float64
+			);
+			
+		container WarmteVraag := for_each_ne(BCname, replace('CalculationSchemes/WarmteVraagT(bebouwing/@BC, beschikbaarF/@BC)', '@BC', BCname));
+		container Kostenkentallen := Kengetallen/Kosten_MT(LeerCurves/MTnet/curve, LeerCurves/OenM/curve, LeerCurves/Inpand/curve);
+		container KostenD
+		{
+			container Wonen
+			{
+				
+				container bw := CalculationSchemes/KostenWoningen(bebouwing/BestaandeWoning, beschikbaarF/BestaandeWoning, PlanRegio, false);
+				container nw := CalculationSchemes/KostenWoningen(bebouwing/NieuwbouwWoning, beschikbaarF/NieuwbouwWoning, PlanRegio, true);
+			}
+		}
+	}
+	
+	
 	unit<uint8>  WkoComponent       := Classifications/WkoComponent;
 	unit<uint32> PlanRegio          := Invoer/SpecifiekeInstellingen/PlanRegio;
 	unit<uint8>  Prijzen_elec       := Prijzen/Elektriciteit/Staffel;
@@ -400,7 +420,7 @@ Template LtWarmtenetImpl
 		}
 		container LtWarmtenet
 		{
-			unit<uint8> LT_Component := Classifications/WkoComponent; // TODO MTA: CHECK (impliciete?) aannamen dat LT ook niet geschikt is voor Glastuinbouw en daarmee qua componenttoepassing equivalent is met WKO
+			unit<uint8> LT_Component := Classifications/WkoComponent;
 			
 			//opbrengsten per groep bebouwingscomponenten
 			
@@ -551,9 +571,9 @@ Template LtWarmtenetImpl
 				
 				attribute<Gj_yr>	V_id_elek		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + LT_Component/Name + '/PR/Totaal/V_id_elek	')+')';
 				attribute<Gj_yr>	V_wd_elek		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + LT_Component/Name + '/PR/Totaal/V_wd_elek	')+')';
-				attribute<Gj_yr>	V_ow_elek		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen elektriciteitsverbruik bij LT bronnen TODO: controle met FO
+				attribute<Gj_yr>	V_ow_elek		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
 				
-				attribute<Gj_yr>	V_id_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // niet specifiek benoemd, alles in WD, TODO: specifiek maken
+				attribute<Gj_yr>	V_id_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
 				attribute<Gj_yr>	V_wd_verlies	(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + LT_Component/Name + '/PR/Totaal/V_wd_verlies	')+')';
 				attribute<Gj_yr>	V_pt_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen primair transport bij LT netten
 				

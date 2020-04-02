@@ -25,7 +25,26 @@ template TEO
 	parameter<bool>		KoudeBeschikbaar  :=	false        ,	Descr = "wordt er collectief koude geleverd ja/nee";
 
 	container		Bebouwing             :=	BeginStatus/Bebouwing;
-	container		KostenBaten           :=	CalculationSchemes/KostenBaten(bebouwing);  // TODO: check necessity: hier geen PlanRegio attributen gebruiken
+	container KostenBaten
+	{
+		attribute<string> BCname(Classifications/WkoComponent) := Classifications/WkoComponent/name;
+		container beschikbaarF := for_each_nednv( BCname
+			,	replace('float64(Classifications/WarmteOptie/KanGebiedsOptie[bebouwing/@BC/WarmteOptie_rel])', '@BC', BCname)
+			,	bebouwing, BCname, float64
+			);
+			
+		container WarmteVraag := for_each_ne(BCname, replace('CalculationSchemes/WarmteVraagT(bebouwing/@BC, beschikbaarF/@BC)', '@BC', BCname));
+		container Kostenkentallen := Kengetallen/Kosten_MT(LeerCurves/MTnet/curve, LeerCurves/OenM/curve, LeerCurves/Inpand/curve);
+		container KostenD
+		{
+			container Wonen
+			{
+				
+				container bw := CalculationSchemes/KostenWoningen(bebouwing/BestaandeWoning, beschikbaarF/BestaandeWoning, PlanRegio, false);
+				container nw := CalculationSchemes/KostenWoningen(bebouwing/NieuwbouwWoning, beschikbaarF/NieuwbouwWoning, PlanRegio, true);
+			}
+		}
+	}
 	container		Efficiency            :=	Kengetallen/Efficiency/Efficiency_LT(T_ow, T_sec);
 	container		Kostenkentallen       :=	Kengetallen/Kosten_LT(Leercurves/Inpand/Curve, Leercurves/eWPww/Curve, Leercurves/LTnet/Curve, Leercurves/MTnet/Curve);
 
@@ -340,9 +359,9 @@ template TEO
 				
 				attribute<Gj_yr>	V_id_elek		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Totaal/V_id_elek	')+')';
 				attribute<Gj_yr>	V_wd_elek		(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Totaal/V_wd_elek	')+')';
-				attribute<Gj_yr>	V_ow_elek		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen elektriciteitsverbruik bij LT bronnen TODO: controle met FO
+				attribute<Gj_yr>	V_ow_elek		(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
 				
-				attribute<Gj_yr>	V_id_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // niet specifiek benoemd, alles in WD, TODO: specifiek maken
+				attribute<Gj_yr>	V_id_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio);
 				attribute<Gj_yr>	V_wd_verlies	(PlanRegio)		:=	='add('+AsItemList('ObjectResults/' + WkoComponent/Name + '/PR/Totaal/V_wd_verlies	')+')';
 				attribute<Gj_yr>	V_pt_verlies	(PlanRegio)		:=	const(0[Gj_yr], PlanRegio); // geen primair transport bij LT netten
 				
