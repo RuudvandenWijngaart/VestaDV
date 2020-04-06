@@ -15,19 +15,20 @@ template TEO
 	
 	parameter<Classifications/gebiedsOptie> GebiedsOptie_rel := Classifications/gebiedsOptie/V/TEO;
 	
-	unit<uint8>			WkoComponent      :=	Classifications/WkoComponent;
+	unit<uint8>			WkoComponent      :=	Classifications/WoonUtilComponent;
 	unit<uint32>		PlanRegio         :=	Invoer/SpecifiekeInstellingen/PlanRegio;
 	unit<uint8>			Prijzen_elec      :=	Prijzen/Elektriciteit/Staffel;
+	container		    Bebouwing         :=	BeginStatus/Bebouwing;
 	
 	parameter<Celsius>	T_ow              :=	20[Celsius]  ,	Descr = "brontemperatuur";
 	parameter<Celsius>	T_sec             :=	70[Celsius]  ,	Descr = "temperatuur in het secundaire net";
 	parameter<bool>		CollectieveWP     :=	T_ow < T_sec ,	Descr = "is er een collectieve warmtepomp nodig ja/nee";
 	parameter<bool>		KoudeBeschikbaar  :=	false        ,	Descr = "wordt er collectief koude geleverd ja/nee";
 
-	container		Bebouwing             :=	BeginStatus/Bebouwing;
+	// =========  Enkele zaken op gebouwniveau worden op gelijke wijze bepaalt als MT opties
 	container KostenBaten
 	{
-		attribute<string> BCname(Classifications/WkoComponent) := Classifications/WkoComponent/name;
+		attribute<string> BCname(WkoComponent) := WkoComponent/name;
 		container KanGebiedsOptie := for_each_nednv( BCname
 			,	replace('float64(Classifications/WarmteOptie/KanGebiedsOptie[bebouwing/@BC/WarmteOptie_rel])', '@BC', BCname)
 			,	bebouwing, BCname, float64
@@ -45,9 +46,12 @@ template TEO
 			}
 		}
 	}
+	
+	// =========  Invoerkentallen over kosten en performance worden opgehaald en verwerkt met leercurves
 	container		Efficiency            :=	Kengetallen/Efficiency/Efficiency_LT(T_ow, T_sec);
 	container		Kostenkentallen       :=	Kengetallen/Kosten_LT(Leercurves/Inpand/Curve, Leercurves/eWPww/Curve, Leercurves/LTnet/Curve, Leercurves/MTnet/Curve);
 
+	// =========  Voor alle woon en utiliteit bebouwingscomponenten worden op gebouwniveau attributen voor kosten en energie bepaald
 	container BestaandeWoningData := WKOWoningData(bebouwing/BestaandeWoning, KostenBaten/WarmteVraag/BestaandeWoning, false, KoudeBeschikbaar, KostenBaten/KostenD/Wonen/bw);
 	container NieuwbouwWoningData := WKOWoningData(bebouwing/NieuwbouwWoning, KostenBaten/WarmteVraag/NieuwbouwWoning, true , KoudeBeschikbaar, KostenBaten/KostenD/Wonen/nw);
 	container BestaandeUtilData   := WKOUtilData  (bebouwing/BestaandeUtil,   KostenBaten/WarmteVraag/BestaandeUtil  , false, KoudeBeschikbaar);	

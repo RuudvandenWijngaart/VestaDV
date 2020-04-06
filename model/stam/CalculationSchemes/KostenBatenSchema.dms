@@ -90,53 +90,61 @@ template KostenBaten
 
 			container CapaciteitsVraag
 			{
-				attribute<kW>	Klein (PlanRegio) :=	
-					Vermogens/GTF_u_RVmt * (
-						sum(bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte * KanGebiedsOptie/BestaandeUtil
-							* float64(bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte <= afkapgrens_klein) 
-						, bebouwing/BestaandeUtil/PlanRegio_rel
-						) + 
-							sum(bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte * KanGebiedsOptie/NieuwbouwUtil
-								* float64(bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte <= afkapgrens_klein) 
-							, bebouwing/NieuwbouwUtil/PlanRegio_rel)
-							
-					);
-															
-				attribute<kW>	Groot (PlanRegio) :=	
-					Vermogens/GTF_u_RVmt * (
-						sum(bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte * KanGebiedsOptie/BestaandeUtil
-							* float64(bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte > afkapgrens_klein) 
-						, bebouwing/BestaandeUtil/PlanRegio_rel
-						) + 
-							sum(bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte * KanGebiedsOptie/NieuwbouwUtil
-								* float64(bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte > afkapgrens_klein) 
-							, bebouwing/NieuwbouwUtil/PlanRegio_rel)
-							
-					);
-					
-				attribute<kW> P_ASW		(PlanRegio)	:=	Vermogens/GTF_u_RVmt * (
-						sum(Vermogens/GTF_u_RVmt * 
-							bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte * KanGebiedsOptie/BestaandeUtil
-						,	bebouwing/BestaandeUtil/PlanRegio_rel
-						) + 
+				container P_Klein //capaciteitsvraag utiliteit kleiner dan 100 kw, gecorrigeerd voor gelijktijdigheid, verwarming en tapwater
+				{
+						
+					attribute<kW>	P_bu (PlanRegio) := //bestaande utiliteit
 						sum(
-							bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte* KanGebiedsOptie/NieuwbouwUtil
-						,	bebouwing/NieuwbouwUtil/PlanRegio_rel)
-					);
-				attribute<kW> Totaal(PlanRegio) := Klein + Groot;
+								(bebouwing/BestaandeUtil/AansluitCapaciteit/ASW_RVmt * bebouwing/BestaandeUtil/AansluitCapaciteit/GTF_RVmt +
+							     bebouwing/BestaandeUtil/AansluitCapaciteit/ASW_TWmt * bebouwing/BestaandeUtil/AansluitCapaciteit/GTF_TW)
+							* KanGebiedsOptie/BestaandeUtil
+							* float64(bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte <= afkapgrens_klein) 
+						, bebouwing/BestaandeUtil/PlanRegio_rel);
+					
+					attribute<kW>	P_nu (PlanRegio) := //nieuwbouw utiliteit
+						sum(
+								(bebouwing/NieuwbouwUtil/AansluitCapaciteit/ASW_RVmt * bebouwing/NieuwbouwUtil/AansluitCapaciteit/GTF_RVmt +
+							     bebouwing/NieuwbouwUtil/AansluitCapaciteit/ASW_TWmt * bebouwing/NieuwbouwUtil/AansluitCapaciteit/GTF_TW)
+							* KanGebiedsOptie/NieuwbouwUtil
+							* float64(bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte <= afkapgrens_klein) 
+						, bebouwing/NieuwbouwUtil/PlanRegio_rel);
+				
+					attribute<kW>	Totaal (PlanRegio) := P_bu + P_nu;	//totaal per buurt
+				}
+				container P_Groot //capaciteitsvraag utiliteit groter dan 100 kw, gecorrigeerd voor gelijktijdigheid, verwarming en tapwater
+				{
+					attribute<kW>	P_bu (PlanRegio) := //bestaande utiliteit
+						sum(
+								(bebouwing/BestaandeUtil/AansluitCapaciteit/ASW_RVmt * bebouwing/BestaandeUtil/AansluitCapaciteit/GTF_RVmt +
+							     bebouwing/BestaandeUtil/AansluitCapaciteit/ASW_TWmt * bebouwing/BestaandeUtil/AansluitCapaciteit/GTF_TW)
+							* KanGebiedsOptie/BestaandeUtil
+							* float64(bebouwing/BestaandeUtil/AansluitCapaciteit/Warmte > afkapgrens_klein) 
+						, bebouwing/BestaandeUtil/PlanRegio_rel);
+					
+					attribute<kW>	P_nu (PlanRegio) := //nieuwbouw utiliteit
+						sum(
+								(bebouwing/NieuwbouwUtil/AansluitCapaciteit/ASW_RVmt * bebouwing/NieuwbouwUtil/AansluitCapaciteit/GTF_RVmt +
+							     bebouwing/NieuwbouwUtil/AansluitCapaciteit/ASW_TWmt * bebouwing/NieuwbouwUtil/AansluitCapaciteit/GTF_TW)
+							* KanGebiedsOptie/NieuwbouwUtil
+							* float64(bebouwing/NieuwbouwUtil/AansluitCapaciteit/Warmte > afkapgrens_klein) 
+						, bebouwing/NieuwbouwUtil/PlanRegio_rel);
+						
+					attribute<kW>	Totaal (PlanRegio) := P_bu + P_nu;	//totaal per buurt
+				}				
+				attribute<kW> P_id  (PlanRegio) := P_Klein/Totaal + P_Groot/Totaal; //totaal inpandig vermogensvraag per buurt, nog niet gecorrigeerd voor capaciteitsverlies naar P_sec
 			}
 
 			//inpandige warmtemeter en leidingwerk utiliteit
-			attribute<Eur>		Ki_WarmteMeter       (PlanRegio) :=		Kostenkentallen/K_Wmtr_vast * NrAansluitingen/Totaal + Kostenkentallen/K_Wmtr_var * CapaciteitsVraag/Totaal;		
-			attribute<Eur>		Ki_Distributie       (PlanRegio) :=		Kostenkentallen/Ki_id_Dist  * CapaciteitsVraag/Klein;
-			attribute<Eur>		Ki_OnderStation      (PlanRegio) :=		Kostenkentallen/K_OS        * CapaciteitsVraag/totaal;
-			attribute<Eur>		Ki_Totaal            (PlanRegio) :=		Ki_WarmteMeter + Ki_Distributie + Ki_OnderStation;
-			attribute<Eur_yr>	Kj_Admin             (PlanRegio) :=		Ki_Distributie  * Kengetallen/Onderhoud/R_wd_admin
-																	+	Ki_OnderStation * Kengetallen/Onderhoud/R_OS_admin
-																	+	Ki_WarmteMeter  * Kengetallen/Onderhoud/R_Inst_admin;
-			attribute<Eur_yr>	Kj_Onderhoud         (PlanRegio) :=		Ki_Distributie  * Kengetallen/Onderhoud/R_wd_onderhoud
-																	+	Ki_OnderStation * Kengetallen/Onderhoud/R_OS_onderhoud
-																	+	Ki_WarmteMeter  * Kengetallen/Onderhoud/R_Inst_onderhoud;
+			attribute<Eur>		Ki_id_WarmteMeter    (PlanRegio) :=		Kostenkentallen/K_Wmtr_vast * NrAansluitingen/Totaal + Kostenkentallen/K_Wmtr_var * CapaciteitsVraag/P_id;		
+			attribute<Eur>		Ki_id_Distributie    (PlanRegio) :=		Kostenkentallen/Ki_id_Dist  * CapaciteitsVraag/P_Klein/Totaal;
+			attribute<Eur>		Ki_id_OnderStation   (PlanRegio) :=		Kostenkentallen/K_OS        * CapaciteitsVraag/P_id;
+			attribute<Eur>		Ki_id                (PlanRegio) :=		Ki_id_WarmteMeter + Ki_id_Distributie + Ki_id_OnderStation;
+			attribute<Eur_yr>	Kj_id_adm            (PlanRegio) :=		Ki_id_Distributie  * Kengetallen/Onderhoud/R_wd_admin
+																	+	Ki_id_OnderStation * Kengetallen/Onderhoud/R_OS_admin
+																	+	Ki_id_WarmteMeter  * Kengetallen/Onderhoud/R_Inst_admin;
+			attribute<Eur_yr>	Kj_id_oh             (PlanRegio) :=		Ki_id_Distributie  * Kengetallen/Onderhoud/R_wd_onderhoud
+																	+	Ki_id_OnderStation * Kengetallen/Onderhoud/R_OS_onderhoud
+																	+	Ki_id_WarmteMeter  * Kengetallen/Onderhoud/R_Inst_onderhoud;
 		}
 
 		container GlasTuinbouw
@@ -250,7 +258,7 @@ template KostenBaten
 			parameter<classifications/gebruiksgrootteklasse>	wd_gebruiksgrootteklasse_rel := last(ID(Prijzen_elec)), Descr = "elektriciteitstarief voor wijkdistributeur";
 			container			LeidingKosten					:=	BuisKosten(PlanRegio, P_sec * 0.001[ MW / kW]);
 			
-			attribute<KW>		P_sec          (PlanRegio)	:=	(Wonen/bw/P_sec + Wonen/nw/P_sec + Utiliteit/CapaciteitsVraag/Totaal + GlasTuinbouw/CapaciteitsVraag) / (1d - Efficiencies/Vermogenverlies_MT);
+			attribute<KW>		P_sec          (PlanRegio)	:=	(Wonen/bw/P_sec + Wonen/nw/P_sec + Utiliteit/CapaciteitsVraag/P_id + GlasTuinbouw/CapaciteitsVraag) / (1d - Efficiencies/Vermogenverlies_MT);
 			attribute<m>		L_hoofdleiding (PlanRegio)	:=	0.25 * /Invoer/RuimtelijkeData/buislengte/per_buurt/L_dist, Descr = "aantal meter distributieleidingen (hoofd)", Source = "aanlevering GreenVis februari 2020";
 			attribute<Eur>		K_hoofdleiding (PlanRegio)	:=	L_hoofdleiding * Leidingkosten/K_m;
 			attribute<m>		L_zijleiding   (PlanRegio)	:=	0.75 * /Invoer/RuimtelijkeData/buislengte/per_buurt/L_dist, Descr = "aantal meter distributieleidingen (zij)", Source = "aanlevering GreenVis februari 2020";
@@ -289,18 +297,18 @@ template KostenBaten
 			attribute<Eur_yr>	Kj_wd_gas_CO2 (PlanRegio) :=	prijzen/Aardgas/Bijstook/KGJ_CO2Heffing       * V_Bijstook,	Descr = "CO2 heffing betaald over inkoop aardgas voor bijstook in hulpketels door eindgebruikers, als onderdeel van Kj_wd_gas";
 		}
 
-		attribute<Eur>    Ki_id           (PlanRegio) := Wonen/Ki_id + Utiliteit/Ki_Totaal + Glastuinbouw/Ki_Totaal, Source = "FO v7a F 2";
+		attribute<Eur>    Ki_id           (PlanRegio) := Wonen/Ki_id + Utiliteit/Ki_id + Glastuinbouw/Ki_Totaal, Source = "FO v7a F 2";
 		attribute<Eur>    Ki_wd           (PlanRegio) := SecundairNet/Ki_Totaal + Wonen/Ki_wd, Source = "FO v7a F 2";
 
-		attribute<Eur_yr> Kj_id_oh        (PlanRegio) := Leercurves/OenM/Curve * Wonen/Kj_id_oh;
-		attribute<Eur_yr> Kj_wd_oh        (PlanRegio) := Leercurves/OenM/Curve * (Wonen/Kj_wd_oh + Utiliteit/Kj_Onderhoud + Glastuinbouw/Kj_Onderhoud + SecundairNet/Kj_Onderhoud);
+		attribute<Eur_yr> Kj_id_oh        (PlanRegio) := Leercurves/OenM/Curve * (Wonen/Kj_id_oh + Utiliteit/Kj_id_oh);
+		attribute<Eur_yr> Kj_wd_oh        (PlanRegio) := Leercurves/OenM/Curve * (Wonen/Kj_wd_oh + Glastuinbouw/Kj_Onderhoud + SecundairNet/Kj_Onderhoud);
 		attribute<Eur_yr> Kj_Onderhoud    (PlanRegio) := Kj_wd_oh + Kj_id_oh;
 		attribute<Eur_yr> Kj_wd_elek      (PlanRegio) := SecundairNet/Kj_wd_elek;
 		attribute<Eur_yr> Km_wd_elek      (PlanRegio) := SecundairNet/Km_wd_elek;
 		attribute<Eur_yr> Kj_wd_gas       (PlanRegio) := Bijstook/Kj_wd_gas;
 		attribute<Eur_yr> Km_wd_gas       (PlanRegio) := Bijstook/Km_wd_gas;
 		attribute<Eur_yr> Kj_lv_adm       (PlanRegio) := Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_lv_Admin * (opbrengsten/JaarlijksD/Oj_VastRecht * 1[yr]);
-		attribute<Eur_yr> Kj_wd_adm       (PlanRegio) := Leercurves/OenM/Curve * (Wonen/Kj_wd_adm + Utiliteit/Kj_Admin + Glastuinbouw/Kj_Admin + SecundairNet/Kj_Admin);
+		attribute<Eur_yr> Kj_wd_adm       (PlanRegio) := Leercurves/OenM/Curve * (Wonen/Kj_wd_adm + Utiliteit/Kj_id_adm + Glastuinbouw/Kj_Admin + SecundairNet/Kj_Admin);
 
 		attribute<nrAansl>nrAansl_d       (PlanRegio) := ='add('+AsItemList(replace('sum(Bebouwing/@BC@/nrAansluitingen * KanGebiedsOptie/@BC@, Bebouwing/@BC@/PlanRegio_rel)', '@BC@', BCname))+')';
 		attribute<nrAansl>nrAansl_g       (PlanRegio) := ='add('+AsItemList(replace('sum(Bebouwing/@BC@/nrAansluitingen * KanGebiedsOptie/@BC@, Bebouwing/@BC@/PlanRegio_rel)', '@BC@', BCname))+')';

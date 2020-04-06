@@ -1,8 +1,8 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 //                                                                                      //
-//                                  (C) VESTA 2019                                      //
+//                                  (C) VESTA 2020                                      //
 //                         Planbureau voor de Leefomgeving                              //
-//                                    JULI 2019                                         //
+//                                    April 2020                                         //
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -14,21 +14,23 @@ Template LtWarmtenetImpl
 	container AanbodKentallen;
 	container EnergiePrijzen;
 	parameter<units/yr_uint16> ZichtJaar;
-	
-	parameter<units/Celsius> T_ow;
-	parameter<units/Celsius> T_sec;
+	parameter<units/Celsius> T_ow;         //Temperatuur bij de primaire warmtebron
+	parameter<units/Celsius> T_sec;        //Temperatuur bij aflevering aan de gebruiker
 	// end case parameters
 	
 	parameter<bool> KoudeBeschikbaar := false, Descr = "Wordt binnen dit type gebiedsoptie ook centraal koude aangeboden, ja/nee";
-	parameter<bool> CollectieveWP := (T_ow < T_sec);
-	
+	parameter<bool> CollectieveWP := (T_ow < T_sec), Descr = "Indien aflevertemperatuur hoger moet zijn dan de brontemperatuur is een collectieve warmtepomp nodig";
 	parameter<string> GebiedsOptie_name := 'LT'+string(T_ow)+'_'+string(T_sec);
 	parameter<Classifications/WarmteOptie> WarmteOptie_rel := ='Classifications/WarmteOptie/V/'+GebiedsOptie_name;
-	
-	container bebouwing := BeginStatus/Bebouwing;
-	container KostenBaten
+	container    bebouwing        := BeginStatus/Bebouwing;
+	unit<uint8>  WkoComponent     := Classifications/WoonUtilComponent;
+	unit<uint32> PlanRegio        := Invoer/SpecifiekeInstellingen/PlanRegio;
+	unit<uint8>  Prijzen_elec     := Prijzen/Elektriciteit/Staffel;
+
+	// =========  Enkele zaken op gebouwniveau worden op gelijke wijze bepaalt als MT opties
+	container KostenBaten 
 	{
-		attribute<string> BCname(Classifications/WkoComponent) := Classifications/WkoComponent/name;
+		attribute<string> BCname(Classifications/WoonUtilComponent) := Classifications/WoonUtilComponent/name;
 		container KanGebiedsOptie := for_each_nednv( BCname
 			,	replace('float64(Classifications/WarmteOptie/KanGebiedsOptie[bebouwing/@BC/WarmteOptie_rel])', '@BC', BCname)
 			,	bebouwing, BCname, float64
@@ -47,61 +49,46 @@ Template LtWarmtenetImpl
 		}
 	}
 	
-	
-	unit<uint8>  WkoComponent       := Classifications/WkoComponent;
-	unit<uint32> PlanRegio          := Invoer/SpecifiekeInstellingen/PlanRegio;
-	unit<uint8>  Prijzen_elec       := Prijzen/Elektriciteit/Staffel;
-
+	// =========  Invoerkentallen over kosten en performance worden opgehaald en verwerkt met leercurves
 	container Efficiency := Kengetallen/Efficiency/Efficiency_LT(T_ow, T_sec);
 	container Kostenkentallen := Kengetallen/Kosten_LT(Leercurves/Inpand/Curve, Leercurves/eWPww/Curve, Leercurves/LTnet/Curve, Leercurves/MTnet/Curve);
 
+	// =========  Ophalen informatie over warmtebronnen
 	unit<uint32> BronSrc := BeginStatus/LtWarmte/bron;
 	unit<uint32> BronSelectie := subset(BronSrc/P_ow_max > 0.0 && BronSrc/T_bron >= T_ow && not(BronSrc/Toegewezen) && pointrow(BronSrc/Point) > 0d && pointcol(BronSrc/Point) > 0d)
 		,	DialogType = "Map", DialogData = "Point"
 	{
-	
-		attribute<BronSrc> BronSrc_rel := nr_OrgEntity;
+		attribute<BronSrc>   BronSrc_rel := nr_OrgEntity;
+		attribute<rdc_meter> Point       := BronSrc/Point[BronSrc_rel];
+		attribute<string>    Label       := BronSrc/Label[BronSrc_rel];
 		
-		attribute<rdc_meter> Point := BronSrc/Point[BronSrc_rel];
-		attribute<string>    Label := BronSrc/Label[BronSrc_rel];
-		
-		
-		attribute<KW>     P_Warmte_primair   := BronSrc/P_ow_max[BronSrc_rel]; // warmte op T_bron voor eWP
-		attribute<KW>     P_Warmte_secundair := P_Warmte_primair / BronSrc/bron_cap[BronSrc_rel]; // warmte op temperatuur T_bron na eWP
-		
-		attribute<Celsius> T_bron            := BronSrc/T_bron[BronSrc_rel];
-		attribute<UInt32>	Categorie		:=	BronSrc/categorie_rel[BronSrc_rel];
-		
-		attribute<Ratio>   Weight            := P_Warmte_secundair / 1[KW];
-		attribute<Ratio>   Bron_vol_Weighted := BronSrc/Bron_vol[BronSrc_rel] * Weight; // bron_vol maal gewicht tbv gewogen middeling.									
-		attribute<Eur_kW> Ki_kW_min_weighted := BronSrc/Ki_kW_min[BronSrc_rel] * Weight;
-		attribute<Eur_kW> Ki_kW_max_weighted := BronSrc/Ki_kW_max[BronSrc_rel] * Weight;
-		attribute<Eur_GJ> K_GJ_weighted      := BronSrc/K_GJ[BronSrc_rel] * Weight;
+		attribute<KW>      P_Warmte_primair   := BronSrc/P_ow_max[BronSrc_rel]; // warmte op T_bron voor eWP
+		attribute<KW>      P_Warmte_secundair := P_Warmte_primair / BronSrc/bron_cap[BronSrc_rel]; // warmte op temperatuur T_bron na eWP
+		attribute<Celsius> T_bron             := BronSrc/T_bron[BronSrc_rel];
+		attribute<UInt32>  Categorie		  := BronSrc/categorie_rel[BronSrc_rel];
+		attribute<Ratio>   Weight             := P_Warmte_secundair / 1[KW];
+		attribute<Ratio>   Bron_vol_Weighted  := BronSrc/Bron_vol[BronSrc_rel] * Weight; // bron_vol maal gewicht tbv gewogen middeling.									
+		attribute<Eur_kW>  Ki_kW_min_weighted := BronSrc/Ki_kW_min[BronSrc_rel]* Weight;
+		attribute<Eur_kW>  Ki_kW_max_weighted := BronSrc/Ki_kW_max[BronSrc_rel]* Weight;
+		attribute<Eur_GJ>  K_GJ_weighted      := BronSrc/K_GJ[BronSrc_rel]     * Weight;
 	}
-	
-	unit <uint32> bron := Unique(BronSelectie/Point) // dit moet omdat connect_points anders weigert.
+	unit <uint32> bron := Unique(BronSelectie/Point) // dit moet omdat connect_points anders niet uitgevoerd kan worden.
 	,	DialogType = "Map",	DialogData = "Point"
 	{
 		attribute<rdc_meter> Point := Values;
 		attribute<.> BronSelectie_rel (BronSelectie) := rlookup(BronSelectie/Point, Values);
 		
-		attribute<string>    Label       := AsItemList(BronSelectie/Label, BronSelectie_rel), DialogType = "LabelText";
-
-		attribute<.>         per_bron    := id(.);
-
-		attribute<kW>        P_Warmte_primair   := sum(BronSelectie/P_Warmte_primair, BronSelectie_rel);
-		attribute<kW>        P_Warmte_secundair := sum(BronSelectie/P_Warmte_secundair, BronSelectie_rel);
-		
-		attribute<Ratio>     Weight             := sum(BronSelectie/Weight, BronSelectie_rel);
-		
-		attribute<Ratio>  Bron_vol_Weighted  := sum(BronSelectie/Bron_vol_Weighted, BronSelectie_rel);
-		attribute<Eur_kW> Ki_kW_min_weighted := sum(BronSelectie/Ki_kW_min_weighted, BronSelectie_rel);
-		attribute<Eur_kW> Ki_kW_max_weighted := sum(BronSelectie/Ki_kW_max_weighted, BronSelectie_rel);		
-		attribute<Eur_GJ> K_GJ_weighted      := sum(BronSelectie/K_GJ_weighted, BronSelectie_rel);
-
-		attribute<float64>   n           := Float64(pcount(BronSelectie_rel));
-		
-		unit<uint32> Feature := bron // nu nog hetzelfde, maar in clustering kunnen T splitsingen worden opgenomen.
+		attribute<string>  Label              := AsItemList(BronSelectie/Label, BronSelectie_rel), DialogType = "LabelText";
+		attribute<.>       per_bron           := id(.);
+		attribute<kW>      P_Warmte_primair   := sum(BronSelectie/P_Warmte_primair, BronSelectie_rel);
+		attribute<kW>      P_Warmte_secundair := sum(BronSelectie/P_Warmte_secundair, BronSelectie_rel);
+		attribute<Ratio>   Weight             := sum(BronSelectie/Weight, BronSelectie_rel);
+		attribute<Ratio>   Bron_vol_Weighted  := sum(BronSelectie/Bron_vol_Weighted, BronSelectie_rel);
+		attribute<Eur_kW>  Ki_kW_min_weighted := sum(BronSelectie/Ki_kW_min_weighted, BronSelectie_rel);
+		attribute<Eur_kW>  Ki_kW_max_weighted := sum(BronSelectie/Ki_kW_max_weighted, BronSelectie_rel);		
+		attribute<Eur_GJ>  K_GJ_weighted      := sum(BronSelectie/K_GJ_weighted, BronSelectie_rel);
+		attribute<float64> n                  := Float64(pcount(BronSelectie_rel));
+		unit<uint32>       Feature            := bron // nu nog hetzelfde, maar in clustering kunnen T splitsingen worden opgenomen.
 		{
 			attribute<rdc_meter> Geometry(arc) := points2sequence(Point, ID(.));
 			attribute<bron>      MST_rel   := ID(bron);
@@ -133,8 +120,6 @@ Template LtWarmtenetImpl
 			attribute<..> MST_rel  := ='value(union_data(., '+asItemList('BronIterations/'+BronIteration/Name+'/Selected/Feature/MST_rel+BronIteration/CumulNrPrevSelectedObjects['+ string(ID(BronIteration))+']')+', LastClusters/Feature/MST_rel+ sum(BronIteration/NrSelectedObjects)), ..)';
 			attribute<m>  LengthProxy := arc_length(Geometry, m);
 		}
-//		attribute<rdc_meter> point := ='union_data(., '+asItemList('BronIterations/'+BronIteration/Name+'/Selected/point')+', LastClusters/Point)';
-
 		attribute<string>    Label  := ='union_data(., '+asItemList('BronIterations/'+BronIteration/Name+'/Selected/Label')+', LastClusters/Label)';
 		attribute<rdc_meter> Point  := ='union_data(., '+asItemList('BronIterations/'+BronIteration/Name+'/Selected/Point')+', LastClusters/Point)';
 		attribute<.>         per_bron(bron) := ='value(MakeDefined('
@@ -143,7 +128,6 @@ Template LtWarmtenetImpl
 		//resultaten bronclustering, eigenschappen per broncluster
 		attribute<kW>		P_Warmte_primair				:=	='union_data(., ' +AsItemList('BronIterations/'+BronIteration/Name+'/Selected/P_Warmte_primair')+',		LastClusters/P_warmte_primair)';
 		attribute<kW>		P_Warmte_secundair				:=	='union_data(., ' +AsItemList('BronIterations/'+BronIteration/Name+'/Selected/P_Warmte_secundair')+',	LastClusters/P_Warmte_secundair)';
-		
 		attribute<Ratio>	Weight							:=	='union_data(., ' +AsItemList('BronIterations/'+BronIteration/Name+'/Selected/Weight')+',				LastClusters/Weight)';
 		attribute<Ratio>	Bron_vol_Weighted				:=	='union_data(., ' +AsItemList('BronIterations/'+BronIteration/Name+'/Selected/Bron_vol_Weighted')+',	LastClusters/Bron_vol_Weighted)';
 		attribute<Eur_kW>	Ki_kW_min_weighted				:=	='union_data(., ' +AsItemList('BronIterations/'+BronIteration/Name+'/Selected/Ki_kW_min_weighted')+',	LastClusters/Ki_kW_min_weighted)';
@@ -159,10 +143,10 @@ Template LtWarmtenetImpl
 		
 		//gebiedsbeschrijving broncluster
 		attribute<m>        LengthProxy                     := sum(Feature/LengthProxy, Feature/MST_rel);
-		
 		attribute<.>		per_UnitedCandidates(UnitedCandidates) :=	Selected/BronCluster_rel[invert(Selected/nr_OrgEntity)];
 	}
 	
+	// =========  Voor alle woon en utiliteit bebouwingscomponenten worden op gebouwniveau attributen voor kosten en energie bepaald
 	container BestaandeWoningData := WKOWoningData(bebouwing/BestaandeWoning, KostenBaten/WarmteVraag/BestaandeWoning, false, KoudeBeschikbaar, KostenBaten/KostenD/Wonen/bw);
 	container NieuwbouwWoningData := WKOWoningData(bebouwing/NieuwbouwWoning, KostenBaten/WarmteVraag/NieuwbouwWoning, true , KoudeBeschikbaar, KostenBaten/KostenD/Wonen/nw);
 	container BestaandeUtilData   := WKOUtilData  (bebouwing/BestaandeUtil,   KostenBaten/WarmteVraag/BestaandeUtil  , false, KoudeBeschikbaar);	
@@ -420,7 +404,7 @@ Template LtWarmtenetImpl
 		}
 		container LtWarmtenet
 		{
-			unit<uint8> LT_Component := Classifications/WkoComponent;
+			unit<uint8> LT_Component := Classifications/WoonUtilComponent;
 			
 			//opbrengsten per groep bebouwingscomponenten
 			

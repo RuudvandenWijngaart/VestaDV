@@ -55,17 +55,23 @@ template WKOUtilData
 	attribute<GJ_yr>	V_wd_verlies	(BO) := (V_warmte_sec - V_Wsec_netto) + (V_koude_sec - V_Ksec_netto);
 	
 	//Gelijktijdige capaciteitsvraag aan het secundaire net
-	parameter<ratio>	GTFrv          := T_sec <= 55[Celsius] ? Vermogens/GTF_w_RVlt     : Vermogens/GTF_w_RVmt;
-	parameter<kw_m2>	ASWrv_u_opp    := T_sec <= 55[Celsius] ? Vermogens/ASW_RVlt_u_opp : Vermogens/ASW_RVmt_u_opp;
-	parameter<kw_asl>	ASWrv_u_asl    := T_sec <= 55[Celsius] ? Vermogens/ASW_RVlt_u_asl : Vermogens/ASW_RVmt_u_asl;
-
-	attribute<kW>		P_TW_sec		(BO) := Vermogens/GTF_u_TW   * (Vermogens/ASW_TWlt_u_opp   * Lu + Vermogens/ASW_TWlt_u_asl   * 1.0[nrAansl]);
-	attribute<kW>		P_RV_sec		(BO) := GTFrv * (ASWrv_u_opp * Lu + ASWrv_u_asl * 1.0[nrAansl]);
+	attribute<kW>       ASW_RV          (BO) := =T_sec <= 55[Celsius]  ? 'BO/AansluitCapaciteit/ASW_RVlt' : 'BO/AansluitCapaciteit/ASW_RVmt';
+	attribute<kW>       ASW_TW          (BO) := =T_sec <= 55[Celsius]  ? 'BO/AansluitCapaciteit/ASW_TWlt' : 'BO/AansluitCapaciteit/ASW_TWmt';
+	attribute<kW>       ASW_K           (BO) := =KoudeBeschikbaar      ? 'BO/AansluitCapaciteit/ASW_K'    : 'const(0.0[kw],BO)';
+	attribute<ratio>    GTF_RV          (BO) := =T_sec <= 55[Celsius]  ? 'BO/AansluitCapaciteit/GTF_RVlt' : 'BO/AansluitCapaciteit/GTF_RVmt';
+	attribute<ratio>    GTF_TW          (BO) := BO/AansluitCapaciteit/GTF_TW;
+	attribute<ratio>    GTF_K           (BO) := BO/AansluitCapaciteit/GTf_K;
+	
+	attribute<kW>		P_TW_sec		(BO) := ASW_RV * GTF_RV;
+	attribute<kW>		P_RV_sec		(BO) := ASW_TW * GTF_TW;
 	attribute<kW>		P_Warmte_sec	(BO) := P_TW_sec + P_RV_sec;
-	attribute<kW>		P_Koude_sec		(BO) := KoudeBeschikbaar ? Vermogens/GTF_u_k * (Vermogens/ASW_k_u_opp * Lu + Vermogens/ASW_k_u_asl * 1.0[nrAansl]) : 0[kW];
-	attribute<kW>		P_Wsec_netto	(BO) := P_Warmte_sec / (1d - Efficiencies/Vermogenverlies_LT),	Descr ="Vermogen warmte te realiseren in het secundaire net met verrekening leidingverlies op vermogen";
-	attribute<kW>		P_Ksec_netto	(BO) := P_Koude_sec / (1d - Efficiencies/Vermogenverlies_LT),		Descr ="Vermogen koude te realiseren in het secundaire net met verrekening leidingverlies op vermogen";
+	parameter<ratio>    Vermogensverlies     := =(T_sec <= 55[Celsius]) ? 'Efficiencies/Vermogenverlies_LT' : 'Efficiencies/Vermogenverlies_MT';
+	attribute<kW>		P_Koude_sec		(BO) := KoudeBeschikbaar ? ASW_K * GTF_K : 0[kW];
+	attribute<kW>		P_Wsec_netto	(BO) := P_Warmte_sec / (1d - Vermogensverlies),	Descr ="Vermogen warmte te realiseren in het secundaire net met verrekening leidingverlies op vermogen";
+	attribute<kW>		P_Ksec_netto	(BO) := P_Koude_sec / (1d - Vermogensverlies),	Descr ="Vermogen koude te realiseren in het secundaire net met verrekening leidingverlies op vermogen";
 	attribute<kW>		P_sec			(BO) := max_elem(P_Wsec_netto, P_Ksec_netto),	Descr = "capaciteitsvraag aan secundair net";
+
+	
 
 	//elektriciteitsverbruik individueel (toegekend aan inpandig distributeur)
 	attribute<GJ_yr>	V_id_RV_Elek	(BO) := V_id_RV / SPF_ind_rv,					Descr = "Elektriciteitsverbruik voor eigen opwekking tbv ruimteverwarming";
@@ -118,20 +124,19 @@ template WKOUtilData
 		attribute<Eur>		Ki_id_OS			(BO)	:= Kostenkentallen/Ki_OnderStation [Eur_KW] * P_sec [KW], Descr = "Investeringskosten onderstations";
 		attribute<Eur>		Ki_id				(BO)	:= (K_wvu * Lu) + Ki_id_EigenOpwek + Ki_id_LTAS + Ki_id_OS,		Descr = "Investeringskosten systeem bij utiliteit, F 64";
 		
+		container checks
+ 		{
+	 		attribute<Eur> Ki_id_PR     (Invoer/SpecifiekeInstellingen/PlanRegio) := sum(Ki_id,     BO/Planregio_rel);
+ 		}
+		
+		
 		//geen gebouweigenaar-kosten bij utiliteit
 		attribute<Eur>		Ki_ge_pm			(BO)	:= const(0[Eur], BO),		Descr = "geen gebouweigenaar-kosten bij utiliteit";
 		attribute<Eur>		Ki_ge_ov			(BO)	:= const(0[Eur], BO),		Descr = "geen gebouweigenaar-kosten bij utiliteit";
 		attribute<Eur>		Oi_ge_EIA			(BO)	:= const(0[Eur], BO),		Descr = "geen gebouweigenaar-kosten bij utiliteit";
 		attribute<Eur>		Ki_ge				(BO)	:= const(0[Eur], BO),		Descr = "geen gebouweigenaar-kosten bij utiliteit";
 
-		//investeringskosten wijkdistributie gebouwgerelateerd, zonder distributieleidingen
-		
- 		container checks
- 		{
-	 		attribute<Eur> Dist_id_PR (Invoer/SpecifiekeInstellingen/PlanRegio) := sum((K_wvu * Lu), BO/Planregio_rel);
- 			attribute<Eur> OS_id_PR (Invoer/SpecifiekeInstellingen/PlanRegio) := sum(Ki_id_OS, BO/Planregio_rel);
- 		}
-			
+		//investeringskosten wijkdistributie gebouwgerelateerd, zonder distributieleidingen			
 		attribute<m_pand>	L_aansl				(BO)	:= /Invoer/RuimtelijkeData/buislengte/per_buurt/L_aansl_pand[BO/Planregio_rel];
 		container			LeidingKosten :=	BuisKostenBC(BO, P_sec * 0.001[ MW / kW]);
 		attribute<Eur_m>	K_aansl_m			(BO)	:=	Leidingkosten/K_m;	
