@@ -36,6 +36,8 @@ template WKOIter
 		attribute<float64>		SSD_yy               :=		sum(Candidates/SSD_yy,                RelPartitioning);
 		attribute<float64>		SqrtDetSSD           :=		MakeDefined(Sqrt(SSD_xx*SSD_yy-SSD_xy*SSD_xy), 0.0);
 		attribute<m2>			AreaProxy            :=		(PI() * SqrtDetSSD / n)[m2];
+		attribute<m>		    LengthProxy	         :=
+			=(GebiedsOptie_rel == Classifications/gebiedsOptie/V/TEO) ? 'min(UnitedCandidates/LengthProxy, Partitioning)' : 'const(0.0[m],.)';
 		 
 		container secundairnet
 		{
@@ -44,25 +46,44 @@ template WKOIter
 			attribute<Eur_m>	K_min_sec		(ClusterSet) :=	P_sec > 0[MW] ? 400[Eur_m] + 210[Eur / m] * (P_sec * 1.0[1 / MW])^ 0.5 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
 			attribute<Eur_m>	K_max_sec		(ClusterSet) :=	P_sec > 0[MW] ? 800[Eur_m] + 200[Eur / m] * (P_sec * 1.0[1 / MW])^ 0.6 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
 			attribute<Eur_m>	K_m_sec			(ClusterSet) :=	(K_min_sec * Schuiven/KostenMin + K_max_sec * Schuiven/KostenMax) * Leercurves/MTnet/Curve;
-			attribute<nrOS>		Onderstations   (ClusterSet) :=  P_sec_kW / Invoer/Kengetallen/Constanten/Vermogen_OS;
+			attribute<nrOS>		Onderstations   (ClusterSet) := P_sec_kW / Invoer/Kengetallen/Constanten/Vermogen_OS;
 			attribute<m>		L_hoofdleiding	(ClusterSet) :=	Invoer/Kengetallen/Constanten/Omwegfactor * sqrt(2.0)* sqrt(AreaProxy);
 			attribute<Eur>		K_hoofdleiding	(ClusterSet) :=	L_hoofdleiding * K_m_sec;
-			attribute<m_OS>     meter_OS        (ClusterSet) :=  Invoer/Kengetallen/Constanten/Omwegfactor * 0.25 * 0.5 * sqrt(2.0) * sqrt(AreaProxy) / 1.0[nrOS];
+			attribute<m_OS>     meter_OS        (ClusterSet) := Invoer/Kengetallen/Constanten/Omwegfactor * 0.25 * 0.5 * sqrt(2.0) * sqrt(AreaProxy) / 1.0[nrOS];
 			attribute<m>		L_zijleiding	(ClusterSet) :=	Onderstations * meter_OS;
 			attribute<Eur>		K_zijleiding	(ClusterSet) :=	L_zijleiding * K_m_sec;
 			attribute<Eur>      Ki_wd           (ClusterSet) := K_hoofdleiding + K_zijleiding;
 		}
 		 
-//		attribute<Eur>			Ki_wd                :=		=KoudeBeschikbaar ? 'AreaProxy * KostenKentallen/Ki_distr' : 'secundairnet/Ki_wd';
-		attribute<Eur>			Ki_wd                :=		=KoudeBeschikbaar ? '1.2d * secundairnet/Ki_wd' : 'secundairnet/Ki_wd';
-
-		attribute<Eur_yr>		Kji_wd               :=		Ki_wd     * ((NCW/wd28/AnnualisationFactor
+		attribute<MW>	 	   P_bronnet            := secundairnet/P_sec * Efficiency/AandeelPrimairVermogen;
+		container	           LeidingKosten        := BuisKostenBC(., P_bronnet);
+		
+		attribute<Eur>		   Ki_ow_WKO            :=
+			=(GebiedsOptie_rel == Classifications/gebiedsOptie/V/TEO) ? 'const(KostenKentallen/Ki_WKO_vast, .)' :
+			'const(KostenKentallen/Ki_WKO_vast * KostenKentallen/R_Regeneratie, .)';
+		attribute<Eur_yr>	   Kji_ow_WKO           :=  Ki_ow_WKO     * ((NCW/ow28/AnnualisationFactor
+															          * (1.0 - SpecifiekeInstellingen/Beleid/EIA/WKO ) 
+															          + Leercurves/OenM/Curve * (Kengetallen/Onderhoud/R_ow_onderhoud + Kengetallen/Onderhoud/R_ow_admin)
+															          ));
+		
+		attribute<Eur>		   Ki_ow_bronleiding    := =not(GebiedsOptie_rel == Classifications/gebiedsOptie/V/TEO) ? 'const(0.0[eur],.)' : 
+	 		'Leidingkosten/A *
+	 		LengthProxy *
+	 		leercurves/LTnet/Curve *
+	 		(LeidingKosten/K_min * Schuiven/KostenMin + LeidingKosten/K_max * Schuiven/KostenMax)
+	 		+ KostenKentallen/Ki_TEO_vast';
+		attribute<Eur_yr>      Kji_ow_bronleiding   :=		Ki_ow_bronleiding  * ((NCW/ow28/AnnualisationFactor
+															                   * (1.0 - SpecifiekeInstellingen/Beleid/EIA/WKO ) 
+															                   + Leercurves/OenM/Curve * (Kengetallen/Onderhoud/R_ow_onderhoud + Kengetallen/Onderhoud/R_ow_admin)
+															                   ));
+		attribute<Eur>		   Ki_wd                :=		=KoudeBeschikbaar ? '1.2d * secundairnet/Ki_wd' : 'secundairnet/Ki_wd';
+		attribute<Eur_yr>	   Kji_wd               :=		Ki_wd     * ((NCW/wd28/AnnualisationFactor
 															          * (1.0 - SpecifiekeInstellingen/Beleid/EIA/wd ) 
 															          + Leercurves/OenM/Curve * (Kengetallen/Onderhoud/R_wd_onderhoud + Kengetallen/Onderhoud/R_wd_admin)
 															          ));
 		
 		// huidige netto contributiemarge
-		attribute<Eur_yr>		Oji_netto            :=		Contributiemarge - Kji_wd;
+		attribute<Eur_yr>		Oji_netto            :=		Contributiemarge - Kji_wd - Kji_ow_bronleiding - Kji_ow_WKO;
 
 		// van elk gebouw of cluster wordt de dichtstbijzijnde buur bepaald, met wie nog niet is geclusterd en met wie de nabijheidrelatie wederkerig is
 		attribute<.>			Neighbour            :=		connect_neighbour(Point);
@@ -106,6 +127,8 @@ template WKOIter
 		
 		attribute<float64>		SqrtDetSSD        :=		MakeDefined(Sqrt(SSD_xx*SSD_yy-SSD_xy*SSD_xy), 0.0);
 		attribute<m2>			AreaProxy         :=		(PI() * SqrtDetSSD / n)[m2];
+		attribute<m>		    LengthProxy	         :=
+			=(GebiedsOptie_rel == Classifications/gebiedsOptie/V/TEO) ? 'min(UnitedCandidates/LengthProxy, Partitioning)' : 'const(0.0[m],.)';
 		 
 		container secundairnet
 		{
@@ -122,19 +145,51 @@ template WKOIter
 			attribute<Eur>		K_zijleiding	(JoinedClusters) :=	L_zijleiding * K_m_sec;
 			attribute<Eur>      Ki_wd           (JoinedClusters) := K_hoofdleiding + K_zijleiding;
 		}
-		 
-		attribute<Eur>			Ki_wd        := =KoudeBeschikbaar ? 'AreaProxy * KostenKentallen/Ki_distr' : 'secundairnet/Ki_wd';
+		attribute<Eur>		   Ki_ow_WKO            :=
+			=(GebiedsOptie_rel == Classifications/gebiedsOptie/V/TEO) ? 'const(KostenKentallen/Ki_WKO_vast, .)' :
+			'const(KostenKentallen/Ki_WKO_vast * KostenKentallen/R_Regeneratie, .)';
+		attribute<Eur_yr>      Kji_ow_WKO           := Ki_ow_WKO * ((NCW/ow28/AnnualisationFactor * (1.0 - SpecifiekeInstellingen/Beleid/EIA/WKO ) 
+											        + Leercurves/OenM/Curve * (Kengetallen/Onderhoud/R_ow_onderhoud + Kengetallen/Onderhoud/R_ow_admin)));			
+	
+		attribute<MW>	 	   P_bronnet            := secundairnet/P_sec * Efficiency/AandeelPrimairVermogen;
+		container	           LeidingKosten        := BuisKostenBC(., P_bronnet);
+		attribute<Eur>		   Ki_ow_bronleiding    :=  =not(GebiedsOptie_rel == Classifications/gebiedsOptie/V/TEO) ? 'const(0.0[eur],.)' : 
+	 		'Leidingkosten/A *
+	 		LengthProxy *
+	 		leercurves/LTnet/Curve *
+	 		(LeidingKosten/K_min * Schuiven/KostenMin + LeidingKosten/K_max * Schuiven/KostenMax)
+	 		+ KostenKentallen/Ki_TEO_vast';
+	 	attribute<Eur_yr>      Kji_ow_bronleiding   := Ki_ow_bronleiding * ((NCW/ow28/AnnualisationFactor * (1.0 - SpecifiekeInstellingen/Beleid/EIA/WKO ) 
+											        + Leercurves/OenM/Curve * (Kengetallen/Onderhoud/R_ow_onderhoud + Kengetallen/Onderhoud/R_ow_admin)));			
+	
+		attribute<Eur>			Ki_wd        :=	=KoudeBeschikbaar ? '1.2d * secundairnet/Ki_wd' : 'secundairnet/Ki_wd';
 		attribute<Eur_yr>		Kji_wd       := Ki_wd * ((NCW/wd28/AnnualisationFactor * (1.0 - SpecifiekeInstellingen/Beleid/EIA/wd ) 
-															+ Leercurves/OenM/Curve * (Kengetallen/Onderhoud/R_wd_onderhoud + Kengetallen/Onderhoud/R_wd_admin)));			
+											 + Leercurves/OenM/Curve * (Kengetallen/Onderhoud/R_wd_onderhoud + Kengetallen/Onderhoud/R_wd_admin)));			
+		attribute<Eur>			Ki_ow_bronleiding_extra  := Ki_ow_bronleiding - Candidates/Ki_ow_bronleiding[src1] - Candidates/Ki_ow_bronleiding[src2];		
+		attribute<Eur_yr>		Kji_ow_bronleiding_extra := Ki_ow_bronleiding_extra * ((NCW/ow28/AnnualisationFactor * (1.0 - SpecifiekeInstellingen/Beleid/EIA/WKO )
+															+ Leercurves/OenM/Curve * (Kengetallen/Onderhoud/R_ow_onderhoud + Kengetallen/Onderhoud/R_ow_admin)
+															));	
 		attribute<Eur>			Ki_wd_extra  := Ki_wd - Candidates/Ki_wd[src1] - Candidates/Ki_wd[src2];		
 		attribute<Eur_yr>		Kji_wd_extra := Ki_wd_extra * ((NCW/wd28/AnnualisationFactor * (1.0 - SpecifiekeInstellingen/Beleid/EIA/wd )
 															+ Leercurves/OenM/Curve * (Kengetallen/Onderhoud/R_wd_onderhoud + Kengetallen/Onderhoud/R_wd_admin)
-															));
-		
+															));													
+		attribute<Eur>			Ki_ow_WKO_extra  := Ki_ow_WKO - Candidates/Ki_ow_WKO[src1] - Candidates/Ki_ow_WKO[src2];		
+		attribute<Eur_yr>		Kji_ow_WKO_extra := Ki_ow_WKO_extra * ((NCW/ow28/AnnualisationFactor * (1.0 - SpecifiekeInstellingen/Beleid/EIA/WKO )
+															+ Leercurves/OenM/Curve * (Kengetallen/Onderhoud/R_ow_onderhoud + Kengetallen/Onderhoud/R_ow_admin)
+															));	
+																												
 		// check of clustering leidt tot hogere gezamenlijke netto contributiemarge
-		attribute<bool>			src1_OK           :=		Candidates/Oji_netto[src1] <= Oji_netto - Kji_wd_extra;
-		attribute<bool>			src2_OK           :=		Candidates/Oji_netto[src2] <= Oji_netto - Kji_wd_extra;
+		
+		attribute<ratio>        src1_Paandeel     :=        max_elem(Candidates/P_warmte[src1],  Candidates/P_koude[src1]) / secundairnet/P_sec_kW;
+		attribute<ratio>        src2_Paandeel     :=        max_elem(Candidates/P_warmte[src2],  Candidates/P_koude[src2]) / secundairnet/P_sec_kW;
+		
+		attribute<eur_yr>       Oji_netto_combine :=        Oji_netto - Kji_wd_extra - Kji_ow_bronleiding_extra - Kji_ow_WKO_extra;
+		
+		attribute<bool>			src1_OK           :=		Candidates/Oji_netto[src1] <= src1_Paandeel * Oji_netto_combine;
+		attribute<bool>			src2_OK           :=		Candidates/Oji_netto[src2] <= src2_Paandeel * Oji_netto_combine;
 
+		attribute<bool>			Reciprocal        :=		src2_OK && src1_OK;
+		
 		// nieuw punt voor gezamenlijke cluster wordt bepaald
 		attribute<rdc_meter>	point             :=		point(MEAN_y, MEAN_x, rdc_meter);
 	}
@@ -145,20 +200,24 @@ template WKOIter
 	{
 		attribute<.>			Partitioning (UnitedCandidates) := invert(nr_OrgEntity)[JoinedClusters/Partitioning];
 		
-		attribute<string>		Label             := JoinedClusters/Label[nr_OrgEntity], DialogType = "LabelText";
-		attribute<Eur_yr>		Contributiemarge  := JoinedClusters/Contributiemarge[nr_OrgEntity];
-		attribute<kW>           P_koude           := JoinedClusters/P_koude [nr_OrgEntity];   
-		attribute<kW>           P_warmte          := JoinedClusters/P_warmte[nr_OrgEntity];
-		attribute<float64>		n                 := JoinedClusters/n       [nr_OrgEntity];
-		attribute<float64>		MEAN_x            := JoinedClusters/MEAN_x  [nr_OrgEntity];
-		attribute<float64>		MEAN_y            := JoinedClusters/MEAN_y  [nr_OrgEntity];
-		attribute<float64>		SSD_xx            := JoinedClusters/SSD_xx  [nr_OrgEntity];
-		attribute<float64>		SSD_xy            := JoinedClusters/SSD_xy  [nr_OrgEntity];
-		attribute<float64>		SSD_yy            := JoinedClusters/SSD_yy  [nr_OrgEntity];
-		attribute<rdc_meter>	point             := JoinedClusters/point   [nr_OrgEntity];
-		attribute<Eur>			Ki_wd             := JoinedClusters/Ki_wd   [nr_OrgEntity];
-		attribute<Eur_yr>		Kji_wd            := JoinedClusters/Kji_wd  [nr_OrgEntity];
-		attribute<Eur_yr>		Oji_netto         := Contributiemarge - Kji_wd;
+		attribute<string>		Label              := JoinedClusters/Label[nr_OrgEntity], DialogType = "LabelText";
+		attribute<Eur_yr>		Contributiemarge   := JoinedClusters/Contributiemarge[nr_OrgEntity];
+		attribute<kW>           P_koude            := JoinedClusters/P_koude [nr_OrgEntity];   
+		attribute<kW>           P_warmte           := JoinedClusters/P_warmte[nr_OrgEntity];
+		attribute<float64>		n                  := JoinedClusters/n       [nr_OrgEntity];
+		attribute<float64>		MEAN_x             := JoinedClusters/MEAN_x  [nr_OrgEntity];
+		attribute<float64>		MEAN_y             := JoinedClusters/MEAN_y  [nr_OrgEntity];
+		attribute<float64>		SSD_xx             := JoinedClusters/SSD_xx  [nr_OrgEntity];
+		attribute<float64>		SSD_xy             := JoinedClusters/SSD_xy  [nr_OrgEntity];
+		attribute<float64>		SSD_yy             := JoinedClusters/SSD_yy  [nr_OrgEntity];
+		attribute<rdc_meter>	point              := JoinedClusters/point   [nr_OrgEntity];
+		attribute<Eur>			Ki_wd              := JoinedClusters/Ki_wd   [nr_OrgEntity];
+		attribute<Eur_yr>		Kji_wd             := JoinedClusters/Kji_wd  [nr_OrgEntity];
+		attribute<Eur>			Ki_ow_bronleiding  := JoinedClusters/Ki_ow_bronleiding   [nr_OrgEntity];
+		attribute<Eur_yr>		Kji_ow_bronleiding := JoinedClusters/Kji_ow_bronleiding  [nr_OrgEntity];
+		attribute<Eur>			Ki_ow_WKO          := JoinedClusters/Ki_ow_WKO           [nr_OrgEntity];
+		attribute<Eur_yr>		Kji_ow_WKO         := JoinedClusters/Kji_ow_WKO          [nr_OrgEntity];
+		attribute<Eur_yr>		Oji_netto          := Contributiemarge - Kji_wd - Kji_ow_bronleiding - Kji_ow_WKO;
 	}
 	
 	
@@ -169,6 +228,8 @@ template WKOIter
 		attribute<string>		Label                           :=		ClusterSet/Label[nr_OrgEntity], DialogType = "LabelText";
 		attribute<.>			Partitioning (UnitedCandidates) :=		invert(nr_OrgEntity)[ClusterSet/Partitioning];
 		attribute<Eur>			Ki_wd                           :=		ClusterSet/Ki_wd[nr_OrgEntity];
+		attribute<Eur>			Ki_ow_bronleiding               :=		ClusterSet/Ki_ow_bronleiding[nr_OrgEntity];
+		attribute<Eur>			Ki_ow_WKO                       :=		ClusterSet/Ki_ow_WKO[nr_OrgEntity];
 		attribute<Eur_yr>		Contributiemarge                :=		ClusterSet/Contributiemarge[nr_OrgEntity];
 	}
 	
@@ -192,24 +253,30 @@ template WKOIter
 		attribute<rdc_meter>	point       := Candidates/point    [src1];
 		attribute<Eur>			Ki_wd       := Candidates/Ki_wd    [src1];
 		attribute<Eur_yr>		Kji_wd      := Candidates/Kji_wd   [src1];
+		attribute<Eur>			Ki_ow_WKO               := Candidates/Ki_ow_WKO            [src1];
+		attribute<Eur_yr>	    Kji_ow_WKO              := Candidates/Kji_ow_WKO           [src1];
+		attribute<Eur>			Ki_ow_bronleiding       := Candidates/Ki_ow_bronleiding    [src1];
+		attribute<Eur_yr>		Kji_ow_bronleiding      := Candidates/Kji_ow_bronleiding   [src1];
 	}
 
 	unit <uint32> SelectedClusters := union_unit(InheritedClusters, UsefulClusters), DialogType = "Map", DialogData = "Point"
 	{
 		attribute<.>			Partitioning (UnitedCandidates) := MakeDefined(InheritedClusters/Partitioning, UsefulClusters/Partitioning + #InheritedClusters)[.];
 
-		attribute<string>		Label            :=	union_data(., InheritedClusters/Label      , UsefulClusters/Label), DialogType = "LabelText";
-		attribute<Eur_yr>		Contributiemarge :=	union_data(., InheritedClusters/Contributiemarge   , UsefulClusters/Contributiemarge);
-		attribute<kW>           P_koude          := union_data(., InheritedClusters/P_koude    , UsefulClusters/P_koude);
-		attribute<kW>           P_warmte         := union_data(., InheritedClusters/P_warmte   , UsefulClusters/P_warmte);
-		attribute<float64>		n                := union_data(., InheritedClusters/n          , UsefulClusters/n);
-		attribute<float64>		MEAN_x           := union_data(., InheritedClusters/MEAN_x     , UsefulClusters/MEAN_x);
-		attribute<float64>		MEAN_y           := union_data(., InheritedClusters/MEAN_y     , UsefulClusters/MEAN_y);
-		attribute<float64>		SSD_xx           := union_data(., InheritedClusters/SSD_xx     , UsefulClusters/SSD_xx);
-		attribute<float64>		SSD_xy           := union_data(., InheritedClusters/SSD_xy     , UsefulClusters/SSD_xy);
-		attribute<float64>		SSD_yy           := union_data(., InheritedClusters/SSD_yy     , UsefulClusters/SSD_yy);
+		attribute<string>		Label             := union_data(., InheritedClusters/Label      , UsefulClusters/Label), DialogType = "LabelText";
+		attribute<Eur_yr>		Contributiemarge  := union_data(., InheritedClusters/Contributiemarge   , UsefulClusters/Contributiemarge);
+		attribute<kW>           P_koude           := union_data(., InheritedClusters/P_koude    , UsefulClusters/P_koude);
+		attribute<kW>           P_warmte          := union_data(., InheritedClusters/P_warmte   , UsefulClusters/P_warmte);
+		attribute<float64>		n                 := union_data(., InheritedClusters/n          , UsefulClusters/n);
+		attribute<float64>		MEAN_x            := union_data(., InheritedClusters/MEAN_x     , UsefulClusters/MEAN_x);
+		attribute<float64>		MEAN_y            := union_data(., InheritedClusters/MEAN_y     , UsefulClusters/MEAN_y);
+		attribute<float64>		SSD_xx            := union_data(., InheritedClusters/SSD_xx     , UsefulClusters/SSD_xx);
+		attribute<float64>		SSD_xy            := union_data(., InheritedClusters/SSD_xy     , UsefulClusters/SSD_xy);
+		attribute<float64>		SSD_yy            := union_data(., InheritedClusters/SSD_yy     , UsefulClusters/SSD_yy);
 
-		attribute<rdc_meter>	point            :=		union_data(., InheritedClusters/point      , UsefulClusters/point);
-		attribute<Eur>			Ki_wd            :=		union_data(., InheritedClusters/Ki_wd      , UsefulClusters/Ki_wd);
+		attribute<rdc_meter>	point             := union_data(., InheritedClusters/point             , UsefulClusters/point);
+		attribute<Eur>			Ki_wd             := union_data(., InheritedClusters/Ki_wd             , UsefulClusters/Ki_wd);
+		attribute<Eur>			Ki_ow_bronleiding := union_data(., InheritedClusters/Ki_ow_bronleiding , UsefulClusters/Ki_ow_bronleiding);
+		attribute<Eur>			Ki_ow_WKO         := union_data(., InheritedClusters/Ki_ow_WKO         , UsefulClusters/Ki_ow_WKO);
 	}
 }
