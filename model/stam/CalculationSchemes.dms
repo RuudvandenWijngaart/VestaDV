@@ -82,18 +82,33 @@ container CalculationSchemes: Using = "Units;Geography"
 	template WarmteVraagT
 	{
 		unit<uint32> BO;	
-		attribute<float64> BeschikbaarheidsFactor(BO); // := float64(Classifications/WarmteOptie/kanGebiedsOptie[BO/WarmteOptie_rel]);
+		parameter<units/Celsius> T_sec;
+		parameter<bool> Koudebeschikbaar;
+		attribute<float64> BeschikbaarheidsFactor(BO);
 		
+		//Aansluitwaardes
+		attribute<kW>       ASW_RV     (BO) := =T_sec <= 55[Celsius]    ? 'BO/AansluitCapaciteit/ASW_RVlt'    : 'BO/AansluitCapaciteit/ASW_RVmt';
+	    attribute<kW>       ASW_TW     (BO) := =T_sec <= 55[Celsius]    ? 'BO/AansluitCapaciteit/ASW_TWlt'    : 'BO/AansluitCapaciteit/ASW_TWmt';
+	    attribute<kW>       ASW_K      (BO) := =KoudeBeschikbaar        ? 'BO/AansluitCapaciteit/ASW_K'       : 'const(0.0[kw],BO)';
+	    
+	    //Gelijktijdigheidsfactoren
+		attribute<ratio>    GTF_RV     (BO) := =T_sec <= 55[Celsius]    ? 'BO/AansluitCapaciteit/GTF_RVlt'    : 'BO/AansluitCapaciteit/GTF_RVmt';
+		attribute<ratio>    GTF_TW     (BO) := BO/AansluitCapaciteit/GTF_TW;
+		attribute<ratio>    GTF_K      (BO) := BO/AansluitCapaciteit/GTf_K;
+		
+		//Vermogensvraag aan het secundaire net
+		attribute<kW>		P_RV_sec   (BO) := ASW_RV * GTF_RV;
+		attribute<kW>		P_TW_sec   (BO) := ASW_TW * GTF_TW;
+		attribute<kW>		P_K_sec    (BO) := =KoudeBeschikbaar ? 'ASW_K * GTF_K': 'const(0.0[kw],BO)';
+		
+		attribute<kW>        AansluitCapaciteit (BO) := =KoudeBeschikbaar ? 'max_elem(ASW_TW   + ASW_RV  , ASW_K  )' : 'ASW_TW   + ASW_RV  ';
+		attribute<kW>        P_sec              (BO) := =KoudeBeschikbaar ? 'max_elem(P_TW_sec + P_RV_sec, P_K_sec)' : 'P_TW_sec + P_RV_sec';
+	    
 		attribute<nrAansl>   nrAansluitingen    (BO) := BeschikbaarheidsFactor * BO/nrAansluitingen;
 		attribute<m2>        Oppervlakte        (BO) := BeschikbaarheidsFactor * BO/Oppervlakte;
-		attribute<kW>        AansluitCapaciteit (BO) := BeschikbaarheidsFactor * BO/AansluitCapaciteit/Warmte;
-		attribute<kW>        P_sec              (BO) :=
-			  BO/AansluitCapaciteit/GTF_RVmt * BO/AansluitCapaciteit/RV
-			+ BO/AansluitCapaciteit/GTF_TW   * BO/AansluitCapaciteit/TW;
 		
 		//VRVS3FH
 		parameter<bool>      IsS3FofS3H  := (Variantcode == 's3f' || Variantcode == 's3h') && RekenStapName == 'R2_2030'  && BO/BebouwingsComponent_UpRef/BCname == 'BestaandeWoning';
-//		attribute<GJ_yr>     V_RV_alt           (BO) := BeschikbaarheidsFactor * BO/GebouwOpties/NaarD_w/Functioneel/RV;
 		attribute<GJ_yr>     V_RV_def           (BO) := BeschikbaarheidsFactor * BO/BebouwingsComponent_UpRef/Functioneel2/V_RV;
 		attribute<GJ_yr>     V_RV               (BO) := =IsS3FofS3H ? 'BeschikbaarheidsFactor * BO/GebouwOpties/NaarD_w/Functioneel/RV' : 'V_RV_def';
 		
@@ -110,6 +125,8 @@ container CalculationSchemes: Using = "Units;Geography"
 	#include <EnergiePrijzen.dms>
 	#include <KostenBatenSchema.dms>
 	#include <KostenWoningen.dms>
+	#include <KostenUtiliteit.dms>
+	#include <KostenGlastuinbouw.dms>
 	
 	template BuisKosten
 	{

@@ -26,14 +26,38 @@ template WKO
 	parameter<bool>		KoudeBeschikbaar  :=	 true         ,	Descr = "wordt er collectief koude geleverd ja/nee";
 
 	container		bebouwing             :=	BeginStatus/Bebouwing;
-	container		KostenBaten           :=	CalculationSchemes/KostenBaten(bebouwing);
+	// =========  Enkele zaken op gebouwniveau worden op gelijke wijze bepaalt als MT opties
+	container KostenBaten
+	{
+		attribute<string> BCname(WkoComponent) := WkoComponent/name;
+		container KanGebiedsOptie := for_each_nednv( BCname
+			,	replace('float64(Classifications/WarmteOptie/KanGebiedsOptie[bebouwing/@BC/WarmteOptie_rel])', '@BC', BCname)
+			,	bebouwing, BCname, float64
+			);
+			
+		container WarmteVraag := for_each_ne(BCname, replace('CalculationSchemes/WarmteVraagT(bebouwing/@BC, T_sec, false, KanGebiedsOptie/@BC)', '@BC', BCname));
+		container Kostenkentallen := Kengetallen/Kosten_MT(LeerCurves/MTnet/curve, LeerCurves/OenM/curve, LeerCurves/Inpand/curve);
+		container KostenD
+		{
+			container Wonen
+			{
+			container bw := CalculationSchemes/KostenWoningen(WarmteVraag/BestaandeWoning/BO, PlanRegio); //berekeningen op objectniveau bestaande woningen
+			container nw := CalculationSchemes/KostenWoningen(WarmteVraag/NieuwbouwWoning/BO, PlanRegio); //berekeningen op objectniveau nieuwbouw woningen
+			}
+			container Utiliteit
+			{
+			container bu := CalculationSchemes/KostenUtiliteit(WarmteVraag/BestaandeUtil/BO, PlanRegio); //berekeningen op objectniveau bestaande utiliteit
+			container nu := CalculationSchemes/KostenUtiliteit(WarmteVraag/NieuwbouwUtil/BO, PlanRegio); //berekeningen op objectniveau nieuwbouw utiliteit
+			}
+		}
+	}
 	container		Efficiency            :=	Kengetallen/Efficiency/Efficiency_LT(T_ow, T_sec);
 	container		Kostenkentallen       :=	Kengetallen/Kosten_LT(Leercurves/Inpand/Curve, Leercurves/eWPww/Curve, Leercurves/LTnet/Curve, Leercurves/MTnet/Curve);
 	
 	container BestaandeWoningData := WKOWoningData(bebouwing/BestaandeWoning, KostenBaten/WarmteVraag/BestaandeWoning, false, KoudeBeschikbaar, KostenBaten/KostenD/Wonen/bw);
 	container NieuwbouwWoningData := WKOWoningData(bebouwing/NieuwbouwWoning, KostenBaten/WarmteVraag/NieuwbouwWoning, true , KoudeBeschikbaar, KostenBaten/KostenD/Wonen/nw);
-	container BestaandeUtilData   := WKOUtilData  (bebouwing/BestaandeUtil,   KostenBaten/WarmteVraag/BestaandeUtil  , false, KoudeBeschikbaar);	
-	container NieuwbouwUtilData   := WKOUtilData  (bebouwing/NieuwbouwUtil,   KostenBaten/WarmteVraag/NieuwbouwUtil  , true , KoudeBeschikbaar);
+	container BestaandeUtilData   := WKOUtilData  (bebouwing/BestaandeUtil,   KostenBaten/WarmteVraag/BestaandeUtil  , false, KoudeBeschikbaar, KostenBaten/KostenD/Utiliteit/bu);	
+	container NieuwbouwUtilData   := WKOUtilData  (bebouwing/NieuwbouwUtil,   KostenBaten/WarmteVraag/NieuwbouwUtil  , true , KoudeBeschikbaar, KostenBaten/KostenD/Utiliteit/nu);
 	
 
 	container CandidateSets := for_each_ne(WkoComponent/Name, replace('WKOData(bebouwing/@WC, @WCData, ''@WC'', T_sec)', '@WC', WkoComponent/Name));

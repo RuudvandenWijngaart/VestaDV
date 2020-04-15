@@ -46,33 +46,15 @@ template WKOWoningData
 	//volumevraag jaarlijks aan het secundaire net (inclusief verrekening leidingverlies)
 	attribute<GJ_yr>	V_Warmte_sec	(BO)	:= V_RV_sec + V_TW_sec,						Descr = "Aandeel van de eigen volumevraag naar warmte uit het secundaire net";
 	attribute<GJ_yr>	V_Koude_sec		(BO)	:= V_Koude - V_id_Koude,					Descr = "Aandeel van de eigen volumevraag naar koude uit het secundaire net";
-	attribute<GJ_yr>	V_Wsec_netto	(BO)	:= V_Warmte_sec / (1d - Efficiencies/Leidingverlies_LT * Leercurves/Verl/Curve),		Descr ="Warmte te leveren aan het secundaire net met verrekening leidingverlies";
-	attribute<GJ_yr>	V_Ksec_netto	(BO)	:= V_Koude_sec / (1d - Efficiencies/Leidingverlies_LT * Leercurves/Verl/Curve),		Descr ="Koude te leveren aan het secundaire net met verrekening leidingverlies";
+	attribute<GJ_yr>	V_Wsec_netto	(BO)	:= V_Warmte_sec / (1d - Efficiencies/Leidingverlies * Leercurves/Verl/Curve),		Descr ="Warmte te leveren aan het secundaire net met verrekening leidingverlies";
+	attribute<GJ_yr>	V_Ksec_netto	(BO)	:= V_Koude_sec / (1d - Efficiencies/Leidingverlies * Leercurves/Verl/Curve),		Descr ="Koude te leveren aan het secundaire net met verrekening leidingverlies";
 	attribute<GJ_yr>	V_wd_verlies	(BO)	:= (V_warmte_sec - V_Wsec_netto) + (V_koude_sec - V_Ksec_netto);
 	
 	//gelijktijdige capaciteitsvraag aan het secundaire net inclusief verrekening vermogensverlies)
-	attribute<kW>       ASW_RV          (BO) := =T_sec <= 55[Celsius]    ? 'BO/AansluitCapaciteit/ASW_RVlt'    : 'BO/AansluitCapaciteit/ASW_RVmt';
-	attribute<kW>       ASW_TW          (BO) := =T_sec <= 55[Celsius]    ? 'BO/AansluitCapaciteit/ASW_TWlt'    : 'BO/AansluitCapaciteit/ASW_TWmt';
-	attribute<kW>       ASW_K           (BO) := =KoudeBeschikbaar        ? 'BO/AansluitCapaciteit/ASW_K'       : 'const(0.0[kw],BO)';
-	attribute<kW>       ASW_totaal      (BO) := =KoudeBeschikbaar        ? 'max_elem(ASW_RV + ASW_TW, ASW_K)'  : 'ASW_RV + ASW_TW';
-	attribute<ratio>    GTF_RV          (BO) := =T_sec <= 55[Celsius]    ? 'BO/AansluitCapaciteit/GTF_RVlt'    : 'BO/AansluitCapaciteit/GTF_RVmt';
-	attribute<ratio>    GTF_TW          (BO) := BO/AansluitCapaciteit/GTF_TW;
-	attribute<ratio>    GTF_K           (BO) := BO/AansluitCapaciteit/GTf_K;
-	
-	attribute<kW>		P_TW_sec		(BO) := ASW_RV * GTF_RV;
-	attribute<kW>		P_RV_sec		(BO) := ASW_TW * GTF_TW;
-	
 	parameter<ratio>    Vermogensverlies     := =(T_sec <= 55[Celsius]) ? 'Efficiencies/Vermogenverlies_LT' : 'Efficiencies/Vermogenverlies_MT';
-	
-	attribute<kW>		P_Warmte_sec	(BO) := P_TW_sec + P_RV_sec;
-	attribute<kW>		P_Koude_sec		(BO)	:=  not(KoudeBeschikbaar) ? 0[kW] : Vermogens/GTF_w_k * (
-																IsAppt ? (Vermogens/ASW_K_wh_opp * WarmteVraagComponent/oppervlakte + Vermogens/ASW_K_wh_asl * WarmteVraagComponent/nrAansluitingen)
-																	   : (Vermogens/ASW_K_wl_opp * WarmteVraagComponent/oppervlakte + Vermogens/ASW_K_wl_asl * WarmteVraagComponent/nrAansluitingen));
-	
-	attribute<kW>		P_sec_bruto  	(BO)	:= =KoudeBeschikbaar ? 'max_elem(P_Warmte_sec, P_Koude_sec)' : 'P_Warmte_sec',	Descr = "capaciteitsvraag aan secundair net, niet gecorrigeerd voor capaciteitsverlies";
-	attribute<kW>		P_Wsec_netto	(BO)	:= P_Warmte_sec / (1d - Vermogensverlies),	Descr ="Vermogen warmte te realiseren in het secundaire net met verrekening leidingverlies op vermogen";
-	attribute<kW>		P_Ksec_netto	(BO)	:= P_Koude_sec / (1d - Vermogensverlies),		Descr ="Vermogen koude te realiseren in het secundaire net met verrekening leidingverlies op vermogen";
-	attribute<kW>		P_sec			(BO)	:= =KoudeBeschikbaar ? 'max_elem(P_Wsec_netto, P_Ksec_netto)' : 'P_Wsec_netto',	Descr = "capaciteitsvraag aan secundair net";
+	attribute<kW>		P_id            (BO) := KostenBase/P_id;
+	attribute<kW>		P_sec_bruto  	(BO) := KostenBase/P_sec;
+	attribute<kW>		P_sec           (BO) := P_sec_bruto / (1d - Vermogensverlies);
 	
 	//elektriciteitsverbruik individueel (toegekend aan inpandig distributeur)
 	
@@ -103,55 +85,34 @@ template WKOWoningData
 	parameter<classifications/gebruiksgrootteklasse> ow_gebruiksgrootteklasse_rel := last(ID(Prijzen_elec));
 
 	container Kosten
-	{
+	{		
 		//Investeringskosten binnen gebouw
-		attribute<pand_asl> Pand_aandeel   (BO)	:= IsAppt ? BO/pand_aandeel : 1.0[units/pand_asl];
-		//IsAppt ? (Schuiven/VerketelingMax * BO/pand_aandeel +  value(Schuiven/VerketelingMin, units/pand_asl)) : 1.0[units/pand_asl];
-		attribute<Eur_asl> Ki_id_inpandig  (BO)	:=
-			IsAppt ? Schuiven/VerketelingMin * Kostenkentallen/Ki_inpand_hoog_metblok
-			       + Schuiven/VerketelingMax * Kostenkentallen/Ki_inpand_hoog_geenblok
-			: Kostenkentallen/Ki_inpand_laag,	Descr = "inpandig leidingwerk";
-		attribute<Eur_asl> Ki_id_afleverset(BO)	:= =(T_sec <= 55[Celsius]) ? 'const(0[Eur_asl],BO)' : 'const(Kostenkentallen/Ki_afleverset, BO)',			Descr = "inpandige afleverset, met indidivuele verketeling verrekend";
-		attribute<Eur>     Ki_id_wv        (BO)	:= (Ki_id_inpandig + Ki_id_afleverset) * nr_won,	Descr = "inpandige afleverset en inpandig leidingwerk met individuele verketeling verrekend";
-		attribute<Eur>     Ki_id_EigenOpwek(BO)	:= 
+		attribute<pand_asl>     Pand_aandeel        (BO) := BO/pand_aandeel;
+		attribute<Eur>          Ki_id_dist          (BO) := =(T_sec <= 55[Celsius]) ? 'KostenBase/Ki_id_leiding' : 'KostenBase/Ki_id_dist';
+		attribute<Eur>          Ki_id_EigenOpwek    (BO) := 
 			(BO/schilLabel_rel <= Classifications/Schillabel/V/A ) ? ((T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_Booster : 0.0[eur]) :
 			(BO/schilLabel_rel <= Classifications/Schillabel/V/B ) ? ((T_sec <= 35[Celsius]) ? Kostenkentallen/Ki_eWP_B : (T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_booster : 0.0[eur]) :
 			(BO/schilLabel_rel <= Classifications/Schillabel/V/E ) ? ((T_sec <= 55[Celsius]) ? Kostenkentallen/Ki_eWP_CDE : 0.0[eur]) 
-			: 1000000.0[eur],																								Descr = "investeringskosten voor eigen opwekkingsinstallatie, afhankelijk van temperatuurniveau en schillabel";
+			: 1000000.0[eur],		Descr = "investeringskosten voor eigen opwekkingsinstallatie, afhankelijk van temperatuurniveau en schillabel";
+		attribute<Eur_aansl>	K_LTAS_asl			(BO) := IsAppt ? BO/BcKentallen/Ki_LTAS_h_asl : BO/Bckentallen/Ki_LTAS_l_asl;
+		attribute<Eur>			Ki_LTAS				(BO) := BO/Bckentallen/Ki_LTAS_opp * BO/oppervlakte + K_LTAS_asl * BO/nrAansluitingen;
+		attribute<Eur>			Ki_id_LTAS			(BO) := (T_sec <= 55[Celsius]) ? Ki_LTAS : 0 [Eur],	Descr = "investeringskosten laag-temperatuur afgiftesysteem, e.g. LT-radiatoren of vloerverwarming";			
+		attribute<Eur>			Ki_id_vergoeding    (BO) := Kostenbase/Ki_id_vergoeding;
+		attribute<Eur>			Ki_id				(BO) := Ki_id_LTAS + Ki_id_dist + Ki_id_EigenOpwek + Ki_id_vergoeding,		Descr = "Investeringskosten systeem bij woningen en appartementen, F 54..56";
 		
-		attribute<Eur_aansl>	K_LTAS_asl			(BO)	:= IsAppt ? BO/BcKentallen/Ki_LTAS_h_asl : BO/Bckentallen/Ki_LTAS_l_asl;
-		attribute<Eur>			Ki_LTAS				(BO)	:= BO/Bckentallen/Ki_LTAS_opp * BO/oppervlakte + K_LTAS_asl * BO/nrAansluitingen;
-		attribute<Eur>			Ki_id_LTAS			(BO)	:= (T_sec <= 55[Celsius]) ? Ki_LTAS : 0 [Eur],	Descr = "investeringskosten laag-temperatuur afgiftesysteem, e.g. LT-radiatoren of vloerverwarming";			
-		attribute<Eur>			Ki_id				(BO)	:= Ki_id_LTAS + Ki_id_wv + Ki_id_EigenOpwek,		Descr = "Investeringskosten systeem bij woningen en appartementen, F 54..56";
-		
-			
 		//Investeringskosten vergoedingen gebouweigenaar
-		attribute<Eur>			Ki_ge_pm			(BO)	:= KostenBase/Ki_ge_pm_o,							Descr = "Investeringskosten vergoeding projectmanagement aan gebouweigenaar";
-		attribute<Eur>			Ki_ge_ov			(BO)	:= IsNieuwbouw ? 0.0[Eur] : KostenBase/Ki_ge_ov_o,	Descr = "Investeringskosten vergoeding ongerief aan gebouweigenaar";
-		attribute<Eur>			Oi_ge_pm_EIA		(BO)	:= IsNieuwbouw ? Ki_ge_pm * SpecifiekeInstellingen/Beleid/Eia/E_nw/Rs_ProjectManagement
-																			: Ki_ge_pm * SpecifiekeInstellingen/Beleid/Eia/E_bw/Rs_ProjectManagement,	Descr = "investeringssubsidie vergoeding projectmanagement aan gebouweigenaar";
-		attribute<Eur>			Oi_ge_ov_EIA		(BO)	:= IsNieuwbouw ? Ki_ge_ov * SpecifiekeInstellingen/Beleid/Eia/E_nw/Rs_OngeriefsVergoeding
-																			: Ki_ge_ov * SpecifiekeInstellingen/Beleid/Eia/E_bw/Rs_OngeriefsVergoeding,	Descr = "investeringssubsidie vergoeding ongerief aan gebouweigenaar";
-		attribute<Eur>			Ki_ge				(BO)	:= Ki_ge_ov + Ki_ge_pm,								Descr = "Investeringskosten vergoedingen aan gebouweigenaar";
-		attribute<Eur>			Oi_ge_EIA			(BO)	:= Oi_ge_pm_EIA + Oi_ge_ov_EIA,						Descr = "Investeringssubsidies vergoedingen aan gebouweigenaar";
+		attribute<Eur>			Ki_ge_pm			(BO) := KostenBase/Ki_ge_pm,	Descr = "Investeringskosten vergoeding projectmanagement aan gebouweigenaar";
+		attribute<Eur>			Ki_ge_ov			(BO) := KostenBase/Ki_ge_ov,	Descr = "Investeringskosten vergoeding ongerief aan gebouweigenaar";
+		attribute<Eur>			Oi_ge_pm_EIA		(BO) := IsNieuwbouw ? Ki_ge_pm * SpecifiekeInstellingen/Beleid/Eia/E_nw/Rs_ProjectManagement
+																		: Ki_ge_pm * SpecifiekeInstellingen/Beleid/Eia/E_bw/Rs_ProjectManagement,	Descr = "investeringssubsidie vergoeding projectmanagement aan gebouweigenaar";
+		attribute<Eur>			Oi_ge_ov_EIA		(BO) := IsNieuwbouw ? Ki_ge_ov * SpecifiekeInstellingen/Beleid/Eia/E_nw/Rs_OngeriefsVergoeding
+																		: Ki_ge_ov * SpecifiekeInstellingen/Beleid/Eia/E_bw/Rs_OngeriefsVergoeding,	Descr = "investeringssubsidie vergoeding ongerief aan gebouweigenaar";
+		attribute<Eur>			Ki_ge				(BO) := Ki_ge_ov + Ki_ge_pm,			Descr = "Investeringskosten vergoedingen aan gebouweigenaar";
+		attribute<Eur>			Oi_ge_EIA			(BO) := Oi_ge_pm_EIA + Oi_ge_ov_EIA,	Descr = "Investeringssubsidies vergoedingen aan gebouweigenaar";
 
 		//investeringskosten wijkdistributie gebouwgerelateerd, zonder distributieleidingen
-		attribute<Eur>			Ki_wd_vergoeding    (BO)    := ASW_totaal * Schuiven/VerketelingMin * KostenBase/Onderstation/KetelVergoeding;
-		attribute<Eur>			Ki_wd_OS			(BO)	:= Ki_wd_vergoeding + Kostenkentallen/Ki_OnderStation [Eur_KW] * P_sec_bruto [KW], Descr = "Investeringskosten onderstations";
-		attribute<m_pand>		L_aansl				(BO)	:= /Invoer/RuimtelijkeData/buislengte/per_buurt/L_aansl_pand[BO/PlanRegio_rel];
-		container				LeidingKosten							:=	BuisKostenBC(BO, ASW_totaal * 0.001[ MW / kW]);
-		attribute<Eur_m>		K_aansl_m			(BO)	:=	Leidingkosten/K_m;	
-		attribute<Eur>			Ki_wd_aansluiting	(BO)	:=	L_aansl * K_aansl_m * pand_aandeel * BO/nrAansluitingen, Descr = "Investeringskosten aansluitleidingen van pand tot OS";
-		attribute<Eur>          Ki_wd_pandOS        (BO)    := Kostenkentallen/Ki_dist_OS * pand_aandeel * BO/nrAansluitingen, Descr = "Extra WD tussen pand-straat aansluiting en onderstations";
-	
-		attribute<Eur>			Ki_wd				(BO)	:= Ki_wd_OS + Ki_wd_aansluiting,					Descr = "Investeringskosten wijkdistributie exclusief distributieleidingen";
-			
-		container checks
- 		{
-	 		attribute<Eur> Ki_wd_OS_PR     (Invoer/SpecifiekeInstellingen/PlanRegio) := sum(Ki_wd_OS,     BO/Planregio_rel);
-	 		attribute<Eur> Ki_wd_aansluiting_PR     (Invoer/SpecifiekeInstellingen/PlanRegio) := sum(Ki_wd_aansluiting,     BO/Planregio_rel);
-	 		attribute<Eur> Ki_wd_vergoeding_PR     (Invoer/SpecifiekeInstellingen/PlanRegio) := sum(Ki_wd_vergoeding,     BO/Planregio_rel);
- 		}
+		attribute<Eur>          Ki_wd_pandOS        (BO) := Kostenkentallen/Ki_dist_OS * pand_aandeel * BO/nrAansluitingen, Descr = "Extra WD tussen pand-straat aansluiting en onderstations";
+		attribute<Eur>		    Ki_wd				(BO) := KostenBase/Ki_wd_aansl + KostenBase/Ki_wd_OS;		
 		
 		//Jaarlijkse kosten elektriciteitsverbruik
 		attribute<Eur_yr>		Kj_id_elek			(BO)	:= V_id_Elek * Prijzen_elec/KGJ_eindgebruik_excl[ind_gebruiksgrootteklasse_rel],	Descr = "jaarlijkse elektriciteitskosten individueel eindgebruiker",	Source = "FO v7a p 82 F 57";
