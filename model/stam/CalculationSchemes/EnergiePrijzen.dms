@@ -49,7 +49,7 @@ container EnergiePrijzen
 		container Results
 		{
 			attribute<units/yr_uint16> Jaar            (table) := Table/Jaar[ units/yr_uint16 ];
-			attribute<Ratio>           InflationFactor (table) := exp(float64(Jaar - 2010[units/yr_uint16]) * AnnualPriceInflationFactor);
+			attribute<ratio>           InflationFactor (table) := exp(float64(Jaar - 2010[units/yr_uint16]) * AnnualPriceInflationFactor);
 			attribute<KG_GJ>           CO2_GJ          (table) := TABLE/RAT_CO2_KWH[KG / model_eenheid] * OmrekenFactor;
 			
 			container Teruglevering
@@ -89,13 +89,13 @@ container EnergiePrijzen
 
 		container Results
 		{
-			attribute<units/yr_uint16> Jaar  (table) := Table/Jaar[units/yr_uint16];
-			attribute<Ratio> InflationFactor (table) := exp(float64(Jaar - 2010[ units/yr_uint16 ]) * AnnualPriceInflationFactor);
-			attribute<Eur_GJ> BioMassa       (table) := TABLE/KGJ_BioMassa   [Eur_GJ] * InflationFactor;
-			attribute<Eur_GJ> Pellets        (table) := TABLE/KGJ_Pellets    [Eur_GJ] * InflationFactor;
-			attribute<Eur_GJ> Kolen_Excl     (table) := TABLE/KGJ_Kolen_Excl [Eur_GJ] * InflationFactor;
-			attribute<Eur_GJ> Kolen_CO2      (table) := TABLE/KGJ_Kolen_CO2  [Eur_GJ] * InflationFactor;
-			attribute<Eur_GJ> Waterstof      (table) := (H2mix/K_kg / Kengetallen/H2kentallen/H2energie_onder) * 1000[mj / gj];
+			attribute<units/yr_uint16> Jaar   (table) := Table/Jaar[units/yr_uint16];
+			attribute<ratio>  InflationFactor (table) := exp(float64(Jaar - 2010[ units/yr_uint16 ]) * AnnualPriceInflationFactor);
+			attribute<Eur_GJ> BioMassa        (table) := TABLE/KGJ_BioMassa   [Eur_GJ] * InflationFactor;
+			attribute<Eur_GJ> Pellets         (table) := TABLE/KGJ_Pellets    [Eur_GJ] * InflationFactor;
+			attribute<Eur_GJ> Kolen_Excl      (table) := TABLE/KGJ_Kolen_Excl [Eur_GJ] * InflationFactor;
+			attribute<Eur_GJ> Kolen_CO2       (table) := TABLE/KGJ_Kolen_CO2  [Eur_GJ] * InflationFactor;
+			attribute<Eur_GJ> Waterstof       (table) := (H2mix/K_kg / Kengetallen/H2kentallen/H2energie_onder) * 1000[mj / gj];
 			
 			container H2mix
 			{
@@ -116,16 +116,33 @@ container EnergiePrijzen
 		// end case parameters
 
 		parameter<string> GXXexpr := SharedInvoer/G03_aan ? '_GAlaag' : SharedInvoer/G04_aan ? '_GAhoog' : '';
+
+		container Elektriciteit := ImportElekGas(
+			 FileName + GXXexpr +'_Elek'
+			,kWh
+			,kWh / GJ
+			,value(1000000.0 / 3600.0, kWh / GJ)
+			,AnnualPriceInflationFactor
+			,'GrootGebruik'
+		);
+
+		container AardGas := ImportElekGas(
+			 FileName + GXXexpr + '_AardGas'
+			,m3
+			,m3 / GJ
+			,1.0 / Kengetallen/constanten/GasEnergie
+			,AnnualPriceInflationFactor
+			,'GebruiksSectie(table, ''GLAST'')'
+		);
 		
-		container Elektriciteit :=	ImportElekGas(FileName + GXXexpr +'_Elek',   kwh, Kwh / GJ, value(1000000.0 / 3600.0, kWh / GJ)     ,
-									AnnualPriceInflationFactor, 'GrootGebruik' );
-									
-		container AardGas       :=	ImportElekGas(FileName + GXXexpr + '_AardGas',     m3,  m3 / GJ, 1.0 / Kengetallen/constanten/GasEnergie ,
-									AnnualPriceInflationFactor, 'GebruiksSectie(table, ''GLAST'')' );
-		
-		container GroenGas      :=	ImportElekGas(FileName + GXXexpr + '_GroenGas',     m3,  m3 / GJ, 1.0 / Kengetallen/constanten/GasEnergie ,
-									AnnualPriceInflationFactor, 'GebruiksSectie(table, ''GLAST'')' );							
-																
-		container Overig        := ImportOverig ('OverigeKosten' + GXXexpr, AnnualPriceInflationFactor);
+		container GroenGas := ImportElekGas(
+			 FileName + GXXexpr + '_GroenGas'
+			,m3
+			,m3 / GJ
+			,1.0 / Kengetallen/constanten/GasEnergie
+			,AnnualPriceInflationFactor
+			,'GebruiksSectie(table, ''GLAST'')' );
+
+		container Overig := ImportOverig ('OverigeKosten' + GXXexpr, AnnualPriceInflationFactor);
 	}
 }
