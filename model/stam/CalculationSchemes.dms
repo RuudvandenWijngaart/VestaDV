@@ -15,30 +15,33 @@ container CalculationSchemes: Using = "Units;Geography"
 	#include <BebouwingsOperaties.dms>
 
 	#include <StartingStateComponent.dms>
-	
+
 	#include <TussenResultaten.dms>
 	
 	#include <Payments.dms>
 	#include <Transformations.dms>
-	
+
 	#include <Resultaten.dms>
 	#include <LeidraadResultaten.dms>
 	#include <StateNaAllocatieComponent.dms>
 	#include <AllocatieResultatenComponent.dms>
 	
-	Template Naar100mGrid
+	template Naar100mGrid
 	{
+		// begin case parameters
 		container AllocatieResultatenComponent;
-		parameter<String> WkoResultsRef; 
-		
+		parameter<string> WkoResultsRef;
+		// end case parameters
+
 		container impl: IsHidden = "True"
 		{
-			container BCdata     := AllocatieResultatenComponent/BCdata;
+			container BCdata                    := AllocatieResultatenComponent/BCdata;
 			container RuimtelijkeVraagComponent := AllocatieResultatenComponent/RuimtelijkeVraagComponent;
-			unit<UInt32> BebouwingsObject       := AllocatieResultatenComponent/BebouwingsObject;
-			
+			unit<uint32> BebouwingsObject       := AllocatieResultatenComponent/BebouwingsObject;
+
 			attribute<Geography/rdc_grids/m100> gridm100_rel (BebouwingsObject) := RuimtelijkeVraagComponent/gridm100_rel;
 		}
+
 		container Vraag
 		{
 			attribute<GJ_yr> AardGas       (Geography/rdc_grids/m100) := sum(AllocatieResultatenComponent/MeterVraag/AardGas      , impl/gridm100_rel);
@@ -48,78 +51,82 @@ container CalculationSchemes: Using = "Units;Geography"
 			attribute<GJ_yr> WKO           (Geography/rdc_grids/m100) := sum(AllocatieResultatenComponent/MeterVraag/WKO          , impl/gridm100_rel);
 			attribute<GJ_yr> Elektriciteit (Geography/rdc_grids/m100) := sum(AllocatieResultatenComponent/MeterVraag/Elektriciteit, impl/gridm100_rel);
 			attribute<GJ_yr> Totaal        (Geography/rdc_grids/m100) := AardGas + RestWarmte + GeoThermie + WijkWKK + WKO + Elektriciteit;
-			
+
 			container Potentiaal
 			{
 				unit<spoint> Kernel := Geography/DistMatrices/pot1000m/KernelDomain;
 
-				attribute<Units/GJ_yr> AardGas       (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/AardGas),       Kernel/Cilindrical));
-				attribute<Units/GJ_yr> RestWarmte    (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/RestWarmte),    Kernel/Cilindrical));
-				attribute<Units/GJ_yr> GeoThermie    (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/GeoThermie),    Kernel/Cilindrical));
-				attribute<Units/GJ_yr> WijkWKK       (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/WijkWKK),       Kernel/Cilindrical));
-				attribute<Units/GJ_yr> WKO           (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/WKO),           Kernel/Cilindrical));
-				attribute<Units/GJ_yr> Elektriciteit (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/Elektriciteit), Kernel/Cilindrical));
-				attribute<Units/GJ_yr> Totaal        (Geography/rdc_grids/m100) := float64(potential(Float32(Vraag/Totaal),        Kernel/Cilindrical));
+				attribute<GJ_yr> AardGas       (Geography/rdc_grids/m100) := float64(potential(float32(Vraag/AardGas),       Kernel/Cilindrical));
+				attribute<GJ_yr> RestWarmte    (Geography/rdc_grids/m100) := float64(potential(float32(Vraag/RestWarmte),    Kernel/Cilindrical));
+				attribute<GJ_yr> GeoThermie    (Geography/rdc_grids/m100) := float64(potential(float32(Vraag/GeoThermie),    Kernel/Cilindrical));
+				attribute<GJ_yr> WijkWKK       (Geography/rdc_grids/m100) := float64(potential(float32(Vraag/WijkWKK),       Kernel/Cilindrical));
+				attribute<GJ_yr> WKO           (Geography/rdc_grids/m100) := float64(potential(float32(Vraag/WKO),           Kernel/Cilindrical));
+				attribute<GJ_yr> Elektriciteit (Geography/rdc_grids/m100) := float64(potential(float32(Vraag/Elektriciteit), Kernel/Cilindrical));
+				attribute<GJ_yr> Totaal        (Geography/rdc_grids/m100) := float64(potential(float32(Vraag/Totaal),        Kernel/Cilindrical));
 			}
 		}
+
 		container AansluitCapaciteit
 		{
-			attribute<kW> Totaal  (Geography/rdc_grids/m100) := sum(impl/RuimtelijkeVraagComponent/AansluitCapaciteit/Warmte,   impl/gridm100_rel);
-			attribute<kW> AardGas (Geography/rdc_grids/m100) := sum(impl/WarmteVraagPerObject/alle/AansluitCapaciteit, impl/gridm100_rel);
+			attribute<kW> Totaal  (Geography/rdc_grids/m100) := sum(impl/RuimtelijkeVraagComponent/AansluitCapaciteit/Warmte, impl/gridm100_rel);
+			attribute<kW> AardGas (Geography/rdc_grids/m100) := sum(impl/WarmteVraagPerObject/alle/AansluitCapaciteit       , impl/gridm100_rel);
 			attribute<kW> Overig  (Geography/rdc_grids/m100) := Totaal - AardGas;
 		}
+
 		container WKO
 		{
-			attribute<GJ_yr>  V_Warmte    (Geography/rdc_grids/m100) := =WkoResultsRef == '' ? 'const(0[GJ_yr], Geography/rdc_grids/m100)' : 'sum('+WkoResultsRef+'/V_Warmte, impl/gridm100_rel)';
-			attribute<GJ_yr>  V_Koude     (Geography/rdc_grids/m100) := =WkoResultsRef == '' ? 'const(0[GJ_yr], Geography/rdc_grids/m100)' : 'sum('+WkoResultsRef+'/V_Koude , impl/gridm100_rel)';
-			attribute<GJ_yr>  V_Elek      (Geography/rdc_grids/m100) := =WkoResultsRef == '' ? 'const(0[GJ_yr], Geography/rdc_grids/m100)' : 'sum('+WkoResultsRef+'/V_Elek  , impl/gridm100_rel)';
-			attribute<GJ_yr>  Onttrekking (Geography/rdc_grids/m100) := V_Warmte - (V_Koude + V_Elek);
+			attribute<GJ_yr> V_Warmte    (Geography/rdc_grids/m100) := =WkoResultsRef == '' ? 'const(0[GJ_yr], Geography/rdc_grids/m100)' : 'sum('+WkoResultsRef+'/V_Warmte, impl/gridm100_rel)';
+			attribute<GJ_yr> V_Koude     (Geography/rdc_grids/m100) := =WkoResultsRef == '' ? 'const(0[GJ_yr], Geography/rdc_grids/m100)' : 'sum('+WkoResultsRef+'/V_Koude , impl/gridm100_rel)';
+			attribute<GJ_yr> V_Elek      (Geography/rdc_grids/m100) := =WkoResultsRef == '' ? 'const(0[GJ_yr], Geography/rdc_grids/m100)' : 'sum('+WkoResultsRef+'/V_Elek  , impl/gridm100_rel)';
+			attribute<GJ_yr> Onttrekking (Geography/rdc_grids/m100) := V_Warmte - (V_Koude + V_Elek);
 
-			attribute<kW>     Capaciteit  (Geography/rdc_grids/m100) := =WkoResultsRef == '' ? 'const(0[kW], Geography/rdc_grids/m100)' : 'sum('+WkoResultsRef+'/P_Warmte,     impl/gridm100_rel)';
+			attribute<kW>    Capaciteit  (Geography/rdc_grids/m100) := =WkoResultsRef == '' ? 'const(0[kW], Geography/rdc_grids/m100)' : 'sum('+WkoResultsRef+'/P_Warmte,     impl/gridm100_rel)';
 		}
 	}
 
 	template WarmteVraagT
 	{
-		unit<uint32> BO;	
-		parameter<units/Celsius> T_sec;
-		parameter<bool> Koudebeschikbaar;
+		// begin case parameters
+		unit<uint32> BO;
+		parameter<Celsius> T_sec;
+		parameter<bool>    Koudebeschikbaar;
 		attribute<float64> BeschikbaarheidsFactor(BO);
-		
+		// end case parameters
+
 		//Aansluitwaardes
-		attribute<kW>       ASW_RV     (BO) := =T_sec <= 55[Celsius]    ? 'BO/AansluitCapaciteit/ASW_RVlt'    : 'BO/AansluitCapaciteit/ASW_RVmt';
-	    attribute<kW>       ASW_TW     (BO) := =T_sec <= 55[Celsius]    ? 'BO/AansluitCapaciteit/ASW_TWlt'    : 'BO/AansluitCapaciteit/ASW_TWmt';
-	    attribute<kW>       ASW_K      (BO) := =KoudeBeschikbaar        ? 'BO/AansluitCapaciteit/ASW_K'       : 'const(0.0[kw],BO)';
-	    
-	    //Gelijktijdigheidsfactoren
-		attribute<ratio>    GTF_RV     (BO) := =T_sec <= 55[Celsius]    ? 'BO/AansluitCapaciteit/GTF_RVlt'    : 'BO/AansluitCapaciteit/GTF_RVmt';
-		attribute<ratio>    GTF_TW     (BO) := BO/AansluitCapaciteit/GTF_TW;
-		attribute<ratio>    GTF_K      (BO) := BO/AansluitCapaciteit/GTf_K;
-		
+		attribute<kW>     ASW_RV             (BO) := =T_sec <= 55[Celsius] ? 'BO/AansluitCapaciteit/ASW_RVlt' : 'BO/AansluitCapaciteit/ASW_RVmt';
+		attribute<kW>     ASW_TW             (BO) := =T_sec <= 55[Celsius] ? 'BO/AansluitCapaciteit/ASW_TWlt' : 'BO/AansluitCapaciteit/ASW_TWmt';
+		attribute<kW>     ASW_K              (BO) := =KoudeBeschikbaar     ? 'BO/AansluitCapaciteit/ASW_K'    : 'const(0[kw], BO)';
+
+		//Gelijktijdigheidsfactoren
+		attribute<ratio>  GTF_RV             (BO) := =T_sec <= 55[Celsius]    ? 'BO/AansluitCapaciteit/GTF_RVlt'    : 'BO/AansluitCapaciteit/GTF_RVmt';
+		attribute<ratio>  GTF_TW             (BO) := BO/AansluitCapaciteit/GTF_TW;
+		attribute<ratio>  GTF_K              (BO) := BO/AansluitCapaciteit/GTf_K;
+
 		//Vermogensvraag aan het secundaire net
-		attribute<kW>		P_RV_sec   (BO) := ASW_RV * GTF_RV;
-		attribute<kW>		P_TW_sec   (BO) := ASW_TW * GTF_TW;
-		attribute<kW>		P_K_sec    (BO) := =KoudeBeschikbaar ? 'ASW_K * GTF_K': 'const(0.0[kw],BO)';
-		
-		attribute<kW>        AansluitCapaciteit (BO) := =KoudeBeschikbaar ? 'max_elem(ASW_TW   + ASW_RV  , ASW_K  )' : 'ASW_TW   + ASW_RV  ';
-		attribute<kW>        P_sec              (BO) := =KoudeBeschikbaar ? 'max_elem(P_TW_sec + P_RV_sec, P_K_sec)' : 'P_TW_sec + P_RV_sec';
-	    
-		attribute<nrAsl>   nrAansluitingen    (BO) := BeschikbaarheidsFactor * BO/nrAansluitingen;
-		attribute<m2>        Oppervlakte        (BO) := BeschikbaarheidsFactor * BO/Oppervlakte;
-		
+		attribute<kW>     P_RV_sec           (BO) := ASW_RV * GTF_RV;
+		attribute<kW>     P_TW_sec           (BO) := ASW_TW * GTF_TW;
+		attribute<kW>     P_K_sec            (BO) := =KoudeBeschikbaar ? 'ASW_K * GTF_K': 'const(0.0[kw],BO)';
+
+		attribute<kW>     AansluitCapaciteit (BO) := =KoudeBeschikbaar ? 'max_elem(ASW_TW   + ASW_RV  , ASW_K  )' : 'ASW_TW   + ASW_RV  ';
+		attribute<kW>     P_sec              (BO) := =KoudeBeschikbaar ? 'max_elem(P_TW_sec + P_RV_sec, P_K_sec)' : 'P_TW_sec + P_RV_sec';
+
+		attribute<nrAsl>  nrAansluitingen    (BO) := BeschikbaarheidsFactor * BO/nrAansluitingen;
+		attribute<m2>     Oppervlakte        (BO) := BeschikbaarheidsFactor * BO/Oppervlakte;
+
 		//VRVS3FH
-		parameter<bool>      IsS3FofS3H  := (Variantcode == 's3f' || Variantcode == 's3h') && RekenStapName == 'R2_2030'  && BO/BebouwingsComponent_UpRef/BCname == 'BestaandeWoning';
-		attribute<GJ_yr>     V_RV_def           (BO) := BeschikbaarheidsFactor * BO/BebouwingsComponent_UpRef/Functioneel2/V_RV;
-		attribute<GJ_yr>     V_RV               (BO) := =IsS3FofS3H ? 'BeschikbaarheidsFactor * BO/GebouwOpties/NaarD_w/Functioneel/RV' : 'V_RV_def';
-		
-		attribute<GJ_yr>     V_TW               (BO) := BeschikbaarheidsFactor * BO/Functioneel/TW;
-		attribute<GJ_yr>     V_K                (BO) := BeschikbaarheidsFactor * BO/Functioneel/K;
-		attribute<GJ_yr>     V_Warmte           (BO) := V_RV + V_TW;
-		attribute<EUR_yr>    Oj_Warmte          (BO) := V_Warmte * BO/WarmteWet/WarmtePrijs, Source = "FO v7a F 8-10";
-		attribute<EUR_yr>    Oj_VastRechtMT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtMT_T;
-		attribute<EUR_yr>    Oj_VastRechtLT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtLT_T;
-		attribute<EUR_yr>    Oj_VastRechtK      (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtK_T;
-		attribute<EUR>       Oi_AansluitBijdrage(BO) := BeschikbaarheidsFactor * BO/Opbrengsten/AansluitBijdrageT;
+		parameter<bool>   IsS3FofS3H              := (Variantcode == 's3f' || Variantcode == 's3h') && RekenStapName == 'R2_2030' && BO/BebouwingsComponent_UpRef/BCname == 'BestaandeWoning';
+		attribute<GJ_yr>  V_RV_def           (BO) := BeschikbaarheidsFactor * BO/BebouwingsComponent_UpRef/Functioneel2/V_RV;
+		attribute<GJ_yr>  V_RV               (BO) := =IsS3FofS3H ? 'BeschikbaarheidsFactor * BO/GebouwOpties/NaarD_w/Functioneel/RV' : 'V_RV_def';
+
+		attribute<GJ_yr>  V_TW               (BO) := BeschikbaarheidsFactor * BO/Functioneel/TW;
+		attribute<GJ_yr>  V_K                (BO) := BeschikbaarheidsFactor * BO/Functioneel/K;
+		attribute<GJ_yr>  V_Warmte           (BO) := V_RV + V_TW;
+		attribute<Eur_yr> Oj_Warmte          (BO) := V_Warmte * BO/WarmteWet/WarmtePrijs, Source = "FO v7a F 8-10";
+		attribute<Eur_yr> Oj_VastRechtMT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtMT_T;
+		attribute<Eur_yr> Oj_VastRechtLT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtLT_T;
+		attribute<Eur_yr> Oj_VastRechtK      (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtK_T;
+		attribute<Eur>    Oi_AansluitBijdrage(BO) := BeschikbaarheidsFactor * BO/Opbrengsten/AansluitBijdrageT;
 	}
 
 	#include <EnergiePrijzen.dms>
@@ -127,7 +134,7 @@ container CalculationSchemes: Using = "Units;Geography"
 	#include <KostenWoningen.dms>
 	#include <KostenUtiliteit.dms>
 	#include <KostenGlastuinbouw.dms>
-	
+
 	template BuisKosten
 	{
 		// begin case parameters
@@ -135,13 +142,14 @@ container CalculationSchemes: Using = "Units;Geography"
 		attribute<MW> Capaciteit (PlanRegio);
 		// begin case parameters
 
-		parameter<ratio> a                 := 1.25; // omwegfactor
+		parameter<ratio> a := 1.25; // omwegfactor
 
 		attribute<Eur_m> K_min (PlanRegio) := Capaciteit > 0[MW] ? 400[Eur_m] + 210[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.5 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
 		attribute<Eur_m> K_max (PlanRegio) := Capaciteit > 0[MW] ? 800[Eur_m] + 200[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.6 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
 		attribute<Eur_m> K_m   (PlanRegio) := (K_min * Schuiven/KostenMin + K_max * Schuiven/KostenMax) * Leercurves/MTnet/curve;
 		attribute<Eur_m> aK_m  (PlanRegio) := a * K_m; // K_hoofd_m incl omwegfactor
 	}
+
 	template BuisKostenBC
 	{
 		// begin case parameters
@@ -157,17 +165,18 @@ container CalculationSchemes: Using = "Units;Geography"
 		attribute<Eur_m> aK_m  (BebouwingsComponent) := a * K_m; // K_hoofd_m incl omwegfactor
 	}
 	
-	Template MaakCurve
+	template MaakCurve
 	{
 		//parameters
-		attribute<percent>	Datamin  (Classifications/ZichtJaar);
-		attribute<percent>	DataMax  (Classifications/ZichtJaar);
+		attribute<percent> Datamin  (Classifications/ZichtJaar);
+		attribute<percent> DataMax  (Classifications/ZichtJaar);
 		//parameters
-		parameter<ratio>	CurveMin :=	interpolate_linear(RekenStap_jaar, Classifications/ZichtJaar/Jaar, DataMin) / 100[percent];
-		parameter<ratio>	CurveMax :=	interpolate_linear(RekenStap_jaar, Classifications/ZichtJaar/Jaar, DataMax) / 100[percent];
-		parameter<ratio>	Base     :=	CurveMin * Schuiven/CurveMin + CurveMax * Schuiven/CurveMax;
-		parameter<ratio>	Curve    :=	Base * Schuiven/LerenAan + 1[ratio] * Schuiven/LerenUit;
+		parameter<ratio>   CurveMin := interpolate_linear(RekenStap_jaar, Classifications/ZichtJaar/Jaar, DataMin) / 100[percent];
+		parameter<ratio>   CurveMax := interpolate_linear(RekenStap_jaar, Classifications/ZichtJaar/Jaar, DataMax) / 100[percent];
+		parameter<ratio>   Base     := CurveMin * Schuiven/CurveMin + CurveMax * Schuiven/CurveMax;
+		parameter<ratio>   Curve    := Base * Schuiven/LerenAan + 1[ratio] * Schuiven/LerenUit;
 	}
+
 	#include <NcwSchema.dms>
 	#include <AanbodOpties.dms>
 	#include <Rapportage.dms>

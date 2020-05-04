@@ -7,36 +7,41 @@
 template StartingStateComponent
 {
 	// begin case parameters
-	unit<uint32>  BebouwingsObjectSrc;
+	unit<uint32> BebouwingsObjectSrc;
 	unit<uint32> ModelObject;
 	parameter<Classifications/BebouwingsComponent> BebouwingsComponent_rel;
-	// end of case parameters	
-	
+	// end case parameters
+
 	unit<uint32>  results := BebouwingsObjectSrc
-	{	
+	{
 		// =============== ongewijzigde attributen uniform voor alle BC
 		attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel   := BebouwingsObjectSrc/buurt_rel;
 		attribute<ModelObject>                             ModelObject_rel := rlookup(BebouwingsObjectSrc/ModelObjectKey, ModelObject/ModelObjectKey);
 
-		// =============== attributen die per rekenstap kunnen wijzigen door toepassing van GebouwOpties		
+		// =============== attributen die per rekenstap kunnen wijzigen door toepassing van GebouwOpties
 		attribute<Classifications/SchilLabel>  SchilLabel_rel := =(BebouwingsComponent_rel == Classifications/BebouwingsComponent/V/BestaandeWoning) 
-			? 'MakeDefined(BebouwingsObjectSrc/SchilLabel_rel, ModelObject/SchilLabel_rel[ ModelObject_rel])' 
+			? 'MakeDefined(BebouwingsObjectSrc/SchilLabel_rel, ModelObject/SchilLabel_rel[ ModelObject_rel])'
 			: 'ModelObject/SchilLabel_rel[ ModelObject_rel]';
 	
 		attribute<Classifications/GebouwOptie> GebouwOptie_rel := ModelObject/StartOptie_rel[ModelObject_rel]; // laast toegepaste optie
 		container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
-			,	'Classifications/GebouwOptie/PerProduct/'+Classifications/Product/name+'[GebouwOptie_rel]'
-			,	., Classifications/Installatie
+			, 'Classifications/GebouwOptie/PerProduct/'+Classifications/Product/name+'[GebouwOptie_rel]'
+			, .
+			, Classifications/Installatie
 		);
 		
 		container Performance_key1 := for_each_nedv(Classifications/Product/Name
-			,	'Classifications/Installatie/Name[InstallatiePerProduct/'+Classifications/Product/Name+']+''.'' + Classifications/SchilLabel/Name[SchilLabel_rel] + ''.' + Classifications/Product/TypeName+''''
-			,	., string
-			), isHidden = "True";
+			, 'Classifications/Installatie/Name[InstallatiePerProduct/'+Classifications/Product/Name+']+''.'' + Classifications/SchilLabel/Name[SchilLabel_rel] + ''.' + Classifications/Product/TypeName+''''
+			, .
+			, string
+		), isHidden = "True";
+
 		container Performance_key2 := for_each_nedv(Classifications/Product/Name
-			,	'Classifications/Installatie/Name[InstallatiePerProduct/'+Classifications/Product/Name+']+''.x.' + Classifications/Product/TypeName+''''
-			,	., string
-			), isHidden = "True";	
+			, 'Classifications/Installatie/Name[InstallatiePerProduct/'+Classifications/Product/Name+']+''.x.' + Classifications/Product/TypeName+''''
+			,.
+			, string
+		), isHidden = "True";
+
 		container PerformancePerProduct := for_each_nedv(Classifications/Product/Name
 			,	replace(
 					'MakeDefined('
@@ -45,15 +50,17 @@ template StartingStateComponent
 						'rlookup(''geen.x.x'', Classifications/Performance/code)'
 					')'
 				, '@P', Classifications/Product/Name)
-			,	., Classifications/Performance
-			);
+			, .
+			, Classifications/Performance
+		);
+
 		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_init := const(Classifications/AfgifteSysteem/V/MTAS, .);
-		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel := max_elem(
-		AfgifteSysteem_init
-	,	Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVb]
-	,	Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVp]
-	);
-	
+		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel  := max_elem(
+			 AfgifteSysteem_init
+			,Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVb]
+			,Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVp]
+		);
+
 		container OpwekkingsOpties
 		{
 			container capaciteit
@@ -65,6 +72,7 @@ template StartingStateComponent
 				attribute<ratio> hWP         (results) := const(0[ratio], results);
 			}
 		}
+
 		container Kapitaallasten
 		{
 			//Aansluitbijdrages
@@ -72,8 +80,8 @@ template StartingStateComponent
 			attribute<Eur_yr> Kmi_Asl_Enet (results) := const(0[Eur_yr], results);
 			attribute<Eur_yr> Kji_Asl_Gnet (results) := const(0[Eur_yr], results);
 			attribute<Eur_yr> Kmi_Asl_Gnet (results) := const(0[Eur_yr], results);
-			
-			//Investeringen			
+
+			//Investeringen
 			attribute<Eur_yr> Kji30_LO (results) := const(0[Eur_yr], results);
 			attribute<Eur_yr> Kmi30_LO (results) := const(0[Eur_yr], results);
 			attribute<Eur_yr> Kji20_LO (results) := const(0[Eur_yr], results);
@@ -82,7 +90,7 @@ template StartingStateComponent
 			attribute<Eur_yr> Kmi15_LO (results) := const(0[Eur_yr], results);
 			attribute<Eur_yr> Kji_gv   (results) := const(0[Eur_yr], results);
 			attribute<Eur_yr> Kmi_gv   (results) := const(0[Eur_yr], results);
-			
+
 			//Subsidies
 			attribute<Eur_yr> Oji_s_LO_30 (results) := const(0[Eur_yr], results);
 			attribute<Eur_yr> Oji_s_LO_20 (results) := const(0[Eur_yr], results);
@@ -92,13 +100,13 @@ template StartingStateComponent
 
 		container CumulatieveInvesteringen // Was Sprongen en Kosten, TODO_OV: uitzoeken wat gecomuleerd moet worden en hoe bij te houden per age en (resterende) duration
 		{
-			attribute<float64> Ki_gv (results) := const(0[Eur], results);
-			attribute<Eur_yr> Kj_gv_incentive (results) := const(0[Eur_yr], results);
+			attribute<float64> Ki_gv           (results) := const(0[Eur]   , results);
+			attribute<Eur_yr>  Kj_gv_incentive (results) := const(0[Eur_yr], results);
 		}
-		
+
 		// =============== attributen die ook per GebiedOptie kunnen wijzigen
 		attribute<Classifications/WarmteOptie> WarmteOptie_rel := Classifications/GebouwOptie/WarmteOptie_rel [ GebouwOptie_rel ];
-		
+
 		unit<uint32> AfnameGebied := ..../AfnameGebied;
 		attribute<AfnameGebied> AfnameGebied_rel := const((0 / 0)[AfnameGebied], results);
 	}
