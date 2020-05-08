@@ -6,49 +6,51 @@
 
 template KostenWoningen
 {
-	unit<UInt32>       BO;
-	unit<UInt32>       PlanRegio;
+	// begin case parameters
+	unit<uint32> BO;
+	unit<uint32> PlanRegio;
+	// end case parameters
 	
 	// ========== oppervlak, aansluitingen en vermogensvraag
-	attribute<nrAsl> nrAansluitingen  (BO) := ='WarmteVraag/' + BO/BCname + '/nrAansluitingen';
-	attribute<kW>      P_id             (BO) := ='WarmteVraag/' + BO/BCname + '/AansluitCapaciteit';
-	attribute<kW>      P_sec            (BO) := ='WarmteVraag/' + BO/BCname + '/P_sec';
-	
+	attribute<nrAsl>  nrAansluitingen  (BO) := ='WarmteVraag/' + BO/BCname + '/nrAansluitingen';
+	attribute<kW>     P_id             (BO) := ='WarmteVraag/' + BO/BCname + '/AansluitCapaciteit';
+	attribute<kW>     P_sec            (BO) := ='WarmteVraag/' + BO/BCname + '/P_sec';
+
 	// ========== investeringskosten wijkdistributie
-	attribute<m_pand>  L_aansl		    (BO) :=	/Invoer/RuimtelijkeData/buislengte/per_buurt/L_aansl_pand[BO/Planregio_rel];
-    container		   LeidingKosten		 :=	BuisKosten(BO, P_id * 0.001[ MW / kW]);
-    attribute<Eur>     Ki_wd_aansl      (BO) :=	L_aansl * Leidingkosten/K_m * nrAansluitingen * BO/Pand_aandeel;
-	attribute<Eur>	   Ki_wd_OS		    (BO) := P_id * Kostenkentallen/K_OS;
-	
+	attribute<m_pand> L_aansl          (BO) := /Invoer/RuimtelijkeData/buislengte/per_buurt/L_aansl_pand[BO/Planregio_rel];
+	container         LeidingKosten := BuisKosten(BO, P_id * 0.001[ MW / kW]);
+	attribute<Eur>    Ki_wd_aansl      (BO) := L_aansl * Leidingkosten/K_m * nrAansluitingen * BO/Pand_aandeel;
+	attribute<Eur>    Ki_wd_OS         (BO) := P_id * Kostenkentallen/K_OS;
+
 	// ========== investeringskosten inpandige distributie
-	attribute<Eur>     Ki_id_leiding    (BO) := nrAansluitingen * (BO/isMeergezins ? Kostenkentallen/Ki_id_meergezin : Kostenkentallen/Ki_id_grondgeb);
-	attribute<Eur>     Ki_id_dist       (BO) := nrAansluitingen * Kostenkentallen/Ki_afleverset + Ki_id_leiding;
-	attribute<kW>	   P_blokverwarming (BO) := P_id * Schuiven/VerketelingMin;
-	attribute<Eur>	   Ki_id_Vergoeding (BO) := P_blokverwarming * Kostenkentallen/KetelVergoeding;
-	
+	attribute<Eur>    Ki_id_leiding    (BO) := nrAansluitingen * (BO/isMeergezins ? Kostenkentallen/Ki_id_meergezin : Kostenkentallen/Ki_id_grondgeb);
+	attribute<Eur>    Ki_id_dist       (BO) := nrAansluitingen * Kostenkentallen/Ki_afleverset + Ki_id_leiding;
+	attribute<kW>     P_blokverwarming (BO) := P_id * Schuiven/VerketelingMin;
+	attribute<Eur>    Ki_id_Vergoeding (BO) := P_blokverwarming * Kostenkentallen/KetelVergoeding;
+
 	// ========== huurverlaging, ongeriefsvergoeding, projectmanagement
-	attribute<Eur>     K_ov             (BO) := nrAansluitingen * (BO/IsMeergezins ?  Schuiven/VerketelingMax * Kostenkentallen/K_Ov : Kostenkentallen/K_Ov);
-    attribute<Eur>     Ki_ge_ov         (BO) := BO/IsNieuwbouw ? 0.0[Eur] : K_ov;
-    attribute<Eur>     K_pm             (BO) := nrAansluitingen * (BO/IsMeergezins ? Schuiven/VerketelingMin * Kostenkentallen/K_Pm_min + Schuiven/VerketelingMax * Kostenkentallen/K_Pm_max : Kostenkentallen/K_Pm_max);
-    attribute<Eur>     Ki_ge_pm         (BO) := BO/IsNieuwbouw ? 0.0[Eur] : K_pm;
-	attribute<Eur_yr>  K_hv             (BO) := nrAansluitingen * Kengetallen/BCkentallen/Kj_hv_w * Schuiven/HuurVerlagingBijGebiedsOptie * (BO/IsMeergezins ? Schuiven/VerketelingMax : 1.0);
-    attribute<Eur_yr>  Kj_ge_hv         (BO) := BO/IsNieuwbouw ? 0.0[Eur_yr] : K_hv;
-    
-    // ========== jaarlijkse kosten voor onderhoud en beheer
-    attribute<Eur_yr>  Kj_wd_OS_oh      (BO) := Kengetallen/Onderhoud/R_OS_onderhoud   * Ki_wd_OS;
-    attribute<Eur_yr>  Kj_wd_aansl_oh   (BO) := Kengetallen/Onderhoud/R_wd_onderhoud   * Ki_wd_aansl;
-    attribute<Eur_yr>  Kj_id_dist_oh    (BO) := Kengetallen/Onderhoud/R_Sec_onderhoud  * Ki_id_dist;
-    
-    // ========== sommering berekeningen op objectniveau naar planregioniveau
-    container PR 
+	attribute<Eur>    K_ov             (BO) := nrAansluitingen * (BO/IsMeergezins ?  Schuiven/VerketelingMax * Kostenkentallen/K_Ov : Kostenkentallen/K_Ov);
+	attribute<Eur>    Ki_ge_ov         (BO) := BO/IsNieuwbouw ? 0[Eur] : K_ov;
+	attribute<Eur>    K_pm             (BO) := nrAansluitingen * (BO/IsMeergezins ? Schuiven/VerketelingMin * Kostenkentallen/K_Pm_min + Schuiven/VerketelingMax * Kostenkentallen/K_Pm_max : Kostenkentallen/K_Pm_max);
+	attribute<Eur>    Ki_ge_pm         (BO) := BO/IsNieuwbouw ? 0[Eur] : K_pm;
+	attribute<Eur_yr> K_hv             (BO) := nrAansluitingen * Kengetallen/BCkentallen/Kj_hv_w * Schuiven/HuurVerlagingBijGebiedsOptie * (BO/IsMeergezins ? Schuiven/VerketelingMax : 1.0);
+	attribute<Eur_yr> Kj_ge_hv         (BO) := BO/IsNieuwbouw ? 0[Eur_yr] : K_hv;
+
+		// ========== jaarlijkse kosten voor onderhoud en beheer
+	attribute<Eur_yr>  Kj_wd_OS_oh     (BO) := Kengetallen/Onderhoud/R_OS_onderhoud  * Ki_wd_OS;
+	attribute<Eur_yr>  Kj_wd_aansl_oh  (BO) := Kengetallen/Onderhoud/R_wd_onderhoud  * Ki_wd_aansl;
+	attribute<Eur_yr>  Kj_id_dist_oh   (BO) := Kengetallen/Onderhoud/R_Sec_onderhoud * Ki_id_dist;
+
+	// ========== sommering berekeningen op objectniveau naar planregioniveau
+	container PR
 	{
-		attribute<Eur>     Ki_id     (PlanRegio) := sum(Ki_id_dist + Ki_id_Vergoeding, BO/Planregio_rel);
-		attribute<Eur>     Ki_wd     (PlanRegio) := sum(Ki_wd_OS + Ki_wd_aansl, BO/Planregio_rel);
-		attribute<Eur_yr>  Kj_id_oh  (PlanRegio) := sum(Kj_id_dist_oh, BO/Planregio_rel);
-		attribute<Eur_yr>  Kj_wd_oh  (PlanRegio) := sum(Kj_wd_OS_oh + Kj_wd_aansl_oh, BO/Planregio_rel);
-		attribute<kW>      P_sec     (PlanRegio) := sum(../P_sec, BO/Planregio_rel);
-		attribute<Eur>     Ki_ge_ov  (PlanRegio) := sum(../Ki_ge_ov, BO/Planregio_rel);
-		attribute<Eur>     Ki_ge_pm  (PlanRegio) := sum(../Ki_ge_pm, BO/Planregio_rel);
-		attribute<Eur_yr>  Kj_ge_hv  (PlanRegio) := sum(../Kj_ge_hv, BO/Planregio_rel);
+		attribute<Eur>    Ki_id    (PlanRegio) := sum(Ki_id_dist + Ki_id_Vergoeding, BO/Planregio_rel);
+		attribute<Eur>    Ki_wd    (PlanRegio) := sum(Ki_wd_OS + Ki_wd_aansl       , BO/Planregio_rel);
+		attribute<Eur_yr> Kj_id_oh (PlanRegio) := sum(Kj_id_dist_oh                , BO/Planregio_rel);
+		attribute<Eur_yr> Kj_wd_oh (PlanRegio) := sum(Kj_wd_OS_oh + Kj_wd_aansl_oh , BO/Planregio_rel);
+		attribute<kW>     P_sec    (PlanRegio) := sum(../P_sec                     , BO/Planregio_rel);
+		attribute<Eur>    Ki_ge_ov (PlanRegio) := sum(../Ki_ge_ov                  , BO/Planregio_rel);
+		attribute<Eur>    Ki_ge_pm (PlanRegio) := sum(../Ki_ge_pm                  , BO/Planregio_rel);
+		attribute<Eur_yr> Kj_ge_hv (PlanRegio) := sum(../Kj_ge_hv                  , BO/Planregio_rel);
 	}
 }
