@@ -40,16 +40,13 @@ template LtWarmtenetImpl
 		container Kostenkentallen := Kengetallen/Kosten_MT(LeerCurves/MTnet/curve, LeerCurves/OenM/curve, LeerCurves/Inpand/curve);
 		container KostenD
 		{
-			container Wonen
-			{			
-			container bw := CalculationSchemes/KostenWoningen(WarmteVraag/BestaandeWoning/BO, PlanRegio); //berekeningen op objectniveau bestaande woningen
-			container nw := CalculationSchemes/KostenWoningen(WarmteVraag/NieuwbouwWoning/BO, PlanRegio); //berekeningen op objectniveau nieuwbouw woningen
-			}
-			container Utiliteit
-			{
-			container bu := CalculationSchemes/KostenUtiliteit(WarmteVraag/BestaandeUtil/BO, PlanRegio); //berekeningen op objectniveau bestaande utiliteit
-			container nu := CalculationSchemes/KostenUtiliteit(WarmteVraag/NieuwbouwUtil/BO, PlanRegio); //berekeningen op objectniveau nieuwbouw utiliteit
-			}
+			// TODO: volgende 2 containers Unificeren naar per BebouwingsComponent
+			container Wonen := for_each_ne(Classifications/WoningComponent/NcwRefBase
+			,	'CalculationSchemes/KostenWoningen(WarmteVraag/'+Classifications/WoningComponent/name+'/BO, PlanRegio)'
+			);
+			container Utiliteit := for_each_ne(Classifications/UtilComponent/NcwRefBase
+			,	'CalculationSchemes/KostenUtiliteit(WarmteVraag/'+Classifications/UtilComponent/name+'/BO, PlanRegio)'
+			);
 		}
 	}
 	
@@ -151,13 +148,32 @@ template LtWarmtenetImpl
 	}
 	
 	// =========  Voor alle woon en utiliteit bebouwingscomponenten worden op gebouwniveau attributen voor kosten en energie bepaald
-	container BestaandeWoningData := WKOWoningData(bebouwing/BestaandeWoning, KostenBaten/WarmteVraag/BestaandeWoning, false, KoudeBeschikbaar, KostenBaten/KostenD/Wonen/bw);
-	container NieuwbouwWoningData := WKOWoningData(bebouwing/NieuwbouwWoning, KostenBaten/WarmteVraag/NieuwbouwWoning, true , KoudeBeschikbaar, KostenBaten/KostenD/Wonen/nw);
-	container BestaandeUtilData   := WKOUtilData  (bebouwing/BestaandeUtil,   KostenBaten/WarmteVraag/BestaandeUtil  , false, KoudeBeschikbaar, KostenBaten/KostenD/Utiliteit/bu);	
-	container NieuwbouwUtilData   := WKOUtilData  (bebouwing/NieuwbouwUtil,   KostenBaten/WarmteVraag/NieuwbouwUtil  , true , KoudeBeschikbaar, KostenBaten/KostenD/Utiliteit/nu);
+	
+	// TODO: Woning en Utiliteit containers Unificeren en parameterisen per BebouwingsComponent
+	container Woning := for_each_ne(Classifications/WoningComponent/name
+	,	replace('WKOWoningData(bebouwing/@C, KostenBaten/WarmteVraag/@C, '+string(Classifications/WoningComponent/IsNieuwbouw)+', KoudeBeschikbaar, KostenBaten/KostenD/Wonen/'+Classifications/WoningComponent/NcwRefBase+')'
+		,	'@C', Classifications/WoningComponent/name
+		)
+	);
+	container Util := for_each_ne(Classifications/UtilComponent/name
+	,	replace('WKOUtilData(bebouwing/@C, KostenBaten/WarmteVraag/@C, '+string(Classifications/UtilComponent/IsNieuwbouw)+', KoudeBeschikbaar, KostenBaten/KostenD/Utiliteit/'+Classifications/UtilComponent/NcwRefBase+')'
+		,	'@C', Classifications/UtilComponent/name
+		)
+	);
+	container BcData := for_each_ne(Classifications/BebouwingsComponent/Name
+		,	union_data(Classifications/BebouwingsComponent
+			,	const('Woning', Classifications/WoningComponent)
+			,	const('Util'  , Classifications/UtilComponent)
+			)
+		+ '/'	
+		+	union_data(Classifications/BebouwingsComponent
+			,	Classifications/WoningComponent/name
+			,	Classifications/UtilComponent/name
+			)
+	);
 	
 	parameter<string> geschiktExpr := 'BO/SchilLabel_ref <= Classifications/energielabel/V/LabelE';
-	container CandidateSets := for_each_ne(WkoComponent/Name, replace('LtData(bebouwing/@WC, @WCData, ''@WC'', T_sec, false, '+Quote(geschiktExpr)+')', '@WC', WkoComponent/Name));
+	container CandidateSets := for_each_ne(WkoComponent/Name, replace('LtData(bebouwing/@WC, bcData/@WC, ''@WC'', T_sec, false, '+Quote(geschiktExpr)+')', '@WC', WkoComponent/Name));
 	
 	//samenvoeging bestaande woningen, nieuwbouwwoningen, bestaande utiliteit, nieuwbouwutiliteit
 	unit <uint32> UnitedCandidates := ='union_unit('+AsItemList('CandidateSets/'+WkoComponent/Name+'/AllowedObjects')+')'
