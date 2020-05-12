@@ -14,6 +14,109 @@
 
 template EsdlNieuwbouw
 {
+	container VestaBebouwingsComponentSchema
+	{
+		unit<uint32> area
+		{
+			attribute<string> id;
+			attribute<string> name;
+			attribute<string> scope;
+			unit<uint32> geometry
+			{
+				attribute<string> CRS;
+				attribute<string> lat;
+				attribute<string> lon;
+			}
+
+			unit<uint32> asset
+			{
+				attribute<string> id;
+				attribute<string> numberofbuildings;
+				attribute<string> name;
+				attribute<string> aggregated;
+				attribute<string> residentialBuildingType;
+				attribute<string> numberOfFloors;
+				attribute<string> buildingYear;
+				attribute<string> aggregationCount;
+				attribute<string> energyLabel;
+				
+				unit<uint32> geometry
+				{
+					attribute<string> CRS;
+					attribute<string> lat;
+					attribute<string> lon;
+				}
+				
+				unit<uint32> asset
+				{
+					attribute<string> id;
+					attribute<string> name;
+					attribute<string> type;
+					attribute<string> lat;
+					attribute<string> lon;
+					
+					unit<uint32> geometry
+					{
+						attribute<string> CRS;
+						attribute<string> lat;
+						attribute<string> lon;
+					}
+				}
+			}
+		}
+	}
+	
+	parameter<string> ESDL_Nieuwbouw: StorageName = "=SpecifiekeInstellingen/NieuwbouwWoningEsdlPath", StorageType = "str";
+		
+	container Parsed_Nieuwbouw:= parse_xml(ESDL_Nieuwbouw, VestaBebouwingsComponentSchema);
+	
+	container Nieuwbouw
+	{
+		unit<uint32> Gebouwen := Parsed_Nieuwbouw/area/asset, FreeData = "false", DialogData = "point_rd", DialogType = "map"
+		{
+			unit<uint32> Geometry := Parsed_Nieuwbouw/area/asset/Geometry;
+		
+			
+			attribute<rdc_meter>  point_rd := LatLongWgs842RD(
+				point(
+					value(first(Geometry/lat, Geometry_Parent_rel), float64)
+				,	value(first(Geometry/lon, Geometry_Parent_rel), float64)
+				,	dpoint)
+			, rdc_meter);
+			//buurt rel
+			attribute<string>     id                       := Parsed_Nieuwbouw/area/asset/id;
+			
+			attribute<uint8> Bouwlagen := const(4b, .);
+			attribute<Classifications/WoningtypeNieuwbouw> Woningtype := rlookup(UpperCase(residentialBuildingType), UpperCase(Classifications/WoningtypeNieuwbouw/name));
+			
+			attribute<uint32>     Bouwjaar                 := buildingYear[uint32];
+			attribute<uint32>     Aantal_aansl             := aggregationCount[uint32];
+			attribute<string>     Schillabel               := energyLabel;
+			// Oppervlakte
+			// Gebouwoptie danwel pakket Installaties voor RuimteVerwarming( basis, piek), Koude(basis, piek), Tapwater(basis, piek)
+			
+			attribute<.> Geometry_Parent_rel (Geometry) := value(Geometry/Parent_rel, .);
+		}
+		
+		unit<uint32> Gebouw_opties := Parsed_Nieuwbouw/area/asset/asset, FreeData = "false", DialogData = "point_rd", DialogType = "map"
+		{
+			unit<uint32> Geometry := Parsed_Nieuwbouw/area/asset/asset/Geometry;
+			
+			attribute<rdc_meter>  point_rd := LatLongWgs842RD(
+				point(
+					value(first(Geometry/lat, Geometry_Parent_rel), float64)
+				,	value(first(Geometry/lon, Geometry_Parent_rel), float64)
+				,	dpoint)
+			, rdc_meter);
+			attribute<string>     id                       := =Gebouw_opties_path+'/id';
+			attribute<string>     name                     := =Gebouw_opties_path+'/name';
+			attribute<string>     type                     := =Gebouw_opties_path+'/type';
+			
+			attribute<.> Geometry_Parent_rel (Geometry) := values(Geometry/Parent_rel, .);
+		}
+	}
+	
+	
 	Container Woning := for_each_ne(Classifications/ZichtJaar/Name
 			,  Classifications/ZichtJaar/HasMutations
 			? 'CalculationSchemes/NieuwbouwWoningOperaties/Unite(PerGrid/' + Classifications/ZichtJaar/Name+ ')'
