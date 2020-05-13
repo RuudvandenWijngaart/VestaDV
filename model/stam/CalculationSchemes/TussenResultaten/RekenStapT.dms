@@ -14,9 +14,9 @@ template RekenstapT
 	parameter<bool>                      isStap0         := RekenstapName == 'StartJaar';
 	parameter<Classifications/Rekenstap> Rekenstap_rel   := rlookup(RekenstapName, Classifications/Rekenstap/name);
 	parameter<yr_uint16>                 Rekenstap_jaar  := Classifications/Rekenstap/jaar[Rekenstap_rel];
-	parameter<string>                    RekenJaarName   := Classifications/RekenJaar/Name[Classifications/Rekenstap/RekenJaar_rel          [Rekenstap_rel]];
-	parameter<string>                    BouwjaarName    := Classifications/ZichtJaar/Name[Classifications/Rekenstap/ZichtJaar_rel_bebouwing[Rekenstap_rel]];
-	parameter<string>                    KlimaatjaarName := Classifications/ZichtJaar/Name[Classifications/Rekenstap/ZichtJaar_rel_klimaat  [Rekenstap_rel]];
+	parameter<string>                    RekenJaarName   := Classifications/RekenJaar/name[Classifications/Rekenstap/RekenJaar_rel          [Rekenstap_rel]];
+	parameter<string>                    BouwjaarName    := Classifications/ZichtJaar/name[Classifications/Rekenstap/ZichtJaar_rel_bebouwing[Rekenstap_rel]];
+	parameter<string>                    KlimaatjaarName := Classifications/ZichtJaar/name[Classifications/Rekenstap/ZichtJaar_rel_klimaat  [Rekenstap_rel]];
 
 	parameter<Classifications/ZichtJaar> ZichtJaar_rel   := rlookup(BouwjaarName, Classifications/ZichtJaar/name);
 	parameter<yr_uint16>                 ZichtJaar_jaar  := Classifications/ZichtJaar/jaar[ZichtJaar_rel];
@@ -43,17 +43,17 @@ template RekenstapT
 		}
 		unit<uint8> ActieveGebiedsOptie_Org := range(uint8, 0b, uint8(GebiedsOpties/aantal)) // te kiezen keten van: { GeoTermie, RestWarmte, ... } LET OP: laatste cijfer moet gelijk zijn aan aantal regels onder 'union_data('
 		{
-			attribute<string> Name := SchemaName;
+			attribute<string> name := SchemaName;
 
 			attribute<Classifications/GebiedsOptie> GebiedsOptie_rel := = GebiedsOpties/Aantal > 0 
 				? 'union_data(.'+AsList(',GebiedsOpties/Optie'+string(id(.) + 1b), '')+')' 
 				: 'const((0b / 0b)[Classifications/GebiedsOptie], .)';
-			attribute<string> SchemaName := Classifications/GebiedsOptie/Name[GebiedsOptie_rel];
-			attribute<string> code       := Classifications/GebiedsOptie/Code[GebiedsOptie_rel];
+			attribute<string> SchemaName := Classifications/GebiedsOptie/name[GebiedsOptie_rel];
+			attribute<string> code       := Classifications/GebiedsOptie/code[GebiedsOptie_rel];
 		}
 		unit<uint8> ActieveGebiedsOptie_Ext: = union_unit_uint8(range(uint8,0b, 1b), ActieveGebiedsOptie_Org) // {  RestWarmte, ... } 
 		{
-			attribute<string> Name: = SchemaName;
+			attribute<string> name: = SchemaName;
 
 			attribute<Classifications/GebiedsOptie> GebiedsOptie_rel := union_data(., Classifications/GebiedsOptie/V/RestWarmte, ActieveGebiedsOptie_Org/GebiedsOptie_rel);
 			attribute<string>                       SchemaName       := union_data(., 'RestWarmte', ActieveGebiedsOptie_Org/SchemaName);
@@ -199,47 +199,47 @@ template RekenstapT
 
 	container StateMetGebouwOpties := PrevState
 	{
-		container Bebouwing := for_each_nex(Classifications/BebouwingsComponent/Name, 'BebouwingsComponenten/'+Classifications/BebouwingsComponent/Name+'/results', uint32);
+		container Bebouwing := for_each_nex(Classifications/BebouwingsComponent/name, 'BebouwingsComponenten/'+Classifications/BebouwingsComponent/name+'/results', uint32);
 	}
 	
 	container GebiedsAllocatie :=
 		for_each_ne(
-			Voorkeuren/ActieveGebiedsOptie/Name,
+			Voorkeuren/ActieveGebiedsOptie/name,
 			'CalculationSchemes/AanbodOpties/'+Voorkeuren/ActieveGebiedsOptie/SchemaName+'(
-				'+MakeDefined(Voorkeuren/ActieveGebiedsOptie/Name[id(Voorkeuren/ActieveGebiedsOptie)-1b]+'/Results', 'StateMetGebouwOpties')+',
+				'+MakeDefined(Voorkeuren/ActieveGebiedsOptie/name[id(Voorkeuren/ActieveGebiedsOptie)-1b]+'/Results', 'StateMetGebouwOpties')+',
 				AanbodKentallen/'+Voorkeuren/ActieveGebiedsOptie/SchemaName+', 
 				EnergiePrijzen, RekenJaar_jaar
 			)'
 		)
 	{
-		parameter<string> ResultStateName := MakeDefined(last(Voorkeuren/ActieveGebiedsOptie/Name)+'/Results', 'Initieel');
+		parameter<string> ResultStateName := MakeDefined(last(Voorkeuren/ActieveGebiedsOptie/name)+'/Results', 'Initieel');
 		container ResultState := =ResultStateName;
 	}
 
 	#include<StateNaAllocatie.dms>
 
 	container AllocatieResultaten :=
-		for_each_ne(Classifications/BebouwingsComponent/Name,
+		for_each_ne(Classifications/BebouwingsComponent/name,
 			replace(
 				'AllocatieResultatenComponent('
 					'StateNaAllocatie/bebouwing/@BC,'
 					'''@BC'''
 				')'
-			,'@BC', Classifications/BebouwingsComponent/Name)
+			,'@BC', Classifications/BebouwingsComponent/name)
 		), FreeData = "False"
 	{
 		unit<uint32> AfnameGebied             := StateNaAllocatie/AfnameGebied;
 		unit<uint64> PlanRegio_x_AfnameGebied := combine_uint64(PlanRegio, AfnameGebied);
-		unit<uint32> ObjectResults            := ='union_unit('+AsItemList(Classifications/BebouwingsComponent/Name+'/BO')+')'
+		unit<uint32> ObjectResults            := ='union_unit('+AsItemList(Classifications/BebouwingsComponent/name+'/BO')+')'
 		{
-			attribute<PlanRegio   >             PlanRegio_rel                := ='union_data(., '+AsItemList(Classifications/BebouwingsComponent/Name+'/BO/PlanRegio_rel'   )+')';
-			attribute<AfnameGebied>             AfnameGebied_rel             := ='union_data(., '+AsItemList(Classifications/BebouwingsComponent/Name+'/BO/AfnameGebied_rel')+')';
+			attribute<PlanRegio   >             PlanRegio_rel                := ='union_data(., '+AsItemList(Classifications/BebouwingsComponent/name+'/BO/PlanRegio_rel'   )+')';
+			attribute<AfnameGebied>             AfnameGebied_rel             := ='union_data(., '+AsItemList(Classifications/BebouwingsComponent/name+'/BO/AfnameGebied_rel')+')';
 			attribute<PlanRegio_x_AfnameGebied> PlanRegio_x_AfnameGebied_rel := combine_data(PlanRegio_x_AfnameGebied, PlanRegio_rel[PlanRegio], AfnameGebied_rel[AfnameGebied]);			
 		}
 		unit<uint32> PlanRegioAfnameGebied := unique(ObjectResults/PlanRegio_x_AfnameGebied_rel);
 
 		attribute<string> AfnamegebiedenPerPlanregio(PlanRegio) := AsItemList(
-			('{'+AfnameGebied/Label+'}')[value(PlanRegioAfnameGebied/values % uint64(#AfnameGebied), AfnameGebied)], value(PlanRegioAfnameGebied/values / uint64(#AfnameGebied), PlanRegio)
+			('{'+AfnameGebied/label+'}')[value(PlanRegioAfnameGebied/values % uint64(#AfnameGebied), AfnameGebied)], value(PlanRegioAfnameGebied/values / uint64(#AfnameGebied), PlanRegio)
 		);
 
 		attribute<string> AfnamegebiedenPerPlanregioReport_org   (PlanRegio) := replace(AfnamegebiedenPerPlanregio,"{","","}","","[","","]","",",",";");
@@ -267,6 +267,6 @@ template RekenstapT
 		attribute<nrAsl> aant_g_aansl_woning_laagb_per_planregio (PlanRegio) :=
 			= 'add(const(0[nrAsl], PlanRegio)'+AsList(replace(', @C/aant_g_aansl_laagb_per_planregio','@C', Classifications/WoningComponent/name),'')+')';
 
-		attribute<bool> GrondroeringInPlanRegio                  (PlanRegio) := ='or('+AsItemList(replace('@BC@/GrondroeringInPlanRegio','@BC@', Classifications/BebouwingsComponent/Name))+')';
+		attribute<bool> GrondroeringInPlanRegio                  (PlanRegio) := ='or('+AsItemList(replace('@BC@/GrondroeringInPlanRegio','@BC@', Classifications/BebouwingsComponent/name))+')';
 	}
 }

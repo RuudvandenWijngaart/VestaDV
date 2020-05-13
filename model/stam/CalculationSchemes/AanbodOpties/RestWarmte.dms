@@ -28,7 +28,7 @@ template RestWarmte
 		unit<uint32> BronConnections := ../Bronnen;
 		parameter<float64> IterNR    := 0.0;
 
-		attribute<BronConnections>  CurrBron          (PlanRegio)     := rlookup(CumulatedArcSet/BronPoint, BronConnections/Point)[invert(CumulatedArcSet/PlanRegio_rel)];
+		attribute<BronConnections>  CurrBron          (PlanRegio)     := rlookup(CumulatedArcSet/Bronpoint, BronConnections/point)[invert(CumulatedArcSet/PlanRegio_rel)];
 		attribute<BronConnections>  CurrConnection    (PlanRegio)     := CurrBron;
 		attribute<bool>             GebruikRestwarmte (PlanRegio)     := OldGebruikOptie;
 		attribute<MW>               MWth_vraag        (PlanRegio)     := KostenBaten/KostenD/PrimairNet/P_ASW * 0.001[ MW / kW];
@@ -42,13 +42,13 @@ template RestWarmte
 
 	unit<uint32> Iteration := Range(uint32, 0, NrIterations)
 	{
-		attribute<string> Name          := 'I' + string(id(.));
-		attribute<string> PrevStateName := MakeDefined(Iteration/Name[id(Iteration)-1]+'/NextState', 'RestWarmteStartingState');
+		attribute<string> name          := 'I' + string(id(.));
+		attribute<string> PrevStateName := MakeDefined(Iteration/name[id(Iteration)-1]+'/NextState', 'RestWarmteStartingState');
 	}
 
-	container Iterations := for_each_ne(Iteration/Name, 'CalculationSchemes/AanbodOpties/RestWarmteIteratie('+Iteration/PrevStateName+', Bronnen, PlanRegio, KostenBaten)');
+	container Iterations := for_each_ne(Iteration/name, 'CalculationSchemes/AanbodOpties/RestWarmteIteratie('+Iteration/PrevStateName+', Bronnen, PlanRegio, KostenBaten)');
 
-	container LastIter  := ='Iterations/'+last(Iteration/Name);
+	container LastIter  := ='Iterations/'+last(Iteration/name);
 	container LastState := LastIter/NextState;
 
 	attribute<MW>       P_Bron  (Bronnen) := sum(KostenBaten/CapaciteitsVraagD * float64(LastState/GebruikRestWarmte) , LastState/CurrBron);
@@ -75,12 +75,12 @@ template RestWarmte
 //	attribute<bool> NieuwGebruikRestWarmte (PlanRegio) := GebruikRestWarmte && !OldGebruik;
 
 	attribute<Eur>   Oi_Totaal         (PlanRegio) := KostenBaten/Oi_Aansluitbijdrage;
-	attribute<KG_GJ> CO2_GJb           (PlanRegio) := Bronnen/CO2_GJ[LastIter/NextState/CurrBron];
+	attribute<kg_GJ> CO2_GJb           (PlanRegio) := Bronnen/CO2_GJ[LastIter/NextState/CurrBron];
 	attribute<G_GJ>  NOx_GJb           (PlanRegio) := Bronnen/NOx_GJ[LastIter/NextState/CurrBron];
 	attribute<G_GJ>  SO2_GJb           (PlanRegio) := Bronnen/SO2_GJ[LastIter/NextState/CurrBron];
 	attribute<G_GJ>  VOS_GJb           (PlanRegio) := Bronnen/VOS_GJ[LastIter/NextState/CurrBron];
 	attribute<G_GJ>  TS_GJb            (PlanRegio) := Bronnen/TS_GJ [LastIter/NextState/CurrBron];
-//	attribute<KG_yr> CO2_Primair       (PlanRegio) := KostenBaten/V_WarmtePrimairD * MakeDefined(CO2_GJb, 0[KG_GJ]);
+//	attribute<KG_yr> CO2_Primair       (PlanRegio) := KostenBaten/V_WarmtePrimairD * MakeDefined(CO2_GJb, 0[kg_GJ]);
 //	attribute<KG_yr> CO2               (PlanRegio) := KostenBaten/CO2_BijstookD + CO2_Primair;
 	attribute<GJ_yr> GJe_Totaal        (PlanRegio) := const(0[GJ_yr], PlanRegio);
 //	attribute<KG_yr> CO2_e             (PlanRegio) := const(0[KG_yr], PlanRegio);
@@ -91,7 +91,7 @@ template RestWarmte
 	unit<uint32> gebruikte_bron := range(uint32, 0, sum(uint32(bron_gebruikt)))
 	{
 		attribute<bronnen> bron_rel := invert(gebruikte_bron_rel);
-		attribute<string>  Label    := bronnen/Label[bron_rel];
+		attribute<string>  label    := bronnen/label[bron_rel];
 	}
 
 	unit<uint32> NewAfnameGebied := union_unit(BeginStatus/AfnameGebied, gebruikte_bron)
@@ -100,19 +100,19 @@ template RestWarmte
 			, BeginStatus/AfnameGebied/GebiedsOptie_rel
 			, const(Classifications/GebiedsOptie/V/RestWarmte, gebruikte_bron)
 		);
-		attribute<string> Label := union_data(.
-			, BeginStatus/AfnameGebied/Label
-			, gebruikte_bron/Label
+		attribute<string> label := union_data(.
+			, BeginStatus/AfnameGebied/label
+			, gebruikte_bron/label
 		);
 	}
 
 	container Results := BeginStatus, IntegrityCheck = "P_Bron <= Bronnen/MWTh_Max * float64(3.00)"
 	{
 		container BebouwingMutatie :=
-			for_each_ne(Classifications/BebouwingsComponent/Name
-				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/' + Classifications/BebouwingsComponent/Name + ', Classifications/GebiedsOptie/V/RestWarmte, .../GebruikRestWarmte, BeginStatus/AfnameGebied)'
+			for_each_ne(Classifications/BebouwingsComponent/name
+				, 'PlanRegioOptieResultaat(BeginStatus/Bebouwing/' + Classifications/BebouwingsComponent/name + ', Classifications/GebiedsOptie/V/RestWarmte, .../GebruikRestWarmte, BeginStatus/AfnameGebied)'
 			);
-		container Bebouwing := for_each_nex(Classifications/BebouwingsComponent/Name, 'BebouwingMutatie/' + Classifications/BebouwingsComponent/Name + '/results', uint32);
+		container Bebouwing := for_each_nex(Classifications/BebouwingsComponent/name, 'BebouwingMutatie/' + Classifications/BebouwingsComponent/name + '/results', uint32);
 		unit<uint32> AfnameGebied := NewAfnameGebied;
 
 		container Factoren
@@ -132,7 +132,7 @@ template RestWarmte
 			attribute<ratio>   P_vol              (PlanRegio) := NieuwGebruik ? bronnen/p_vol[LastIter/NextState/CurrBron] : VorigePeriode/P_vol;
 			attribute<bronnen> Welke_bron_nu      (PlanRegio) := LastIter/NextState/CurrBron;
 			attribute<bronnen> Welke_bron_gebruik (PlanRegio) := NieuwGebruik ? LastIter/NextState/CurrBron : VorigePeriode/Welke_bron_nu;
-			attribute<string>  Bron_naam          (PlanRegio) := Bronnen/Label[welke_bron_gebruik];
+			attribute<string>  Bron_naam          (PlanRegio) := Bronnen/label[welke_bron_gebruik];
 			attribute<Eur_GJ>  Bron_kmGJ          (PlanRegio) := Bronnen/Km_gj[welke_bron_gebruik];
 
 			container jaarlijks
@@ -305,7 +305,7 @@ template RestWarmte
 			{
 				attribute<KG_yr> CO2_id_gas  (PlanRegio) := const(0[KG_yr], PlanRegio); // geen gasverbruik bij LT netten
 				attribute<KG_yr> CO2_wd_gas  (PlanRegio) := GebruikRestWarmte ? (1d - P_vol) * KostenBaten/CO2_BijstookD : 0[kg_yr]; // geen gasverbruik bij LT netten
-				attribute<KG_yr> CO2_ow_gas  (PlanRegio) := GebruikRestWarmte ? P_vol * verbruik/V_ow_warmte * MakeDefined(CO2_GJb, 0[KG_GJ]) : 0[KG_yr];
+				attribute<KG_yr> CO2_ow_gas  (PlanRegio) := GebruikRestWarmte ? P_vol * verbruik/V_ow_warmte * MakeDefined(CO2_GJb, 0[kg_GJ]) : 0[KG_yr];
 
 				attribute<KG_yr> CO2_id_elek (PlanRegio) := Verbruik/V_id_elek * prijzen/Elektriciteit/CO2_GJ;
 				attribute<KG_yr> CO2_wd_elek (PlanRegio) := Verbruik/V_wd_elek * prijzen/Elektriciteit/CO2_GJ;
@@ -323,7 +323,7 @@ template RestWarmte
 
 			unit<uint32> CumulatedArcSet := union_unit(StartArcSet, ExtraArcSet), DialogType = "Map", DialogData = "CumulatedArcs"
 			{
-				attribute<rdc_meter> BronPoint     := union_data(., StartArcSet/BronPoint, LastCumulatedArcSet/BronPoint[ExtraArcSet/LastCumulatedArcSet_rel]), DisableStorage = "True";
+				attribute<rdc_meter> Bronpoint     := union_data(., StartArcSet/Bronpoint, LastCumulatedArcSet/Bronpoint[ExtraArcSet/LastCumulatedArcSet_rel]), DisableStorage = "True";
 				attribute<PlanRegio> PlanRegio_rel := union_data(., StartArcSet/PlanRegio_rel, ExtraArcSet/PlanRegio_rel);
 
 				parameter<bool> HasArcs := true, DisableStorage = "True";

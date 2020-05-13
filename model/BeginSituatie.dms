@@ -13,8 +13,8 @@ container BeginSituatie : Using = "Units;Geography;Model;Invoer"
 	container StartingStateComponenten := 
 		for_each_ne(Classifications/BebouwingsComponent/name, 
 			'CalculationSchemes/StartingStateComponent('+
-				'RuimtelijkeData/Bebouwing/StartJaar/'+Classifications/BebouwingsComponent/Name+
-				','+ 'Kengetallen/Bebouwing/'+Classifications/BebouwingsComponent/Name+'/results
+				'RuimtelijkeData/Bebouwing/StartJaar/'+Classifications/BebouwingsComponent/name+
+				','+ 'Kengetallen/Bebouwing/'+Classifications/BebouwingsComponent/name+'/results
 				, '+ string(id(Classifications/BebouwingsComponent))+'[Classifications/BebouwingsComponent]'+
 			')'
 		);
@@ -72,13 +72,13 @@ container BeginSituatie : Using = "Units;Geography;Model;Invoer"
 	
 	// =========  Initieel worden alle geregistreerde parameters per gebiedsoptie op nul gezet, om later gevuld te worden in een Rekenstap
 	container LegeGebiedsOptie {
-		container	Oi_Aansl  := for_each_nedv(Classifications/WoonUtilComponent/Name,           'const(0[Eur]   , PlanRegio)', PlanRegio, Eur);
+		container	Oi_Aansl  := for_each_nedv(Classifications/WoonUtilComponent/name,           'const(0[Eur]   , PlanRegio)', PlanRegio, Eur);
 		container   jaarlijks := for_each_nedv(classifications/gebiedsoptie_jaarlijks/full_name, 'const(0[Eur_yr], PlanRegio)', PlanRegio, Eur_yr);
 		container   eenmalig  := for_each_nedv(classifications/gebiedsoptie_eenmalig/name,       'const(0[Eur]   , PlanRegio)', PlanRegio, Eur);		
 		container   Verbruik  := for_each_nedv(classifications/gebiedsoptie_verbruik/name,       'const(0[GJ_yr] , PlanRegio)', PlanRegio, GJ_yr);
 		container   Uitstoot  := for_each_nedv(classifications/gebiedsoptie_uitstoot/name,       'const(0[kg_yr] , PlanRegio)', PlanRegio, kg_yr);
 	}
-	container Cumulaties := for_each_ne(Classifications/GebiedsOptie/Name, 'LegeGebiedsOptie');
+	container Cumulaties := for_each_ne(Classifications/GebiedsOptie/name, 'LegeGebiedsOptie');
 
 	container LtOptie := LegeGebiedsOptie {
 			attribute<ratio>	P_vol (planregio) := const(1.0[ratio], planregio);
@@ -86,8 +86,8 @@ container BeginSituatie : Using = "Units;Geography;Model;Invoer"
 			{
 				attribute<Eur>       Ki_A  : [];
 				attribute<Eur>       Ki_B  : [];
-				attribute<string>    Label : [];
-				attribute<rdc_meter> Point : [];
+				attribute<string>    label : [];
+				attribute<rdc_meter> point : [];
 			}
 	}
 	container MtOptie := LegeGebiedsOptie {
@@ -98,8 +98,8 @@ container BeginSituatie : Using = "Units;Geography;Model;Invoer"
 	{
 		attribute<Eur>       Ki_A  : [];
 		attribute<Eur>       Ki_B  : [];
-		attribute<string>    Label : [];
-		attribute<rdc_meter> Point : [];
+		attribute<string>    label : [];
+		attribute<rdc_meter> point : [];
 		attribute<Classifications/GebiedsOptie> GebiedsOptie_rel : [];
 	}
 
@@ -160,17 +160,17 @@ container BeginSituatie : Using = "Units;Geography;Model;Invoer"
 			attribute<planregio>     BU_DK_rel := rlookup(BU_Code_dk, Invoer/RuimtelijkeData/StudieGebied/buurt/BU_code);
 
 			attribute<.>             up_rel    := rlookup(BU_DK_rel, BU_rel);
-			attribute<rdc_meter>     Point     := PlanRegio/Point[BU_rel];
+			attribute<rdc_meter>     point     := PlanRegio/point[BU_rel];
 			attribute<WarmteBronnen> bron_rel  := rlookup(bronnaam, WarmteBronnen/bron_naam);
 			attribute<nodeset>       F1        := MakeDefined(value(bron_rel+#linkset, nodeset), value(up_rel, nodeset)), // source, a WarmteBronnen or alternatively the up_rel Planregio
-						IntegrityCheck = "isNull(Point) || (IsDefined(point) && (IsDefined(bron_rel) != IsDefined(up_rel)))";
+						IntegrityCheck = "isNull(point) || (IsDefined(point) && (IsDefined(bron_rel) != IsDefined(up_rel)))";
 
 			attribute<nodeset>       F2        := value(id(.), nodeset); // serviced Planregio
 		}
 
 		unit<uint32> nodeset := union_unit(linkset, WarmteBronnen)
 		{
-			attribute<rdc_meter> Point := union_data(., linkset/Point, WarmteBronnen/Point);
+			attribute<rdc_meter> point := union_data(., linkset/point, WarmteBronnen/point);
 			
 			unit<uint32> e :=
 				dijkstra_m(
@@ -190,16 +190,16 @@ container BeginSituatie : Using = "Units;Geography;Model;Invoer"
 		unit<uint32> GivenStartArcSet := linkset //: StorageName = "%projdir%/data/RestWarmteStart/CumulatedArcSet.dbf", StorageReadOnly = "True"
 		{
 			attribute</Invoer/RuimtelijkeData/StudieGebied/buurt> PlanRegio_rel := linkset/BU_rel;
-			attribute<rdc_meter>                       PrevPoint     := nodeset/Point[linkset/F1];
+			attribute<rdc_meter>                       Prevpoint     := nodeset/point[linkset/F1];
 //					attribute<Eur>                             Ki_Netto;
 			attribute<WarmteBronnen>                   Bron_rel      := value(rjoin(value(id(linkset), nodeset), nodeset/e/DstZone_rel, nodeset/e/OrgZone_rel), WarmteBronnen);
-			attribute<rdc_meter>                       BronPoint     := WarmteBronnen/Point[Bron_rel];
+			attribute<rdc_meter>                       Bronpoint     := WarmteBronnen/point[Bron_rel];
 
 			parameter<bool> HasArcs := true; // avoid reading the dbf to find this out.
 			
 			attribute<rdc_meter> Arcs(arc)
 				:= points2sequence_ps(
-					union_data(union_unit(., .), PrevPoint, PlanRegio/Point[PlanRegio_rel]),
+					union_data(union_unit(., .), Prevpoint, PlanRegio/point[PlanRegio_rel]),
 					union_data(union_unit(., .), id(.), id(.))
 				);
 		}
@@ -207,8 +207,8 @@ container BeginSituatie : Using = "Units;Geography;Model;Invoer"
 		{
 			attribute<rdc_meter> Arcs(CumulatedArcSet, arc) : [];
 		
-			attribute<rdc_meter> PrevPoint     : [];
-			attribute<rdc_meter> BronPoint     : [];
+			attribute<rdc_meter> Prevpoint     : [];
+			attribute<rdc_meter> Bronpoint     : [];
 			attribute<PlanRegio> PlanRegio_rel : [];
 			attribute<Eur>       Ki_Netto      : [];
 	
