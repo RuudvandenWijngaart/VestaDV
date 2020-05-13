@@ -30,11 +30,12 @@ template EsdlNieuwbouw
 
 			unit<uint32> asset
 			{
+				attribute<string> xsi__type;
 				attribute<string> id;
 				attribute<string> numberofbuildings;
 				attribute<string> name;
 				attribute<string> aggregated;
-				attribute<string> residentialBuildingType; // TODO ESDL: RENAME to BuildingType; specify enumeration according to Woningtype, WoningtypeNieuwbouw, UtilType, UtiltypeNieuwbouw, or GLTB
+				attribute<string> residentialBuildingType; // TODO ESDL: RENAME to BuildingType; specify enumeration according to WoningTypeBestaand, WoningtypeNieuwbouw, UtilType, UtiltypeNieuwbouw, or GLTB
 				attribute<string> numberOfFloors;
 				attribute<string> buildingYear;
 				attribute<string> aggregationCount;
@@ -49,6 +50,7 @@ template EsdlNieuwbouw
 				
 				unit<uint32> asset
 				{
+					attribute<string> xsi__type;
 					attribute<string> id;
 					attribute<string> name;
 					attribute<string> type;
@@ -70,11 +72,14 @@ template EsdlNieuwbouw
 		
 	container Parsed_Nieuwbouw:= parse_xml(ESDL_Nieuwbouw, VestaBebouwingsComponentSchema);
 	
-	unit<uint32> Gebouw := Parsed_Nieuwbouw/area/asset, FreeData = "false", DialogData = "point_rd", DialogType = "map"
+	unit<uint32> Gebouw := Parsed_Nieuwbouw/area/asset, FreeData = "false", DialogData = "point_rd", DialogType = "map"  // TODO ESDL: subset(xsi::type == 'Building') NEE: BuildingUnit 
 	{
 		unit<uint32> Geometry := Parsed_Nieuwbouw/area/asset/Geometry;
+		attribute<.> Geometry_Parent_rel (Geometry) := value(Geometry/Parent_rel, .);
+		
+		attribute<Classifications/BebouwingsComponentBase> BebouwingsComponentBase_rel := const(Classifications/BebouwingsComponentBase/V/NieuwbouwWoning, .); // TODO ESDL: selecteer obv GebruiksDoel
 	
-		attribute<Classifications/BebouwingsComponentBase> BebouwingsComponentBase_rel := const(Classifications/BebouwingsComponentBase/V/NieuwbouwWoning, .); // TODO ESDL
+		attribute<Classifications/BebouwingsComponent> BebouwingsComponent_rel := const(Classifications/BebouwingsComponent/V/NieuwbouwWoning, .); // TODO ESDL
 		
 		attribute<rdc_meter>  point_rd := LatLongWgs842RD(
 			point(
@@ -85,26 +90,32 @@ template EsdlNieuwbouw
 		
 		attribute<string>     id         := Parsed_Nieuwbouw/area/asset/id;
 		
-		attribute<Classifications/WoningtypeNieuwbouw> Woningtype := rlookup(UpperCase(residentialBuildingType), UpperCase(Classifications/WoningtypeNieuwbouw/name));
+		attribute<Classifications/WoningtypeNieuwbouw> Woningtype_rel := rlookup(UpperCase(residentialBuildingType), UpperCase(Classifications/WoningtypeNieuwbouw/name));
 		
 		attribute<uint8>      Bouwlagen  := value(numberOfFloors, uint8);
 		attribute<uint32>     Bouwjaar   := buildingYear[uint32];
 		attribute<nrAsl>      nr_aansl   := value(aggregationCount, nrAsl);
 		attribute<string>     Schillabel := energyLabel;
 		
+		// WoningType == APPARTEMENT en IsDefined(Bouwlagen) -> FlatTot4 of Flat5ofmeer
+		attribute<Classifications/WoningtypeNieuwbouw> Woningtype :=
+			WoningType_rel == Classifications/WoningtypeNieuwbouw/V/Appartement 
+			&& IsDefined(Bouwlagen) && Bouwlagen > 0b 
+		?	Bouwlagen > 4b ? Classifications/WoningtypeNieuwbouw/V/Flat5 : Classifications/WoningtypeNieuwbouw/V/FlatTot4
+		:	WoningType_rel;
+		
 		// Oppervlakte
 		attribute<m2>         Oppervlakte:= const(100[m2], .); // TODO ESDL
 		attribute<pand_asl>   pand_aandeel := value(1.0, nrPand) / value(Bouwlagen, nrAsl);
-		// Gebouwoptie danwel pakket Installaties voor RuimteVerwarming( basis, piek), Koude(basis, piek), Tapwater(basis, piek)
-		
-		attribute<.> Geometry_Parent_rel (Geometry) := value(Geometry/Parent_rel, .);
+		// Gebouwoptie danwel pakket Installaties voor RuimteVerwarming( basis, piek), Koude(basis, piek), Tapwater(basis, piek)		
 	}
 	
 	unit<uint32> Gebouw_optie := Parsed_Nieuwbouw/area/asset/asset, FreeData = "false", DialogData = "point_rd", DialogType = "map"
 	{
 		unit<uint32> Geometry := Parsed_Nieuwbouw/area/asset/asset/Geometry;
+		attribute<.> Geometry_Parent_rel (Geometry) := value(Geometry/Parent_rel, .);
 		
-		attribute<Gebouw> Gebouw_rel := value(Parent_rel,Gebouw);
+		attribute<Gebouw> Gebouw_rel := value(Parent_rel, Gebouw);
 		
 		attribute<rdc_meter>  point_rd := LatLongWgs842RD(
 			point(
@@ -114,9 +125,7 @@ template EsdlNieuwbouw
 		, rdc_meter);
 		attribute<string>     id   := Parsed_Nieuwbouw/area/asset/asset/id;
 		attribute<string>     name := Parsed_Nieuwbouw/area/asset/asset/name;
-		attribute<string>     type := Parsed_Nieuwbouw/area/asset/asset/type;
-		
-		attribute<.> Geometry_Parent_rel (Geometry) := value(Geometry/Parent_rel, .);
+		attribute<string>     type := Parsed_Nieuwbouw/area/asset/asset/type;		
 	}
 
 	template SelectT
