@@ -52,11 +52,11 @@ template LtBronIter
 		attribute<bool> Combi    (Candidates) := Marginaal &&  Cluster; // er moet verder geclusterd worden om aan het minimum te gaan voldoen.
 	}
 
-	unit<uint32> Selected := Subset(Afweging/Select), DialogType = "Map", DialogData = "Point"
+	unit<uint32> Selected := Subset(Afweging/Select), DialogType = "Map", DialogData = "point"
 	{
 		attribute<Candidates> Candidates_rel := nr_OrgEntity;
-		attribute<string>    Label := Candidates/Label[Candidates_rel], DialogType = "LabelText";
-		attribute<rdc_meter> Point := Candidates/Point[Candidates_rel];
+		attribute<string>    label := Candidates/label[Candidates_rel], DialogType = "labelText";
+		attribute<rdc_meter> point := Candidates/point[Candidates_rel];
 		
 		attribute<kW>        P_warmte_primair   := Candidates/P_warmte_primair  [Candidates_rel];
 		attribute<kW>        P_Warmte_secundair := Candidates/P_Warmte_secundair[Candidates_rel];
@@ -80,11 +80,11 @@ template LtBronIter
 		}
 	}
 
-	unit<uint32> ClusterSet := Subset(Afweging/Combi), DialogType = "Map", DialogData = "Point"
+	unit<uint32> ClusterSet := Subset(Afweging/Combi), DialogType = "Map", DialogData = "point"
 	{
 		attribute<Candidates> Candidates_rel := nr_OrgEntity;
-		attribute<string>    Label := Candidates/Label[Candidates_rel], DialogType = "LabelText";
-		attribute<rdc_meter> Point := Candidates/Point[Candidates_rel];
+		attribute<string>    label := Candidates/label[Candidates_rel], DialogType = "labelText";
+		attribute<rdc_meter> point := Candidates/point[Candidates_rel];
 		
 		// feature selectie
 		unit<uint32> CandiFeature := Candidates/Feature;
@@ -100,14 +100,14 @@ template LtBronIter
 		attribute<.> per_bron (bron) := invert(Candidates_rel)[Candidates/per_bron];		
 		unit<uint32> cluster_bron := subset(IsDefined(per_bron)) {
 			attribute<..> cluster_rel := per_bron[nr_OrgEntity];
-			attribute<rdc_meter> Point:= bron/Point[cluster_bron/nr_OrgEntity];
+			attribute<rdc_meter> point:= bron/point[cluster_bron/nr_OrgEntity];
 		}
 		
 		// connect each cluster_bron to the Arcs of these clusters.
-		container connections := connect_info_ne(Feature/Geometry, Feature/MST_rel, cluster_bron/Point, cluster_bron/cluster_rel) {
+		container connections := connect_info_ne(Feature/Geometry, Feature/MST_rel, cluster_bron/point, cluster_bron/cluster_rel) {
 			attribute<float64>     dist    (cluster_bron);
 			attribute<Feature>     ArcID   (cluster_bron);
-			attribute<rdc_meter>   CutPoint(cluster_bron);
+			attribute<rdc_meter>   Cutpoint(cluster_bron);
 			
 			attribute<..>          cluster_rel(cluster_bron) := Feature/MST_rel[ArcID];
 			attribute<bool>        test_ne (cluster_bron) := cluster_rel != cluster_bron/cluster_rel;
@@ -115,10 +115,10 @@ template LtBronIter
 		
 		// feature side
 		attribute<cluster_bron> NearBron_rel := min_index(connections/dist, connections/cluster_rel); // welke bron is het minst ver vanuit ieder Cluster
-		attribute<rdc_meter>  Near_Point   := cluster_bron/Point[NearBron_rel];
+		attribute<rdc_meter>  Near_point   := cluster_bron/point[NearBron_rel];
 		attribute<float64>    Near_dist    := connections/dist[NearBron_rel];                // en hoe ver is dat?
 		attribute<ClusterSet> Near_rel     := cluster_bron/cluster_rel[NearBron_rel];        // en welk cluster is dat?
-		attribute<rdc_meter>  Cut_Point    := connections/CutPoint[NearBron_rel];
+		attribute<rdc_meter>  Cut_point    := connections/Cutpoint[NearBron_rel];
 		
 		//TODO_OV: select best order; reverse could be a T-connection
 		attribute<bool>       InCluster    := Near_rel[Near_rel] == id(ClusterSet); // reciprociteit?
@@ -126,7 +126,7 @@ template LtBronIter
 		attribute<bool>       NotInCluster := Not(InCluster);
 	}
 
-	unit <uint32> JoinedClusters := Subset(ClusterSet/CanCluster), DialogType = "Map", DialogData = "Point"
+	unit <uint32> JoinedClusters := Subset(ClusterSet/CanCluster), DialogType = "Map", DialogData = "point"
 	{
 		attribute<ClusterSet> cluster1_rel := nr_OrgEntity;
 		attribute<ClusterSet> cluster2_rel := ClusterSet/Near_rel[cluster1_rel];
@@ -136,8 +136,8 @@ template LtBronIter
 
 		attribute<.> per_bron (bron) := MakeDefined(invert(src1)[Candidates/per_bron], invert(src2)[Candidates/per_bron]);
 
-		attribute<string>    Label       := '['+Candidates/Label  [src1] + ';' + Candidates/Label[src2]+']', DialogType = "LabelText";
-		attribute<rdc_meter> Point       := MEAN(center_bound(Feature/Geometry), Feature/MST_rel);
+		attribute<string>    label       := '['+Candidates/label  [src1] + ';' + Candidates/label[src2]+']', DialogType = "labelText";
+		attribute<rdc_meter> point       := MEAN(center_bound(Feature/Geometry), Feature/MST_rel);
 		
 		attribute<kW>     P_warmte_primair   := Candidates/P_warmte_primair   [src1] + Candidates/P_warmte_primair   [src2];
 		attribute<kW>     P_Warmte_secundair := Candidates/P_Warmte_secundair   [src1] + Candidates/P_Warmte_secundair   [src2];
@@ -153,14 +153,14 @@ template LtBronIter
 		unit<uint32> Features1 := subset(IsDefined(invert(src1)[CandiFeatures/MST_rel]));
 		unit<uint32> Features2 := subset(IsDefined(invert(src2)[CandiFeatures/MST_rel]));
 		
-		attribute<rdc_meter> connect1 := ClusterSet/Cut_Point [cluster1_rel];
-		attribute<rdc_meter> connect2 := ClusterSet/Near_Point[cluster1_rel];
+		attribute<rdc_meter> connect1 := ClusterSet/Cut_point [cluster1_rel];
+		attribute<rdc_meter> connect2 := ClusterSet/Near_point[cluster1_rel];
 		
-		unit<uint32> connectionPoint := union_unit(., .);
+		unit<uint32> connectionpoint := union_unit(., .);
 		attribute<rdc_meter> connection(arc) := points2sequence(
-			union_data(connectionPoint, connect1, connect2), 
-			union_data(connectionPoint, id(.), id(.)),
-			union_data(connectionPoint, const(0, .), const(1, .))
+			union_data(connectionpoint, connect1, connect2), 
+			union_data(connectionpoint, id(.), id(.)),
+			union_data(connectionpoint, const(0, .), const(1, .))
 		);
 		
 		unit<uint32> Feature := union_unit(Features1, Features2, .) // left features + right features + connection
@@ -179,13 +179,13 @@ template LtBronIter
 		}
 	}
 
-	unit <uint32> InheritedClusters := Subset(ClusterSet/NotInCluster), DialogType = "Map", DialogData = "Point"
+	unit <uint32> InheritedClusters := Subset(ClusterSet/NotInCluster), DialogType = "Map", DialogData = "point"
 	{
 		attribute<Candidates> Candidates_rel := ClusterSet/Candidates_rel[nr_OrgEntity];
 		attribute<.>          per_bron (bron) := invert(Candidates_rel)[Candidates/per_bron];
 		
-		attribute<string>    Label := Candidates/Label[Candidates_rel], DialogType = "LabelText";
-		attribute<rdc_meter> Point := Candidates/Point[Candidates_rel];
+		attribute<string>    label := Candidates/label[Candidates_rel], DialogType = "labelText";
+		attribute<rdc_meter> point := Candidates/point[Candidates_rel];
 		
 		attribute<kW>      P_warmte_primair   := Candidates/P_warmte_primair  [Candidates_rel];
 		attribute<kW>      P_Warmte_secundair := Candidates/P_Warmte_secundair[Candidates_rel];
@@ -207,10 +207,10 @@ template LtBronIter
 		}
 	}
 
-	unit <uint32> SelectedClusters := union_unit(InheritedClusters, JoinedClusters), DialogType = "Map", DialogData = "Point"
+	unit <uint32> SelectedClusters := union_unit(InheritedClusters, JoinedClusters), DialogType = "Map", DialogData = "point"
 	{
-		attribute<string>  Label              := union_data(., InheritedClusters/Label             , JoinedClusters/Label), DialogType = "LabelText";
-		attribute<rdc_meter> Point            := union_data(., InheritedClusters/Point             , JoinedClusters/Point);
+		attribute<string>  label              := union_data(., InheritedClusters/label             , JoinedClusters/label), DialogType = "labelText";
+		attribute<rdc_meter> point            := union_data(., InheritedClusters/point             , JoinedClusters/point);
 		attribute<kW>      P_warmte_primair   := union_data(., InheritedClusters/P_warmte_primair  , JoinedClusters/P_warmte_primair);
 		attribute<kW>      P_Warmte_secundair := union_data(., InheritedClusters/P_Warmte_secundair, JoinedClusters/P_Warmte_secundair);
 		attribute<ratio>   Weight             := union_data(., InheritedClusters/Weight            , JoinedClusters/Weight);

@@ -26,7 +26,7 @@ template BebouwingsComponentT
 	parameter<ratio>  BTW_Factor_gv;
 	// end of case parameters
 
-	parameter<Classifications/BebouwingsComponent> BC_rel := rlookup(BCname, Classifications/BebouwingsComponent/Name); // TODO_OV: Laat dit de parameter zijn en zoek de rest op.
+	parameter<Classifications/BebouwingsComponent> BC_rel := rlookup(BCname, Classifications/BebouwingsComponent/name); // TODO_OV: Laat dit de parameter zijn en zoek de rest op.
 
 	container NcwRefs
 	{
@@ -57,11 +57,11 @@ template BebouwingsComponentT
 
 		unit<uint32>  AfnameGebied         := PrevState/AfnameGebied;
 
-		attribute<Classifications/SchilLabel>  SchilLabel_rel  (BO) := PrevObject/SchilLabel_rel [PrevObject_rel];
+		attribute<Classifications/Schillabel>  Schillabel_rel  (BO) := PrevObject/Schillabel_rel [PrevObject_rel];
 		attribute<Classifications/WarmteOptie> WarmteOptie_rel (BO) := PrevObject/WarmteOptie_rel[PrevObject_rel];
 
-		container InstallatiePerProduct := for_each_nedv(Classifications/Product/Name
-		, 'PrevObject/InstallatiePerProduct/'+Classifications/Product/Name+'[PrevObject_rel]'
+		container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
+		, 'PrevObject/InstallatiePerProduct/'+Classifications/Product/name+'[PrevObject_rel]'
 		, BO
 		, Classifications/Installatie
 		)
@@ -167,17 +167,17 @@ template BebouwingsComponentT
 			attribute<GJ_yr> EA(..) := (nrAansluitingen * ModelObject/V_EA_asl [Model_rel] + Oppervlakte * ModelObject/V_EA_opp [Model_rel]) * DragerSpecifiekeOpties/ElektrischeApparatuur;
 
 			// TODO_OV, OPTIMIZE, V_RV_asl/@SL@ alleen meenemen indien niet allemaal 0, zoals bij utiliteiten wel het geval is
-			container RV := for_each_nedv(Classifications/SchilLabel/Name
+			container RV := for_each_nedv(Classifications/Schillabel/name
 			 , replace(
 				'(nrAansluitingen * ModelObject/V_RV_asl/@SL@[Model_rel] + Oppervlakte * ModelObject/V_RV_opp/@SL@[Model_rel])'
 					'* DragerSpecifiekeOpties/RuimteVerwarming'
 					'* Klimaateffect'
-				,'@SL@', Classifications/SchilLabel/Name)
+				,'@SL@', Classifications/Schillabel/name)
 			 ,..
 			 , GJ_yr
 			);
 
-			attribute<GJ_yr> CurrRV    (..) := ='merge(SchilLabel_rel, GJ_yr, '+AsItemList('RV/'+Classifications/SchilLabel/Name)+')';	
+			attribute<GJ_yr> CurrRV    (..) := ='merge(Schillabel_rel, GJ_yr, '+AsItemList('RV/'+Classifications/Schillabel/name)+')';	
 			attribute<GJ_yr> Ventilatie(..) := =
 				'('
 					+ (all(ModelObject/V_Vent_asl == 0[GJ_yr_asl]) ? '' : 'NrAansluitingen * ModelObject/V_Vent_asl + ')
@@ -235,30 +235,30 @@ template BebouwingsComponentT
 		unit<uint8> SchilSprong_set := subset(SchilSprong_sel)
 		{
 			attribute<Classifications/SchilSprong>     SchilSprong_rel     := nr_OrgEntity;
-			attribute<string>                          Name                := Classifications/SchilSprong/name[SchilSprong_rel];
-			attribute<Classifications/SchilLabel>      Naar_rel            := Classifications/SchilSprong/Naar_rel[SchilSprong_rel];
+			attribute<string>                          name                := Classifications/SchilSprong/name[SchilSprong_rel];
+			attribute<Classifications/Schillabel>      Naar_rel            := Classifications/SchilSprong/Naar_rel[SchilSprong_rel];
 			attribute<Classifications/SchilSprongCode> SchilSprongCode_rel := Classifications/SchilSprong/SchilSprongCode_rel[SchilSprong_rel];
 
-			attribute<string> LeerCurveName := Classifications/SchilLabel/LeerCurveName[Naar_rel];
+			attribute<string> LeerCurveName := Classifications/Schillabel/LeerCurveName[Naar_rel];
 
 			unit<uint32> xMO := combine(., ModelObject)
 			{
-				attribute<Eur_asl> Ki_asl := =#.=0?'const(0[Eur_asl],.)':'union_data(.,'+AsItemList(replace('(ModelObject/Ki_min_asl/@SS@ * Schuiven/KostenMin + ModelObject/Ki_max_asl/@SS@ * Schuiven/KostenMax) * Leercurves/'+LeerCurveName+'/Curve', '@SS@', Name))+')';
-				attribute<Eur_m2 > Ki_opp := =#.=0?'const(0[Eur_m2 ],.)':'union_data(.,'+AsItemList(replace('(ModelObject/Ki_min_opp/@SS@ * Schuiven/KostenMin + ModelObject/Ki_max_opp/@SS@ * Schuiven/KostenMax) * Leercurves/'+LeerCurveName+'/Curve', '@SS@', Name))+')';
+				attribute<Eur_asl> Ki_asl := =#.=0?'const(0[Eur_asl],.)':'union_data(.,'+AsItemList(replace('(ModelObject/Ki_min_asl/@SS@ * Schuiven/KostenMin + ModelObject/Ki_max_asl/@SS@ * Schuiven/KostenMax) * Leercurves/'+LeerCurveName+'/Curve', '@SS@', name))+')';
+				attribute<Eur_m2 > Ki_opp := =#.=0?'const(0[Eur_m2 ],.)':'union_data(.,'+AsItemList(replace('(ModelObject/Ki_min_opp/@SS@ * Schuiven/KostenMin + ModelObject/Ki_max_opp/@SS@ * Schuiven/KostenMax) * Leercurves/'+LeerCurveName+'/Curve', '@SS@', name))+')';
 			}
 		}
 
-		unit<uint8> SchilSprongOrIdle_set := union_unit_uint8(Classifications/SchilLabel, SchilSprong_set) 
+		unit<uint8> SchilSprongOrIdle_set := union_unit_uint8(Classifications/Schillabel, SchilSprong_set) 
 		{
-			attribute<Classifications/SchilLabel> Van_rel  := union_data(., id(Classifications/SchilLabel), Classifications/SchilSprong/Van_rel [SchilSprong_set/nr_OrgEntity]);
-			attribute<Classifications/SchilLabel> Naar_rel := union_data(., id(Classifications/SchilLabel), Classifications/SchilSprong/Naar_rel[SchilSprong_set/nr_OrgEntity]);
+			attribute<Classifications/Schillabel> Van_rel  := union_data(., id(Classifications/Schillabel), Classifications/SchilSprong/Van_rel [SchilSprong_set/nr_OrgEntity]);
+			attribute<Classifications/Schillabel> Naar_rel := union_data(., id(Classifications/Schillabel), Classifications/SchilSprong/Naar_rel[SchilSprong_set/nr_OrgEntity]);
 
-			attribute<string> Name := union_data(., 'S'+repeat(Classifications/SchilLabel/name,2), SchilSprong_set/name);
+			attribute<string> name := union_data(., 'S'+repeat(Classifications/Schillabel/name,2), SchilSprong_set/name);
 
 			unit<uint32> xMO := combine(., ModelObject) 
 			{
-				attribute<Eur_asl> Ki_asl := ='union_data(., ' + AsItemList(const('const(0[Eur_asl], ModelObject)', Classifications/SchilLabel))+', SchilSprong_set/xMO/Ki_asl)';
-				attribute<Eur_m2 > Ki_opp := ='union_data(., ' + AsItemList(const('const(0[Eur_m2 ], ModelObject)', Classifications/SchilLabel))+', SchilSprong_set/xMO/Ki_opp)';
+				attribute<Eur_asl> Ki_asl := ='union_data(., ' + AsItemList(const('const(0[Eur_asl], ModelObject)', Classifications/Schillabel))+', SchilSprong_set/xMO/Ki_asl)';
+				attribute<Eur_m2 > Ki_opp := ='union_data(., ' + AsItemList(const('const(0[Eur_m2 ], ModelObject)', Classifications/Schillabel))+', SchilSprong_set/xMO/Ki_opp)';
 			}
 		}
 
@@ -267,9 +267,9 @@ template BebouwingsComponentT
 		unit<uint32> Installatie := Classifications/Installatie
 		{
 			// TODO_OV, MTA: remove const in merge wanneer void domain hier zal worden toegestaan, issue XXX.
-			attribute<Eur_asl>   Ki_asl := =replace('(Ki_asl_min_@BC * Schuiven/KostenMin + Ki_asl_max_@BC * Schuiven/KostenMax)* merge(LeerCurve_rel, float64, '+AsItemList('const(LeerCurves/'+Classifications/LeerCurves/Name+'/Curve, .)')+')', '@BC', BcCode);
-			attribute<Eur_kW>    Ki_cap := =replace('(Ki_cap_min_@BC * Schuiven/KostenMin + Ki_cap_max_@BC * Schuiven/KostenMax)* merge(LeerCurve_rel, float64, '+AsItemList('const(LeerCurves/'+Classifications/LeerCurves/Name+'/Curve, .)')+')', '@BC', BcCode);
-			attribute<Eur_m2>    Ki_opp := =replace('(Ki_opp_min_@BC * Schuiven/KostenMin + Ki_opp_max_@BC * Schuiven/KostenMax)* merge(LeerCurve_rel, float64, '+AsItemList('const(LeerCurves/'+Classifications/LeerCurves/Name+'/Curve, .)')+')', '@BC', BcCode);
+			attribute<Eur_asl>   Ki_asl := =replace('(Ki_asl_min_@BC * Schuiven/KostenMin + Ki_asl_max_@BC * Schuiven/KostenMax)* merge(LeerCurve_rel, float64, '+AsItemList('const(LeerCurves/'+Classifications/LeerCurves/name+'/Curve, .)')+')', '@BC', BcCode);
+			attribute<Eur_kW>    Ki_cap := =replace('(Ki_cap_min_@BC * Schuiven/KostenMin + Ki_cap_max_@BC * Schuiven/KostenMax)* merge(LeerCurve_rel, float64, '+AsItemList('const(LeerCurves/'+Classifications/LeerCurves/name+'/Curve, .)')+')', '@BC', BcCode);
+			attribute<Eur_m2>    Ki_opp := =replace('(Ki_opp_min_@BC * Schuiven/KostenMin + Ki_opp_max_@BC * Schuiven/KostenMax)* merge(LeerCurve_rel, float64, '+AsItemList('const(LeerCurves/'+Classifications/LeerCurves/name+'/Curve, .)')+')', '@BC', BcCode);
 
 			attribute<Eur_kW>    Ki30_cap   := Ki_cap * AT30;
 			attribute<Eur_kW>    Ki20_cap   := Ki_cap * AT20;
@@ -298,7 +298,7 @@ template BebouwingsComponentT
 		}
 	}
 	
-	container DoelLabels := for_each_ne(Classifications/DoelLabel_NaSprong/Name, 'DoelLabelT(BO, Classifications/DoelLabel_NaSprong/V/'+Classifications/DoelLabel_NaSprong/Name+')') 
+	container Doellabels := for_each_ne(Classifications/Doellabel_NaSprong/name, 'DoellabelT(BO, Classifications/Doellabel_NaSprong/V/'+Classifications/Doellabel_NaSprong/name+')') 
 	{
 		container geen  // handle as special case
 		{
@@ -306,37 +306,37 @@ template BebouwingsComponentT
 		}
 	}
 
-	attribute<string> GebouwOptie_sel_Expr (Classifications/GebouwOptie) := 'LowerCase(LocatieSpecifiekeOpties/GebouwOpties/'+Classifications/GebouwOptie/Name+') != ' + Quote('criteria/never');
+	attribute<string> GebouwOptie_sel_Expr (Classifications/GebouwOptie) := 'LowerCase(LocatieSpecifiekeOpties/GebouwOpties/'+Classifications/GebouwOptie/name+') != ' + Quote('criteria/never');
 	attribute<bool>   GebouwOptie_sel      (Classifications/GebouwOptie) := ='union_data(Classifications/GebouwOptie, '+AsItemList(GebouwOptie_sel_Expr)+')';
 	
 	unit<uint8> BcGebouwOptie := subset(GebouwOptie_sel) 
 	{
-		attribute<string> Name           := Classifications/GebouwOptie/Name[nr_OrgEntity];
-		attribute<string> Label          := Name, DialogType = "LabelText";
-		attribute<string> Criterium_expr := ='replace_value(LowerCase(union_data(., '+AsItemList('LocatieSpecifiekeOpties/GebouwOpties/'+Name)+')), ''criteria/always'', '''')';
+		attribute<string> name           := Classifications/GebouwOptie/name[nr_OrgEntity];
+		attribute<string> label          := name, DialogType = "labelText";
+		attribute<string> Criterium_expr := ='replace_value(LowerCase(union_data(., '+AsItemList('LocatieSpecifiekeOpties/GebouwOpties/'+name)+')), ''criteria/always'', '''')';
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
 
-	container GebouwOpties := for_each_ne(BcGebouwOptie/Name, 'GebouwOptieT(BO, Classifications/GebouwOptie/V/'+BcGebouwOptie/Name+', '+Quote(BcGebouwOptie/Criterium_expr)+')');
+	container GebouwOpties := for_each_ne(BcGebouwOptie/name, 'GebouwOptieT(BO, Classifications/GebouwOptie/V/'+BcGebouwOptie/name+', '+Quote(BcGebouwOptie/Criterium_expr)+')');
 	
 	unit<uint32> BebouwingsObjectMetGebouwOptie := BO
 	{
 		unit<uint8>              BcGebouwOptie   := BebouwingsComponent_UpRef/BcGebouwOptie;
-		attribute<BcGebouwOptie> GebouwOptie_rel := =(#BcGebouwOptie == 1)? 'const(0[BcGebouwOptie],BO)' : 'argmin('+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/kosten_or_undefined')+')[BcGebouwOptie]';
+		attribute<BcGebouwOptie> GebouwOptie_rel := =(#BcGebouwOptie == 1)? 'const(0[BcGebouwOptie],BO)' : 'argmin('+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/kosten_or_undefined')+')[BcGebouwOptie]';
 
 		attribute<Classifications/WarmteOptie> WarmteOptie_rel := Classifications/WarmteOptie/IsGebiedsOptie[BO/WarmteOptie_rel]
 			? BO/WarmteOptie_rel
 			: Classifications/GebouwOptie/WarmteOptie_rel[BcGebouwOptie/nr_OrgEntity[GebouwOptie_rel]];
 
-		attribute<Classifications/SchilLabel> SchilLabel_rel := ='merge(GebouwOptie_rel, Classifications/SchilLabel, '+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/SchilLabel_rel')+')';
+		attribute<Classifications/Schillabel> Schillabel_rel := ='merge(GebouwOptie_rel, Classifications/Schillabel, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/Schillabel_rel')+')';
 
-		container InstallatiePerProduct := for_each_nedv(Classifications/Product/Name
-			, replace('merge(GebouwOptie_rel, Classifications/Installatie, '+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/InstallatiePerProduct/@P')+')', '@P', Classifications/Product/Name)
+		container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
+			, replace('merge(GebouwOptie_rel, Classifications/Installatie, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/InstallatiePerProduct/@P')+')', '@P', Classifications/Product/name)
 			,.
 			, Classifications/Installatie
 			);
 
-		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel (BO) := ='merge(GebouwOptie_rel, Classifications/AfgifteSysteem, '+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/AfgifteSysteem_rel')+')';
+		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel (BO) := ='merge(GebouwOptie_rel, Classifications/AfgifteSysteem, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/AfgifteSysteem_rel')+')';
 
 		// Extra info
 		attribute<string> WarmteOptie (BO) := Classifications/WarmteOptie/name[WarmteOptie_rel];
@@ -365,8 +365,8 @@ template BebouwingsComponentT
 
 	container Functioneel2
 	{
-		attribute<GJ_yr> V_RV     (BO) := ='merge(BebouwingsObjectMetGebouwOptie/GebouwOptie_rel, GJ_yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/Functioneel/RV')+')';
-		attribute<GJ_yr> V_TW     (BO) := ='merge(BebouwingsObjectMetGebouwOptie/GebouwOptie_rel, GJ_yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/Functioneel/TW')+')';
+		attribute<GJ_yr> V_RV     (BO) := ='merge(BebouwingsObjectMetGebouwOptie/GebouwOptie_rel, GJ_yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/Functioneel/RV')+')';
+		attribute<GJ_yr> V_TW     (BO) := ='merge(BebouwingsObjectMetGebouwOptie/GebouwOptie_rel, GJ_yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/Functioneel/TW')+')';
 		attribute<GJ_yr> V_Warmte (BO) :=  V_RV + V_TW;
 	}
 	container Opbrengsten
@@ -435,7 +435,7 @@ template BebouwingsComponentT
 
 		container Warmtewet := Functioneel2
 		{
-			attribute<GJ_yr> V_gas (BO) := ='merge(GebouwOptie_rel, GJ_yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/Name+'/Metervraag/gas')+')';
+			attribute<GJ_yr> V_gas (BO) := ='merge(GebouwOptie_rel, GJ_yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/Metervraag/gas')+')';
 
 			unit<uint32> GasVerbruikers := subset(V_Gas > 0.0[gj_yr])
 			{
