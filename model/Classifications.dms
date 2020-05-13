@@ -13,11 +13,11 @@
 
 container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 {
-	unit<uint8> BebouwingsSector: nrofrows = 3
+	unit<uint8> BebouwingsSectorBase: nrofrows = 3
 	{
 		attribute<string> name     : [ 'Woning', 'Util', 'GlTb'];
 		attribute<bool>   isActive := Invoer/SpecifiekeInstellingen/BS_isActive;
-		attribute<string> label    := name, DialogType = "labelText";
+		attribute<string> label    := name, DialogType = "LabelText";
 
 		attribute<bool>   IsGlastuinbouw   : [ false, false,  true ];
 		attribute<bool>   DraagtBTW        : [ true, false, false ];
@@ -29,19 +29,35 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
 	}
 
-	unit<uint8> BebouwingsComponentBase := combine_uint8(BebouwingsSector, bool )
+	unit<uint8> BebouwingsSector:= Subset(BebouwingsSectorBase/isActive)
 	{
-		attribute<string> name     := ( nr_2 ? 'Nieuwbouw' : 'Bestaande') + bebouwingsSector/name[nr_1];
-		attribute<bool>   isActive := BebouwingsSector/isActive[nr_1] && (Invoer/SpecifiekeInstellingen/BC_doNieuwbouw || !isNieuwbouw);
-		attribute<string> label    := name, DialogType = "labelText";
-		attribute<string> code     := string(id(.));
+		attribute<string> name             := BebouwingsSectorBase/name[nr_OrgEntity];
+		attribute<string> label            := BebouwingsSectorBase/label[nr_OrgEntity], DialogType = "LabelText";
 
-		attribute<BebouwingsSector> BebouwingsSector_rel := nr_1;
+		attribute<bool>   IsGlastuinbouw   := BebouwingsSectorBase/IsGlastuinbouw[nr_OrgEntity];
+		attribute<bool>   DraagtBTW        := BebouwingsSectorBase/DraagtBTW[nr_OrgEntity];
+		attribute<.>      Warmtewet_BC_rel := BebouwingsSectorBase/Warmtewet_BC_rel[nr_OrgEntity];
+
+		attribute<string> NcwRefBase       := BebouwingsSectorBase/NcwRefBase[nr_OrgEntity];
+		attribute<string> BcCode           := BebouwingsSectorBase/BcCode[nr_OrgEntity];
+
+		container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+	}
+
+	unit<uint8> BebouwingsComponentBase := combine_uint8(BebouwingsSectorBase, bool )
+	{
+		attribute<string> name     := ( nr_2 ? 'Nieuwbouw' : 'Bestaande') + BebouwingsSectorBase/name[nr_1];
+		attribute<string> TypeName := BebouwingsSectorBase/name[nr_1] + 'Type' + ( nr_2 ? 'Nieuwbouw' : 'Bestaand');
+		attribute<bool>   isActive := BebouwingsSectorBase/isActive[nr_1] && (Invoer/SpecifiekeInstellingen/BC_doNieuwbouw || !isNieuwbouw);
+		attribute<string> label    := name, DialogType = "LabelText";
+		attribute<string> Code     := string(id(.));
+		
+		attribute<BebouwingsSectorBase> BebouwingsSectorBase_rel := nr_1;
 
 		attribute<bool>   isBestaand       := not(IsNieuwbouw);
-		attribute<bool>   isGlastuinbouw   := BebouwingsSector/isGlastuinbouw[nr_1];
+		attribute<bool>   isGlastuinbouw   := BebouwingsSectorBase/isGlastuinbouw[nr_1];
 		attribute<bool>   isNieuwbouw      := nr_2;
-		attribute<bool>   DraagtBTW        := BebouwingsSector/DraagtBTW[nr_1];
+		attribute<bool>   DraagtBTW        := BebouwingsSectorBase/DraagtBTW[nr_1];
 		attribute<bool>   KanWKO           := not(IsGlastuinbouw);
 		attribute<bool>   Warmtewet        : [ true, false, false, false, false, false ]; // prijsberekening warmte volgens ACM berekening ?
 		attribute<.>      Warmtewet_BC_rel : [ 0, 0, 2, 2, 4, 4 ]; /// warmtewet prijs voor Nieuwbouw obv bestaande objecten
@@ -55,7 +71,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<string> entity := 'BebouwingsComponenten/'+ name +'/BebouwingsObject';
 
 		attribute<string> NcwRefBase : ['bw', 'nw', 'bu', 'nu', 'bt', 'nt'];
-		attribute<string> BcCode     := BebouwingsSector/BcCode[nr_1];
+		attribute<string> BcCode     := BebouwingsSectorBase/BcCode[nr_1];
 
 		container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
 	}
@@ -63,13 +79,14 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	unit<uint8> BebouwingsComponent := subset(BebouwingsComponentBase/isActive) 
 	{
 		attribute<string> name       := BebouwingsComponentBase/name [nr_OrgEntity];
+		attribute<string> TypeName   := BebouwingsComponentBase/TypeName[nr_OrgEntity];
 		attribute<string> code       := BebouwingsComponentBase/code [nr_OrgEntity];
 		attribute<string> label      := BebouwingsComponentBase/label[nr_OrgEntity];
 		attribute<string> BronExpr   := BebouwingsComponentBase/BronExpr[nr_OrgEntity];
 		attribute<string> NcwRefBase := BebouwingsComponentBase/NcwRefBase[nr_OrgEntity];
 		
-		attribute<BebouwingsSector> BebouwingsSector_rel := BebouwingsComponentBase/BebouwingsSector_rel[nr_OrgEntity];
-//		attribute<BebouwingsSector> BebouwingsSector_rel := nr_OrgEntity -> BebouwingsSector_rel; // TODO: new syntax isssue XXX
+		attribute<BebouwingsSectorBase> BebouwingsSectorBase_rel := BebouwingsComponentBase/BebouwingsSectorBase_rel[nr_OrgEntity];
+//		attribute<BebouwingsSectorBase> BebouwingsSectorBase_rel := nr_OrgEntity -> BebouwingsSectorBase_rel; // TODO: new syntax isssue XXX
 
 		attribute<bool > IsBestaand       := BebouwingsComponentBase/IsBestaand[nr_OrgEntity];
 		attribute<bool > IsGlastuinbouw   := BebouwingsComponentBase/IsGlastuinbouw[nr_OrgEntity];
@@ -91,13 +108,13 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<string> name        := BebouwingsComponent/name[nr_OrgEntity];
 	}
 
-	unit<uint8> WoningComponent := subset(BebouwingsComponent/BebouwingsSector_rel == BebouwingsSector/V/Woning) 
+	unit<uint8> WoningComponent := subset(BebouwingsComponent/BebouwingsSectorBase_rel == BebouwingsSectorBase/V/Woning) 
 	{
 		attribute<string> name        := BebouwingsComponent/name [nr_OrgEntity];
 		attribute<string> NcwRefBase  := BebouwingsComponent/NcwRefBase[nr_OrgEntity];
 		attribute<bool  > IsNieuwbouw := BebouwingsComponent/IsNieuwbouw[nr_OrgEntity];
 	}
-	unit<uint8> UtilComponent := subset(BebouwingsComponent/BebouwingsSector_rel == BebouwingsSector/V/Util) 
+	unit<uint8> UtilComponent := subset(BebouwingsComponent/BebouwingsSectorBase_rel == BebouwingsSectorBase/V/Util) 
 	{
 		attribute<string> name        := BebouwingsComponent/name [nr_OrgEntity];
 		attribute<string> NcwRefBase  := BebouwingsComponent/NcwRefBase[nr_OrgEntity];
@@ -107,7 +124,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 // =========  Classificaties voor Bebouwingscomponenten
 	unit<uint8> WoningtypeBestaand : nrofrows = 7
 	{
-		attribute<string> label                : ['geen woonpand','vrijstaand','2 onder 1 kap'   ,'rijwoning hoek','rijwoning tussen','meergezins: laag en midden','meergezins: hoog'] , DialogType = "labelText";
+		attribute<string> label                : ['geen woonpand','vrijstaand','2 onder 1 kap'   ,'rijwoning hoek','rijwoning tussen','meergezins: laag en midden','meergezins: hoog'] , DialogType = "LabelText";
 		attribute<string> name                 : ['geen_woonpand','vrijstaand','twee_onder_1_kap','hoekwoning'    ,'tussenwoning'    ,'meergezinspand_laag_midden','meergezinspand_hoog'];
 		attribute<string> resterendFactorName  : [     'onbekend','vrijstaand', 'TweeOnderEenKap','Rijtjeshuis'   ,'Rijtjeshuis'     , 'FlatTot4'                 ,'Flat5'];
 
@@ -135,7 +152,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	{
 		attribute<bool>  IsMeergezins: [ false, false, false, false, true, true, true, true, false, true, false, true, false, false, false ];
 		attribute<bool>  IsHoogbouw  := id(.) == V/Flat5;
-		attribute<string> label      := excel_code, DialogType = "labelText";
+		attribute<string> label      := excel_code, DialogType = "LabelText";
 
 		attribute<string> name: [
 			'onbekend', 'vrijstaand', 'TweeOnderEenKap',
@@ -170,9 +187,9 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	{
 		attribute<bool>              IsMeergezins          := const(false, .);
 		attribute<bool>              IsHoogbouw            := const(false, .);
-		attribute<string>            label                 := label_key == 'Overig' ? 'overige_gebruiks' : label_key, DialogType = "labelText";
-		attribute<string>            label_key             : ['Kantoor', 'Winkel', 'Gezondheidszorg', 'Logies', 'Onderwijs', 'Industrie','Bijeenkomst','Sport','Overig','Cel'];
-		attribute<string>            excel_code            := label_key;
+		attribute<string>            label                 := Label_key == 'Overig' ? 'overige_gebruiks' : Label_key, DialogType = "LabelText";
+		attribute<string>            Label_key             : ['Kantoor', 'Winkel', 'Gezondheidszorg', 'Logies', 'Onderwijs', 'Industrie','Bijeenkomst','Sport','Overig','Cel'];
+		attribute<string>            excel_code            := Label_key;
 		attribute<int16>             SymbolIndex           : [41,54,241,49,67,213,107,246,171,150], DialogType = "SymbolIndex";
 		attribute<string>            name                  := label;
 		attribute<string>            resterendFactorName   : ['kantoor', 'winkel', 'verzorging_verpleging', 'horeca', 'onderwijs', 'overig', 'overig', 'overig', 'overig', 'overig'];
@@ -185,11 +202,11 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	{
 		attribute<bool>         IsMeergezins           := const(false, .);
 		attribute<bool>         IsHoogbouw             := const(false, .);
-		attribute<string>       label                  : ['kantoor' , 'winkel' , 'groothandel', 'autohandel_reperatie'    , 'verzorging_verpleging'   , 'ziekenhuis'  , 'onderwijs', 'horeca' , 'overig'                 ], DialogType = "labelText";
-		attribute<string>       label_key              : ['kantoren', 'winkels', 'Groothandel', 'Autohandel en reparatie' , 'Verpleging en verzorging', 'Ziekenhuizen', 'Onderwijs', 'Horeca' , 'Overige dienstverlening'], isHidden = "True";
+		attribute<string>       label                  : ['kantoor' , 'winkel' , 'groothandel', 'autohandel_reperatie'    , 'verzorging_verpleging'   , 'ziekenhuis'  , 'onderwijs', 'horeca' , 'overig'                 ], DialogType = "LabelText";
+		attribute<string>       Label_key              : ['kantoren', 'winkels', 'Groothandel', 'Autohandel en reparatie' , 'Verpleging en verzorging', 'Ziekenhuizen', 'Onderwijs', 'Horeca' , 'Overige dienstverlening'], isHidden = "True";
 		attribute<string>       filename_Nieuwbouw     : ['kantoren', 'winkels', 'groothandel', 'autohandel'              , 'verpleging'              , 'ziekenhuis'  , 'onderwijs', 'horeca' , 'overig'                 ], isHidden = "True";
 		attribute<string>       wlo_filename_Nieuwbouw : ['kantoor' , 'winkel' , ''           , ''                        , 'verpleging_verzorging'   , ''            , 'onderwijs', 'horeca' , 'overig_dienstverlening' ], isHidden = "True";
-		attribute<string>       excel_code             := label_key, isHidden = "True";
+		attribute<string>       excel_code             := Label_key, isHidden = "True";
 		attribute<int16>        SymbolIndex            : [41,54,241,49,67,213,107,246,171], DialogType = "SymbolIndex", isHidden = "True";
 		attribute<string>       name                   := label, isHidden = "True";
 		attribute<string>       resterendFactorName    := name;
@@ -201,7 +218,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	{
 		attribute<bool>   IsMeergezins := const(false, .);
 		attribute<bool>   IsHoogbouw   := const(false, .);
-		attribute<string> label        := csv_output, DialogType = "labelText";
+		attribute<string> label        := csv_output, DialogType = "LabelText";
 		attribute<string> name         := replace(label, ' ', '_');
 		attribute<string> excel_code: 
 		[
@@ -224,6 +241,8 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<string> csv_output          := replace(excel_code, ', ', '_'); // no comma's in output to csv as Excel will treat them as seperate columns
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
+	unit<uint8> GlTbTypeBestaand := GLTB;
+	unit<uint8> GlTbTypeNieuwbouw:= GLTB;
 
 // =========  Classificaties voor bouw/zichtjaren
 	unit<uint8> BouwjaarWoningBestaand : nrofrows = 11
@@ -419,7 +438,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	// let op: de set van mogelijke RapGroeperingen is afhankelijk van de gekozen BebouwingsComponenten.
 	unit<uint8> WoningBestaandRapGroep: nrofrows = 16 // Eigendom (4) en inkomensklasse (8) zijn nu niet beschikbaar voor woningBAG
 	{
-		attribute<string> label: DialogType = "labelText",
+		attribute<string> label: DialogType = "LabelText",
 		[
 			'0=geen onderverdeling',
 			'1=woningtype',
@@ -430,7 +449,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			'8=inkomensklasse(obv: ???)',
 			'', '', '', '', '', '', ''
 		];
-		attribute<string> Exportlabel: // GEEN SPATIES of SLASHES E.D. GEBRUIKEN
+		attribute<string> ExportLabel: // GEEN SPATIES of SLASHES E.D. GEBRUIKEN
 		[
 			'geen_onderverdeling',
 			'woningtype',
@@ -467,14 +486,14 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 
 	unit<uint8> UtilBestaandRapGroep: nrofrows = 4
 	{
-		attribute<string> label: DialogType = "labelText",
+		attribute<string> label: DialogType = "LabelText",
 		[
 			'undefined',
 			'1: Ziekenhuis etc',
 			'minder dan 11 werknememers en niet 1',
 			'11 of meer werknemers en niet 1'
 		];
-		attribute<string> Exportlabel:
+		attribute<string> ExportLabel:
 		[
 			'geen_onderverdeling',
 			'utiltype',
@@ -499,7 +518,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 
 	unit<uint8> WoningEigendom: nrofrows = 7
 	{
-		attribute<string> label: DialogType = "labelText",
+		attribute<string> label: DialogType = "LabelText",
 		[
 			 'onbekend'
 			,'allemaal huur'
@@ -542,7 +561,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 
 	unit<uint8> InkomensKlasse: nrofrows = 7
 	{
-		attribute<string> label : DialogType = "labelText",
+		attribute<string> label : DialogType = "LabelText",
 		[
 			 '0 Onbekend'
 			,'1 Hoog'
@@ -559,7 +578,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	unit<uint8> WoonUtilComponent := Subset(BebouwingsComponent/KanWKO)
 	{
 		attribute<string> name        := BebouwingsComponent/name[nr_OrgEntity];
-		attribute<string> code        := BebouwingsComponent/code[nr_OrgEntity];
+		attribute<string> Code        := BebouwingsComponent/Code[nr_OrgEntity];
 		attribute<bool>   IsNieuwbouw := BebouwingsComponent/IsNieuwbouw[nr_OrgEntity];
 	}
 
@@ -567,7 +586,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	unit<uint8> schillabel: nrofrows = 7
 	{
 		attribute<string> name          : ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-		attribute<string> label         : ['A+', 'B', 'C', 'D', 'E', 'F', 'G'], DialogType = "labelText";
+		attribute<string> label         : ['A+', 'B', 'C', 'D', 'E', 'F', 'G'], DialogType = "LabelText";
 		attribute<string> LeercurveName : ['Verder', 'Bpls', 'Cmin', 'Cmin', 'Cmin', 'Cmin', 'Cmin'];
 
 		attribute<uint32> Color : DialogType = "BrushColor",
@@ -585,23 +604,23 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
 	
-	unit<uint8> Doellabel_NaSprong := unique(SchilSprong/Naar_rel)
+	unit<uint8> DoelLabel_NaSprong := unique(SchilSprong/Naar_rel)
 	{
-		attribute<string>     name           := Schillabel/name[Schillabel_rel];
-		attribute<schillabel> Schillabel_rel := values;
+		attribute<string>     name           := SchilLabel/name[SchilLabel_rel];
+		attribute<schillabel> SchilLabel_rel := values;
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);		
 	}
 
-	unit<uint8> Doellabel := 
-		range(uint8, 0b, uint8(#Doellabel_NaSprong+1)) // REMOVE WHEN stop support for version < 7.208
+	unit<uint8> DoelLabel := 
+		range(uint8, 0b, uint8(#DoelLabel_NaSprong+1)) // REMOVE WHEN stop support for version < 7.208
 		// new SYNTAX for GeoDMS 7.208: 
-		// union_unit_uint8(Doellabel_NaSprong, void)
+		// union_unit_uint8(DoelLabel_NaSprong, void)
 	{
-		attribute<string>             name           := union_data(., Doellabel_NaSprong/name, 'geen');
-		attribute<Doellabel_NaSprong> NaSprong_rel   := union_data(., id(Doellabel_NaSprong), (0/0)[Doellabel_NaSprong]);
-		attribute<schillabel>         Schillabel_rel := union_data(., Doellabel_NaSprong/Schillabel_rel, (0/0)[schillabel]);
-		attribute<uint32>             Color          := schillabel/Color[Schillabel_rel], DialogType = "BrushColor";
+		attribute<string>             name           := union_data(., DoelLabel_NaSprong/name, 'geen');
+		attribute<DoelLabel_NaSprong> NaSprong_rel   := union_data(., id(DoelLabel_NaSprong), (0/0)[DoelLabel_NaSprong]);
+		attribute<schillabel>         SchilLabel_rel := union_data(., DoelLabel_NaSprong/SchilLabel_rel, (0/0)[schillabel]);
+		attribute<uint32>             Color          := schillabel/Color[SchilLabel_rel], DialogType = "BrushColor";
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
@@ -609,13 +628,13 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	unit<uint32> ProductType: nrofrows = 3
 	{
 		attribute<string> name  : ['RV', 'TW', 'K'];
-		attribute<string> label := name, DialogType = "labelText";
+		attribute<string> label := name, DialogType = "LabelText";
 	}
 
 	unit<uint32> ServiceNiveau : nrofrows = 2
 	{
 		attribute<string> name  : ['b', 'p'];
-		attribute<string> label : ['basis', 'piek'], DialogType = "labelText";
+		attribute<string> label : ['basis', 'piek'], DialogType = "LabelText";
 	}
 
 	unit<uint32> Product := combine(ProductType, ServiceNiveau) 
@@ -625,7 +644,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<string> TypeName    := ProductType/name[nr_1];
 		attribute<string> ServiceName := ServiceNiveau/name[nr_2];
 		attribute<string> name        := TypeName + ServiceName;
-		attribute<string> label       := ProductType/label[nr_1] + '.' + ServiceNiveau/label[nr_2], DialogType = "labelText";
+		attribute<string> label       := ProductType/label[nr_1] + '.' + ServiceNiveau/label[nr_2], DialogType = "LabelText";
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
@@ -633,7 +652,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	unit<uint32> AfgifteSysteem : nrofrows = 3
 	{
 		attribute<string> name  : [ 'geen', 'MTAS', 'LTAS' ];
-		attribute<string> label := name, DialogType = "labelText";
+		attribute<string> label := name, DialogType = "LabelText";
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
@@ -641,7 +660,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	unit<uint32> Input : nrofrows = 10
 	{
 		attribute<string> name         : ['e', 'gas', 'H2', 'biomassa', 'pellets', 'LT', 'MT', 'zon', 'wind', 'kolen'];
-		attribute<string> label        := name, DialogType = "labelText";
+		attribute<string> label        := name, DialogType = "LabelText";
 		attribute<bool>   isBemeterd   := id(.) <= V/MT;
 		attribute<bool>   gebiedsOptie := id(.) <= V/MT && not(gebouwOptie);
 		attribute<bool>   opwekOptie   := id(.) == V/zon || id(.) == V/wind;
@@ -652,7 +671,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	unit<uint32> BemeterdeGebouwInput := subset(Input/gebouwOptie && Input/isBemeterd)
 	{
 		attribute<string> name  := Input/name[nr_OrgEntity];
-		attribute<string> label := name, DialogType = "labelText";
+		attribute<string> label := name, DialogType = "LabelText";
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
@@ -666,7 +685,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	unit<uint32> Installatie := Installatie_imp
 	,	IntegrityCheck = "#(unique(Installatie_imp/name)) == #(Installatie_imp)"
 	{
-		attribute<string> label := name, DialogType = "labelText";
+		attribute<string> label := name, DialogType = "LabelText";
 
 		attribute<float64> OpDak              := float64(Installatie_imp/Dak);
 		container          KanLeveren         := for_each_nedv(Product/name, 'float64(Installatie_imp/'+Product/name+')', ., ratio);
@@ -715,12 +734,12 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	unit<uint32> Performance := Performance_imp
 	,	IntegrityCheck = "# unique(Performance_imp/Installatie_name + '.' + Performance_imp/schillabel_name + '.' + Performance_imp/ProductType_name) == #(Performance_imp)"
 	{
-		attribute<string> label := Installatie_name + '.' + schillabel_name + '.' + ProductType_name, DialogType = "labelText";
+		attribute<string> label := Installatie_name + '.' + schillabel_name + '.' + ProductType_name, DialogType = "LabelText";
 		attribute<string> code  := label;
 
 		// relatie met andere entiteiten
 		attribute<Installatie> Installatie_rel := rlookup(Installatie_name, Installatie/name), IntegrityCheck="IsDefined(this)";
-		attribute<Schillabel>  schillabel_rel  := rlookup(schillabel_name,  schillabel/name ), IntegrityCheck="IsDefined(this) || schillabel_name == 'x'";
+		attribute<SchilLabel>  schillabel_rel  := rlookup(schillabel_name,  schillabel/name ), IntegrityCheck="IsDefined(this) || schillabel_name == 'x'";
 		attribute<ProductType> ProductType_rel := rlookup(ProductType_Name, ProductType/name), IntegrityCheck="IsDefined(this) || ProductType_Name == 'e' || ProductType_Name == 'geen'";
 
 		attribute<AfgifteSysteem> AfgifteSysteem_rel := rlookup(AS_Name, AfgifteSysteem/name), IntegrityCheck = "IsDefined(this)";
@@ -739,10 +758,10 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 
 	unit<uint8> energielabel: nrofrows = 10
 	{
-		attribute<string> name  : ['AeWP', 'EWV', 'Aplus', 'labelB', 'labelC', 'labelD', 'labelE', 'labelF', 'labelG', 'BeWP'];
-		attribute<string> label : DialogType = "labelText",  ['AeWP', 'EWV', 'A+', 'B', 'C', 'D', 'E', 'F', 'G', 'BeWP'];
+		attribute<string> name  : ['AeWP', 'EWV', 'Aplus', 'LabelB', 'LabelC', 'LabelD', 'LabelE', 'LabelF', 'LabelG', 'BeWP'];
+		attribute<string> label : DialogType = "LabelText",  ['AeWP', 'EWV', 'A+', 'B', 'C', 'D', 'E', 'F', 'G', 'BeWP'];
 				
-		attribute<Schillabel> schillabel_rel := union_data(., 
+		attribute<SchilLabel> schillabel_rel := union_data(., 
 			schillabel/V/A, schillabel/V/A, 
 			schillabel/V/A, schillabel/V/B,
 			schillabel/V/C, schillabel/V/D,
@@ -770,11 +789,11 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
 
-	unit<uint32> SchilSprongCode := combine(Schillabel, Schillabel);
+	unit<uint32> SchilSprongCode := combine(SchilLabel, SchilLabel);
 
 	unit<uint8> SchilSprongOrg: nrofrows = 6
 	{
-		attribute<string> label := code + ': '+Descr, DialogType = "labelText";
+		attribute<string> label := code + ': '+Descr, DialogType = "LabelText";
 		attribute<string> Descr:
 		[
 			'Van Huidig (E..G) Naar Tussenlabel(C..E)',
@@ -784,7 +803,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			'Van Tussenlabel naar A+',
 			'Van B naar A+'
 		];
-		attribute<string> code:  DialogType = "labelText",
+		attribute<string> code:  DialogType = "LabelText",
 		['S_H_T', 'S_H_B', 'S_H_AP', 'S_T_B', 'S_T_AP', 'S_B_AP'];
 
 		attribute<string> code_base: // sprongen zoals gegeven met modelwoning
@@ -805,17 +824,17 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<bool>   bu:   [ 1 ,  1 ,  1 ,  1 ,  1 ,  0 ,  1 ,  1 ,  0 ,  0 ,  1 ,  1 ,  0 ,  0 ,  1 ,  1 ,  0 ,  0 ];
 		attribute<bool>   none := const(false, .);
 
-		attribute<Schillabel>      Van_rel             := rlookup(Van , Schillabel/name), IntegrityCheck = "IsDefined(this)";
-		attribute<Schillabel>      Naar_rel            := rlookup(Naar, Schillabel/name), IntegrityCheck = "IsDefined(this)";
+		attribute<SchilLabel>      Van_rel             := rlookup(Van , SchilLabel/name), IntegrityCheck = "IsDefined(this)";
+		attribute<SchilLabel>      Naar_rel            := rlookup(Naar, SchilLabel/name), IntegrityCheck = "IsDefined(this)";
 		attribute<string>          name                := 'S'+Van+Naar;
 		attribute<string>          Descr               := 'Van '+Van+' naar '+Naar;
-		attribute<string>          label               := name, DialogType = "labelText";
+		attribute<string>          label               := name, DialogType = "LabelText";
 		attribute<SchilSprongCode> SchilSprongCode_rel := combine_data(SchilSprongCode, Van_rel, Naar_rel);
 	}
 
-	unit<uint8> labelSprong: nrofrows = 17
+	unit<uint8> LabelSprong: nrofrows = 17
 	{
-		attribute<string> label := code + ': '+Descr, DialogType = "labelText";
+		attribute<string> label := code + ': '+Descr, DialogType = "LabelText";
 		attribute<string> Descr:
 		[
 			'Van Huidig (E..G) Naar Tussenlabel(C..E)',
@@ -841,7 +860,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		];
 
 		attribute<SchilSprong> SchilSprong_rel: [0, 1, 2, 3, 4, 5, 1, 3, null, 2, 4, 5, null, 2, 4, 5, null];
-		attribute<string> code:  DialogType = "labelText",
+		attribute<string> code:  DialogType = "LabelText",
 		[
 			'S_H_T', 'S_H_B',  'S_H_AP',
 			'S_T_B', 'S_T_AP', 'S_B_AP',
@@ -881,26 +900,26 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		];
 	}
 
-	unit<uint32> labelBasedOnModelAndObservedValue : nrofrows = 33 // alleen voorzover CurrValue anders moet zijn dan ModelValue
+	unit<uint32> LabelBasedOnModelAndObservedValue : nrofrows = 33 // alleen voorzover CurrValue anders moet zijn dan ModelValue
 	{
-		attribute<Energielabel> Modellabel    : [ 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 5, 4, 4, 4, 4, 3, 3, 3, 2, 2 ];
-		attribute<Energielabel> Observedlabel : [ 6, 5, 4, 3, 2, 1, 0, 5, 4, 3, 2, 1, 0, 5, 4, 3, 2, 1, 0, 4, 3, 2, 1, 0, 3, 2, 1, 0, 2, 1, 0, 1, 0 ];
+		attribute<EnergieLabel> ModelLabel    : [ 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 5, 4, 4, 4, 4, 3, 3, 3, 2, 2 ];
+		attribute<EnergieLabel> ObservedLabel : [ 6, 5, 4, 3, 2, 1, 0, 5, 4, 3, 2, 1, 0, 5, 4, 3, 2, 1, 0, 4, 3, 2, 1, 0, 3, 2, 1, 0, 2, 1, 0, 1, 0 ];
 		
 		
-		attribute<labelSprong>  CurrSprong: [ 0, 0, 1, 1, 2, 2, 2, 0, 1, 1, 2, 2, 2, 0, 0, 1, 2, 2, 2, 1, 1, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2 ];
-		attribute<Energielabel> Currlabel : [ 6, 6, 3, 3, 2, 2, 2, 5, 3, 3, 2, 2, 2, 4, 4, 3, 2, 2, 2, 3, 3, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 2 ];
+		attribute<LabelSprong>  CurrSprong: [ 0, 0, 1, 1, 2, 2, 2, 0, 1, 1, 2, 2, 2, 0, 0, 1, 2, 2, 2, 1, 1, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2 ];
+		attribute<EnergieLabel> CurrLabel : [ 6, 6, 3, 3, 2, 2, 2, 5, 3, 3, 2, 2, 2, 4, 4, 3, 2, 2, 2, 3, 3, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 2 ];
 
-		attribute<uint8> code := Modellabel * uint8(#Energielabel) + Observedlabel;
+		attribute<uint8> code := ModelLabel * uint8(#EnergieLabel) + ObservedLabel;
 		
-		attribute<Schillabel>   ModelSchil_rel    := Energielabel/Schillabel_rel[Modellabel];
-		attribute<Schillabel>   ObservedSchil_rel := Energielabel/Schillabel_rel[Observedlabel];
-		attribute<Schillabel>   CurrSchil_rel     := Energielabel/Schillabel_rel[Currlabel];
+		attribute<SchilLabel>   ModelSchil_rel    := EnergieLabel/Schillabel_rel[ModelLabel];
+		attribute<SchilLabel>   ObservedSchil_rel := EnergieLabel/Schillabel_rel[ObservedLabel];
+		attribute<SchilLabel>   CurrSchil_rel     := EnergieLabel/Schillabel_rel[CurrLabel];
 		
-		attribute<uint8> codeSL := ModelSchil_rel * uint8(#Schillabel) + ObservedSchil_rel;
+		attribute<uint8> codeSL := ModelSchil_rel * uint8(#SchilLabel) + ObservedSchil_rel;
 		
-		attribute<string> ModelSchil_name    := Schillabel/name[ModelSchil_rel   ];
-		attribute<string> ObservedSchil_name := Schillabel/name[ObservedSchil_rel];
-		attribute<string> CurrSchil_name     := Schillabel/name[CurrSchil_rel    ];
+		attribute<string> ModelSchil_name    := SchilLabel/name[ModelSchil_rel   ];
+		attribute<string> ObservedSchil_name := SchilLabel/name[ObservedSchil_rel];
+		attribute<string> CurrSchil_name     := SchilLabel/name[CurrSchil_rel    ];
 	}
 
 // =========  Classificaties overig	
@@ -923,7 +942,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	unit<uint8> GebouwOptie := GebouwOptie_imp
 	{
 		attribute<bool>         kanGebiedsOptie := GebouwOptie_imp/kanGebiedsOptie[bool];
-		attribute<../Doellabel> Doellabel_rel   := rlookup(GebouwOptie_imp/Doellabel, ../Doellabel/name);
+		attribute<../DoelLabel> DoelLabel_rel   := rlookup(GebouwOptie_imp/DoelLabel, ../DoelLabel/name);
 
 		container I := Installatie/V;
 
@@ -999,7 +1018,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<bool>   IsH2 := id(.) == V/WaterstofHR || id(.) == V/WaterstofWP;
 		attribute<bool>   IsLT := not(IsMT) && not(IsH2);
 
-		attribute<string> label := name, DialogType = "labelText";
+		attribute<string> label := name, DialogType = "LabelText";
 		attribute<uint32> Color : DialogType = "BrushColor",
 		[
 			 rgb(150,  0,  0)
@@ -1033,7 +1052,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<bool>   IsH2            := union_data(., const(false, GebouwOptie), GebiedsOptie/IsH2);
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
-		attribute<string> labelText := name;
+		attribute<string> LabelText := name;
 	}
 
 	unit<uint8> PlanRegioOptie := subset(GebiedsOptie/IsPlanRegioOptie) 
@@ -1289,7 +1308,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			 rgb(255,245,  0),rgb(255,216,  0),rgb(255,180,  0),
 			 rgb(255,163,  0),rgb(255,140,  0),rgb(255,132,  0),rgb(255,128,0),rgb(255,51,0),rgb(230,0,0), rgb(153,0,0)];
 
-		attribute<string> label: DialogType = "labelText",
+		attribute<string> label: DialogType = "LabelText",
 			[' < -25','-25 tot -15','-15 tot -5',' -5 tot 0','     0     ','  0 tot  2','  2 tot  3','  3 tot  4','  4 tot  5',
 			'  5 tot  6','  6 tot  8','  8 tot 10',' 10 tot 15',' 15 tot 25',' > 25'];
 	}
@@ -1308,7 +1327,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 				,rgb(120,  0,  0),rgb( 60,  0,  0),rgb(120,  0,128),rgb(255,  0,200)
 			];
 
-		attribute<string> label : DialogType = "labelText",
+		attribute<string> label : DialogType = "LabelText",
 			[' 0 -  10','10 -  20','20 -  30','30 -  40','40 -  50','50 -  60','60 -  70','70 -  80','80 -  90','90 - 100','100- 120','120- 150','150- 200'];
 	}
 
@@ -1326,7 +1345,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 
 		attribute<uint32> SymbolColor:= BrushColor, DialogType = "SymbolColor";
 
-		attribute<string> label : DialogType = "labelText",
+		attribute<string> label : DialogType = "LabelText",
 			[' 0 ', '0    - 0.15', '0.15 - 0.30', '0.30 - 0.45', '0.45 - 0.60', '0.60 - 0.75', '0.75 - 0.90', '0.90 - 1.05', '> 1.05'];
 	}
 
@@ -1339,7 +1358,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<uint32> BrushColor: DialogType = "BrushColor",
 			[rgb(192,192,192),rgb(0,0,255),rgb(0,64,192),rgb(0,128,128),rgb(0,192,64),rgb(0,255,0),rgb(64,192,0),rgb(128,128,0),rgb(192,64,0),rgb(255,0,0)];
 
-		attribute<string> label: DialogType = "labelText",
+		attribute<string> label: DialogType = "LabelText",
 			['0.00 - 0.10','0.10 - 0.20','0.20 - 0.30','0.30 - 0.40','0.40 - 0.50','0.50 - 0.60','0.60 - 0.70','0.70 - 0.80','0.80 - 0.90','0.90 - 1.00'];
 	}
 
@@ -1352,14 +1371,14 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<uint32> BrushColor: DialogType = "BrushColor",
 			[rgb(0,0,255),rgb(85,85,170),rgb(170,170,85),rgb(255,255,0),rgb(255,204,0),rgb(255,153,0),rgb(255,102,0),rgb(192,192,192)];
 
-		attribute<string> label: DialogType = "labelText",
+		attribute<string> label: DialogType = "LabelText",
 			['0 to 5','5 to 10','10 to 15','15 to 30','30 to 50','50 to 75','75 to 100','Geen'];
 	}
 
 // =========  Classificatie voor de vervangingsstatus van Gasleidingen beheerd door Stedin
 	unit<uint8> CategorieKl: nrofrows = 3
 	{
-		attribute<string> label: DialogType = "labelText",
+		attribute<string> label: DialogType = "LabelText",
 		[
 			 'Jonger dan 30 jaar'
 			,'Ouder dan 30 jaar'
@@ -1378,9 +1397,9 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	{
 		unit<uint8> WoningtypeBouwjaarBestaand := combine_uint8(WoningtypeBestaand, BouwjaarWoningBestaand)
 		{
-			attribute<string> labelWoningtype := WoningtypeBestaand/label[nr_1];
-			attribute<string> labelBouwjaar   := BouwjaarWoningBestaand/label[nr_2];
-			attribute<string> label           := labelWoningtype + '_' + labelBouwjaar;
+			attribute<string> LabelWoningtype := WoningtypeBestaand/label[nr_1];
+			attribute<string> LabelBouwjaar   := BouwjaarWoningBestaand/label[nr_2];
+			attribute<string> label           := LabelWoningtype + '_' + LabelBouwjaar;
 		}
 
 		unit<uint32> ZichtJaarWonen := combine(ZichtJaar, WoningtypeNieuwbouw) // wordt gebruikt om Nieuwbouw maps en ResterdFactorMaps te lezen.
@@ -1403,9 +1422,9 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 
 		unit<uint8> UtiltypeBouwjaarBestaand := combine_uint8(UtiltypeBestaand, BouwjaarUtilBestaand)
 		{
-			attribute<string> labelUtiltype := UtiltypeBestaand/label[nr_1];
-			attribute<string> labelBouwjaar   := BouwjaarUtilBestaand/label[nr_2];
-			attribute<string> label           := labelUtiltype + '_' + labelBouwjaar;
+			attribute<string> LabelUtiltype := UtiltypeBestaand/label[nr_1];
+			attribute<string> LabelBouwjaar   := BouwjaarUtilBestaand/label[nr_2];
+			attribute<string> label           := LabelUtiltype + '_' + LabelBouwjaar;
 		}
 
 		unit<uint8> GLTBBouwJaarNieuw := combine_uint8(GLTB, BouwJaar);
@@ -1425,11 +1444,11 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			attribute<string>          label                   := name;
 		}
 
-		unit<uint32> labelChange := combine(energielabel, labelSprong)
+		unit<uint32> LabelChange := combine(energielabel, LabelSprong)
 		{
-			attribute<string> label := labelSprong/code[nr_2]+': van ' + energielabel/label[nr_1] + ' naar ' + energielabel/label[label_na], DialogType = "labelText";
+			attribute<string> label := LabelSprong/code[nr_2]+': van ' + energieLabel/label[nr_1] + ' naar ' + energieLabel/label[Label_na], DialogType = "LabelText";
 	
-			attribute<energielabel> label_na: [
+			attribute<energielabel> Label_na: [
 			//  org   org   org   new   new   new   org    new   new   new    org    new   new   new
 			//	EG_T  CG_B  BG_AP T_B   T_AP  B_AP  AG_eWP T_eWP B_eWP AP_eWP AG_EWV T_EWV B_EWV AP_EWV'
 			

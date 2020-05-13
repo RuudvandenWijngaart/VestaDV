@@ -34,7 +34,7 @@ template EsdlNieuwbouw
 				attribute<string> numberofbuildings;
 				attribute<string> name;
 				attribute<string> aggregated;
-				attribute<string> residentialBuildingType;
+				attribute<string> residentialBuildingType; // TODO ESDL: RENAME to BuildingType; specify enumeration according to Woningtype, WoningtypeNieuwbouw, UtilType, UtiltypeNieuwbouw, or GLTB
 				attribute<string> numberOfFloors;
 				attribute<string> buildingYear;
 				attribute<string> aggregationCount;
@@ -70,89 +70,141 @@ template EsdlNieuwbouw
 		
 	container Parsed_Nieuwbouw:= parse_xml(ESDL_Nieuwbouw, VestaBebouwingsComponentSchema);
 	
-	container Nieuwbouw
+	unit<uint32> Gebouw := Parsed_Nieuwbouw/area/asset, FreeData = "false", DialogData = "point_rd", DialogType = "map"
 	{
-		unit<uint32> Gebouwen := Parsed_Nieuwbouw/area/asset, FreeData = "false", DialogData = "point_rd", DialogType = "map"
-		{
-			unit<uint32> Geometry := Parsed_Nieuwbouw/area/asset/Geometry;
+		unit<uint32> Geometry := Parsed_Nieuwbouw/area/asset/Geometry;
+	
+		attribute<Classifications/BebouwingsComponentBase> BebouwingsComponentBase_rel := const(Classifications/BebouwingsComponentBase/V/NieuwbouwWoning, .); // TODO ESDL
 		
-			
-			attribute<rdc_meter>  point_rd := LatLongWgs842RD(
-				point(
-					value(first(Geometry/lat, Geometry_Parent_rel), float64)
-				,	value(first(Geometry/lon, Geometry_Parent_rel), float64)
-				,	dpoint)
-			, rdc_meter);
-			//buurt rel
-			attribute<string>     id                       := Parsed_Nieuwbouw/area/asset/id;
-			
-			attribute<uint8> Bouwlagen := const(4b, .);
-			attribute<Classifications/WoningtypeNieuwbouw> Woningtype := rlookup(UpperCase(residentialBuildingType), UpperCase(Classifications/WoningtypeNieuwbouw/name));
-			
-			attribute<uint32>     Bouwjaar                 := buildingYear[uint32];
-			attribute<uint32>     Aantal_aansl             := aggregationCount[uint32];
-			attribute<string>     Schillabel               := energyLabel;
-			// Oppervlakte
-			// Gebouwoptie danwel pakket Installaties voor RuimteVerwarming( basis, piek), Koude(basis, piek), Tapwater(basis, piek)
-			
-			attribute<.> Geometry_Parent_rel (Geometry) := value(Geometry/Parent_rel, .);
-		}
+		attribute<rdc_meter>  point_rd := LatLongWgs842RD(
+			point(
+				value(first(Geometry/lat, Geometry_Parent_rel), float64)
+			,	value(first(Geometry/lon, Geometry_Parent_rel), float64)
+			,	dpoint)
+		, rdc_meter);
 		
-		unit<uint32> Gebouw_opties := Parsed_Nieuwbouw/area/asset/asset, FreeData = "false", DialogData = "point_rd", DialogType = "map"
+		attribute<string>     id         := Parsed_Nieuwbouw/area/asset/id;
+		
+		attribute<Classifications/WoningtypeNieuwbouw> Woningtype := rlookup(UpperCase(residentialBuildingType), UpperCase(Classifications/WoningtypeNieuwbouw/name));
+		
+		attribute<uint8>      Bouwlagen  := value(numberOfFloors, uint8);
+		attribute<uint32>     Bouwjaar   := buildingYear[uint32];
+		attribute<nrAsl>      nr_aansl   := value(aggregationCount, nrAsl);
+		attribute<string>     Schillabel := energyLabel;
+		
+		// Oppervlakte
+		attribute<m2>         Oppervlakte:= const(100[m2], .); // TODO ESDL
+		attribute<pand_asl>   pand_aandeel := value(1.0, nrPand) / value(Bouwlagen, nrAsl);
+		// Gebouwoptie danwel pakket Installaties voor RuimteVerwarming( basis, piek), Koude(basis, piek), Tapwater(basis, piek)
+		
+		attribute<.> Geometry_Parent_rel (Geometry) := value(Geometry/Parent_rel, .);
+	}
+	
+	unit<uint32> Gebouw_optie := Parsed_Nieuwbouw/area/asset/asset, FreeData = "false", DialogData = "point_rd", DialogType = "map"
+	{
+		unit<uint32> Geometry := Parsed_Nieuwbouw/area/asset/asset/Geometry;
+		
+		attribute<Gebouw> Gebouw_rel := value(Parent_rel,Gebouw);
+		
+		attribute<rdc_meter>  point_rd := LatLongWgs842RD(
+			point(
+				value(first(Geometry/lat, Geometry_Parent_rel), float64)
+			,	value(first(Geometry/lon, Geometry_Parent_rel), float64)
+			,	dpoint)
+		, rdc_meter);
+		attribute<string>     id   := Parsed_Nieuwbouw/area/asset/asset/id;
+		attribute<string>     name := Parsed_Nieuwbouw/area/asset/asset/name;
+		attribute<string>     type := Parsed_Nieuwbouw/area/asset/asset/type;
+		
+		attribute<.> Geometry_Parent_rel (Geometry) := value(Geometry/Parent_rel, .);
+	}
+
+	template SelectT
+	{
+		parameter<uint32> zichtjaar;
+		parameter<uint32> prev_zichtjaar;
+		
+		parameter<Classifications/BebouwingsComponentBase> BebouwingsComponentBase_par;
+		
+		
+		unit<uint32> results := subset(Gebouw/Bouwjaar > prev_zichtjaar && Gebouw/Bouwjaar <= zichtjaar && Gebouw/BebouwingsComponentBase_rel == BebouwingsComponentBase_par)
+			, DialogType = "Map"
+			, DialogData = "Point"
 		{
-			unit<uint32> Geometry := Parsed_Nieuwbouw/area/asset/asset/Geometry;
-			
-			attribute<rdc_meter>  point_rd := LatLongWgs842RD(
-				point(
-					value(first(Geometry/lat, Geometry_Parent_rel), float64)
-				,	value(first(Geometry/lon, Geometry_Parent_rel), float64)
-				,	dpoint)
-			, rdc_meter);
-			attribute<string>     id                       := =Gebouw_opties_path+'/id';
-			attribute<string>     name                     := =Gebouw_opties_path+'/name';
-			attribute<string>     type                     := =Gebouw_opties_path+'/type';
-			
-			attribute<.> Geometry_Parent_rel (Geometry) := values(Geometry/Parent_rel, .);
+			attribute<string> Code     := Label;
+			attribute<string> TypeName := Gebouw/residentialBuildingType[nr_OrgEntity];
+			attribute<string> Label    := Classifications/BebouwingsComponentBase/name[BebouwingsComponentBase_par] + string(zichtjaar) + string(Gebouw/id[nr_OrgEntity]), DialogType = "LabelText";
+
+			unit<uint8> BebouwingsTypeDomein := ='Classifications/'+Classifications/BebouwingsComponentBase/TypeName[BebouwingsComponentBase_par];
+			unit<uint8> ModelObjectKeyDomein := combine_uint8(BebouwingsTypeDomein, Classifications/BouwJaar);
+
+			attribute<nrAsl>                              nrAansluitingen_i  := Gebouw/nr_aansl   [nr_OrgEntity];
+			attribute<m2>                                 Oppervlakte_i      := Gebouw/oppervlakte[nr_OrgEntity];
+			attribute<Classifications/Schillabel>         SchilLabel_rel     := rlookup(Gebouw/schillabel [nr_OrgEntity], Classifications/Schillabel/name);
+			attribute<Geography/rdc_meter>                Point              := Gebouw/point_rd   [nr_OrgEntity];
+			attribute<Invoer/RuimtelijkeData/StudieGebied/buurt> buurt_rel   := point_in_polygon(point, Invoer/RuimtelijkeData/StudieGebied/buurt/geometry );
+			attribute<BebouwingsTypeDomein>               BebouwingsType     := rlookup(UpperCase(TypeName), UpperCase(BebouwingsTypeDomein/Name));
+			attribute<Classifications/BouwJaar>           Bouwjaar           := classify(10000i-int32(Gebouw/Bouwjaar[nr_OrgEntity]), 10000i-int32(Classifications/BouwJaar/ClassBreak));
+			attribute<ModelObjectKeyDomein>               ModelObjectKey     := combine_data(ModelObjectKeyDomein, BebouwingsType, BouwJaar);
+
+			attribute<pand_asl>                           pand_aandeel       := Gebouw/pand_aandeel[nr_OrgEntity];
+
+			container Gebied
+			{
+				attribute<float64> n      (..) := nrAansluitingen_i;
+				attribute<float64> MEAN_x (..) := PointRow(Point);
+				attribute<float64> MEAN_y (..) := PointCol(Point);
+				attribute<float64> SSD_xx (..) := sqrt(n*10[m]);
+				attribute<float64> SSD_xy (..) := sqrt(n*10[m]);
+				attribute<float64> SSD_yy (..) := sqrt(n*10[m]);
+			}
+
+			container Kapitaallasten
+			{
+				//Aansluitbijdrages
+				attribute<Eur_yr> Kji_Asl_Enet (..) := const(0[EUR_yr], ..);
+				attribute<Eur_yr> Kmi_Asl_Enet (..) := const(0[EUR_yr], ..);
+				attribute<Eur_yr> Kji_Asl_Gnet (..) := const(0[EUR_yr], ..);
+				attribute<Eur_yr> Kmi_Asl_Gnet (..) := const(0[EUR_yr], ..);
+
+				//Investeringen
+				attribute<Eur_yr> Kji30_LO (..) := const(0[EUR_yr], ..);
+				attribute<Eur_yr> Kmi30_LO (..) := const(0[EUR_yr], ..);
+				attribute<Eur_yr> Kji20_LO (..) := const(0[EUR_yr], ..);
+				attribute<Eur_yr> Kmi20_LO (..) := const(0[EUR_yr], ..);
+				attribute<Eur_yr> Kji15_LO (..) := const(0[EUR_yr], ..);
+				attribute<Eur_yr> Kmi15_LO (..) := const(0[EUR_yr], ..);
+				attribute<Eur_yr> Kji_gv   (..) := const(0[EUR_yr], ..);
+				attribute<Eur_yr> Kmi_gv   (..) := const(0[EUR_yr], ..);
+
+				//Subsidies
+				attribute<Eur_yr> Oji_s_LO_30 (..) := const(0[EUR_yr], ..);
+				attribute<Eur_yr> Oji_s_LO_20 (..) := const(0[EUR_yr], ..);
+				attribute<Eur_yr> Oji_s_LO_15 (..) := const(0[EUR_yr], ..);
+				attribute<Eur_yr> Oji_s_gv    (..) := const(0[EUR_yr], ..);
+			}
+			container Criteria;
 		}
 	}
 	
-	
-	Container Woning := for_each_ne(Classifications/ZichtJaar/name
+	Container Woning := for_each_ne(Classifications/ZichtJaar/Name
 			,  Classifications/ZichtJaar/HasMutations
-			? 'CalculationSchemes/NieuwbouwWoningOperaties/Unite(PerGrid/' + Classifications/ZichtJaar/name+ ')'
+			? 'SelectT('+string(Classifications/ZichtJaar/Jaar)+','+string(MakeDefined(Classifications/ZichtJaar/Jaar[ID(Classifications/ZichtJaar)-1b], 0w))+', Classifications/BebouwingsComponentBase/V/NieuwbouwWoning)'
 			: 'CalculationSchemes/LegeBebouwingsComponent(Classifications/WoningtypeNieuwbouw)'
-			)
-	{
-		container PerGrid := for_each_ne(Classifications/combines/ZichtJaarWonen/HasMutations ? Classifications/combines/ZichtJaarWonen/name : ''
-				, 'CalculationSchemes/NieuwbouwWoningOperaties/Select(Invoer/RuimtelijkeData/Nieuwbouw/Woning/' + Classifications/combines/ZichtJaarWonen/name + 
-				  '[nrAsl], value(' + string(Classifications/combines/ZichtJaarWonen/WoningtypeNieuwbouw_rel) + ', Classifications/WoningtypeNieuwbouw) '+
-				  ', value(' + string(Classifications/combines/ZichtJaarWonen/ZichtJaar_jaar )+ ',units/yr_uint16)'+
-				  ')'
-				);
-	}
+			);
 
-	Container Utiliteit := for_each_ne(Classifications/ZichtJaar/name
+	Container Utiliteit := for_each_ne(Classifications/ZichtJaar/Name
 			,  Classifications/ZichtJaar/HasMutations
-			? 'CalculationSchemes/NieuwbouwUtilOperaties/Unite(PerGrid/' + Classifications/ZichtJaar/name+ ')'
-			: 'CalculationSchemes/LegeBebouwingsComponent(Classifications/UtilTypeNieuwbouw)'
+			? 'SelectT('+string(Classifications/ZichtJaar/Jaar)+','+string(MakeDefined(Classifications/ZichtJaar/Jaar[ID(Classifications/ZichtJaar)-1b], 0w))+', Classifications/BebouwingsComponentBase/V/NieuwbouwUtil)'
+			: 'CalculationSchemes/LegeBebouwingsComponent(Classifications/UtiltypeNieuwbouw)'
+			);
+			
+	Container GlasTuinBouw:= for_each_ne(Classifications/ZichtJaar/Name
+			,  Classifications/ZichtJaar/HasMutations
+			? 'SelectT('+string(Classifications/ZichtJaar/Jaar)+','+string(MakeDefined(Classifications/ZichtJaar/Jaar[ID(Classifications/ZichtJaar)-1b], 0w))+', Classifications/BebouwingsComponentBase/V/NieuwbouwGlTb)'
+			: 'CalculationSchemes/LegeBebouwingsComponent(Classifications/GLTB)'
 			)
 	{
-		container PerGrid := for_each_ne(Classifications/combines/ZichtJaarUtiliteit/HasMutations ?  Classifications/combines/ZichtJaarUtiliteit/name : ''
-				, 'CalculationSchemes/NieuwbouwUtilOperaties/Select(NieuwbouwUtil/' + Classifications/combines/ZichtJaarUtiliteit/name + 
-				  ', ' + quote(Classifications/combines/ZichtJaarUtiliteit/utiliteit_Name) + 
-				  ', value(' + string(Classifications/combines/ZichtJaarUtiliteit/ZichtJaar_jaar)+ ',units/yr_uint16)'+
-				  ')'
-				);
-	}
-
-	Container GlasTuinBouw:= for_each_ne( Classifications/ZichtJaar/HasMutations ? Classifications/ZichtJaar/name : '' 
-			,'CalculationSchemes/NieuwbouwGlTbOperaties/MaakMutatieNieuwbouw(RuimtelijkeData/GlasTuinBouw/Bij_studiegebied/' + Classifications/ZichtJaar/name
-				+ ',RuimtelijkeData/GlasTuinBouw/Af_studiegebied/'  + Classifications/ZichtJaar/name
-				+ ',value(' + string(Classifications/ZichtJaar/jaar )+ ',units/yr_uint16)'
-//				+ ','+MakeDefined(Classifications/ZichtJaar/name[id(Classifications/ZichtJaar)-1]+'/Nieuwbouw/BebouwingsObject','Huidig/LegeNieuwbouw/results/BebouwingsObject')
-			+')'
-		)
-	{
-		container StartJaar := CalculationSchemes/LegeBebouwingsComponent(classifications/GLTB);
+//		container StartJaar := CalculationSchemes/LegeBebouwingsComponent(classifications/GLTB);
 	}
 }
