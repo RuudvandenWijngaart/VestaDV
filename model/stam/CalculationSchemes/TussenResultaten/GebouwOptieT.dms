@@ -18,12 +18,21 @@ template GebouwOptieT
 	parameter<string> SprongSuffix     :=  AltijdSprong ? '[0[SchilLabelDomain]]' : '';
 	unit<uint32>      SchilLabelDomain := =AltijdSprong ? 'range(uint32, 0, 1)' : 'BebouwingsObject';
 
+	attribute<Classifications/SchilLabel> Defaultlabel (SchilLabelDomain) :=  BO/ModelObjectDomain/SchilLabel_rel[BO/Model_rel];
+	
 	attribute<Classifications/SchilLabel> SchilLabel_rel (SchilLabelDomain) := = AltijdSprong
 		? 'union_data(SchilLabelDomain, SchilLabel_rel_formeel)'
 		: SomsSprong
-			? 'min_elem(BebouwingsObject/schillabel_rel, SchilLabel_rel_formeel)'
+			? 'BebouwingsObject/schillabel_rel == Classifications/schillabel/V/N && Defaultlabel <= SchilLabel_rel_formeel
+			? BebouwingsObject/schillabel_rel
+			: min_elem(BebouwingsObject/schillabel_rel, SchilLabel_rel_formeel)'
 			: 'BebouwingsObject/schillabel_rel';
 
+	attribute<Classifications/Schillabel>  SchillabelOrDefault_rel (SchilLabelDomain) :=
+		Schillabel_rel == Classifications/schillabel/V/N 
+			? BebouwingsObject/ModelObjectDomain/SchilLabel_rel[BebouwingsObject/Model_rel]
+			: Schillabel_rel;
+			
 	// InstallatiePerProduct geeft per BebouwingsObject of per SchilLabel voor ieder Product de te kiezen of al aanwezige installatie
 	
 	container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
@@ -36,7 +45,7 @@ template GebouwOptieT
 
 	// Performance_rel geeft per BebouwingsObject of per SchilLabel voor ieder Product het performance profiel obv (InstallatieNaam, SchilLabel of x, ProductType {RV, TW of K} )
 	container Performance_key1 := for_each_nedv(Classifications/Product/name
-		, 'Classifications/Installatie/name[InstallatiePerProduct/'+Classifications/Product/name+']+''.'' + Classifications/SchilLabel/name[SchilLabel_rel] + ''.' + Classifications/Product/TypeName+''''
+		, 'Classifications/Installatie/name[InstallatiePerProduct/'+Classifications/Product/name+']+''.'' + Classifications/SchilLabel/name[SchillabelOrDefault_rel] + ''.' + Classifications/Product/TypeName+''''
 		, SchilLabelDomain
 		, string
 		)
