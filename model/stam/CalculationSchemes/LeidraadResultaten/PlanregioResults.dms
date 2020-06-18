@@ -12,7 +12,7 @@ container PlanregioResults
 	attribute<ratio>      R_StadV  (Planregio) := Invoer/RuimtelijkeData/StudieGebied/buurt/R_StadV;
 	attribute<ratio>      R_AardG  (Planregio) := 1D - R_StadV;
 	attribute<string>     IsWater  (Planregio) := Invoer/RuimtelijkeData/StudieGebied/buurt/IsWater;
-	parameter<bool>       Groengas             := TussenResultaten/VoorkEuren/Afweging/IsGroenGas;
+	parameter<Float64>    GroenGasFactor := TussenResultaten/Voorkeuren/GroenGasFactor;
 
 	container Hulpvariabelen
 	{
@@ -38,13 +38,13 @@ container PlanregioResults
 			attribute<ratio>    R_StadV := .../R_StadV;
 			attribute<GJ_yr>    VraagH2 := StateNaAllocatie/Totaal/Verbruik/V_H2;
 			attribute<GJ_yr>    VraagGG := 
-				(Statisch/IsUitgesloten || !GroenGas || nrWEQ == 0[nrWoning])
+				(Statisch/IsUitgesloten || nrWEQ == 0[nrWoning])
 					? 0[GJ_yr] 
 					: MakeDefined(
 							  R_AardG * sum(Allocatie/BestaandeWoning/metervraag/Aardgas, bebouwing/BestaandeWoning/PlanRegio_rel)
 							+ R_AardG * sum(Allocatie/BestaandeUtil/metervraag/Aardgas  , bebouwing/BestaandeUtil/PlanRegio_rel)
 						,0[GJ_yr]
-					 );
+					 ) * GroenGasFactor;
 			attribute<string> Uitgesloten := string(Statisch/IsUitgesloten);
 			attribute<string> IsOngeldig    := string(Checks/s3GeenLT || Checks/s2GeenMT || Statisch/IsUitgesloten);
 
@@ -182,7 +182,7 @@ container PlanregioResults
 
 			attribute<GJ_yr> H09_Input_aardgas := IsOngeldig
 				? (0/0)[GJ_yr]
-				: (Statisch/IsUitgesloten || GroenGas || nrWEQ == 0[nrWoning])
+				: (Statisch/IsUitgesloten || nrWEQ == 0[nrWoning])
 					? 0[GJ_yr]
 					: MakeDefined(
 						  R_AardG * sum(Allocatie/BestaandeWoning/metervraag/Aardgas, bebouwing/BestaandeWoning/PlanRegio_rel)
@@ -191,11 +191,11 @@ container PlanregioResults
 						+ R_AardG * StateNaAllocatie/totaal/verbruik/V_wd_gas
 						+ R_AardG * StateNaAllocatie/totaal/verbruik/V_ow_gas
 						+ WarmteBestaand/V_Bijstook
-					 ,0[GJ_yr]);
+					 ,0[GJ_yr]) * (1.0 - GroenGasFactor);
 
 			attribute<GJ_yr> H10_Input_duurzaamgas := IsOngeldig
 				? (0/0)[GJ_yr]
-				: (Statisch/IsUitgesloten || !GroenGas || nrWEQ == 0[nrWoning])
+				: (Statisch/IsUitgesloten || nrWEQ == 0[nrWoning])
 					? 0[GJ_yr]
 					: MakeDefined(
 						  R_AardG * sum(Allocatie/BestaandeWoning/metervraag/Aardgas, bebouwing/BestaandeWoning/PlanRegio_rel)
@@ -205,7 +205,7 @@ container PlanregioResults
 						+ R_AardG * StateNaAllocatie/totaal/verbruik/V_ow_gas
 						+ R_AardG * StateNaAllocatie/totaal/verbruik/V_H2
 						+ WarmteBestaand/V_Bijstook
-					 ,0[GJ_yr]);
+					 ,0[GJ_yr]) * GroenGasFactor;
 
 			attribute<GJ_yr> H11_Input_elektriciteit := IsOngeldig
 				? (0/0)[GJ_yr]
@@ -607,9 +607,7 @@ container PlanregioResults
 			attribute<ton_yr> Orig_CO2_ton (Planregio) := OrigKosten/Orig_CO2_ton;
 
 			attribute<ton_yr> New_CO2_ton  (Planregio) :=
-				Groengas
-					? const(0[ton_yr], PlanRegio)
-					: EnergyResults/CO2/gebouwen/Aardgas/totaal / 1000[kg_yr / ton_yr] + EnergyResults/CO2/GebiedsOpties/totaal / 1000[kg_yr / ton_yr];
+				(1.0 - GroenGasFactor) * (EnergyResults/CO2/gebouwen/Aardgas/totaal + EnergyResults/CO2/GebiedsOpties/totaal) / 1000[kg_yr / ton_yr];
 
 			attribute<ton_yr> Delta_CO2        (Planregio) := Orig_CO2_ton - New_CO2_ton;
 			attribute<Eur_yr> Delta_nat_kosten (Planregio) := Natkosten_abs;
@@ -625,11 +623,11 @@ container PlanregioResults
 
 			attribute<nrAsl> A01_Aansl_aardgas :=
 				round(
-					(Statisch/IsUitgesloten || GroenGas)
+					(Statisch/IsUitgesloten)
 						? 0[nrAsl]
 						: MakeDefined(
 							 R_AardG * Allocatie/aant_g_aansl_per_planregio
-							,0[nrAsl])
+							,0[nrAsl]) * (1.0 - GroenGasFactor)
 				)[nrAsl];
 
 			attribute<nrAsl> A02_Aansl_eWP :=
@@ -685,13 +683,13 @@ container PlanregioResults
 
 			attribute<nrAsl> A06_Aansl_HR_HG :=
 				round(
-					(Statisch/IsUitgesloten || !GroenGas)
+					(Statisch/IsUitgesloten)
 							? 0[nrAsl]
 							: MakeDefined(
 								   R_AardG * sum(Allocatie/BestaandeUtil/BO/Aansluitingen/Gnet   * float64(Allocatie/BestaandeUtil/BO/Aansluitingen/Enet_hwp   == 0[nrAsl]), Allocatie/BestaandeUtil/BO/Planregio_rel)
 								 + R_AardG * sum(Allocatie/BestaandeWoning/BO/Aansluitingen/Gnet * float64(Allocatie/BestaandeWoning/BO/Aansluitingen/Enet_hwp == 0[nrAsl]), Allocatie/BestaandeWoning/BO/Planregio_rel)
 								 + R_AardG * StateNaAllocatie/nrAansluitinging/WaterstofHR
-								,0[nrAsl])
+								,0[nrAsl]) * GroenGasFactor
 				)[nrAsl];
 		}
 		parameter<string> RefExpr := isStap0 ? 'Ref_2019_' : isReferentie ? 'Ref_2030_' : '%configName%/';

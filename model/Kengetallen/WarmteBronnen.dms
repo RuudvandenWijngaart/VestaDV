@@ -134,14 +134,17 @@ container WarmteBronnen
 		}
 		container RekenTypes
 		{
-			attribute<bool>   IsGroenGas (classifications/Rekenstap) := ='union_data(classifications/Rekenstap, '+AsItemList('SpecifiekeInstellingen/'+classifications/Rekenstap/name+'/VoorkEuren/Afweging/IsGroenGas')+')';
+			attribute<Float64> GroenGasFactor (classifications/Rekenstap) := ='union_data(classifications/Rekenstap, '+AsItemList('SpecifiekeInstellingen/'+classifications/Rekenstap/name+'/Voorkeuren/GroenGasFactor')+')';
+			attribute<Float64> H2Factor       (classifications/Rekenstap) := ='union_data(classifications/Rekenstap, '+AsItemList('SpecifiekeInstellingen/'+classifications/Rekenstap/name+'/Voorkeuren/H2Factor')+')';
+			attribute<Float64> GrijsGasFactor (classifications/Rekenstap) := 1.0 - GroenGasFactor;
+			
 			container STEG
 			{
 				attribute<Eur_GJ> Km_GJ_H2  (classifications/Rekenstap) := (0.2 / 0.3) * prijzen/Waterstof_GJ[classifications/Rekenstap/RekenJaar_rel];
-				attribute<Eur_GJ> K_GJ_Gas  (classifications/Rekenstap) := (0.2 / 0.3) * prijzen/K_Gas_GJ [classifications/Rekenstap/RekenJaar_rel];
-				attribute<Eur_GJ> Km_GJ_Gas (classifications/Rekenstap) := (0.2 / 0.3) * prijzen/Km_Gas_GJ[classifications/Rekenstap/RekenJaar_rel];
-				attribute<Eur_GJ> Km_GJ     (classifications/Rekenstap) := IsGroenGas ? Km_GJ_H2 : Km_GJ_Gas;
-				attribute<Eur_GJ> K_GJ      (classifications/Rekenstap) := IsGroenGas ? Km_GJ_H2 : K_GJ_Gas;
+				attribute<Eur_GJ> K_GJ_Gas  (classifications/Rekenstap) := (0.2 / 0.3) * prijzen/K_Gas_GJ    [classifications/Rekenstap/RekenJaar_rel];
+				attribute<Eur_GJ> Km_GJ_Gas (classifications/Rekenstap) := (0.2 / 0.3) * prijzen/Km_Gas_GJ   [classifications/Rekenstap/RekenJaar_rel];
+				attribute<Eur_GJ> Km_GJ     (classifications/Rekenstap) := H2Factor *  Km_GJ_H2 + (1.0 - H2Factor) * Km_GJ_Gas;
+				attribute<Eur_GJ> K_GJ      (classifications/Rekenstap) := H2Factor *  Km_GJ_H2 + (1.0 - H2Factor) * K_GJ_Gas;
 			}
 
 			container Kolen
@@ -170,8 +173,8 @@ container WarmteBronnen
 					parameter<float64> Opwekking     := 0.0;
 				}
 				
-				attribute<Eur_GJ> K_Gas  (classifications/Rekenstap) := IsGroenGas ? prijzen/K_GrGas_GJ [classifications/Rekenstap/RekenJaar_rel] : prijzen/K_Gas_GJ [classifications/Rekenstap/RekenJaar_rel];
-				attribute<Eur_GJ> Km_Gas (classifications/Rekenstap) := IsGroenGas ? prijzen/Km_GrGas_GJ[classifications/Rekenstap/RekenJaar_rel] : prijzen/Km_Gas_GJ[classifications/Rekenstap/RekenJaar_rel];
+				attribute<Eur_GJ> K_Gas  (classifications/Rekenstap) := prijzen/K_GrGas_GJ [classifications/Rekenstap/RekenJaar_rel] * GroenGasFactor + prijzen/K_Gas_GJ [classifications/Rekenstap/RekenJaar_rel] * GrijsGasFactor;
+				attribute<Eur_GJ> Km_Gas (classifications/Rekenstap) := prijzen/Km_GrGas_GJ[classifications/Rekenstap/RekenJaar_rel] * GroenGasFactor + prijzen/Km_Gas_GJ[classifications/Rekenstap/RekenJaar_rel] * GrijsGasFactor;
 
 				attribute<Eur_GJ>  K_GJ  (classifications/Rekenstap) :=
 					Factoren/Aardgas * K_Gas  + (Factoren/Elektriciteit * prijzen/ElekEnGros_GJ)[classifications/Rekenstap/RekenJaar_rel]; // en gros prijs als opbrengst, dit is excl distributiekosten

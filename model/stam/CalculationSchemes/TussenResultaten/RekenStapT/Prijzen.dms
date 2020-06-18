@@ -8,41 +8,48 @@ container Prijzen
 {
 	container AardGas
 	{
-		unit<uint32> Tabel := =IsGroengas ? 'Invoer/EnergiePrijzen/GroenGas/Table'   : 'Invoer/EnergiePrijzen/AardGas/Table';
-		container bron     := =IsGroengas ? 'Invoer/EnergiePrijzen/GroenGas/results' : 'Invoer/EnergiePrijzen/AardGas/results';
+		unit<uint32> TabelAG := Invoer/EnergiePrijzen/AardGas/Table;
+		container bronAG     := Invoer/EnergiePrijzen/AardGas/results;
 		
-		parameter<Tabel> JaarIndex := classify(RekenJaar_jaar, bron/Jaar);
-		parameter<kg_GJ> CO2_GJ    := bron/CO2_GJ[JaarIndex] * (1.0 - VoorkEuren/GroenGasFactor);
-		parameter<bool>  IsGroengas:= VoorkEuren/Afweging/IsGroenGas;
+		unit<uint32> TabelGG := Invoer/EnergiePrijzen/GroenGas/Table;
+		container bronGG     := Invoer/EnergiePrijzen/GroenGas/results;
+		
+		parameter<TabelAG> JaarIndexAG := classify(RekenJaar_jaar, bronAG/Jaar);
+		parameter<TabelGG> JaarIndexGG := classify(RekenJaar_jaar, bronGG/Jaar);
+		
+		parameter<kg_GJ> CO2_GJ    := bronAG/CO2_GJ[JaarIndexAG] * (1.0 - Voorkeuren/GroenGasFactor),
+			IntegrityCheck = "bronGG/CO2_GJ[JaarIndexGG] * Voorkeuren/GroenGasFactor == 0[kg_GJ]";
+		parameter<Float64>  GroenGasFactor:= Voorkeuren/GroenGasFactor;
+		parameter<Float64>  GrijsGasFactor:= Voorkeuren/GroenGasFactor;
 		
 		unit<uint8> Staffel := classifications/gebruiksgrootteklasse 
 		{
 			attribute<GJ_yr>  ClassBreak := gas_break;
-			attribute<Eur_GJ> KGJ_Commodity        := ='union_data(., ' + AsItemList('bron/' + name + '/CommodityPrice  [JaarIndex]') + ')';
-			attribute<Eur_GJ> KGJ_netwerk          := ='union_data(., ' + AsItemList('bron/' + name + '/netwerk         [JaarIndex]') + ')';
-			attribute<Eur_GJ> KGJ_eindgebruik_excl := ='union_data(., ' + AsItemList('bron/' + name + '/eindgebruik_excl[JaarIndex]') + ')';
-			attribute<Eur_GJ> KGJ_Maatschappelijk  := ='union_data(., ' + AsItemList('bron/' + name + '/Maatschappelijk [JaarIndex]') + ')';
-			attribute<Eur_GJ> KGJ_EnergieHeffing   := ='union_data(., ' + AsItemList('bron/' + name + '/EnergieHeffing  [JaarIndex]') + ')';
-			attribute<Eur_GJ> KGJ_CO2Heffing       := ='union_data(., ' + AsItemList('bron/' + name + '/CO2Heffing      [JaarIndex]') + ')';
+			attribute<Eur_GJ> KGJ_Commodity        := ='union_data(., ' + AsItemList('bronAG/' + name + '/CommodityPrice  [JaarIndexAG] * GrijsGasFactor + bronGG/' + name + '/CommodityPrice  [JaarIndexGG] * GroenGasFactor') + ')';
+			attribute<Eur_GJ> KGJ_netwerk          := ='union_data(., ' + AsItemList('bronAG/' + name + '/netwerk         [JaarIndexAG] * GrijsGasFactor + bronGG/' + name + '/netwerk         [JaarIndexGG] * GroenGasFactor') + ')';
+			attribute<Eur_GJ> KGJ_eindgebruik_excl := ='union_data(., ' + AsItemList('bronAG/' + name + '/eindgebruik_excl[JaarIndexAG] * GrijsGasFactor + bronGG/' + name + '/eindgebruik_excl[JaarIndexGG] * GroenGasFactor') + ')';
+			attribute<Eur_GJ> KGJ_Maatschappelijk  := ='union_data(., ' + AsItemList('bronAG/' + name + '/Maatschappelijk [JaarIndexAG] * GrijsGasFactor + bronGG/' + name + '/Maatschappelijk [JaarIndexGG] * GroenGasFactor') + ')';
+			attribute<Eur_GJ> KGJ_EnergieHeffing   := ='union_data(., ' + AsItemList('bronAG/' + name + '/EnergieHeffing  [JaarIndexAG] * GrijsGasFactor + bronGG/' + name + '/EnergieHeffing  [JaarIndexGG] * GroenGasFactor') + ')';
+			attribute<Eur_GJ> KGJ_CO2Heffing       := ='union_data(., ' + AsItemList('bronAG/' + name + '/CO2Heffing      [JaarIndexAG] * GrijsGasFactor + bronGG/' + name + '/CO2Heffing      [JaarIndexGG] * GroenGasFactor') + ')';
 		}
 
 		unit<uint8>  Glastuinbouw : nrofrows = 1
 		{
 			attribute<GJ_yr>  ClassBreak           := union_data(., first(staffel/Classbreak));
-			attribute<Eur_GJ> KGJ_eindgebruik_excl := bron/Glastuinbouw/eindgebruik_excl[const(JaarIndex,.)];
-			attribute<Eur_GJ> KGJ_Maatschappelijk  := bron/Glastuinbouw/Maatschappelijk [const(JaarIndex,.)];
-			attribute<Eur_GJ> KGJ_netwerk          := bron/Glastuinbouw/netwerk         [const(JaarIndex,.)];
-			attribute<Eur_GJ> KGJ_EnergieHeffing   := bron/Glastuinbouw/EnergieHeffing  [const(JaarIndex,.)];
-			attribute<Eur_GJ> KGJ_CO2Heffing       := bron/Glastuinbouw/CO2Heffing      [const(JaarIndex,.)];
+			attribute<Eur_GJ> KGJ_eindgebruik_excl := bronAG/Glastuinbouw/eindgebruik_excl[const(JaarIndexAG,.)] * GrijsGasFactor + bronGG/Glastuinbouw/eindgebruik_excl[const(JaarIndexGG,.)] * GroenGasFactor;
+			attribute<Eur_GJ> KGJ_Maatschappelijk  := bronAG/Glastuinbouw/Maatschappelijk [const(JaarIndexAG,.)] * GrijsGasFactor + bronGG/Glastuinbouw/Maatschappelijk [const(JaarIndexGG,.)] * GroenGasFactor;
+			attribute<Eur_GJ> KGJ_netwerk          := bronAG/Glastuinbouw/netwerk         [const(JaarIndexAG,.)] * GrijsGasFactor + bronGG/Glastuinbouw/netwerk         [const(JaarIndexGG,.)] * GroenGasFactor;
+			attribute<Eur_GJ> KGJ_EnergieHeffing   := bronAG/Glastuinbouw/EnergieHeffing  [const(JaarIndexAG,.)] * GrijsGasFactor + bronGG/Glastuinbouw/EnergieHeffing  [const(JaarIndexGG,.)] * GroenGasFactor;
+			attribute<Eur_GJ> KGJ_CO2Heffing       := bronAG/Glastuinbouw/CO2Heffing      [const(JaarIndexAG,.)] * GrijsGasFactor + bronGG/Glastuinbouw/CO2Heffing      [const(JaarIndexGG,.)] * GroenGasFactor;
 		}
 
 		container Bijstook := bron/GrootGebruik
 		{
-			parameter<Eur_GJ> KGJ_eindgebruik_excl := eindgebruik_excl[JaarIndex];
-			parameter<Eur_GJ> KGJ_Maatschappelijk  := Maatschappelijk [JaarIndex];
-			parameter<Eur_GJ> KGJ_netwerk          := netwerk         [JaarIndex];
-			parameter<Eur_GJ> KGJ_CO2Heffing       := CO2Heffing      [JaarIndex];
-			parameter<Eur_GJ> KGJ_EnergieHeffing   := EnergieHeffing  [JaarIndex];
+			parameter<Eur_GJ> KGJ_eindgebruik_excl := bronAG/GrootGebruik/eindgebruik_excl[JaarIndexAG] * GrijsGasFactor + bronGG/GrootGebruik/eindgebruik_excl[JaarIndexGG] * GroenGasFactor;
+			parameter<Eur_GJ> KGJ_Maatschappelijk  := bronAG/GrootGebruik/Maatschappelijk [JaarIndexAG] * GrijsGasFactor + bronGG/GrootGebruik/Maatschappelijk [JaarIndexGG] * GroenGasFactor;
+			parameter<Eur_GJ> KGJ_netwerk          := bronAG/GrootGebruik/netwerk         [JaarIndexAG] * GrijsGasFactor + bronGG/GrootGebruik/netwerk         [JaarIndexGG] * GroenGasFactor;
+			parameter<Eur_GJ> KGJ_EnergieHeffing   := bronAG/GrootGebruik/EnergieHeffing  [JaarIndexAG] * GrijsGasFactor + bronGG/GrootGebruik/EnergieHeffing  [JaarIndexGG] * GroenGasFactor;
+			parameter<Eur_GJ> KGJ_CO2Heffing       := bronAG/GrootGebruik/CO2Heffing      [JaarIndexAG] * GrijsGasFactor + bronGG/GrootGebruik/CO2Heffing      [JaarIndexGG] * GroenGasFactor;
 		}
 	}
 
