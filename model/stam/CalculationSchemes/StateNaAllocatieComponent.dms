@@ -18,6 +18,51 @@ template StateNaAllocatieComponent
 			, GJ_yr
 			);
 
+		container WarmteVraag // CalculationSchemes/WarmteVraagT is hier expliciet geinstantieerd wegens iets andere toepassing bij herberekening achteraf.
+		{
+			// begin case parameters
+			// attribute<Celsius> T_sec(BO) := Classifications/GebiedsOptie/T_sec[Classifications/WarmteOptie/GebiedsOptie_rel[WarmteOptie_rel]];
+			attribute<bool>    IsLT(BO) := Classifications/WarmteOptie/IsLT[WarmteOptie_rel];
+			attribute<bool>    Koudebeschikbaar(BO) := WarmteOptie_rel == Classifications/WarmteOptie/V/WKO; // TODO OV: Generaliseren
+			attribute<float64> BeschikbaarheidsFactor(BO) := Float64(Classifications/WarmteOptie/IsGebiedsOptie[WarmteOptie_rel]);
+			// end case parameters
+
+			//Aansluitwaardes
+			attribute<kW>     ASW_RV             (BO) := IsLT ? BO/AansluitCapaciteit/ASW_RVlt : BO/AansluitCapaciteit/ASW_RVmt;
+			attribute<kW>     ASW_TW             (BO) := IsLT ? BO/AansluitCapaciteit/ASW_TWlt : BO/AansluitCapaciteit/ASW_TWmt;
+			attribute<kW>     ASW_K              (BO) := KoudeBeschikbaar     ? BO/AansluitCapaciteit/ASW_K    : 0[kw];
+
+			//Gelijktijdigheidsfactoren
+			attribute<ratio>  GTF_RV             (BO) := IsLT ? BO/AansluitCapaciteit/GTF_RVlt : BO/AansluitCapaciteit/GTF_RVmt;
+			attribute<ratio>  GTF_TW             (BO) := BO/AansluitCapaciteit/GTF_TW;
+			attribute<ratio>  GTF_K              (BO) := BO/AansluitCapaciteit/GTf_K;
+
+			//Vermogensvraag aan het secundaire net
+			attribute<kW>     P_RV_sec           (BO) := ASW_RV * GTF_RV;
+			attribute<kW>     P_TW_sec           (BO) := ASW_TW * GTF_TW;
+			attribute<kW>     P_K_sec            (BO) := KoudeBeschikbaar ? ASW_K * GTF_K : 0.0[kw];
+
+			attribute<kW>     AansluitCapaciteit (BO) := KoudeBeschikbaar ? max_elem(ASW_TW   + ASW_RV  , ASW_K  ) : ASW_TW   + ASW_RV  ;
+			attribute<kW>     P_sec              (BO) := KoudeBeschikbaar ? max_elem(P_TW_sec + P_RV_sec, P_K_sec) : P_TW_sec + P_RV_sec;
+
+			attribute<nrAsl>  nrAansluitingen    (BO) := BeschikbaarheidsFactor * BO/nrAansluitingen;
+			attribute<m2>     Oppervlakte        (BO) := BeschikbaarheidsFactor * BO/Oppervlakte;
+
+			//VRVS3FH
+			parameter<bool>   IsS3FofS3H              := (Variantcode == 's3f' || Variantcode == 's3h') && RekenstapName == 'R2_2030' && BO/BebouwingsComponent_UpRef/BCname == 'BestaandeWoning';
+			attribute<GJ_yr>  V_RV_def           (BO) := BeschikbaarheidsFactor * BO/BebouwingsComponent_UpRef/Functioneel2/V_RV;
+			attribute<GJ_yr>  V_RV               (BO) := =IsS3FofS3H ? 'BeschikbaarheidsFactor * BO/GebouwOpties/NaarD_w/Functioneel/RV' : 'V_RV_def';
+
+			attribute<GJ_yr>  V_TW               (BO) := BeschikbaarheidsFactor * BO/Functioneel/TW;
+			attribute<GJ_yr>  V_K                (BO) := BeschikbaarheidsFactor * BO/Functioneel/K;
+			attribute<GJ_yr>  V_Warmte           (BO) := V_RV + V_TW;
+			attribute<Eur_yr> Oj_Warmte          (BO) := V_Warmte * BO/WarmteWet/WarmtePrijs, Source = "FO v7a F 8-10";
+			attribute<Eur_yr> Oj_VastRechtMT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtMT_T;
+			attribute<Eur_yr> Oj_VastRechtLT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtLT_T;
+			attribute<Eur_yr> Oj_VastRechtK      (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtK_T;
+			attribute<Eur>    Oi_AansluitBijdrage(BO) := BeschikbaarheidsFactor * BO/Opbrengsten/AansluitBijdrageT;
+		}
+		
 		container eenmalig
 		{
 			//Aansluitbijdrages
@@ -32,6 +77,8 @@ template StateNaAllocatieComponent
 			attribute<Eur> Ki15_LO (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Ki15_LO')+')';
 			attribute<Eur> Ki_GV   (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Ki_GV'  )+')';
 			attribute<Eur> Ki_LTAS (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Ki_LTAS')+')';
+			
+			attribute<Eur_yr> Kj_gv_incentive(BO) := ='merge(GebouwOptie_rel, Eur_yr, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Kj_gv_incentive')+')';
 
 			//Subsidies
 			attribute<Eur> Oi_s_LO_30 (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Oi30_s_LO')+')';
@@ -59,6 +106,7 @@ template StateNaAllocatieComponent
 			attribute<Eur_yr> Kmi15_LO (BO) := eenmalig/Ki15_LO * NCW/mr15/AnnualisationFactor;
 			attribute<Eur_yr> Kji_gv   (BO) := PrevResults/Kji_gv   + eenmalig/Ki_gv   * NcwRefs/_30/AnnualisationFactor;
 			attribute<Eur_yr> Kmi_gv   (BO) := PrevResults/Kmi_gv   + eenmalig/Ki_gv   * NCW/mr30/AnnualisationFactor;
+			attribute<Eur_yr> Kj_gv_incentive(BO) := PrevResults/Kj_gv_incentive+ Eenmalig/Kj_gv_incentive;
 			
 			attribute<Eur_yr> Kji_LTAS (BO) := PrevResults/Kji_LTAS + eenmalig/Ki_LTAS * NcwRefs/_30/AnnualisationFactor;
 			attribute<Eur_yr> Kmi_LTAS (BO) := PrevResults/Kmi_LTAS + eenmalig/Ki_LTAS * NCW/mr30/AnnualisationFactor;
