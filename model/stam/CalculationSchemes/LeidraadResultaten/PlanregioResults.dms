@@ -363,6 +363,19 @@ container PlanregioResults
 							,0[Eur_yr])
 				)[Eur_yr];
 		}
+		unit<uint32> ExtraFactoren := Invoer/DefaultInstellingen/Basis/PlanRegio
+		{
+			parameter<Eur_asl> K_Koken             := 1000[Eur_asl];
+			attribute<Eur>     Ki_ElektrischKoken  := =substr(Variantcode, 0,2) == 's4' ? 'const(0.0[Eur], .)' : 'K_Koken * Statisch/Table/I09_aantal_woningen';
+			attribute<Eur_yr>  Kmi_ElektrischKoken := Ki_ElektrischKoken * /TussenResultaten/StartJaar/NCW/mr15/AnnualisationFactor;
+			
+			parameter<ratio>   AandeelWP_NL        := sum(Aansluitingen/Table/A02_Aansl_eWP) / sum(Statisch/Table/I09_aantal_woningen + Statisch/Table/I10_aantal_utiliteit);
+			parameter<Eur_kWh> OpslagWPverbruik    := 0.005[Eur_kWh] * AandeelWP_NL;
+			parameter<Eur_GJ>  OpslagWP_GJ         := OpslagWPverbruik / 0.0036[GJ / kWh];
+			attribute<Eur_yr>  Kj_OpslagWP         := Hoofdindicatoren/extensief/H11_Input_elektriciteit * OpslagWP_GJ;
+			
+		}
+		
 		unit<uint32> table := Invoer/DefaultInstellingen/Basis/PlanRegio
 		{
 			attribute<string> BU_CODE              := Statisch/table/I01_buurtcode;
@@ -470,6 +483,7 @@ container PlanregioResults
 							+ R_AardG * Maatschappelijk/LokaleEnergieProductie/Kmi_15
 							+ R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Kmi_id_LO
 							- Origkosten/table/K09_Gebouw_installatie
+							+ ExtraFactoren/Kmi_ElektrischKoken
 							,0[Eur_yr])
 				  )[Eur_yr];
 
@@ -501,6 +515,7 @@ container PlanregioResults
 							+ R_AardG * StateNaAllocatie/totaal/jaarlijks/id/Km_id_gas //waterstof H2 opties
 							+ WarmteBestaand/Kj_wd_gas
 							+ R_AardG * Maatschappelijk/gebouwen/AardGasVerbruik/Km_Totaal
+							+ R_AardG * Maatschappelijk/gebouwen/WaterstofVerbruik/Km_Totaal
 							,0[Eur_yr])
 				  )[Eur_yr];
 
@@ -517,6 +532,7 @@ container PlanregioResults
 							+ WarmteBestaand/Kj_wd_elek
 							+ R_AardG * Maatschappelijk/gebouwen/ElektriciteitsVraag/Km_Totaal
 							+ WarmteBestaand/Kj_elek_gebouw
+							+ ExtraFactoren/Kj_OpslagWP
 							,0[Eur_yr])
 				  )[Eur_yr];
 
