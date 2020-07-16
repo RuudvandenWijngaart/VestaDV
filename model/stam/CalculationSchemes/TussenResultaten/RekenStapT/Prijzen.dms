@@ -55,21 +55,30 @@ container Prijzen
 
 	container Elektriciteit
 	{
-		unit<uint32> Tabel := Invoer/EnergiePrijzen/Elektriciteit/Table;
-		container    bron  := Invoer/EnergiePrijzen/Elektriciteit/results;
+		unit<uint32> TabelGrijs := Invoer/EnergiePrijzen/Elektriciteit/Table;
+		container    bronGrijs  := Invoer/EnergiePrijzen/Elektriciteit/results;
+		
+		unit<uint32> TabelGroen := Invoer/EnergiePrijzen/GroeneElektriciteit/Table;
+		container    bronGroen  := Invoer/EnergiePrijzen/GroeneElektriciteit/results;
 
-		parameter<Tabel> JaarIndex := classify(RekenJaar_jaar, bron/Jaar);
-		parameter<kg_GJ> CO2_GJ    := bron/CO2_GJ[JaarIndex] * Voorkeuren/ElektriciteitCO2Factor;
+		parameter<TabelGrijs> JaarIndexGrijs := classify(RekenJaar_jaar, bronGrijs/Jaar);
+		parameter<TabelGroen> JaarIndexGroen := classify(RekenJaar_jaar, bronGroen/Jaar);
+		
+		parameter<kg_GJ> CO2_GJ    := bronGrijs/CO2_GJ[JaarIndexGrijs] * Voorkeuren/ElektriciteitCO2Factor,
+			IntegrityCheck = "bronGroen/CO2_GJ[JaarIndexGroen] * (1.0 - Voorkeuren/ElektriciteitCO2Factor) == 0[kg_GJ]";
+			
+		parameter<Float64>  GroenElekFactor:= 1.0 - GrijsElekFactor;
+		parameter<Float64>  GrijsElekFactor:= Voorkeuren/ElektriciteitCO2Factor;
 
 		unit<uint8> Staffel := classifications/gebruiksgrootteklasse
 		{
-			attribute<GJ_yr>  ClassBreak           := elek_break_kWh [GJ_yr];
-			attribute<Eur_GJ> KGJ_commodity        := ='union_data(., ' + AsItemList('bron/' + name + '/CommodityPrice  [JaarIndex]') + ')';
-			attribute<Eur_GJ> KGJ_eindgebruik_excl := ='union_data(., ' + AsItemList('bron/' + name + '/eindgebruik_excl[JaarIndex]') + ')';
-			attribute<Eur_GJ> KGJ_Maatschappelijk  := ='union_data(., ' + AsItemList('bron/' + name + '/Maatschappelijk [JaarIndex]') + ')';
-			attribute<Eur_GJ> KGJ_netwerk          := ='union_data(., ' + AsItemList('bron/' + name + '/netwerk         [JaarIndex]') + ')';
-			attribute<Eur_GJ> KGJ_EnergieHeffing   := ='union_data(., ' + AsItemList('bron/' + name + '/EnergieHeffing  [JaarIndex]') + ')';
-			attribute<Eur_GJ> KGJ_CO2Heffing       := ='union_data(., ' + AsItemList('bron/' + name + '/CO2Heffing      [JaarIndex]') + ')';
+			attribute<GJ_yr>  ClassBreak           := elek_break_kWh [GJ_yr];		
+			attribute<Eur_GJ> KGJ_Commodity        := ='union_data(., ' + AsItemList('bronGrijs/' + name + '/CommodityPrice  [JaarIndexGrijs] * GrijsElekFactor + bronGroen/' + name + '/CommodityPrice  [JaarIndexGroen] * GroenElekFactor') + ')';
+			attribute<Eur_GJ> KGJ_netwerk          := ='union_data(., ' + AsItemList('bronGrijs/' + name + '/netwerk         [JaarIndexGrijs] * GrijsElekFactor + bronGroen/' + name + '/netwerk         [JaarIndexGroen] * GroenElekFactor') + ')';
+			attribute<Eur_GJ> KGJ_eindgebruik_excl := ='union_data(., ' + AsItemList('bronGrijs/' + name + '/eindgebruik_excl[JaarIndexGrijs] * GrijsElekFactor + bronGroen/' + name + '/eindgebruik_excl[JaarIndexGroen] * GroenElekFactor') + ')';
+			attribute<Eur_GJ> KGJ_Maatschappelijk  := ='union_data(., ' + AsItemList('bronGrijs/' + name + '/Maatschappelijk [JaarIndexGrijs] * GrijsElekFactor + bronGroen/' + name + '/Maatschappelijk [JaarIndexGroen] * GroenElekFactor') + ')';
+			attribute<Eur_GJ> KGJ_EnergieHeffing   := ='union_data(., ' + AsItemList('bronGrijs/' + name + '/EnergieHeffing  [JaarIndexGrijs] * GrijsElekFactor + bronGroen/' + name + '/EnergieHeffing  [JaarIndexGroen] * GroenElekFactor') + ')';
+			attribute<Eur_GJ> KGJ_CO2Heffing       := ='union_data(., ' + AsItemList('bronGrijs/' + name + '/CO2Heffing      [JaarIndexGrijs] * GrijsElekFactor + bronGroen/' + name + '/CO2Heffing      [JaarIndexGroen] * GroenElekFactor') + ')';
 		}
 	}
 	
