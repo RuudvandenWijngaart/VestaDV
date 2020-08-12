@@ -5,8 +5,8 @@ REM Resultaten worden weggeschreven in: n:/LD/%confignaam%/results/...
 REM Bij nogmaals runnen worden bestanden gewoon overschreven
 
 REM aanpassingen voor machine specifieke paden
-set prj_dir=N:\PD\_Folckert\VestaDV_GeneralisatieConversie
-set log_dir=N:\log_folckert
+set prj_dir=N:\PD\_Bas\GeneralisatieConversie_Bas_20200224
+set log_dir=N:\LD\_Bas\log_bas
 set exe_dir=N:\prog\ObjectVision\GeoDms7207
 
 REM einde aanpassingen voor machine specifieke paden
