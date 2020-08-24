@@ -130,17 +130,21 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 		,	url             = "%SourceDataProjDir%/vraag/wonen20200106_Metadata_RVOlabels_FvdM.txt"
 		{
 			attribute<string> HLT_unquoted := trim(replace(HLT,'''',''));
-			attribute<string> adres_key    :=
-				replace(Postcode,'''','') + '_' + replace(HNR,'''','') + 
-				(strlen(HLT_unquoted) > 0 
-					? '_' + HLT_unquoted
-					: ''
-				);
+			attribute<string> adres_key    := 
+				//lowercase(
+					replace(Postcode,'''','') + '_' + replace(HNR,'''','') + 
+					(strlen(HLT_unquoted) > 0 
+						? '_' + HLT_unquoted
+						: ''
+					)
+				//)
+				;
 			unit<uint32> UniqueLabel := unique(label), DisableStorage="True" { attribute<uint32> Count := pcount(rlookup(label, values)); }
 			
 			//order of replace matters!
 			attribute<Classifications/SchilLabel>   schillabel_rel := rlookup(replace(label, '+',''), Classifications/SchilLabel/name), IntegrityCheck = "IsDefined(this)";
 			attribute<uint32>                       datum_numeriek := uint32(replace(DATUM,'''',''));
+			
 		}
 
 		unit<uint32> data := unique(src/adres_key)
@@ -150,6 +154,39 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 			attribute<uint32>                     datum_laatste       := max(src/datum_numeriek, rlookup(src/adres_key, values));
 			attribute<Classifications/SchilLabel> SchilLabel_rel      := rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/schillabel_rel), FreeData = "False";
 		}
+		
+		unit<uint32> src_voorlopig
+		:	StorageName     = "%SourceDataProjDir%/vraag/wonen/20191201_voorlopige_labels_rvo.csv"
+		,	StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True"
+		,	url             = ""
+		{
+			attribute<string> HLT_unquoted := trim(replace(HLT,'''',''));
+			attribute<string> adres_key    :=
+				//lowercase(
+					replace(Postcode,'''','') + '_' + replace(HNR,'''','') + 
+					(strlen(HLT_unquoted) > 0 
+						? '_' + HLT_unquoted
+						: ''
+					)
+				//)
+				;
+			unit<uint32> UniqueLabel := unique(label), DisableStorage="True" { attribute<uint32> Count := pcount(rlookup(label, values)); }
+			
+			//order of replace matters!
+			attribute<Classifications/SchilLabel>   schillabel_rel := rlookup(replace(label, '+',''), Classifications/SchilLabel/name);// IntegrityCheck = "IsDefined(this)";
+			attribute<uint32>                       datum_numeriek := uint32(replace(DATUM,'''',''));
+
+		}
+
+		unit<uint32> data_voorlopig := unique(src_voorlopig/adres_key)
+		{
+			attribute<string>                     nummeraanduiding_id := nummeraanduiding/identificatie[rlookup(values, nummeraanduiding/adres_key)];
+			attribute<string>                     vbo_id              := rjoin(nummeraanduiding_id, vbo/nummeraanduiding_id, vbo/identificatie), FreeData = "False";
+			attribute<uint32>                     datum_laatste       := max(src_voorlopig/datum_numeriek, rlookup(src_voorlopig/adres_key, values));
+			attribute<Classifications/SchilLabel> SchilLabel_rel      := rjoin(values + '_' + string(datum_laatste), src_voorlopig/adres_key + '_' + string(src_voorlopig/datum_numeriek), src_voorlopig/schillabel_rel), FreeData = "False";
+		}
+
 
 		unit<uint32> opgelegd
 		:	StorageName     = "%SourceDataProjDir%/vraag/wonen/sprongtabel.csv"//voor voorbeeld vulling zie: %SourceDataProjDir%/vraag/wonen/sprongtabel_voorbeeld.csv
