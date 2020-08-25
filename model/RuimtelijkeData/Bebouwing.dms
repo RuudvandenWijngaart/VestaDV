@@ -30,6 +30,7 @@ container Bebouwing :=
 			unit<uint8>  BebouwingsTypeDomein  := Classifications/WoningtypeBestaand;
 			unit<uint8>  BouwjaarDomein        := Classifications/BouwjaarWoningBestaand;
 			unit<uint8>  ModelObjectKeyDomein  := Classifications/combines/WoningtypeBouwjaarBestaand;
+			unit<uint8> WoningtypeBouwjaarBestaandRapportageDomein := Classifications/combines/WoningtypeBouwjaarBestaandRapportage;
 
 			attribute<string>                                    code      := BAG/vbo_woonfunctie_studiegebied/identificatie;
 			attribute<Invoer/RuimtelijkeData/StudieGebied/buurt> buurt_rel := BAG/vbo_woonfunctie_studiegebied/buurt_rel;
@@ -39,6 +40,7 @@ container Bebouwing :=
 
 			attribute<BebouwingsTypeDomein> BebouwingsType := impl/WoningType, isHidden = "True";
 			attribute<ModelObjectKeyDomein> ModelObjectKey := combine_data(ModelObjectKeyDomein, BebouwingsType, impl/BouwjaarWoningBestaand_rel);
+			attribute<WoningtypeBouwjaarBestaandRapportageDomein> RapObjectKey   := combine_data(WoningtypeBouwjaarBestaandRapportageDomein, BebouwingsType, Impl/BouwjaarWoningBestaandRapportage_rel);
 			attribute<BouwjaarDomein>       BouwJaar       := classify(BAG/vbo_woonfunctie_studiegebied/bouwjaar, Classifications/BouwjaarWoningBestaand/ClassBreak), isHidden = "True";
 
 			attribute<rdc_meter>            point          := BAG/vbo_woonfunctie_studiegebied/geometry;
@@ -55,6 +57,17 @@ container Bebouwing :=
 
 			unit<uint32> EnergieLabelData := RuimtelijkeData/EnergieLabel/Data;
 			attribute<Classifications/SchilLabel> SchilLabel_rel := rjoin(code, EnergieLabelData/VBO_id, EnergieLabelData/schillabel_rel);
+			attribute<Classifications/RVOEnergieLabel> RVOLabel_inclusief_voorlopig_rel := 
+				MakeDefined(
+					SchilLabel_rel
+					, rjoin(code, RuimtelijkeData/EnergieLabel/Data_voorlopig/VBO_id, RuimtelijkeData/EnergieLabel/Data_voorlopig/schillabel_rel)
+				)[Classifications/RVOEnergieLabel];
+			attribute<uint8> ellabel_type := 
+					isDefined(SchilLabel_rel) 
+						? 1b
+						: isDefined(rjoin(code, RuimtelijkeData/EnergieLabel/Data_voorlopig/VBO_id, RuimtelijkeData/EnergieLabel/Data_voorlopig/schillabel_rel))
+							? 2b
+							: 0b;
 
 			container Criteria
 			{
@@ -66,6 +79,11 @@ container Bebouwing :=
 
 				attribute<Classifications/BouwjaarWoningBestaand> BouwjaarWoningBestaand_rel (..) := BAG/vbo_woonfunctie_studiegebied/BouwjaarWoningBestaand_rel;
 				attribute<string>                                 BouwJaarExcel              (..) := Classifications/BouwjaarWoningBestaand/excel_code[BouwjaarWoningBestaand_rel];
+				
+				attribute<Classifications/BouwjaarWoningBestaandRapportage> BouwjaarWoningBestaandRapportage_rel (..) := 
+					isNull(Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/bouwjaar) 
+						? Classifications/BouwjaarWoningBestaandRapportage/onbekend 
+						: classify(Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/bouwjaar, Classifications/BouwjaarWoningBestaandRapportage/ClassBreak);
 
 				attribute<classifications/WoningtypeBestaand>     WoningType                 (..) := BAG/vbo_woonfunctie_studiegebied/WoningtypeBestaand_rel;
 				attribute<BebouwingsTypeDomein>                   BebouwingsType             (..) := WoningType;

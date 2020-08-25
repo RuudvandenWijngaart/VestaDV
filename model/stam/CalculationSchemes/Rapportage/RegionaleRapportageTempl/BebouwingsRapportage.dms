@@ -13,17 +13,22 @@ container BebouwingsRapportage: Using = "impl/RegioSelectie"
 			unit<uint8> table := RapGroep
 			{
 				attribute<string>       label            := RapGroep/label;
-				attribute<QuantityUnit> Aantal           := =(Exportlabel == 'WoningType' || Exportlabel == 'woningtype_bouwjaarklasse') ? 'impl/nrAansluitingen' : 'impl/oppervlakte';
+				attribute<QuantityUnit> Aantal           := = AsList('EL/' + Classifications/RVOEnergieLabel/name, ' + ');
 				attribute<QuantityUnit> nrUnits      (BO):= =(Exportlabel == 'WoningType' || Exportlabel == 'woningtype_bouwjaarklasse') ? 'BO/nrAansluitingen' : 'BO/oppervlakte';
 	//			attribute<QuantityUnit> Schil            := sum(float64(BCdata/Sprongen/KanVerbeteren[nr_OrgEntity])                   * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
 	//			attribute<QuantityUnit> RuimteVerwarming := sum(float64(BCdata/Sprongen/RuimteVerwarming/KanVerbeteren[nr_OrgEntity] ) * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
 
-				container EL := for_each_nedv(Classifications/schillabel/name, 'sum(float64(BO/SchillabelOrDefault_rel[nr_OrgEntity]==' + string(id(Classifications/schillabel))+'[Classifications/schillabel])* NrUnits[nr_OrgEntity], BCGroep_rel)', RapGroep, QuantityUnit);
+				container EL_BestaandeWoning      := for_each_nedv(Classifications/RVOEnergieLabel/name, 'sum(float64(Invoer/RuimtelijkeData/Bebouwing/impl/BestaandeWoning/RVOLabel_inclusief_voorlopig_rel[nr_OrgEntity]==' + string(id(Classifications/RVOEnergieLabel))+'[Classifications/RVOEnergieLabel])* NrUnits[nr_OrgEntity], BCGroep_rel)', RapGroep, QuantityUnit);
+				container EL_BestaandeUtil        := for_each_nedv(Classifications/RVOEnergieLabel/name, 'sum(float64(BO/SchillabelOrDefault_rel[nr_OrgEntity]==' + string(id(Classifications/RVOEnergieLabel))+'[Classifications/RVOEnergieLabel])* NrUnits[nr_OrgEntity], BCGroep_rel)', RapGroep, QuantityUnit);
+				parameter<bool> isBestaandeWoning := BCname = 'BestaandeWoning';
+
+				container EL := = isBestaandeWoning ? 'EL_BestaandeWoning' : 'EL_BestaandeUtil';
 			}
+
 			container csv := 
 				WriteTable8ToCSV(
 					 table
-					,Exportlabel+':label;Aantal;' + AsList('EL/' + Classifications/schillabel/name, ';')
+					,Exportlabel+':label;Aantal;' + AsList('EL/' + Classifications/RVOEnergieLabel/name, ';')
 					,ReportFolder+'/'+ BebouwingscomponentNaam +'_Gebouw_Verbeteringen.csv'
 				);
 		}
