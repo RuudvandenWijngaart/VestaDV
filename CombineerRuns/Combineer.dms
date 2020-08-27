@@ -96,7 +96,7 @@ container Vergelijking: using = "Units"
 				[true,true
 				,true,true,false,true,true,false
 				,true,true,false,true,true,true,false,true
-				,true,true,true,true
+				,true,true,true,true //HERE
 				,false,false,false,false
 				];
 				
@@ -135,7 +135,7 @@ container Vergelijking: using = "Units"
 				[false,false
 				,false,false,false,false,false,false
 				,false,false,false,false,false,false,false,false
-				,true,true,true,true
+				,true,true,true,true //HERE
 				,false,false,false,false
 				];
 			attribute<bool> IsH2 :
@@ -809,8 +809,24 @@ container Vergelijking: using = "Units"
 				parameter<Eur_m3> InvertedOrientatiewaarde := makedefined(nth_element_weighted( InvertedWaarde, MaxVolume, VerbruikM3), 0[Eur_m3]);
 				parameter<Eur_m3> Orientatiewaarde :=  makedefined(0d - InvertedOrientatiewaarde, 0[Eur_m3]);
 				
-				attribute<bool>		Beschikbaarheid := Gaswaarde >= Orientatiewaarde;
-				parameter<m3_yr>	InGebruik       := sum(VerbruikM3 * float64(Beschikbaarheid)); // volume totaal in verbruik als check voor totaal
+				attribute<bool>		  Beschikbaarheid := Gaswaarde >= Orientatiewaarde;
+				attribute<nrWoning>   nrWEQ           := (1d-R_StadV) * LeidraadResultaten/StartJaar/PlanregioResults/nrWEQ[nr_orgentity];
+				attribute<float64>    R_stadV         := LeidraadResultaten/StartJaar/PlanregioResults/R_StadV[nr_orgentity];
+				attribute<m3_yr_WEQ>  M3perWEQ        := VerbruikM3 / nrWEQ;
+				parameter<m3_yr_WEQ>  MeanM3perWEQ    := sum(VerbruikM3) / sum(nrWEQ);
+				parameter<m3_yr>	  InGebruik       := sum(VerbruikM3 * float64(Beschikbaarheid)); // volume totaal in verbruik als check voor totaal
+				
+				unit<uint32> Allocated := subset(Beschikbaarheid)
+				{
+					attribute<float64>    Besch_R_stadV      := R_stadV[nr_orgentity];
+					attribute<m3_yr>	  Besch_VerbruikM3   := VerbruikM3[nr_orgentity];
+					attribute<nrWoning>   Besch_nrWEQ        := nrWEQ[nr_orgentity];
+					attribute<m3_yr_WEQ>  Besch_M3perWEQ     := Besch_VerbruikM3 / Besch_nrWEQ;
+					parameter<m3_yr_WEQ>  Besch_MeanM3perWEQ := sum(Besch_VerbruikM3) / sum(Besch_nrWEQ);
+					
+					attribute<m3_yr_WEQ>  Allocated_M3perWEQ (Gasvragers) := Besch_M3perWEQ[invert(nr_OrgEntity)];
+				}
+				attribute<m3_yr_WEQ>  Allocated_M3perWEQ (PlanRegio) := Allocated/Allocated_M3perWEQ[invert(nr_OrgEntity)];
 			}
 		}
 		
