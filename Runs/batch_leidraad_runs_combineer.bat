@@ -5,13 +5,7 @@ REM Resultaten worden weggeschreven in: n:/LD/%confignaam%/results/...
 REM Bij nogmaals runnen worden bestanden gewoon overschreven
 
 REM aanpassingen voor machine specifieke paden
-set prj_dir=N:\PD\_Bas\GeneralisatieConversie_Bas_20200224
-set log_dir=N:\LD\_Bas\log_bas
-set exe_dir=N:\prog\ObjectVision\GeoDms7207
-
-REM einde aanpassingen voor machine specifieke paden
-
-set exe_path=%exe_dir%\GeoDMSRun.exe
+Call path/set.bat
 
 set ITEM1=/LeidraadResultaten/Zichtjaar/PlanRegioResults/Hoofdindicatoren/export_csv/result
 set ITEM2=/LeidraadResultaten/Zichtjaar/PlanRegioResults/NationaleKosten/export_csv/result
