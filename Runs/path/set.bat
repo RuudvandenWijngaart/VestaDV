@@ -1,7 +1,8 @@
 REM aanpassingen voor machine specifieke paden
-set prj_dir=N:\PD\_Bas\GeneralisatieConversie
-set log_dir=N:\LD\_Bas\GeneralisatieConversie\log
-set exe_dir=N:\prog\ObjectVision\GeoDms7206
+
+set prj_dir=C:\Vesta\PD\VestaDV-VestaStartanalyse2020
+set log_dir=C:\Vesta\LD\VestaDV-VestaStartanalyse2020\log
+set exe_dir=C:\Program Files\ObjectVision\GeoDms7206
 
 REM einde aanpassingen voor machine specifieke paden
 
