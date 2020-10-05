@@ -7,7 +7,7 @@ REM Bij nogmaals runnen worden bestanden gewoon overschreven
 REM aanpassingen voor machine specifieke paden
 set prj_dir=C:\Users\Gebruiker\Desktop\Vesta\PD\VestaDV_Conversie
 set log_dir=C:\Users\Gebruiker\Desktop\Vesta\log_folckert
-set exe_dir=C:\Program Files\ObjectVision\GeoDms7212
+set exe_dir=C:\Program Files\ObjectVision\GeoDms7206
 
 REM einde aanpassingen voor machine specifieke paden
 
