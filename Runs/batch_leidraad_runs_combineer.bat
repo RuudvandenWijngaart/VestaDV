@@ -7,7 +7,7 @@ REM Bij nogmaals runnen worden bestanden gewoon overschreven
 REM aanpassingen voor machine specifieke paden
 set prj_dir=N:\PD\_Bas\GeneralisatieConversie_Bas_20200224
 set log_dir=N:\LD\_Bas\log_bas
-set exe_dir=N:\prog\ObjectVision\GeoDms7207
+set exe_dir=C:\Program Files\ObjectVision\GeoDms7206
 
 REM einde aanpassingen voor machine specifieke paden
 
@@ -48,6 +48,5 @@ set ITEMS=%ITEM1% %ITEM2% %ITEM3% %ITEM4% %ITEM5%
 "%exe_path%" /L"%log_dir%\LN.txt"          "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/LN/Hoofdindicatoren/export_csv/result
 "%exe_path%" /L"%log_dir%\LN.txt"          "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/LN/NationaleKosten/export_csv/result
 "%exe_path%" /L"%log_dir%\LN.txt"          "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/LN/Aansluitingen/export_csv/result
+"%exe_path%" /L"%log_dir%\LN.txt"          "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/LN/Hulpvariabelen/export_csv/result
 "%exe_path%" /L"%log_dir%\LN.txt"          "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/LN/GevoeligheidsAnalyse/export_csv/result
-
-pause Totaal klaar
