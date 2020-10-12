@@ -16,9 +16,9 @@ Call path/set.bat
 
 set ITEMS=/LeidraadResultaten/zichtjaar/DataPakketExport/bestaand/generate_all
 
-"%exe_path%" /L"%log_dir%\Runfile_Startjaar_DataPakketExport.txt" "%prj_dir%\Runs\Runfile.dms" LeidraadResultaten/Startjaar/DataPakketExport/bestaand/generate_all
+"%exe_path%" /L"%log_dir%\Runfile_Startjaar_DataPakketExport.txt"           "%prj_dir%\Runs\Runfile.dms" LeidraadResultaten/Startjaar/DataPakketExport/bestaand/generate_all
+"%exe_path%" /L"%log_dir%\Runfile_Ref2030_DataPakketExport.txt"             "%prj_dir%\Runs\Runfile.dms" LeidraadResultaten/Ref2030/DataPakketExport/bestaand/generate_all
 
-"%exe_path%" /L"%log_dir%\Runfile_ZichtJaar_DataPakketExport.txt"           "%prj_dir%\Runs\Runfile.dms"           %ITEMS%
 "%exe_path%" /L"%log_dir%\S1a_B_LuchtWP_ZichtJaar_DataPakketExport.txt"     "%prj_dir%\Runs\S1a_B_LuchtWP.dms"     %ITEMS%
 "%exe_path%" /L"%log_dir%\S1b_B_BodemWP_ZichtJaar_DataPakketExport.txt"     "%prj_dir%\Runs\S1b_B_BodemWP.dms"     %ITEMS%
 
