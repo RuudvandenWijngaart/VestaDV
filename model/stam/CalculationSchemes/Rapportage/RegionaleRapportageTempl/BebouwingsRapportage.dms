@@ -6,72 +6,71 @@
 
 container BebouwingsRapportage: Using = "impl/RegioSelectie"
 {
+	
 	container Gebouw
 	{
-		container Verbeteringen
-		{
-			unit<uint8> table := RapGroep
-			{
-				attribute<string>       label            := RapGroep/label;
-				attribute<QuantityUnit> Aantal           := = AsList('EL/' + Classifications/RVOEnergieLabel/name, ' + ');
-				attribute<QuantityUnit> nrUnits      (BO):= =(Exportlabel == 'WoningType' || Exportlabel == 'woningtype_bouwjaarklasse') ? 'BO/nrAansluitingen' : 'BO/oppervlakte';
-	//			attribute<QuantityUnit> Schil            := sum(float64(BCdata/Sprongen/KanVerbeteren[nr_OrgEntity])                   * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
-	//			attribute<QuantityUnit> RuimteVerwarming := sum(float64(BCdata/Sprongen/RuimteVerwarming/KanVerbeteren[nr_OrgEntity] ) * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
-
-				container EL_BestaandeWoning      := for_each_nedv(Classifications/RVOEnergieLabel/name, 'sum(float64(BO/SchillabelOrDefault_rel[nr_OrgEntity]==' + string(id(Classifications/RVOEnergieLabel))+'[Classifications/SchilLabel])* NrUnits[nr_OrgEntity], BCGroep_rel)', RapGroep, QuantityUnit);
-				container EL_BestaandeUtil        := for_each_nedv(Classifications/RVOEnergieLabel/name, 'sum(float64(BO/SchillabelOrDefault_rel[nr_OrgEntity]==' + string(id(Classifications/RVOEnergieLabel))+'[Classifications/SchilLabel])* NrUnits[nr_OrgEntity], BCGroep_rel)', RapGroep, QuantityUnit);
-				parameter<bool> isBestaandeWoning := BCname = 'BestaandeWoning';
-
-				container EL := = isBestaandeWoning ? 'EL_BestaandeWoning' : 'EL_BestaandeUtil';
-			}
-
-			container csv := 
-				WriteTable8ToCSV(
-					 table
-					,Exportlabel+':label;Aantal;' + AsList('EL/' + Classifications/RVOEnergieLabel/name, ';')
-					,ReportFolder+'/'+ BebouwingscomponentNaam +'_Gebouw_Verbeteringen.csv'
-				);
-		}
-		container Opwekking
+		container SchilLabel
 		{
 			unit<uint8> table := RapGroep
 			{
 				attribute<string>       label       := RapGroep/label;
-				attribute<QuantityUnit> Aantal      := impl/Aantal;
-				attribute<QuantityUnit> Zon_PV      := sum(BCdata/OpwekkingsOpties/capaciteit/Zon_PV     [nr_OrgEntity] * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
-				attribute<QuantityUnit> Zonneboiler := sum(BCdata/OpwekkingsOpties/capaciteit/Zonneboiler[nr_OrgEntity] * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
+				attribute<QuantityUnit> nrUnits (BO):= =(Exportlabel == 'WoningType' || Exportlabel == 'woningtype_bouwjaarklasse') ? 'BO/nrAansluitingen' : 'BO/oppervlakte';
 
-				attribute<QuantityUnit> mWKK        := sum(BebouwingsComponentGebiedsData/Aandelen/mWKK[nr_OrgEntity] * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
-				attribute<QuantityUnit> eWP         := sum(BebouwingsComponentGebiedsData/Aandelen/eWP [nr_OrgEntity] * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
-				attribute<QuantityUnit> EWV         := sum(BebouwingsComponentGebiedsData/Aandelen/EWV [nr_OrgEntity] * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
-				attribute<QuantityUnit> hWP         := sum(BebouwingsComponentGebiedsData/Aandelen/hWP [nr_OrgEntity] * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
+				attribute<QuantityUnit> Aantal := = AsList('EL/' + Classifications/RVOEnergieLabel/name, ' + ');
+				container EL := for_each_nedv(
+					Classifications/SchilLabel/name,
+					'sum(float64(BO/Schillabel_rel[nr_OrgEntity]==' + string(id(Classifications/SchilLabel))+'[Classifications/SchilLabel])* NrUnits[nr_OrgEntity], BCGroep_rel)',
+					RapGroep,
+					QuantityUnit);
+			}
+			container csv := 
+				WriteTable8ToCSV(
+					 table
+					,Exportlabel+':label;Aantal;' + AsList('EL/' + Classifications/Schillabel/name, ';')
+					,ReportFolder+'/'+ BebouwingscomponentNaam +'_Gebouw_Schillabel.csv'
+				);
+		}
+		container GebouwOptie
+		{
+			unit<uint8> table := RapGroep
+			{
+				attribute<string>       label       := RapGroep/label;
+				attribute<QuantityUnit> nrUnits (BO):= =(Exportlabel == 'WoningType' || Exportlabel == 'woningtype_bouwjaarklasse') ? 'BO/nrAansluitingen' : 'BO/oppervlakte';
+
+				attribute<QuantityUnit> Aantal := = AsList('LO/' + BO/BcGebouwOptie/name, ' + ');
+				container LO := for_each_nedv(
+					BO/BcGebouwOptie/name,
+					'sum(float64(BO/GebouwOptie_rel[nr_OrgEntity]==' + string(id(BO/BcGebouwOptie))+'[BO/BcGebouwOptie])* NrUnits[nr_OrgEntity], BCGroep_rel)',
+					RapGroep,
+					QuantityUnit);
 			}
 			container csv :=
 				WriteTable8ToCSV(
 					 Table
-					,Exportlabel+':label;Aantal;Zon_PV;Zonneboiler;mWKK;eWP;EWV;hWP'
-					,ReportFolder+'/'+ BebouwingscomponentNaam +'_Gebouw_Opwekking.csv'
+					,Exportlabel+':label;Aantal;' + AsList('LO/' + BO/BcGebouwOptie/name, ';')
+					,ReportFolder+'/'+ BebouwingscomponentNaam +'_Gebouw_Gebouwoptie.csv'
 				);
 		}
-	}
-	container Gebied
-	{
-		unit<uint8> table := RapGroep
+		container WarmteOptie
 		{
-			attribute<string>       label      := RapGroep/label;
-			attribute<QuantityUnit> Aantal     := impl/Aantal;
-			attribute<QuantityUnit> Restwarmte := sum(BebouwingscomponentGebiedsData/Aandelen/RestWarmte         [nr_OrgEntity] * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
-			attribute<QuantityUnit> GeoThermie := sum(BebouwingscomponentGebiedsData/Aandelen/GeoThermie         [nr_OrgEntity] * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
-			attribute<QuantityUnit> WijkWKK    := sum(BebouwingscomponentGebiedsData/Aandelen/WijkWKK            [nr_OrgEntity] * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
-			attribute<QuantityUnit> BioWKK     := sum(BebouwingscomponentGebiedsData/Aandelen/BioWKK             [nr_OrgEntity] * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
-			attribute<QuantityUnit> WKO        := sum(BebouwingscomponentGebiedsData/Aandelen/WKO                [nr_OrgEntity] * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
-			attribute<QuantityUnit> Aardgas    := sum(BebouwingscomponentGebiedsData/Aandelen/AardGasExclMicroWKK[nr_OrgEntity] * RuimtelijkeVraagComponent/NrModelUnits[nr_OrgEntity], BCGroep_rel);
+			unit<uint8> table := RapGroep
+			{
+				attribute<string>       label       := RapGroep/label;
+				attribute<QuantityUnit> nrUnits (BO):= =(Exportlabel == 'WoningType' || Exportlabel == 'woningtype_bouwjaarklasse') ? 'BO/nrAansluitingen' : 'BO/oppervlakte';
+				
+				attribute<QuantityUnit> Aantal := = AsList('GO/' + Classifications/WarmteOptie/name, ' + ');
+				container GO := for_each_nedv(
+						Classifications/WarmteOptie/name,
+						'sum(float64(BO/WarmteOptie_rel[nr_OrgEntity]==' + string(id(Classifications/WarmteOptie))+'[Classifications/WarmteOptie])* NrUnits[nr_OrgEntity], BCGroep_rel)',
+						RapGroep,
+						QuantityUnit);
+			}
+			container csv := 
+				WriteTable8ToCSV(
+					 table
+					,Exportlabel+':label;Aantal;' + AsList('GO/' + Classifications/WarmteOptie/name, ';')
+					,ReportFolder+'/'+ BebouwingscomponentNaam +'_Gebouw_Warmteoptie.csv'
+				);
 		}
-		container csv := 
-			WriteTable8ToCSV(
-				 table
-				,Exportlabel+':label;Aantal;Restwarmte;GeoThermie;WijkWKK;BioWKK;WKO;Aardgas'
-				,ReportFolder+'/'+ BebouwingscomponentNaam +'_Gebiedsmaatregelen.csv'
-			);
 	}
 }
