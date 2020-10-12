@@ -15,18 +15,20 @@ container Payments
 		parameter<string> key2 := '@@@';
 		// end case parameters
 
-		attribute<bool>   conditionN  (src) := strpos(src/name, key) >= 0;
-		attribute<bool>   conditionL  (src) := strpos(src/leverancier, key) >= 0;
-		attribute<bool>   conditionA  (src) := strpos(src/afnemer, key) >= 0;
-		attribute<bool>   tooManyCodes(src) := conditionN && (conditionL || conditionA);
-		attribute<bool>   condition1  (src) := conditionN || conditionL || conditionA, IntegrityCheck = "!tooManyCodes"; // save on double naming
+		attribute<bool>   hasVarName  (src) := strpos(src/name, key) >= 0;
+		attribute<bool>   hasVarLev   (src) := strpos(src/leverancier, key) >= 0;
+		attribute<bool>   hasVarAfn   (src) := strpos(src/afnemer, key) >= 0;
+		attribute<bool>   tooManyVars (src) := hasVarName && (hasVarLev || hasVarAfn);
+		attribute<bool>   hasVar      (src) := hasVarName || hasVarLev || hasVarAfn, IntegrityCheck = "!tooManyVars"; // save on double naming
 
-		attribute<bool>   condition2  (src) := strpos(src/expr, key) >= 0;
-		attribute<bool>   condition   (src)  := condition1 || condition2, IntegrityCheck = "condition1 == condition2"; // only distributed expressions may be substututed by a group.
+		attribute<bool>   hasKey      (src) := strpos(src/expr, key) >= 0;
+		attribute<bool>   iCheck      (src) := hasVar == hasKey;
+		
+		attribute<bool>   mustSubst   (src)  := hasVar || hasKey, IntegrityCheck = "iCheck"; // only distributed expressions may be substututed by a group.
 
-		attribute<uint32> firstResult (src) := uint32(int32(id(src)) + makedefined(cumulate(int32(condition))[id(src)-1]*(int32(#valueset)-1i),0i));
+		attribute<uint32> firstResult (src) := uint32(int32(id(src)) + makedefined(cumulate(int32(mustSubst))[id(src)-1]*(int32(#valueset)-1i),0i));
 
-		unit<uint32> result := range(uint32, 0, uint32(int32(#src) + sum(int32(condition))*(int32(#valueset)-1i)))
+		unit<uint32> result := range(uint32, 0, uint32(int32(#src) + sum(int32(mustSubst))*(int32(#valueset)-1i)))
 		{
 			attribute<src>    src_rel       := classify(id(.), firstResult);
 			attribute<string> valueset_name := MakeDefined(valueset/name[value(id(.)-firstResult[src_rel], valueset)], 'xxx');
