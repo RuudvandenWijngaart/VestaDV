@@ -13,54 +13,61 @@
 
 container Referentie
 {
-	parameter<string> Variantcode := 'Ref2030';
+	// Instellen runnaam.
+	parameter<string> Variantcode := 'Referentie';
+	
+	// Ophalen eenheden, gebiedsafbakeningen en typeringen.
 	#include <%projDir%/model/Units.dms>
 	#include <%projDir%/model/Geography.dms>
 	#include <%projDir%/model/Classifications.dms>
 
-	// Hier kun je meer of minder rekenstappen per jaar gaan definieren. Pas dan ook de onderstaande attribuutdata aan.
-	// Waarschijnlijk moet de eerste rekenstap wel verwijzen naar het eerste zichtjaar en moeten volgende rekenstappen niet naar eerdere jaren verwijzen.	
+	// Invoer: hier kunnen meerdere rekenstappen per zichtjaar gedefinieerd worden.
+	// Eerste rekenstap moet verwijzen naar het eerste zichtjaar.
+	// Volgende rekenstappen mogen niet naar eerdere jaren verwijzen.	
 	unit<uint8> rekenstap: nrofrows = 5
 	{
 		attribute<units/yr_uint16> Jaar  : [2010, 2020, 2030, 2040, 2050];
-		
-		// bij label en name kun je eigen rekenstappen opgeven. Deze namen moeten overeen komen met:
-		// - namen van subitems van in Invoer/SpecifiekeInstellingen
 		attribute<string>          label := string(id(.))+'_'+string(Jaar);
 		attribute<string>          name  := id(.) == 0b ? 'StartJaar' : 'R' + label; 
 	}
 	
+	// Ophalen gedeelde instellingen voor alle runs, deze kunnen hieronder worden overruled.
 	#include <%projDir%/runs/SharedInvoer.dms>
 	
 	container Invoer := SharedInvoer, Using = "Units"
 	{
-		// Include Invoer and defaults settings section, similar for each run
+		// Ophalen ruimtelijke invoerbestanden, kengetallen en energieprijzen.
 		#include <%projDir%/model/RuimtelijkeData.dms>
 		#include <%projDir%/model/Kengetallen.dms>
-		
 		#include <%projDir%/model/EnergiePrijzen.dms>
 
 		container DefaultInstellingen
 		{
+			// Ophalen opties voor instellingen die per rekenstap gebruikt kunnen worden.
 			#include <%projDir%/Runs/DefaultSettings/Basis.dms>
 			#include <%projDir%/Runs/DefaultSettings/Rekenstap.dms>		
 		}
 		
 		container SpecifiekeInstellingen := DefaultInstellingen/Basis
 		{
-			parameter<string> prijzenbron := '20200812_Energieprijzen_KEV2019', Descr = "Energieprijzen in het basispad van de Klimaat en Energie Verkenning 2019 (PBL)";
-			parameter<bool> HasStartingArcSet := true;
+			// Invoer: welke energieprijzenbestanden worden gebruikt.
+			parameter<string> prijzenbron       := '20200812_Energieprijzen_KEV2019',
+				Descr = "Energieprijzen in het basispad van de Klimaat en Energie Verkenning 2019 (PBL)";
 			
+			// Invoer: worden bestaande warmtenetten meegenomen JA/NEE.
+			parameter<bool>   HasStartingArcSet := true;
+			
+			// Invoer: Per rekenstap worden specifieke instellingen gebruikt.
+			// De lijst van rekenstappen wordt gedefinieerd bij rekenstap.
 			container StartJaar := DefaultInstellingen/Basis;
-			
-			// Per rekenstap kun je hier specifieke instelling overrulen. De lijst van rekenstappen wordt gedefinieerd bij rekenstap
-			container R1_2020 := DefaultInstellingen/Rekenstap/Stap_1;
-			container R2_2030 := R1_2020;
-			container R3_2040 := R2_2030;
-			container R4_2050 := R3_2040;
+			container R1_2020   := DefaultInstellingen/Rekenstap/Stap_1;
+			container R2_2030   := R1_2020;
+			container R3_2040   := R2_2030;
+			container R4_2050   := R3_2040;
 		}
 	}
 
+	// Ophalen overige rekenschemas.
 	#include <%projDir%/model/stam.dms>
 	#include <%projDir%/model/BeginSituatie.dms>
 	#include <%projDir%/model/TussenResultaten.dms>
