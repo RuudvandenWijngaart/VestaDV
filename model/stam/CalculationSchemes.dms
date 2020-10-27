@@ -52,14 +52,13 @@ container CalculationSchemes: Using = "Units;Geography"
 		attribute<nrAsl>  nrAansluitingen    (BO) := BeschikbaarheidsFactor * BO/nrAansluitingen;
 		attribute<m2>     Oppervlakte        (BO) := BeschikbaarheidsFactor * BO/Oppervlakte;
 
-		//VRVS3FH
-		parameter<bool>   IsS3FofS3H              := (Variantcode == 's3f' || Variantcode == 's3h') && RekenstapName == 'R2_2030' && BO/BebouwingsComponent_UpRef/BCname == 'BestaandeWoning';
-		attribute<GJ_yr>  V_RV_def           (BO) := BeschikbaarheidsFactor * BO/BebouwingsComponent_UpRef/Functioneel2/V_RV;
-		attribute<GJ_yr>  V_RV               (BO) := =IsS3FofS3H ? 'BeschikbaarheidsFactor * BO/GebouwOpties/NaarD_w/Functioneel/RV' : 'V_RV_def';
-
+		//Vraag
+		attribute<GJ_yr>  V_RV               (BO) := BeschikbaarheidsFactor * BO/BebouwingsComponent_UpRef/Functioneel2/V_RV;
 		attribute<GJ_yr>  V_TW               (BO) := BeschikbaarheidsFactor * BO/Functioneel/TW;
 		attribute<GJ_yr>  V_K                (BO) := BeschikbaarheidsFactor * BO/Functioneel/K;
 		attribute<GJ_yr>  V_Warmte           (BO) := V_RV + V_TW;
+		
+		//Opbrengsten
 		attribute<Eur_yr> Oj_Warmte          (BO) := V_Warmte * BO/WarmteWet/WarmtePrijs, Source = "FO v7a F 8-10";
 		attribute<Eur_yr> Oj_VastRechtMT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtMT_T;
 		attribute<Eur_yr> Oj_VastRechtLT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtLT_T;
@@ -76,32 +75,28 @@ container CalculationSchemes: Using = "Units;Geography"
 	template BuisKosten
 	{
 		// begin case parameters
-		unit<uint32>  PlanRegio;
-		attribute<MW> Capaciteit (PlanRegio);
+		unit<uint32>  LeidingDomein;
+		attribute<MW> Capaciteit (LeidingDomein);
 		// begin case parameters
 
-		parameter<ratio> a := 1.25; // omwegfactor
-
-		attribute<Eur_m> K_min (PlanRegio) := Capaciteit > 0[MW] ? 400[Eur_m] + 210[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.5 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
-		attribute<Eur_m> K_max (PlanRegio) := Capaciteit > 0[MW] ? 800[Eur_m] + 200[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.6 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
-		attribute<Eur_m> K_m   (PlanRegio) := (K_min * Schuiven/KostenMin + K_max * Schuiven/KostenMax) * Leercurves/MTnet/curve;
-		attribute<Eur_m> aK_m  (PlanRegio) := a * K_m; // K_hoofd_m incl omwegfactor
+		attribute<Eur_m> K_min (LeidingDomein) := Capaciteit > 0[MW] ? 400[Eur_m] + 210[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.5 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
+		attribute<Eur_m> K_max (LeidingDomein) := Capaciteit > 0[MW] ? 800[Eur_m] + 200[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.6 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
+		attribute<Eur_m> K_m   (LeidingDomein) := (K_min * Schuiven/KostenMin + K_max * Schuiven/KostenMax) * Leercurves/MTnet/curve;
+		attribute<Eur_m> aK_m  (LeidingDomein) := Invoer/Kengetallen/Constanten/Omwegfactor * K_m; // K_hoofd_m incl omwegfactor
 	}
 
-	template BuisKostenBC
-	{
-		// begin case parameters
-		unit<uint32>  BebouwingsComponent;
-		attribute<MW> Capaciteit (BebouwingsComponent);
-		// begin case parameters
+// 	template BuisKostenBC
+// 	{
+// 		// begin case parameters
+// 		unit<uint32>  BebouwingsComponent;
+// 		attribute<MW> Capaciteit (BebouwingsComponent);
+// 		// begin case parameters
 
-		parameter<ratio> a := 1.25; // omwegfactor
-
-		attribute<Eur_m> K_min (BebouwingsComponent) := Capaciteit > 0[MW] ? 400[Eur_m] + 210[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.5 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
-		attribute<Eur_m> K_max (BebouwingsComponent) := Capaciteit > 0[MW] ? 800[Eur_m] + 200[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.6 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
-		attribute<Eur_m> K_m   (BebouwingsComponent) := (K_min * Schuiven/KostenMin + K_max * Schuiven/KostenMax) * Leercurves/MTnet/curve;
-		attribute<Eur_m> aK_m  (BebouwingsComponent) := a * K_m; // K_hoofd_m incl omwegfactor
-	}
+// 		attribute<Eur_m> K_min (BebouwingsComponent) := Capaciteit > 0[MW] ? 400[Eur_m] + 210[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.5 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
+// 		attribute<Eur_m> K_max (BebouwingsComponent) := Capaciteit > 0[MW] ? 800[Eur_m] + 200[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.6 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
+// 		attribute<Eur_m> K_m   (BebouwingsComponent) := (K_min * Schuiven/KostenMin + K_max * Schuiven/KostenMax) * Leercurves/MTnet/curve;
+// 		attribute<Eur_m> aK_m  (BebouwingsComponent) := Invoer/Kengetallen/Constanten/Omwegfactor * K_m; // K_hoofd_m incl omwegfactor
+// 	}
 	
 	template MaakCurve
 	{
