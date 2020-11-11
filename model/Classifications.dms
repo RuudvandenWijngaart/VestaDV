@@ -1071,14 +1071,15 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			id(.) == V/WaterstofWP ? GebouwOptie/V/' + /Invoer/DefaultInstellingen/Basis/StartGebouwOpties/GebiedoptieGebouwopties/Optie_H2WP_u + ':
 			id(.) == V/WaterstofHR ? GebouwOptie/V/' + /Invoer/DefaultInstellingen/Basis/StartGebouwOpties/GebiedoptieGebouwopties/Optie_H2HR_u + ':
 			GebouwOptie/V/Gebied_zk';
-			
+
 		attribute<string> code             := string(id(.));
 		attribute<bool>   IsPlanRegioOptie : [ true, true, true, true, false, false, false, false, false, false, false, false, true, true, true]; //, false ];
 		attribute<bool>   IsMT : [ true, true, true, true, false, 
 			false, false, false, false, false, false, 
 			false, false, false, false]; //, false ];
-		attribute<bool>   IsH2 := id(.) == V/WaterstofHR || id(.) == V/WaterstofWP;
-		attribute<bool>   IsLT := not(IsMT) && not(IsH2);
+		attribute<bool>   IsH2  := id(.) == V/WaterstofHR || id(.) == V/WaterstofWP;
+		attribute<bool>   IsLT  := not(IsMT) && not(IsH2);
+		attribute<bool>   KoudeActief := id(.) == V/WKO;
 
 		attribute<string> label := name, DialogType = "LabelText";
 		attribute<uint32> Color : DialogType = "BrushColor",
@@ -1112,6 +1113,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<bool>   IsMT            := union_data(., const(false, GebouwOptie), GebiedsOptie/IsMT);
 		attribute<bool>   IsLT            := union_data(., const(false, GebouwOptie), GebiedsOptie/IsLT);
 		attribute<bool>   IsH2            := union_data(., const(false, GebouwOptie), GebiedsOptie/IsH2);
+		attribute<bool>   KoudeActief     := union_data(., const(false, GebouwOptie), GebiedsOptie/KoudeActief);
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 		attribute<string> LabelText := name;
@@ -1344,21 +1346,23 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			'InpandigeDistributeur'
 		];
 	}
-	unit<uint8> GebiedsOptie_Verbruik: nrofrows = 12
+	unit<uint8> GebiedsOptie_Verbruik: nrofrows = 15
 	{
 		attribute<string> name: [  
 			'V_id_gas',  'V_wd_gas',  'V_ow_gas', 
 			'V_id_elek', 'V_wd_elek', 'V_ow_elek', 
 			'V_id_verlies', 'V_wd_verlies', 'V_pt_verlies', 
 			'V_warmte', 'V_koude',
-			'V_H2'
+			'V_H2',
+			'V_id_warmte','V_wd_warmte','V_ow_warmte'
 		];
 		attribute<string> actor_code: [ 
 			'id', 'wd', 'ow', 
 			'id', 'wd', 'ow', 
 			'id', 'wd', 'pt', 
 			'', '',
-			''
+			'',
+			'id','wd','ow'
 		];
 		attribute<string> full_name := name;
 	}
@@ -1530,26 +1534,26 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			attribute<string>          label                   := name;
 		}
 
-		unit<uint32> LabelChange := combine(energielabel, LabelSprong)
-		{
-			attribute<string> label := LabelSprong/code[nr_2]+': van ' + energieLabel/label[nr_1] + ' naar ' + energieLabel/label[Label_na], DialogType = "LabelText";
-	
-			attribute<energielabel> Label_na: [
-			//  org   org   org   new   new   new   org    new   new   new    org    new   new   new
-			//	EG_T  CG_B  BG_AP T_B   T_AP  B_AP  AG_eWP T_eWP B_eWP AP_eWP AG_EWV T_EWV B_EWV AP_EWV'
-			
-			//  H_T, H_B, H_AP, T_B, T_AP, B_AP, H_BeWP, T_BeWP, B_BeWP, H_AeWP, T_AeWP, B_AeWP, A_AeWP, H_EWV, T_EWV, B_EWV, A_EWV,
-				0  , 0  , 0   , 0  , 0   , 0   , 0     , 0     , 0     , 0     , 0     , 0     , 0     , 0    , 0    , 0    , 0    ,	// sprongen vanaf AeWP (0)
-				1  , 1  , 1   , 1  , 1   , 1   , 1     , 1     , 1     , 1     , 1     , 1     , 1     , 1    , 1    , 1    , 1    ,	// sprongen vanaf EWV  (1)
-				2  , 2  , 2   , 2  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf A+   (2)
-				3  , 3  , 2   , 3  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf B    (3)
-				3  , 3  , 2   , 3  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf C    (4, evt als zijnde Tussenlabel)
-				3  , 3  , 2   , 3  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf D    (5, evt als zijnde Tussenlabel)
-				4  , 3  , 2   , 3  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf E    (6, evt als zijnde Tussenlabel)
-				5  , 3  , 2   , 3  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf F    (7)
-				6  , 3  , 2   , 3  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf G    (8)
-				9  , 9  , 9   , 9  , 9   , 9   , 9     , 9     , 9     , 9     , 9     , 9     , 9     , 9    , 9    , 9    , 9    		// sprongen vanaf BeWP (9)
-			];
-		}
+// 		unit<uint32> LabelChange := combine(energielabel, LabelSprong)
+// 		{
+// 			attribute<string> label := LabelSprong/code[nr_2]+': van ' + energieLabel/label[nr_1] + ' naar ' + energieLabel/label[Label_na], DialogType = "LabelText";
+// 	
+// 			attribute<energielabel> Label_na: [
+// 			//  org   org   org   new   new   new   org    new   new   new    org    new   new   new
+// 			//	EG_T  CG_B  BG_AP T_B   T_AP  B_AP  AG_eWP T_eWP B_eWP AP_eWP AG_EWV T_EWV B_EWV AP_EWV'
+// 			
+// 			//  H_T, H_B, H_AP, T_B, T_AP, B_AP, H_BeWP, T_BeWP, B_BeWP, H_AeWP, T_AeWP, B_AeWP, A_AeWP, H_EWV, T_EWV, B_EWV, A_EWV,
+// 				0  , 0  , 0   , 0  , 0   , 0   , 0     , 0     , 0     , 0     , 0     , 0     , 0     , 0    , 0    , 0    , 0    ,	// sprongen vanaf AeWP (0)
+// 				1  , 1  , 1   , 1  , 1   , 1   , 1     , 1     , 1     , 1     , 1     , 1     , 1     , 1    , 1    , 1    , 1    ,	// sprongen vanaf EWV  (1)
+// 				2  , 2  , 2   , 2  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf A+   (2)
+// 				3  , 3  , 2   , 3  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf B    (3)
+// 				3  , 3  , 2   , 3  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf C    (4, evt als zijnde Tussenlabel)
+// 				3  , 3  , 2   , 3  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf D    (5, evt als zijnde Tussenlabel)
+// 				4  , 3  , 2   , 3  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf E    (6, evt als zijnde Tussenlabel)
+// 				5  , 3  , 2   , 3  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf F    (7)
+// 				6  , 3  , 2   , 3  , 2   , 2   , 9     , 9     , 9     , 0     , 0     , 0     , 0     , 1    , 1    , 1    , 1    ,	// sprongen vanaf G    (8)
+// 				9  , 9  , 9   , 9  , 9   , 9   , 9     , 9     , 9     , 9     , 9     , 9     , 9     , 9    , 9    , 9    , 9    		// sprongen vanaf BeWP (9)
+// 			];
+// 		}
 	}
 }

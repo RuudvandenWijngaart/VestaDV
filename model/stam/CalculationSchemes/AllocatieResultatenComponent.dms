@@ -29,8 +29,14 @@ template AllocatieResultatenComponent
 		attribute<string>                     GebouwOptie_name := BcGebouwOptie/name[GebouwOptie_rel];
 		attribute<Classifications/Schillabel> Schillabel_rel   := ='merge(GebouwOptie_rel, Classifications/Schillabel, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/Schillabel_rel')+')';
 		attribute<bool>                       NieuwGebiedOptie := not(Classifications/WarmteOptie/isGebiedsOptie[BebouwingsComponent_UpRef/BO/WarmteOptie_rel]) && Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie];
-
+        
+		attribute<bool> KoudeGebouw :=
+			IsDefined(BemeterdeGebouwInput_rel/Kb) ||
+			IsDefined(BemeterdeGebouwInput_rel/Kp);
 		
+		attribute<bool> KoudeGebied :=
+			Classifications/WarmteOptie/KoudeActief[WarmteOptie_rel];
+			
 		container BemeterdeGebouwInput_rel :=  for_each_nedv(Classifications/Product/name
 			, replace('merge(GebouwOptie_rel, Classifications/BemeterdeGebouwInput, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/BemeterdeGebouwInput_rel/@P')+')', '@P', Classifications/Product/name)
 			, BO
@@ -43,7 +49,8 @@ template AllocatieResultatenComponent
 			, float64
 		);
 		container Aansluitingen
-		{
+		{		
+			
 			attribute<bool> IsHybride      (BO) :=
 				(  BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e
 				&& BemeterdeGebouwInput_rel/RVp != Classifications/BemeterdeGebouwInput/V/e)
@@ -59,7 +66,7 @@ template AllocatieResultatenComponent
 
 			attribute<nrAsl> Gnet          (BO) := float64(Metervraag/V_gas > 0[GJ_yr]) * nrAansluitingen * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie]));
 			attribute<nrAsl> H2net         (BO) := nrAansluitingen * float64(aandelen/WaterstofWP || aandelen/WaterstofHR);
-
+			attribute<nrAsl> Warmte        (BO) := float64(metervraag/V_Warmte > 0[GJ_yr]) * nrAansluitingen;
 			attribute<nrAsl> Enet_app      (BO) := float64((Enet_hwp + Enet_ewp) == 0[nrAsl]) * nrAansluitingen; // alleen apparatuur
 			attribute<nrAsl> Enet_hwp      (BO) := float64(IsHybride)                         * nrAansluitingen; // apparatuur en hybride systeem
 			attribute<nrAsl> Enet_ewp      (BO) := float64(IsAllElectric)                     * nrAansluitingen; // apparatuur en volledig elektrisch verwarmd
