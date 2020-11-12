@@ -53,7 +53,7 @@ container Verbruik: Using = "Units;Geography", KeepData = "True"
 		attribute<string> TS_2050  := union_data(.,  '0.0',  '0.0');
 	}
 	
-	unit<uint32> mutatieSchema: nrofrows = 27
+	unit<uint32> mutatieSchema: nrofrows = 52
 	{
 		parameter<uint32> nrAttr := 5, isHidden = "True";
 		unit<uint32> Elements := Range(uint32, 0, nrAttr * #.), isHidden = "True"
@@ -67,117 +67,359 @@ container Verbruik: Using = "Units;Geography", KeepData = "True"
 					
 					//BN = Bebouwings-nummer (0-5)
 					//BC = Bebouwings-component e.g. BestaandeWoning
+					
+					//RON = Gebiedsoptie-nummer (0-x)
+					//ROC = Gebiedsoptie-component e.g. RestWarmte
 
-		// ===== Gas en Electriciteitsleveringen aan eindgebruikers
-				'A1_GLevering', 'e10_GNet', 
-					'-Allocatie/@BC@/BO/MeterVraag/V_gas',
+					
+			// ===== GEBOUWOPTIES =====
+			
+			// Ruimteverwarming uit lokale opwekkingsinstallaties
+				'b1_LokaleOpwekking', '@BC@_RV', 
+					'Allocatie/@BC@/BO/Functioneel/V_RV * float64(Allocatie/@BC@/BO/Aansluitingen/Warmte == 0.0[nrAsl])', 
 					PRR, ''
-
-			,	'A1_GLevering', 'a@BN@1_Gas_@BC@',
+				
+			// Tapwater uit lokale opwekkingsinstallaties
+			,	'b1_LokaleOpwekking', '@BC@_TW', 
+					'Allocatie/@BC@/BO/Functioneel/V_TW * float64(Allocatie/@BC@/BO/Aansluitingen/Warmte == 0.0[nrAsl])', 
+					PRR, ''
+			
+			// Ventilatie uit lokale opwekkingsinstallaties
+			,	'b1_LokaleOpwekking', '@BC@_Vent', 
+					'Allocatie/@BC@/BO/Functioneel/V_Vent', 
+					PRR, ''	
+				
+			// Koudelevering uit lokale opwekkingsinstallaties	
+			,	'b1_LokaleOpwekking', '@BC@_Koude', 
+					'Allocatie/@BC@/BO/Functioneel/V_K * float64(Allocatie/@BC@/BO/Aansluitingen/Warmte == 0.0[nrAsl]) * float64(Allocatie/@BC@/BO/KoudeGebouw)', 
+					PRR, ''	
+					
+			// LokaleOpwekking ontvangt metervraag elektra
+			,	'b1_LokaleOpwekking', 'Elektra_@BC@', 
+					'-Allocatie/@BC@/BO/MeterVraag/V_e', 
+					PRR, ''	
+				
+			// LokaleOpwekking ontvangt metervraag gas	
+			,	'b1_LokaleOpwekking', 'Gas_@BC@', 
+					'-Allocatie/@BC@/BO/MeterVraag/V_gas', 
+					PRR, ''	
+					
+			// LokaleOpwekking ontvangt metervraag waterstof
+			,	'b1_LokaleOpwekking', 'H2_@BC@', 
+					'-Allocatie/@BC@/BO/MeterVraag/V_H2', 
+					PRR, ''	
+			
+			// LokaleOpwekking ontvangt metervraag biogrondstoffen
+			,	'b1_LokaleOpwekking', 'Biovast_@BC@', 
+					'-(Allocatie/@BC@/BO/MeterVraag/V_pellets + Allocatie/@BC@/BO/MeterVraag/V_biomassa)', 
+					PRR, ''	
+			
+			// Levering elektriciteit aan gebouwen
+			,	'a1_ELevering', 'Elektra_@BC@', 
+					'(Allocatie/@BC@/BO/MeterVraag/V_e + Allocatie/@BC@/BO/MeterVraag/V_app)', 
+					PRR, ''
+				
+			// Elektriciteit voor gebouwen afkomstig uit elektriciteitsnet
+			,	'a1_ELevering', 'Enet', 
+					'-(Allocatie/@BC@/BO/MeterVraag/V_e + Allocatie/@BC@/BO/MeterVraag/V_app)', 
+					PRR, 'E'
+					
+			// Levering gas aan gebouwen
+			,	'a2_GLevering', 'Gas_@BC@', 
 					'Allocatie/@BC@/BO/MeterVraag/V_gas',
 					PRR, ''
+					
+			// Gas voor gebouwen afkomstig uit gasnet
+			,	'a2_GLevering', 'Gnet', 
+					'-Allocatie/@BC@/BO/MeterVraag/V_gas',
+					PRR, 'G'
 
-			,	'A2_eLevering', 'e20_eNet', 
-					'-Allocatie/@BC@/BO/MeterVraag/V_e', 
-					PRR, ''
-
-			,	'A2_eLevering', 'a@BN@2_Elektra_@BC@', 
-					'Allocatie/@BC@/BO/MeterVraag/V_e', 
+			// Levering waterstof aan gebouwen
+			,	'a3_H2Levering', 'H2_@BC@',
+					'Allocatie/@BC@/BO/MeterVraag/V_H2',
 					PRR, ''
 					
-			,	'B1_LokaleOpwekking', 'a@BN@_@BC@_RV', 
-					'Allocatie/@BC@/BO/MeterVraag/V_e', 
-					PRR, ''
+			// Waterstof voor gebouwen afkomstig uit gasnet
+			,	'a3_H2Levering', 'Gnet',
+					'-Allocatie/@BC@/BO/MeterVraag/V_H2',
+					PRR, ''		
+					
+			// Apparatuurdiensten uit lokale apparaten
+			,	'b2_Apparatuur', '@BC@_app',
+					'Allocatie/@BC@/BO/Functioneel/V_app',
+					PRR, ''		
+					
+			// Lokale apparaten ontvangen metervraag elektriciteit
+			,	'b2_Apparatuur', 'Elektra_@BC@',
+					'-Allocatie/@BC@/BO/Metervraag/V_app',
+					PRR, ''		
+					
+			// Omgevingsverlies van apparatuur
+			,	'b2_Apparatuur', 'OmgevingVerlies',
+					'max_elem(0.0[GJ_yr], Allocatie/@BC@/BO/Metervraag/V_app - Allocatie/@BC@/BO/Functioneel/V_app)',
+					PRR, ''		
 
-			,	'B1_LokaleOpwekking', 'a@BN@_@BC@_WW', 
-					'Allocatie/@BC@/BO/MeterVraag/V_e', 
-					PRR, ''
+			// Omgevingswinst van apparatuur
+			,	'b2_Apparatuur', 'OmgevingWinst',
+					'-max_elem(0.0[GJ_yr], Allocatie/@BC@/BO/Functioneel/V_app - Allocatie/@BC@/BO/Metervraag/V_app)',
+					PRR, ''	
+					
+			// Omgevingsverlies van lokale opwekking
+			,	'b1_LokaleOpwekking', 'OmgevingVerlies',
+					'max_elem(0.0[GJ_yr],
+						  (  
+						     Allocatie/@BC@/BO/MeterVraag/V_e
+						   + Allocatie/@BC@/BO/MeterVraag/V_gas
+						   + Allocatie/@BC@/BO/MeterVraag/V_H2
+						   + Allocatie/@BC@/BO/MeterVraag/V_pellets
+						   + Allocatie/@BC@/BO/MeterVraag/V_biomassa
+					  	  )
+						- (  
+							 Allocatie/@BC@/BO/Functioneel/V_RV * float64(Allocatie/@BC@/BO/Aansluitingen/Warmte == 0.0[nrAsl])
+						   + Allocatie/@BC@/BO/Functioneel/V_TW * float64(Allocatie/@BC@/BO/Aansluitingen/Warmte == 0.0[nrAsl])
+						   + Allocatie/@BC@/BO/Functioneel/V_Vent
+						   + Allocatie/@BC@/BO/Functioneel/V_K  * float64(Allocatie/@BC@/BO/Aansluitingen/Warmte == 0.0[nrAsl]) * float64(Allocatie/@BC@/BO/KoudeGebouw)
+						  )
+					)', PRR, ''		
 
-			// ===== WKO
-			,	'C_@RON@_@ROC@', 'a@BN@_@BC@_RV',
-					'float64(Allocatie/@BC@/WarmteAllocatie == Classifications/WarmteOptie/V/@ROC@)*Allocatie/@BC@/BO/Functioneel/V_RV',
+			// Omgevingswinst van lokale opwekking
+			,	'b1_LokaleOpwekking', 'OmgevingWinst',
+					'-max_elem(0.0[GJ_yr],
+						  (  
+						     Allocatie/@BC@/BO/Functioneel/V_RV * float64(Allocatie/@BC@/BO/Aansluitingen/Warmte == 0.0[nrAsl])
+						   + Allocatie/@BC@/BO/Functioneel/V_TW * float64(Allocatie/@BC@/BO/Aansluitingen/Warmte == 0.0[nrAsl])
+						   + Allocatie/@BC@/BO/Functioneel/V_Vent
+						   + Allocatie/@BC@/BO/Functioneel/V_K  * float64(Allocatie/@BC@/BO/Aansluitingen/Warmte == 0.0[nrAsl]) * float64(Allocatie/@BC@/BO/KoudeGebouw)
+					  	  )
+						- (  
+							 Allocatie/@BC@/BO/MeterVraag/V_e
+						   + Allocatie/@BC@/BO/MeterVraag/V_gas
+						   + Allocatie/@BC@/BO/MeterVraag/V_H2
+						   + Allocatie/@BC@/BO/MeterVraag/V_pellets
+						   + Allocatie/@BC@/BO/MeterVraag/V_biomassa
+						  )
+					)', PRR, ''	
+					
+			
+			// ===== VERBRUIK GEBIEDSOPTIES =====
+			
+			// Levering elektriciteit aan inpandige distributie
+			,	'a1_ELevering', 'InpandigDistributie', 
+					'StateNaAllocatie/Totaal/Verbruik/V_id_elek', 
+					'', ''
+					
+			// Levering elektriciteit aan WijkDistributie
+			,	'a1_ELevering', 'WijkDistributie', 
+					'StateNaAllocatie/Totaal/Verbruik/V_wd_elek', 
+					'', ''
+			
+			// Levering elektriciteit aan PrimaireBron
+			,	'a1_ELevering', 'PrimaireBron', 
+					'StateNaAllocatie/Totaal/Verbruik/V_ow_elek', 
+					'', ''
+				
+			// Elektriciteit voor inpandige distributie afkomstig uit elektriciteitsnet
+			,	'a1_ELevering', 'Enet', 
+					'-StateNaAllocatie/Totaal/Verbruik/V_id_elek', 
+					'', ''
+					
+			// Elektriciteit voor WijkDistributie afkomstig uit elektriciteitsnet
+			,	'a1_ELevering', 'Enet', 
+					'-StateNaAllocatie/Totaal/Verbruik/V_wd_elek', 
+					'', ''
+			
+			// Elektriciteit voor PrimaireBron afkomstig uit elektriciteitsnet
+			,	'a1_ELevering', 'Enet', 
+					'-StateNaAllocatie/Totaal/Verbruik/V_ow_elek', 
+					'', ''
+					
+			// Levering gas aan inpandige distributie
+			,	'a2_GLevering', 'InpandigDistributie', 
+					'StateNaAllocatie/Totaal/Verbruik/V_id_gas',
+					'', ''
+					
+			// Levering gas aan WijkDistributie
+			,	'a2_GLevering', 'WijkDistributie', 
+					'StateNaAllocatie/Totaal/Verbruik/V_wd_gas',
+					'', ''
+					
+			// Levering gas aan PrimaireBron
+			,	'a2_GLevering', 'PrimaireBron', 
+					'StateNaAllocatie/Totaal/Verbruik/V_ow_gas',
+					'', ''
+					
+			// Gas voor inpandige distributie afkomstig uit gasnet
+			,	'a2_GLevering', 'Gnet', 
+					'-StateNaAllocatie/Totaal/Verbruik/V_id_gas',
+					'', ''		
+			
+			// Gas voor WijkDistributie afkomstig uit gasnet
+			,	'a2_GLevering', 'Gnet', 
+					'-StateNaAllocatie/Totaal/Verbruik/V_wd_gas',
+					'', ''	
+					
+			// Gas voor PrimaireBron afkomstig uit gasnet
+			,	'a2_GLevering', 'Gnet', 
+					'-StateNaAllocatie/Totaal/Verbruik/V_ow_gas',
+					'', ''	
+
+			// ===== GEBIEDSOPTIES INPANDIG =====
+			
+			// Ruimteverwarminglevering aan gebouwen uit inpandige distributie warmtenetten
+			,	'o@RON@_@ROC@_01Inpandig', '@BC@_RV',
+					'Allocatie/@BC@/BO/Functioneel/V_RV * float64(Allocatie/@BC@/WarmteAllocatie == Classifications/WarmteOptie/V/@ROC@) * float64(Allocatie/@BC@/BO/Aansluitingen/Warmte > 0.0[nrAsl])',
 					PRR, ''
 	
-			,	'C_@RON@_@ROC@', 'a@BN@_@BC@_WW',
-					'float64(Allocatie/@BC@/WarmteAllocatie == Classifications/WarmteOptie/V/@ROC@)*Allocatie/@BC@/BO/Functioneel/V_TW',
+			// Tapwaterlevering aan gebouwen uit inpandige distributie warmtenetten
+			,	'o@RON@_@ROC@_01Inpandig', '@BC@_TW',
+					'Allocatie/@BC@/BO/Functioneel/V_TW * float64(Allocatie/@BC@/WarmteAllocatie == Classifications/WarmteOptie/V/@ROC@) * float64(Allocatie/@BC@/BO/Aansluitingen/Warmte > 0.0[nrAsl])',
 					PRR, ''
 
-			,	'C_@RON@_@ROC@', 'a@WKON@_@WKOC@_Koude',
-					'-float64(Allocatie/@BC@/WarmteAllocatie == Classifications/WarmteOptie/V/@ROC@)*Allocatie/@BC@/BO/Functioneel/V_K',
+			// Koudelevering aan gebouwen uit inpandige distributie warmtenetten
+			,	'o@RON@_@ROC@_01Inpandig', '@BC@_Koude',
+					'Allocatie/@BC@/BO/Functioneel/V_K * float64(Allocatie/@BC@/WarmteAllocatie == Classifications/WarmteOptie/V/@ROC@) * float64(Allocatie/@BC@/BO/Aansluitingen/Warmte > 0.0[nrAsl]) * float64(Allocatie/@BC@/BO/KoudeGebied)',
 					PRR, ''
 
-			,	'C_@RON@_@ROC@', 'e10_GNet',
-					'-StateNaAllocatie/@ROC@/Verbruik/V_id_gas', 
+			// Levering gas aan inpandige installaties in gebouwen
+			,	'o@RON@_@ROC@_01Inpandig', 'Gnet',
+					'-StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_id_gas', 
 					'', 'G' 
 
-			,	'C_@RON@_@ROC@', 'e20_eNet',
-					'-StateNaAllocatie/@ROC@/Verbruik/V_id_elek', 
+			// Levering elektriciteit aan inpandige installaties in gebouwen
+			,	'o@RON@_@ROC@_01Inpandig', 'Enet',
+					'-StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_id_elek', 
 					'', 'E'
 
-			,	'C_@RON@_@ROC@', 'b2_InpandigeWarmte',
-					'-StateNaAllocatie/@ROC@/Verbruik/V_id_warmte',
+			// Warmte die ontvangen wordt door inpandige systemen uit het wijkdistributienet
+			,	'o@RON@_@ROC@_01Inpandig', 'WijkDistributie',
+					'-StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_id_warmte',
 					'', ''
+			
+			// OmgevingVerlies van inpandige installaties in gebouwen
+			,	'o@RON@_@ROC@_01Inpandig', 'OmgevingWinst',
+					'-max_elem(0.0[GJ_yr],
+						  (  
+						     StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_id_gas
+						   + StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_id_elek
+						   + StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_id_warmte
+					  	  )
+				        - ( 
+						     StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_warmte
+						   + StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_koude
+					  	  )
+					)', '', ''
 
-			,	'D2_Bijstook', 'e10_GNet',
-					'-StateNaAllocatie/@ROC@/Verbruik/V_wd_gas', 
-					'', 'G'
-
-			,	'D2_Bijstook', 'e20_eNet',
-					'-StateNaAllocatie/@ROC@/Verbruik/V_wd_elek', 
-					'', 'E'
-
-			,	'D2_Bijstook', 'c10_WijkWarmte',
+			// OmgevingWinst van inpandige installaties in gebouwen
+			,	'o@RON@_@ROC@_01Inpandig', 'OmgevingVerlies',
+					'max_elem(0.0[GJ_yr],
+					      (  
+						     StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_warmte
+						   + StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_koude
+					  	  )
+						- (  
+							 StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_id_gas
+						   + StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_id_elek
+						   + StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_id_warmte
+						  )
+					)', '', ''
+					
+			
+			// ===== GEBIEDSOPTIES DISTRIBUTIE =====
+			
+			// Levering gas aan installaties in wijkdistributienetten
+			,	'o@RON@_@ROC@_02Distributie', 'Gnet',
 					'-StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_wd_gas', 
-					'', ''
+					'', 'G' 
 
-			,	'D2_Bijstook', 'i10_OmgevingVerlies',
-					'StateNaAllocatie/@ROC@/Verbruik/V_wd_verlies', 
-					'', ''
-
-			,	'D2_Bijstook', 'b2_InpandigeWarmte',
-					'StateNaAllocatie/@ROC@/Verbruik/V_id_warmte', 
-					'', ''
-
-			,	'E@RON@_@ROC@', 'h10_OmgevingsWarmteWinst',
-					'StateNaAllocatie/@ROC@/Verbruik/V_ow_warmte', 
-					'', ''
-
-			,	'E@RON@_@ROC@', 'e10_GNet',
-					'StateNaAllocatie/@ROC@/Verbruik/V_ow_gas', 
-					'', 'G'
-
-			,	'E@RON@_@ROC@', 'e20_eNet',
-					'StateNaAllocatie/@ROC@/Verbruik/V_ow_elek', 
+			// Levering elektriciteit aan installaties in wijkdistributienetten
+			,	'o@RON@_@ROC@_02Distributie', 'Enet',
+					'-StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_wd_elek', 
 					'', 'E'
 
-			,	'E@RON@_@ROC@', 'c10_WijkWarmte',
-					'StateNaAllocatie/@ROC@/Verbruik/V_wd_warmte', 
+			// Warmte die ontvangen wordt door het wijkdistributienet uit het transportnet
+			,	'o@RON@_@ROC@_02Distributie', 'Opwekking',
+					'-StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_wd_warmte',
 					'', ''
+					
+			// Warmte die ontvangen wordt door inpandige systemen uit het wijkdistributienet
+			,	'o@RON@_@ROC@_02Distributie', 'InpandigDistributie',
+					'StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_id_warmte',
+					'', ''
+					
+			// OmgevingVerlies van leidingen en installaties in wijkdistributienetten
+			,	'o@RON@_@ROC@_02Distributie', 'OmgevingWinst',
+					'-max_elem(0.0[GJ_yr],
+						  (  
+						     StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_id_warmte
+					  	  )
+				        - (  
+						     StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_wd_warmte
+						  +  StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_wd_gas
+						  +  StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_wd_elek
+					  	  )
+					)', '', ''
 
-			,	'E@RON@_@ROC@', 'f10_Biogas',  //Biogas
-					'-(GebiedsAllocatie/@ROC@/results/@ROC@/P_vol * StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_warmte) * float64(StateNaAllocatie/PlanRegioWarmteAllocatie_REMOVE == Classifications/GebiedsOptie/V/@ROC@) * GebiedsAllocatie/@ROC@/Results/Factoren/Biogas', 
-					'', ''
+			// OmgevingWinst van leidingen en installaties in wijkdistributienetten
+			,	'o@RON@_@ROC@_02Distributie', 'OmgevingVerlies',
+					'max_elem(0.0[GJ_yr],
+					      (  
+						     StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_wd_warmte
+						  +  StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_wd_gas
+						  +  StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_wd_elek
+					  	  )
+						- (  
+							 StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_id_warmte
+						  )
+					)', '', ''
+			
+							
+			// ===== GEBIEDSOPTIES OPWEKKING =====
 
-			,	'E@RON@_@ROC@', 'f20_Biovast',  //Biovast
-					'-(GebiedsAllocatie/@ROC@/results/@ROC@/P_vol * StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_warmte) * float64(StateNaAllocatie/PlanRegioWarmteAllocatie_REMOVE == Classifications/GebiedsOptie/V/@ROC@) * GebiedsAllocatie/@ROC@/Results/Factoren/Biovast', 
-					'', ''
+			// Levering gas aan installaties in wijkdistributienetten
+			,	'o@RON@_@ROC@_03Opwekking', 'Gnet',
+					'-StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_ow_gas', 
+					'', 'G' 
 
-			,	'E@RON@_@ROC@', 'h10_OmgevingsWarmteWinst',  //Ondergrond
-					'-(GebiedsAllocatie/@ROC@/results/@ROC@/P_vol * StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_warmte) * float64(StateNaAllocatie/PlanRegioWarmteAllocatie_REMOVE == Classifications/GebiedsOptie/V/@ROC@) * GebiedsAllocatie/@ROC@/Results/Factoren/Ondergrond', 
+			// Levering elektriciteit aan installaties in wijkdistributienetten
+			,	'o@RON@_@ROC@_03Opwekking', 'Enet',
+					'-StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_ow_elek', 
+					'', 'E'
+			
+			// Warmte uit primaire bron
+			,	'o@RON@_@ROC@_03Opwekking', 'PrimaireBron',
+					'-StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_ow_warmte', 
 					'', ''
+					
+			// Warmte die ontvangen wordt door het wijkdistributienet uit het transportnet
+			,	'o@RON@_@ROC@_03Opwekking', 'WijkDistributie',
+					'StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_wd_warmte',
+					'', ''
+					
+			// OmgevingVerlies van leidingen en installaties in wijkdistributienetten
+			,	'o@RON@_@ROC@_03Opwekking', 'OmgevingWinst',
+					'-max_elem(0.0[GJ_yr],
+						  (  
+						     StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_wd_warmte
+					  	  )
+				        - (  
+						     StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_ow_warmte
+						  +  StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_ow_gas
+						  +  StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_ow_elek
+					  	  )
+					)', '', ''
 
-			,	'E@RON@_@ROC@', 'h20_Opwekking',  // Opwekking
-					'-(GebiedsAllocatie/@ROC@/results/@ROC@/P_vol * StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_warmte) * float64(StateNaAllocatie/PlanRegioWarmteAllocatie_REMOVE == Classifications/GebiedsOptie/V/@ROC@) * GebiedsAllocatie/@ROC@/Results/Factoren/Opwekking', 
-					'', ''
-
-			,	'E@RON@_@ROC@', 'i10_OmgevingVerlies', 
-					'(GebiedsAllocatie/@ROC@/results/@ROC@/P_vol * StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_warmte) * float64(StateNaAllocatie/PlanRegioWarmteAllocatie_REMOVE == Classifications/GebiedsOptie/V/@ROC@) * '
-					'(GebiedsAllocatie/@ROC@/Results/Factoren/Aardgas + GebiedsAllocatie/@ROC@/Results/Factoren/Elektriciteit + GebiedsAllocatie/@ROC@/Results/Factoren/Biogas + GebiedsAllocatie/@ROC@/Results/Factoren/Biovast + GebiedsAllocatie/@ROC@/Results/Factoren/Ondergrond + GebiedsAllocatie/@ROC@/Results/Factoren/Opwekking + - 1.0)', 
-					'', ''
-
-			,	'E@RON@_@ROC@', 'c10_WijkWarmte', 
-					'(GebiedsAllocatie/@ROC@/results/@ROC@/P_vol * StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_warmte) * float64(StateNaAllocatie/PlanRegioWarmteAllocatie_REMOVE == Classifications/GebiedsOptie/V/@ROC@)', 
-					'', ''
+			// OmgevingWinst van leidingen en installaties in wijkdistributienetten
+			,	'o@RON@_@ROC@_03Opwekking', 'OmgevingVerlies',
+					'max_elem(0.0[GJ_yr],
+					      (  
+						     StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_ow_warmte
+						  +  StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_ow_gas
+						  +  StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_ow_elek
+					  	  )
+						- (  
+							 StateNaAllocatie/Cumulaties/@ROC@/Verbruik/V_wd_warmte
+						  )
+					)', '', ''
 
 			);
 		}
