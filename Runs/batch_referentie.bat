@@ -7,6 +7,6 @@ REM Bij nogmaals runnen worden bestanden gewoon overschreven
 REM aanpassingen voor machine specifieke paden
 Call path/set.bat
 
-"%exe_path%" /L"%log_dir%\Referentie.txt"  "%prj_dir%\Runs\Referentie.dms" /Resultaten/R4_2050/Generate/All
+"%exe_path%" /L"%log_dir%\Referentie.txt"  "%prj_dir%\Runs\Referentie.dms" /Resultaten/Exports/GenerateAllIndicatoren
 
 pause Totaal klaar
