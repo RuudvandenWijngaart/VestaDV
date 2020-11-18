@@ -1,0 +1,76 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                                           //
+//                         (C) VESTA 2020 - Planbureau voor de Leefomgeving                                  //
+//                                                                                                           //
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                                           //
+//Bij gebruik van het Vesta-model zie:                                                                       //
+//https://github.com/RuudvandenWijngaart/VestaDV/wiki/F.1-Installatie-Instructies#vraag-vanuit-het-vesta-team//
+//                                                                                                           //
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+container Referentie
+{
+	// Instellen runnaam.
+	parameter<string> Variantcode := 'Referentie';
+	
+	// Ophalen eenheden, gebiedsafbakeningen en typeringen.
+	#include <%projDir%/model/Units.dms>
+	#include <%projDir%/model/Geography.dms>
+	#include <%projDir%/model/Classifications.dms>
+
+	// Invoer: hier kunnen meerdere rekenstappen per zichtjaar gedefinieerd worden.
+	// Eerste rekenstap moet verwijzen naar het eerste zichtjaar.
+	// Volgende rekenstappen mogen niet naar eerdere jaren verwijzen.	
+	unit<uint8> rekenstap: nrofrows = 31
+	{
+		attribute<units/yr_uint16> Jaar  := (2020w + uint16(id(.)))[units/yr_uint16];
+		attribute<string>          label := string(id(.))+'_'+string(Jaar);
+		attribute<string>          name  := id(.) == 0b ? 'StartJaar' : 'R' + label; 
+		unit<uint8> repeats  := subset(id(rekenstap) != 0b && id(rekenstap) != 1b){attribute<string>name:=rekenstap/name[nr_orgentity];}
+		template Rx_xxxx := R1_2021;
+	}
+	
+	// Ophalen gedeelde instellingen voor alle runs, deze kunnen hieronder worden overruled.
+	#include <%projDir%/runs/SharedInvoer.dms>
+	
+	container Invoer := SharedInvoer, Using = "Units"
+	{
+		// Ophalen ruimtelijke invoerbestanden, kengetallen en energieprijzen.
+		#include <%projDir%/model/RuimtelijkeData.dms>
+		#include <%projDir%/model/Kengetallen.dms>
+		#include <%projDir%/model/EnergiePrijzen.dms>
+
+		container DefaultInstellingen
+		{
+			// Ophalen opties voor instellingen die per rekenstap gebruikt kunnen worden.
+			#include <%projDir%/Runs/DefaultSettings/Basis.dms>
+			#include <%projDir%/Runs/DefaultSettings/Rekenstap.dms>		
+		}
+		
+		container SpecifiekeInstellingen := DefaultInstellingen/Basis, expr="for_each_nt(rekenstap/repeats/name, rekenstap/Rx_xxxx)"
+		{
+			// Invoer: welke energieprijzenbestanden worden gebruikt.
+			parameter<string> prijzenbron       := '20200812_Energieprijzen_KEV2019',
+				Descr = "Energieprijzen in het basispad van de Klimaat en Energie Verkenning 2019 (PBL)";
+			
+			// Invoer: worden bestaande warmtenetten meegenomen JA/NEE.
+			parameter<bool>   HasStartingArcSet := true;
+			
+			// Invoer: Per rekenstap worden specifieke instellingen gebruikt.
+			// De lijst van rekenstappen wordt gedefinieerd bij rekenstap.
+			container StartJaar := DefaultInstellingen/Basis;
+			container R1_2021   := DefaultInstellingen/Rekenstap/Stap_1;
+		}
+	}
+
+	// Ophalen overige rekenschemas.
+	#include <%projDir%/model/stam.dms>
+	#include <%projDir%/model/BeginSituatie.dms>
+	#include <%projDir%/model/TussenResultaten.dms>
+	#include <%projDir%/model/Resultaten.dms>
+	#include <%projDir%/model/ConfigSettings.dms>
+	#include <%projDir%/model/ExportSettings.dms>
+}
