@@ -229,10 +229,10 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 			attribute<m>       L_dist_input     := rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Hoofdleiding_lengte_m)[m];
 			attribute<nrPand>  nrAansluitingen  := rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Aansluitingen)[units/nrPand];
 
-			attribute<m>       L_aansl          := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Aansluit_lengte_m)[m], nrPanden * 1[m_pand]), Descr = "invoer lengte aansluitleidingen per buurt";
-			attribute<m>       L_dist           := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Hoofdleiding_lengte_m)[m], 500[m])          , Descr = "invoer lengte distributieleidingen per buurt";
-			attribute<nrPand>  nrPanden         := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Panden)[units/nrPand], 1[units/nrPand])   , Descr = "invoer aantal panden per buurt";
-			attribute<m_pand>  L_aansl_pand     := max_elem(L_aansl / nrPanden, 1[m_pand])                                                                        , Descr = "invoer gemiddelde lengte aansluitleidingen per pand";
+			attribute<m>       L_aansl          := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Aansluit_lengte_m)[m], nrPanden * 1[m_pand])[m] , Descr = "invoer lengte aansluitleidingen per buurt";
+			attribute<m>       L_dist           := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Hoofdleiding_lengte_m)[m], 500[m])[m]           , Descr = "invoer lengte distributieleidingen per buurt";
+			attribute<nrPand>  nrPanden         := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Panden)[units/nrPand], 1[units/nrPand])[nrPand] , Descr = "invoer aantal panden per buurt";
+			attribute<m_pand>  L_aansl_pand     := max_elem(L_aansl / nrPanden, 1[m_pand])[m_pand]                                                                    , Descr = "invoer gemiddelde lengte aansluitleidingen per pand";
 			attribute<float64> Niet_aangesloten := float64(nrPanden) - float64(nrAansluitingen);
 		}
 	}
@@ -282,13 +282,14 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 
 			attribute<kw>    input_capaciteit_buurt        := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/capaciteit_buurt__kva_)[kw], Descr = "invoer huidige opgestelde capaciteit aan MS-ruimtes ";
 
-			attribute<kw>    default_capaciteit_buurt      :=
-				= AsList('sum(BC/Bestaande' + /Classifications/BebouwingsSector/name + '/BO/AansluitCapaciteit/ASW_Eapp, BC/Bestaande' + /Classifications/BebouwingsSector/name + '/BO/PlanRegio_rel) 
-						  * TussenResultaten/StartJaar/Vermogens/GTF_' + /Classifications/BebouwingsSector/NcwRefBase + '_Enet  ', ' + ')
-			, Descr = "default huidige opgestelde capaciteit aan MS-ruimtes";
+			//TODO: restore terugvaloptie default
+//			attribute<kw>    default_capaciteit_buurt      :=
+//				= AsList('sum(BC/Bestaande' + /Classifications/BebouwingsSector/name + '/BO/AansluitCapaciteit/ASW_Eapp, BC/Bestaande' + /Classifications/BebouwingsSector/name + '/BO/PlanRegio_rel) 
+//						  * TussenResultaten/StartJaar/Vermogens/GTF_' + /Classifications/BebouwingsSector/NcwRefBase + '_Enet  ', ' + ')
+//			, Descr = "default huidige opgestelde capaciteit aan MS-ruimtes";
 			
-			attribute<kw>    capaciteit_buurt              := IsDefined(input_capaciteit_buurt) ? (input_capaciteit_buurt > default_capaciteit_buurt ? input_capaciteit_buurt : default_capaciteit_buurt) : default_capaciteit_buurt;
-			attribute<kW>    verschil_capaciteit_buurt     := capaciteit_buurt - default_capaciteit_buurt;
+			attribute<kw>    capaciteit_buurt              := input_capaciteit_buurt;
+//			attribute<kW>    verschil_capaciteit_buurt     := capaciteit_buurt - default_capaciteit_buurt;
 
 			attribute<m>     input_lengte_LS_net           := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/lengte_LS_buurt__meters_)[m],     Descr = "invoer totale lengte van het LS-net per buurt";
 			attribute<m>     default_lengte_LS_net         := TussenResultaten/StartJaar/GebiedsAllocatie/RestWarmte/KostenBaten/KostenD/L_infra_e, Descr = "default totale lengte van het LS-net per buurt";
@@ -307,27 +308,41 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 	
 	container Klimaat :=
 			for_each_ndva(
-				 Classifications/ZichtJaar/name + '_in'
+				 Classifications/Rekenjaar/name
 				,Geography/rdc_grids/m100
 				,float32
-				,'%sourceDataProjDir%/hulpbestanden/klimaat/GH/GH_' + Classifications/ZichtJaar/label + '.tif'
+				,'%sourceDataProjDir%/hulpbestanden/klimaat/GHexp/GH_' + string(Classifications/Rekenjaar/Values) + '.tif'
 			)
 			, descr = "Klimaat_scenario_knmi"
-			, url   = "%sourceDataProjDir%/hulpbestanden/klimaat/Werkwijze_aanmaak_correctiekaarten_klimaat_obv_KNMI2014_scenarios_tbv_Vesta33.pdf"
-			
-	{
-		parameter<ratio> correctiefactor :=
-			1.0 + float64(mean(Startjaar_in) - mean(J2020_in)) * 0.8[ratio]
-			, Descr = "kentallen warmtevraag bevatten al 80% van verschil tussen 2010 en 2020";
-			
-			attribute<float32> StartJaar (Geography/rdc_grids/m100) := float32(correctiefactor) * StartJaar_in;
-			attribute<float32> J2020     (Geography/rdc_grids/m100) := float32(correctiefactor) * J2020_in;
-			attribute<float32> J2030     (Geography/rdc_grids/m100) := float32(correctiefactor) * J2030_in;
-			attribute<float32> J2040     (Geography/rdc_grids/m100) := float32(correctiefactor) * J2040_in; 
-			attribute<float32> J2050     (Geography/rdc_grids/m100) := float32(correctiefactor) * J2050_in;  
-	}
+			, url   = "%sourceDataProjDir%/hulpbestanden/klimaat/Werkwijze_aanmaak_correctiekaarten_klimaat_obv_KNMI2014_scenarios_tbv_Vesta33.pdf";
+		
+	
+	
+// 	container Klimaat :=
+// 			for_each_ndva(
+// 				 Classifications/ZichtJaar/name + '_in'
+// 				,Geography/rdc_grids/m100
+// 				,float32
+// 				,'%sourceDataProjDir%/hulpbestanden/klimaat/GH/GH_' + Classifications/ZichtJaar/label + '.tif'
+// 			)
+// 			, descr = "Klimaat_scenario_knmi"
+// 			, url   = "%sourceDataProjDir%/hulpbestanden/klimaat/Werkwijze_aanmaak_correctiekaarten_klimaat_obv_KNMI2014_scenarios_tbv_Vesta33.pdf"
+// 			
+// 	{
+// 		parameter<ratio> correctiefactor :=
+// 			1.0 + float64(mean(Startjaar_in) - mean(J2020_in)) * 0.8[ratio]
+// 			, Descr = "kentallen warmtevraag bevatten al 80% van verschil tussen 2010 en 2020";
+// 			
+// 			attribute<float32> StartJaar (Geography/rdc_grids/m100) := float32(correctiefactor) * StartJaar_in;
+// 			attribute<float32> J2020     (Geography/rdc_grids/m100) := float32(correctiefactor) * J2020_in;
+// 			attribute<float32> J2030     (Geography/rdc_grids/m100) := float32(correctiefactor) * J2030_in;
+// 			attribute<float32> J2040     (Geography/rdc_grids/m100) := float32(correctiefactor) * J2040_in; 
+// 			attribute<float32> J2050     (Geography/rdc_grids/m100) := float32(correctiefactor) * J2050_in;  
+// 	}
 	// TODO: jaartallen in correctie parametriseren
 			
+	
+	
 	// inlezen kerncijfers wijken en buurten - meerdere jaren om missende waarden te ondervangen
 	container CBSWijkEnBuurt: url="%sourceDataProjDir%/CBS/20200129_update_kerncijfers_wijken_buurten_BVB.txt"
 	{
