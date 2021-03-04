@@ -27,8 +27,9 @@ template BebouwingsComponentT
 	unit<uint8> PrijzenAardgas := =
 				'Prijzen/AardGas/'+(BCname == 'BestaandeGlTb' || Bcname == 'NieuwbouwGlTb' ? 'Glastuinbouw' : 'Staffel');
 
-	parameter<Classifications/BebouwingsComponent> BC_rel := rlookup(BCname, Classifications/BebouwingsComponent/name); // TODO_OV: Laat dit de parameter zijn en zoek de rest op.
-
+	parameter<Classifications/BebouwingsComponent>  BC_rel   := rlookup(BCname, Classifications/BebouwingsComponent/name); // TODO_OV: Laat dit de parameter zijn en zoek de rest op.
+	parameter<Classifications/BebouwingsSectorBase> BcSector :=	Classifications/BebouwingsComponent/BebouwingsSectorBase_rel[BC_rel];
+	
 	container NcwRefs
 	{
 		container _15 := ='NCW/'+NcwRefBase+'15';
@@ -59,6 +60,7 @@ template BebouwingsComponentT
 
 		unit<uint32>  AfnameGebied         := PrevState/AfnameGebied;
 
+		parameter<string> BCname := ../BCname;
 		attribute<Classifications/Schillabel>  Schillabel_rel  (BO) := makedefined(PrevObject/Schillabel_rel[PrevObject_rel], ModelObject/SchilLabel_rel[Model_rel]);
 		
 		attribute<Units/yr> GeenLabel_Bouwjaar (BO) := =BCname == 'BestaandeWoning' ? 
@@ -69,21 +71,23 @@ template BebouwingsComponentT
 		
 		container Interpolate
 		{
-			attribute<Classifications/Schillabel>  Defaultlabel_lower (BO) :=
-					not(Schillabel_rel == Classifications/schillabel/V/N) ? (0/0)[Classifications/Schillabel] :
-						Functioneel/RV/A >= Functioneel/RV/N ? Classifications/schillabel/V/A
-					: 	Functioneel/RV/B >= Functioneel/RV/N ? Classifications/schillabel/V/A
-					: 	Functioneel/RV/C >= Functioneel/RV/N ? Classifications/schillabel/V/B
-					: 	Functioneel/RV/D >= Functioneel/RV/N ? Classifications/schillabel/V/C
-					: 	Functioneel/RV/E >= Functioneel/RV/N ? Classifications/schillabel/V/D
-					: 	Functioneel/RV/F >= Functioneel/RV/N ? Classifications/schillabel/V/E
-					: 	Functioneel/RV/G >= Functioneel/RV/N ? Classifications/schillabel/V/F
-					: 	Classifications/schillabel/V/G;
+			attribute<Classifications/Schillabel>  Defaultlabel_lower (BO) := switch(
+						  case(isnull(Defaultlabel_new), Defaultlabel_new)
+						, case(Defaultlabel_new == Classifications/schillabel/V/A, Classifications/schillabel/V/A)
+						, case(Defaultlabel_new == Classifications/schillabel/V/B, Classifications/schillabel/V/A)
+						, case(Defaultlabel_new == Classifications/schillabel/V/C, Classifications/schillabel/V/B)
+						, case(Defaultlabel_new == Classifications/schillabel/V/D, Classifications/schillabel/V/C)
+						, case(Defaultlabel_new == Classifications/schillabel/V/E, Classifications/schillabel/V/D)
+						, case(Defaultlabel_new == Classifications/schillabel/V/F, Classifications/schillabel/V/E)
+						, case(Functioneel/RV/N >= Functioneel/RV/G, Classifications/schillabel/V/G)
+						, case(Defaultlabel_new == Classifications/schillabel/V/G, Classifications/schillabel/V/F)
+						, Classifications/schillabel/V/G);
+						
+			attribute<bool> EQUAL (BO) := isnull(Defaultlabel_lower) || Defaultlabel_lower == Defaultlabel_lower_CN;
 			
 			attribute<GJ_yr> RV_upper  (BO) := ='merge(Defaultlabel_new, GJ_yr, '+AsItemList('Functioneel/RV_raw/'+Classifications/Schillabel/name)+')';
 			attribute<GJ_yr> RV_lower  (BO) := ='merge(Defaultlabel_lower, GJ_yr, '+AsItemList('Functioneel/RV_raw/'+Classifications/Schillabel/name)+')';
 			attribute<GJ_yr> D_total   (BO) := RV_upper - RV_lower;
-			
 			attribute<ratio> R_upper   (BO) := makedefined(1.0[ratio]-((RV_upper - Functioneel/CurrRV) / D_total), 0.5[ratio]);
 			attribute<ratio> R_lower   (BO) := makedefined(1.0[ratio]-((Functioneel/CurrRV - RV_lower) / D_total), 0.5[ratio]);
 			attribute<ratio> R_sum     (BO) := R_upper + R_lower;
@@ -98,7 +102,7 @@ template BebouwingsComponentT
 				: 	Functioneel/RV/E >= Functioneel/RV/N ? Classifications/schillabel/V/E
 				: 	Functioneel/RV/F >= Functioneel/RV/N ? Classifications/schillabel/V/F
 				: 	Classifications/schillabel/V/G;
-		
+				
 		attribute<Classifications/Schillabel>  SchillabelOrDefault_rel (BO) :=
 			Schillabel_rel == Classifications/schillabel/V/N ? Defaultlabel_new	: Schillabel_rel;
 		
@@ -128,17 +132,6 @@ template BebouwingsComponentT
 		attribute<nrAsl> nrAansluitingen := ResterendFactor * nrAansluitingen_i;
 		attribute<m2>    Oppervlakte     := ResterendFactor * Oppervlakte_i;
 
-		// TODO_OV: Optimaliseer domein voor Niet woningen tbv specifiek BCcDomein
-		parameter<string> BCname  := ../BCname;
-		attribute<string> BCc (.) :=
-			(BCname == 'BestaandeUtil' || BCname == 'NieuwBouwUtil'  ) 
-				? 'u' 
-				: (BCname == 'BestaandeGLTB' || BCname == 'NieuwBouwGLTB'  ) 
-					? 't' 
-					: IsMeergezins 
-						? 'wh' 
-						: 'wl';
-
 		container AansluitCapaciteit
 		{
 			attribute<kW> RV    (..) := ASW_RVmt;
@@ -149,46 +142,67 @@ template BebouwingsComponentT
 			attribute<kW> eZ    (..) := ASW_Eapp;
 			attribute<kW> eM    (..) := ASW_Eewp;
 
-			attribute<ratio> GTF_RVmt (..) := switch(case(BCc=='t', Vermogens/GTF_t_RVmt) , case(BCc=='u', Vermogens/GTF_u_RVmt), Vermogens/GTF_w_RVmt) ;
-			attribute<ratio> GTF_RVlt (..) := switch(case(BCc=='t', Vermogens/GTF_t_RVlt) , case(BCc=='u', Vermogens/GTF_u_RVlt), Vermogens/GTF_w_RVlt) ;
-			attribute<ratio> GTF_TW   (..) := switch(case(BCc=='t', Vermogens/GTF_t_TW  ) , case(BCc=='u', Vermogens/GTF_u_TW  ), Vermogens/GTF_w_TW  ) ;
-			attribute<ratio> GTF_K    (..) := switch(case(BCc=='t', Vermogens/GTF_t_K   ) , case(BCc=='u', Vermogens/GTF_u_K   ), Vermogens/GTF_w_K   ) ;
-			attribute<ratio> GTF_Enet (..) := switch(case(BCc=='t', Vermogens/GTF_t_Enet) , case(BCc=='u', Vermogens/GTF_u_Enet), Vermogens/GTF_w_Enet) ;
+			parameter<ratio> GTF_RVmt := Vermogens/GTF_RVmt[BCsector];
+			parameter<ratio> GTF_RVlt := Vermogens/GTF_RVlt[BCsector];
+			parameter<ratio> GTF_TW   := Vermogens/GTF_TW[BCsector];
+			parameter<ratio> GTF_K    := Vermogens/GTF_K[BCsector];
+			parameter<ratio> GTF_Enet := Vermogens/GTF_Enet[BCsector];
 
-			attribute<kW>    ASW_RVmt (..) := =( BCname == 'BestaandeUtil' || BCname == 'NieuwBouwUtil' ) ? 'Vermogens/ASW_RVmt_u_opp_specific[BebouwingsType] * Oppervlakte' : 'ASW_RVmt_flat';
-			attribute<kW>    ASW_RVlt (..) := =( BCname == 'BestaandeUtil' || BCname == 'NieuwBouwUtil' ) ? 'Vermogens/ASW_RVlt_u_opp_specific[BebouwingsType] * Oppervlakte' : 'ASW_RVlt_flat';
-			
-			attribute<kW>    ASW_RVmt_flat (..) :=  
-				  Oppervlakte     * switch(case(BCc=='t', Vermogens/ASW_RVmt_t_opp) , case(BCc=='u', Vermogens/ASW_RVmt_u_opp), case(BCc=='wl',Vermogens/ASW_RVmt_wl_opp), Vermogens/ASW_RVmt_wh_opp)
-				+ nrAansluitingen * switch(case(BCc=='t', Vermogens/ASW_RVmt_t_asl) , case(BCc=='u', Vermogens/ASW_RVmt_u_asl), case(BCc=='wl',Vermogens/ASW_RVmt_wl_asl), Vermogens/ASW_RVmt_wh_asl);
-
-			attribute<kW>    ASW_TWmt (..) :=
-				  Oppervlakte     * switch(case(BCc=='t', Vermogens/ASW_TWmt_t_opp) , case(BCc=='u', Vermogens/ASW_TWmt_u_opp), case(BCc=='wl',Vermogens/ASW_TWmt_wl_opp), Vermogens/ASW_TWmt_wh_opp)
-				+ nrAansluitingen * switch(case(BCc=='t', Vermogens/ASW_TWmt_t_asl) , case(BCc=='u', Vermogens/ASW_TWmt_u_asl), case(BCc=='wl',Vermogens/ASW_TWmt_wl_asl), Vermogens/ASW_TWmt_wh_asl);
-
-			attribute<kW>    ASW_RVlt_flat (..) :=
-				  Oppervlakte     * switch(case(BCc=='t', Vermogens/ASW_RVlt_t_opp) , case(BCc=='u', Vermogens/ASW_RVlt_u_opp), case(BCc=='wl',Vermogens/ASW_RVlt_wl_opp), Vermogens/ASW_RVlt_wh_opp)
-				+ nrAansluitingen * switch(case(BCc=='t', Vermogens/ASW_RVlt_t_asl) , case(BCc=='u', Vermogens/ASW_RVlt_u_asl), case(BCc=='wl',Vermogens/ASW_RVlt_wl_asl), Vermogens/ASW_RVlt_wh_asl);
-
-			attribute<kW>    ASW_TWlt (..) :=
-				  Oppervlakte     * switch(case(BCc=='t', Vermogens/ASW_TWlt_t_opp) , case(BCc=='u', Vermogens/ASW_TWlt_u_opp), case(BCc=='wl',Vermogens/ASW_TWlt_wl_opp), Vermogens/ASW_TWlt_wh_opp)
-				+ nrAansluitingen * switch(case(BCc=='t', Vermogens/ASW_TWlt_t_asl) , case(BCc=='u', Vermogens/ASW_TWlt_u_asl), case(BCc=='wl',Vermogens/ASW_TWlt_wl_asl), Vermogens/ASW_TWlt_wh_asl);
-
-			attribute<kW>    ASW_K    (..) :=
-				  Oppervlakte     * switch(case(BCc=='t', Vermogens/ASW_K_t_opp)    , case(BCc=='u', Vermogens/ASW_K_u_opp),    case(BCc=='wl',Vermogens/ASW_K_wl_opp),    Vermogens/ASW_K_wh_opp)
-				+ nrAansluitingen * switch(case(BCc=='t', Vermogens/ASW_K_t_asl)    , case(BCc=='u', Vermogens/ASW_K_u_asl),    case(BCc=='wl',Vermogens/ASW_K_wl_asl),    Vermogens/ASW_K_wh_asl);
-
-			attribute<kW>    ASW_Eapp (..) :=
-				  Oppervlakte     * switch(case(BCc=='t', Vermogens/ASW_Eapp_t_opp) , case(BCc=='u', Vermogens/ASW_Eapp_u_opp), case(BCc=='wl',Vermogens/ASW_Eapp_wl_opp), Vermogens/ASW_Eapp_wh_opp)
-				+ nrAansluitingen * switch(case(BCc=='t', Vermogens/ASW_Eapp_t_asl) , case(BCc=='u', Vermogens/ASW_Eapp_u_asl), case(BCc=='wl',Vermogens/ASW_Eapp_wl_asl), Vermogens/ASW_Eapp_wh_asl);
-
-			attribute<kW>    ASW_Ehwp (..) :=
-				  Oppervlakte     * switch(case(BCc=='t', Vermogens/ASW_Ehwp_t_opp) , case(BCc=='u', Vermogens/ASW_Ehwp_u_opp), case(BCc=='wl',Vermogens/ASW_Ehwp_wl_opp), Vermogens/ASW_Ehwp_wh_opp)
-				+ nrAansluitingen * switch(case(BCc=='t', Vermogens/ASW_Ehwp_t_asl) , case(BCc=='u', Vermogens/ASW_Ehwp_u_asl), case(BCc=='wl',Vermogens/ASW_Ehwp_wl_asl), Vermogens/ASW_Ehwp_wh_asl);
-
-			attribute<kW>    ASW_Eewp (..) :=
-				  Oppervlakte     * switch(case(BCc=='t', Vermogens/ASW_Eewp_t_opp) , case(BCc=='u', Vermogens/ASW_Eewp_u_opp), case(BCc=='wl',Vermogens/ASW_Eewp_wl_opp), Vermogens/ASW_Eewp_wh_opp)
-				+ nrAansluitingen * switch(case(BCc=='t', Vermogens/ASW_Eewp_t_asl) , case(BCc=='u', Vermogens/ASW_Eewp_u_asl), case(BCc=='wl',Vermogens/ASW_Eewp_wl_asl), Vermogens/ASW_Eewp_wh_asl);
+ 			attribute<kW>    ASW_RVmt (..) := =
+ 				  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
+ 				  	'IsMeergezins ? Oppervlakte * Vermogens/ASW_RVmt_wh_opp + nrAansluitingen * Vermogens/ASW_RVmt_wh_asl : Oppervlakte * Vermogens/ASW_RVmt_wl_opp + nrAansluitingen * Vermogens/ASW_RVmt_wl_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/Util && not(.../isNieuwbouw) ? 'Oppervlakte * Vermogens/ASW_RVmt_u_opp_specific[BebouwingsType]'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/GLTB   ? 'Oppervlakte * Vermogens/ASW_RVmt_t_opp + nrAansluitingen * Vermogens/ASW_RVmt_t_asl'
+ 				: 'const(0.0[kW],..)';
+ 			
+ 			attribute<kW>    ASW_RVlt (..) := =
+ 				  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
+ 				  	'IsMeergezins ? Oppervlakte * Vermogens/ASW_RVlt_wh_opp + nrAansluitingen * Vermogens/ASW_RVlt_wh_asl : Oppervlakte * Vermogens/ASW_RVlt_wl_opp + nrAansluitingen * Vermogens/ASW_RVlt_wl_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/Util && not(.../isNieuwbouw) ? 'Oppervlakte * Vermogens/ASW_RVlt_u_opp_specific[BebouwingsType]'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/GLTB   ? 'Oppervlakte * Vermogens/ASW_RVlt_t_opp + nrAansluitingen * Vermogens/ASW_RVlt_t_asl'
+ 				: 'const(0.0[kW],..)';
+ 			
+			attribute<kW>    ASW_TWmt (..) := = 
+				  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
+				  	'IsMeergezins ? Oppervlakte * Vermogens/ASW_TWmt_wl_opp + nrAansluitingen * Vermogens/ASW_TWmt_wl_asl : Oppervlakte * Vermogens/ASW_TWmt_wh_opp + nrAansluitingen * Vermogens/ASW_TWmt_wh_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte * Vermogens/ASW_TWmt_u_opp + nrAansluitingen * Vermogens/ASW_TWmt_u_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/GLTB   ? 'Oppervlakte * Vermogens/ASW_TWmt_t_opp + nrAansluitingen * Vermogens/ASW_TWmt_t_asl'
+ 				: 'const(0.0[kW],..)';
+ 			
+			attribute<kW>    ASW_TWlt (..) :== 
+				  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
+				  	'IsMeergezins ? Oppervlakte * Vermogens/ASW_TWlt_wl_opp + nrAansluitingen * Vermogens/ASW_TWlt_wl_asl : Oppervlakte * Vermogens/ASW_TWlt_wh_opp + nrAansluitingen * Vermogens/ASW_TWlt_wh_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte * Vermogens/ASW_TWlt_u_opp + nrAansluitingen * Vermogens/ASW_TWlt_u_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/GLTB   ? 'Oppervlakte * Vermogens/ASW_TWlt_t_opp + nrAansluitingen * Vermogens/ASW_TWlt_t_asl'
+ 				: 'const(0.0[kW],..)';
+ 			
+			attribute<kW>    ASW_K    (..) := = 
+				  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
+				  	'IsMeergezins ? Oppervlakte * Vermogens/ASW_K_wl_opp + nrAansluitingen * Vermogens/ASW_K_wl_asl : Oppervlakte * Vermogens/ASW_K_wh_opp + nrAansluitingen * Vermogens/ASW_K_wh_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte * Vermogens/ASW_K_u_opp + nrAansluitingen * Vermogens/ASW_K_u_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/GLTB   ? 'Oppervlakte * Vermogens/ASW_K_t_opp + nrAansluitingen * Vermogens/ASW_K_t_asl'
+ 				: 'const(0.0[kW],..)';
+ 			
+			attribute<kW>    ASW_Eapp (..) := = 
+				  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
+				  	'IsMeergezins ? Oppervlakte * Vermogens/ASW_Eapp_wl_opp + nrAansluitingen * Vermogens/ASW_Eapp_wl_asl : Oppervlakte * Vermogens/ASW_Eapp_wh_opp + nrAansluitingen * Vermogens/ASW_Eapp_wh_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte * Vermogens/ASW_Eapp_u_opp + nrAansluitingen * Vermogens/ASW_Eapp_u_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/GLTB   ? 'Oppervlakte * Vermogens/ASW_Eapp_t_opp + nrAansluitingen * Vermogens/ASW_Eapp_t_asl'
+ 				: 'const(0.0[kW],..)';
+ 			
+			attribute<kW>    ASW_Ehwp (..) := = 
+				  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
+				  	'IsMeergezins ? Oppervlakte * Vermogens/ASW_Ehwp_wl_opp + nrAansluitingen * Vermogens/ASW_Ehwp_wl_asl : Oppervlakte * Vermogens/ASW_Ehwp_wh_opp + nrAansluitingen * Vermogens/ASW_Ehwp_wh_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte * Vermogens/ASW_Ehwp_u_opp + nrAansluitingen * Vermogens/ASW_Ehwp_u_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/GLTB   ? 'Oppervlakte * Vermogens/ASW_Ehwp_t_opp + nrAansluitingen * Vermogens/ASW_Ehwp_t_asl'
+ 				: 'const(0.0[kW],..)';
+ 			
+			attribute<kW>    ASW_Eewp (..) := = 
+				  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
+				  	'IsMeergezins ? Oppervlakte * Vermogens/ASW_Eewp_wh_opp + nrAansluitingen * Vermogens/ASW_Eewp_wh_asl : Oppervlakte * Vermogens/ASW_Eewp_wl_opp + nrAansluitingen * Vermogens/ASW_Eewp_wl_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte * Vermogens/ASW_Eewp_u_opp + nrAansluitingen * Vermogens/ASW_Eewp_u_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/GLTB   ? 'Oppervlakte * Vermogens/ASW_Eewp_t_opp + nrAansluitingen * Vermogens/ASW_Eewp_t_asl'
+ 				: 'const(0.0[kW],..)';
 		}
 
 		container Functioneel
