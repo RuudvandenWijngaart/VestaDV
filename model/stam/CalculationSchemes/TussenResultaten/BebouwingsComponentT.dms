@@ -18,13 +18,14 @@ template BebouwingsComponentT
 	container       LocatieSpecifiekeOpties;
 	container       VraagKentallenComponent;
 	unit<uint32>    PrevObject;
-
-	unit<uint8> PrijzenAardgas;
-
+	
 	parameter<string> NcwRefBase;
 	parameter<ratio>  BTW_Factor;
 	parameter<ratio>  BTW_Factor_gv;
 	// end of case parameters
+	
+	unit<uint8> PrijzenAardgas := =
+				'Prijzen/AardGas/'+(BCname == 'BestaandeGlTb' || Bcname == 'NieuwbouwGlTb' ? 'Glastuinbouw' : 'Staffel');
 
 	parameter<Classifications/BebouwingsComponent> BC_rel := rlookup(BCname, Classifications/BebouwingsComponent/name); // TODO_OV: Laat dit de parameter zijn en zoek de rest op.
 
@@ -64,9 +65,7 @@ template BebouwingsComponentT
 			 'Schillabel_rel == Classifications/schillabel/V/N ? Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/bouwjaar : (0/0)[Units/yr]'
 			:'const((0/0)[Units/yr], BO)';
 		attribute<Classifications/WarmteOptie> WarmteOptie_rel (BO) := PrevObject/WarmteOptie_rel[PrevObject_rel];
-
-		
-		attribute<Classifications/Schillabel>  Startlabel_rel  (BO) := =../isNieuwbouw ? 'const(Classifications/schillabel/V/A, BO)' : 'StartJaar/BebouwingsComponenten/' + BCname + '/BO/SchilLabel_rel';
+		attribute<Classifications/Schillabel>  Startlabel_rel  (BO) := PrevObject/Startlabel_rel[PrevObject_rel];
 		
 		container Interpolate
 		{
@@ -221,15 +220,15 @@ template BebouwingsComponentT
 			 , GJ_yr
 			);
 			
-			container RV := RV_raw
+			container RV := for_each_nedv(
+				 Classifications/Schillabel/name
+				,replace(
+					'not(Startlabel_rel == Classifications/Schillabel/V/N) && Schillabel_rel > Classifications/Schillabel/V/@SL@ ? min_elem(StartlabelRV, RV_raw/@SL@) : RV_raw/@SL@'
+					, '@SL@', Classifications/Schillabel/name)
+			 	,..
+			 	, GJ_yr)
 			{			
-				attribute<GJ_yr> A (...) := not(Startlabel_rel == Classifications/Schillabel/V/N) && Startlabel_rel > Classifications/Schillabel/V/A ? min_elem(StartlabelRV, RV_raw/A) : RV_raw/A;
-				attribute<GJ_yr> B (...) := not(Startlabel_rel == Classifications/Schillabel/V/N) && Startlabel_rel > Classifications/Schillabel/V/B ? min_elem(StartlabelRV, RV_raw/B) : RV_raw/B;
-				attribute<GJ_yr> C (...) := not(Startlabel_rel == Classifications/Schillabel/V/N) && Startlabel_rel > Classifications/Schillabel/V/C ? min_elem(StartlabelRV, RV_raw/C) : RV_raw/C;
-				attribute<GJ_yr> D (...) := not(Startlabel_rel == Classifications/Schillabel/V/N) && Startlabel_rel > Classifications/Schillabel/V/D ? min_elem(StartlabelRV, RV_raw/D) : RV_raw/D;
-				attribute<GJ_yr> E (...) := not(Startlabel_rel == Classifications/Schillabel/V/N) && Startlabel_rel > Classifications/Schillabel/V/E ? min_elem(StartlabelRV, RV_raw/E) : RV_raw/E;
-				attribute<GJ_yr> F (...) := not(Startlabel_rel == Classifications/Schillabel/V/N) && Startlabel_rel > Classifications/Schillabel/V/F ? min_elem(StartlabelRV, RV_raw/F) : RV_raw/F;
-				attribute<GJ_yr> G (...) := not(Startlabel_rel == Classifications/Schillabel/V/N) && Startlabel_rel > Classifications/Schillabel/V/G ? min_elem(StartlabelRV, RV_raw/G) : RV_raw/G;
+				attribute<GJ_yr> N (...) := RV_raw/N;
 			}
 
 			attribute<GJ_yr> CurrRV       (..) := ='merge(Schillabel_rel, GJ_yr, '+AsItemList('RV_raw/'+Classifications/Schillabel/name)+')';	
