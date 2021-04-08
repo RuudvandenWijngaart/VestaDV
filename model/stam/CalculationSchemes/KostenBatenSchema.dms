@@ -75,21 +75,6 @@ template KostenBatenT
 			attribute<Eur_yr> Kj_wd_oh  (PlanRegio) := = 'add(const(0[Eur_yr], PlanRegio)'+AsList(replace(', @C/PR/Kj_wd_oh' ,'@C', Classifications/UtilComponent/NcwRefBase),'')+')';
 		}
 
-		container GlasTuinbouw
-		{
-			parameter<bool> BT_active := Classifications/BebouwingsComponentBase/isActive[Classifications/BebouwingsComponentBase/V/BestaandeGlTb];
-			parameter<bool> NT_active := Classifications/BebouwingsComponentBase/isActive[Classifications/BebouwingsComponentBase/V/NieuwbouwGlTb];
-			container bt := = BT_active ? 'CalculationSchemes/KostenGlasTuinbouw(WarmteVraag/BestaandeGlTb/BO, PlanRegio)' : 'GlasTuinbouw'; //berekeningen op objectniveau bestaande glastuinbouw
-			container nt := = NT_active ? 'CalculationSchemes/KostenGlasTuinbouw(WarmteVraag/NieuwbouwGLTB/BO, PlanRegio)' : 'GlasTuinbouw'; //berekeningen op objectniveau nieuwbouw glastuinbouw
-
-			// ========== vermogensvraag en inpandige kosten glastuinbouw per planregio
-			parameter<ratio>  GTF := Vermogens/GTF_RVmt[Classifications/BebouwingsSectorBase/V/GLTB];
-			attribute<kW>     P_sec     (PlanRegio) := = BT_active && NT_active ? 'GTF * (bt/PR/P_id + nt/PR/P_id)'   : BT_active ? 'GTF * bt/PR/P_id' : 'const(0[kW]    , PlanRegio)';
-			attribute<Eur>    Ki_id     (PlanRegio) := = BT_active && NT_active ? 'bt/PR/Ki_id     + nt/PR/Ki_id'     : BT_active ? 'bt/PR/Ki_id'      : 'const(0[Eur]   , PlanRegio)';
-			attribute<Eur_yr> Kj_id_oh  (PlanRegio) := = BT_active && NT_active ? 'bt/PR/Kj_id_oh  + nt/PR/Kj_id_oh'  : BT_active ? 'bt/PR/Kj_id_oh'   : 'const(0[Eur_yr], PlanRegio)';
-			attribute<Eur_yr> Kj_id_adm (PlanRegio) := = BT_active && NT_active ? 'bt/PR/Kj_id_adm + nt/PR/Kj_id_adm' : BT_active ? 'bt/PR/Kj_id_adm'  : 'const(0[Eur_yr], PlanRegio)';
-		}
-
 		container SecundairNet
 		{
 			parameter<classifications/gebruiksgrootteklasse> wd_gebruiksgrootteklasse_rel := last(id(Prijzen_elec)), Descr = "elektriciteitstarief voor wijkdistributeur";
@@ -97,7 +82,7 @@ template KostenBatenT
 			unit<uint8> Prijzen_elec  := Prijzen/Elektriciteit/Staffel;
 			container   LeidingKosten := BuisKosten(PlanRegio, P_sec * 0.001[ MW / kW]);
 
-			attribute<kW>     P_sec          (PlanRegio) := (Wonen/P_sec + Utiliteit/P_sec + GlasTuinbouw/P_sec) / (1d - Efficiencies/Vermogenverlies_MT);
+			attribute<kW>     P_sec          (PlanRegio) := (Wonen/P_sec + Utiliteit/P_sec) / (1d - Efficiencies/Vermogenverlies_MT);
 			attribute<m>      L_hoofdleiding (PlanRegio) := 0.25 * /Invoer/RuimtelijkeData/buislengte/per_buurt/L_dist, Descr = "aantal meter distributieleidingen (hoofd)", Source = "aanlevering GreenVis februari 2020";
 			attribute<Eur>    K_hoofdleiding (PlanRegio) := L_hoofdleiding * Leidingkosten/K_m;
 			attribute<m>      L_zijleiding   (PlanRegio) := 0.75 * /Invoer/RuimtelijkeData/buislengte/per_buurt/L_dist, Descr = "aantal meter distributieleidingen (zij)", Source = "aanlevering GreenVis februari 2020";
@@ -137,10 +122,10 @@ template KostenBatenT
 			attribute<Eur_yr> Kj_wd_gas_CO2 (PlanRegio) := Prijzen/Aardgas/Bijstook/KGJ_CO2Heffing       * V_Bijstook, Descr = "CO2 heffing betaald over inkoop aardgas voor bijstook in hulpketels door eindgebruikers, als onderdeel van Kj_wd_gas";
 		}
 
-		attribute<Eur>    Ki_id           (PlanRegio) := Wonen/Ki_id + Utiliteit/Ki_id + Glastuinbouw/Ki_id;
+		attribute<Eur>    Ki_id           (PlanRegio) := Wonen/Ki_id + Utiliteit/Ki_id;
 		attribute<Eur>    Ki_wd           (PlanRegio) := SecundairNet/Ki_Totaal + Wonen/Ki_wd + Utiliteit/Ki_wd;
 
-		attribute<Eur_yr> Kj_id_oh        (PlanRegio) := Leercurves/OenM/Curve * (Wonen/Kj_id_oh + Utiliteit/Kj_id_oh + Glastuinbouw/Kj_id_oh);
+		attribute<Eur_yr> Kj_id_oh        (PlanRegio) := Leercurves/OenM/Curve * (Wonen/Kj_id_oh + Utiliteit/Kj_id_oh);
 		attribute<Eur_yr> Kj_wd_oh        (PlanRegio) := Leercurves/OenM/Curve * (Wonen/Kj_wd_oh + Utiliteit/Kj_wd_oh + SecundairNet/Kj_Onderhoud);
 		attribute<Eur_yr> Kj_Onderhoud    (PlanRegio) := Kj_wd_oh + Kj_id_oh;
 		attribute<Eur_yr> Kj_wd_elek      (PlanRegio) := SecundairNet/Kj_wd_elek;
@@ -148,7 +133,7 @@ template KostenBatenT
 		attribute<Eur_yr> Kj_wd_gas       (PlanRegio) := Bijstook/Kj_wd_gas;
 		attribute<Eur_yr> Km_wd_gas       (PlanRegio) := Bijstook/Km_wd_gas;
 		attribute<Eur_yr> Kj_lv_adm       (PlanRegio) := Leercurves/OenM/Curve * Kengetallen/Onderhoud/R_lv_Admin * (opbrengsten/jaarlijksD/Oj_VastRecht * 1[yr]);
-		attribute<Eur_yr> Kj_wd_adm       (PlanRegio) := Leercurves/OenM/Curve * (Utiliteit/Kj_id_adm + Glastuinbouw/Kj_id_adm + SecundairNet/Kj_Admin);
+		attribute<Eur_yr> Kj_wd_adm       (PlanRegio) := Leercurves/OenM/Curve * (Utiliteit/Kj_id_adm + SecundairNet/Kj_Admin);
 
 		attribute<nrAsl>  nrAansl_d       (PlanRegio) := ='add('+AsItemList(replace('sum(Bebouwing/@BC@/nrAansluitingen * KanGebiedsOptie/@BC@, Bebouwing/@BC@/PlanRegio_rel)', '@BC@', BCname))+')';
 		attribute<nrAsl>  nrAansl_g       (PlanRegio) := ='add('+AsItemList(replace('sum(Bebouwing/@BC@/nrAansluitingen * KanGebiedsOptie/@BC@, Bebouwing/@BC@/PlanRegio_rel)', '@BC@', BCname))+')';
