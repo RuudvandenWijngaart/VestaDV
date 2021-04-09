@@ -7,9 +7,7 @@
 template BebouwingsComponentT
 {
 	// begin case parameters
-	unit<uint32>      BebouwingsObjectZonderNieuwbouw;
 	parameter<string> BCname;
-	parameter<bool>   IsNieuwbouw;
 	parameter<bool>   HasResterendFactors;
 
 	container       ResterendFactorMaps;
@@ -17,17 +15,27 @@ template BebouwingsComponentT
 	attribute<bool> SchilSprong_sel(Classifications/SchilSprong);
 	container       LocatieSpecifiekeOpties;
 	container       VraagKentallenComponent;
-	unit<uint32>    PrevObject;
 	
 	parameter<string> NcwRefBase;
-	parameter<ratio>  BTW_Factor;
-	parameter<ratio>  BTW_Factor_gv;
 	// end of case parameters
 	
 	unit<uint8> PrijzenAardgas := Prijzen/AardGas/Staffel;
 
 	parameter<Classifications/BebouwingsComponent>  BC_rel   := rlookup(BCname, Classifications/BebouwingsComponent/name); // TODO_OV: Laat dit de parameter zijn en zoek de rest op.
 	parameter<Classifications/BebouwingsSectorBase> BcSector :=	Classifications/BebouwingsComponent/BebouwingsSectorBase_rel[BC_rel];
+	
+	parameter<bool>   IsNieuwbouw   := Classifications/BebouwingsComponent/IsNieuwbouw[BC_rel];
+	parameter<ratio>  BTW_Factor    := ='1.0 '+(Classifications/BebouwingsComponent/DraagtBTW[BC_rel] ? '+ SpecifiekeInstellingen/VAT    / 100[percent]' : '');
+	parameter<ratio>  BTW_Factor_gv := ='1.0 '+(Classifications/BebouwingsComponent/DraagtBTW[BC_rel] ? '+ SpecifiekeInstellingen/VAT_gv / 100[percent]' : '');
+	unit<uint32>      PrevObject    := ='PrevState/Bebouwing/'+ BCname;
+
+//	unit<uint32>      BebouwingsObjectZonderNieuwbouw := ='Bebouwing/'+ BCname;
+
+	unit<uint32>      BebouwingsObjectZonderNieuwbouw :=
+		=Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw  && BC_rel == Classifications/BebouwingsComponent/V/BestaandeWoning ? 'Bebouwing/NieuwbouwWoning' :
+		 Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw  && BC_rel == Classifications/BebouwingsComponent/V/BestaandeUtil   ? 'Bebouwing/NieuwbouwUtil'   :
+		'Bebouwing/'+ BCname;
+	
 	
 	container NcwRefs
 	{
@@ -42,9 +50,10 @@ template BebouwingsComponentT
 
 	unit<uint8> BebouwingsTypeDomein := BO/BebouwingsTypeDomein;
 
-	container union := =IsNieuwbouw ? 'CalculationSchemes/BebouwingsOperaties/union(PrevObject, BebouwingsObjectZonderNieuwbouw)' : '..';
+//	container union := =IsNieuwbouw ? 'CalculationSchemes/BebouwingsOperaties/union(PrevObject, BebouwingsObjectZonderNieuwbouw)' : '..';
+	container union := =Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw ? 'CalculationSchemes/BebouwingsOperaties/union(PrevObject, BebouwingsObjectZonderNieuwbouw)' : '..';
 
-	unit<uint32> BO := = IsNieuwbouw ? 'union/result' : 'BebouwingsObjectZonderNieuwbouw'
+	unit<uint32> BO := =Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw ? 'union/result' : 'PrevObject'
 	{
 		container BebouwingsComponent_UpRef := ..; // TODO_OV: used sporadically, try to avoid this CHECK
 		container NcwRefs                   := BebouwingsComponent_UpRef/NcwRefs;
@@ -62,9 +71,6 @@ template BebouwingsComponentT
 		parameter<string> BCname := ../BCname;
 		attribute<Classifications/Schillabel>  Schillabel_rel  (BO) := makedefined(PrevObject/Schillabel_rel[PrevObject_rel], ModelObject/SchilLabel_rel[Model_rel]);
 		
-		attribute<Units/yr> GeenLabel_Bouwjaar (BO) := =BCname == 'BestaandeWoning' ? 
-			 'Schillabel_rel == Classifications/schillabel/V/N ? Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/bouwjaar : (0/0)[Units/yr]'
-			:'const((0/0)[Units/yr], BO)';
 		attribute<Classifications/WarmteOptie> WarmteOptie_rel (BO) := PrevObject/WarmteOptie_rel[PrevObject_rel];
 		attribute<Classifications/Schillabel>  Startlabel_rel  (BO) := PrevObject/Startlabel_rel[PrevObject_rel];
 		
@@ -453,7 +459,7 @@ template BebouwingsComponentT
 		container BC_kentallen  := BebouwingsComponent_UpRef/BC_kentallen;
 		container Functioneel   := BebouwingsComponent_UpRef/BO/Functioneel;
 		
-		container OrgKapitaallasten := = ../IsNieuwbouw ? 'Union/result/Kapitaallasten' : 'PrevObject/Kapitaallasten';
+		container OrgKapitaallasten := =Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw ? 'Union/result/Kapitaallasten' : 'PrevObject/Kapitaallasten';
 		
 		container Warmtewet := Functioneel2
 		{
@@ -478,7 +484,6 @@ template BebouwingsComponentT
 				'1.0[ratio] / SpecifiekeInstellingen/NMDA_Prijzen/KoudePrijs/Woningen'  :
 				'1.0[ratio] / SpecifiekeInstellingen/NMDA_Prijzen/KoudePrijs/Utiliteit' ;
 			parameter<Eur_GJ> KoudePrijs := KoudeFactor * PrijzenElektriciteit/KGJ_eindgebruik_excl[classify(0[GJ_yr], PrijzenElektriciteit/ClassBreak)];
-
 		}
 	}
 }
