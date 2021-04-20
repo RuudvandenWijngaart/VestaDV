@@ -24,7 +24,6 @@ template BebouwingsComponentT
 	parameter<Classifications/BebouwingsComponent>  BC_rel   := rlookup(BCname, Classifications/BebouwingsComponent/name); // TODO_OV: Laat dit de parameter zijn en zoek de rest op.
 	parameter<Classifications/BebouwingsSectorBase> BcSector :=	Classifications/BebouwingsComponent/BebouwingsSectorBase_rel[BC_rel];
 	
-	parameter<bool>   IsNieuwbouw   := Classifications/BebouwingsComponent/IsNieuwbouw[BC_rel];
 	parameter<ratio>  BTW_Factor    := ='1.0 '+(Classifications/BebouwingsComponent/DraagtBTW[BC_rel] ? '+ SpecifiekeInstellingen/VAT    / 100[percent]' : '');
 	parameter<ratio>  BTW_Factor_gv := ='1.0 '+(Classifications/BebouwingsComponent/DraagtBTW[BC_rel] ? '+ SpecifiekeInstellingen/VAT_gv / 100[percent]' : '');
 	unit<uint32>      PrevObject    := ='PrevState/Bebouwing/'+ BCname;
@@ -50,7 +49,6 @@ template BebouwingsComponentT
 
 	unit<uint8> BebouwingsTypeDomein := BO/BebouwingsTypeDomein;
 
-//	container union := =IsNieuwbouw ? 'CalculationSchemes/BebouwingsOperaties/union(PrevObject, BebouwingsObjectZonderNieuwbouw)' : '..';
 	container union := =Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw ? 'CalculationSchemes/BebouwingsOperaties/union(PrevObject, BebouwingsObjectZonderNieuwbouw)' : '..';
 
 	unit<uint32> BO := =Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw ? 'union/result' : 'PrevObject'
@@ -124,7 +122,6 @@ template BebouwingsComponentT
 		attribute<Geography/rdc_grids/m100>       gridm100_rel       (BO) := point[Geography/rdc_grids/m100];
 
 		attribute<bool> IsMeergezins (.) := BebouwingsTypeDomein/IsMeergezins[BebouwingsType];
-		attribute<bool> IsNieuwbouw  (.) := const(../isNieuwBouw,.);
 
 		attribute<ratio> ResterendFactorBase := = HasResterendFactors
 			? 'MakeDefined(merge(BebouwingsType, ratio, '+AsItemList('ResterendFactorMaps/'+BebouwingsTypeDomein/ResterendFactorName+'[gridm100_rel]')+'), 1.0)'
@@ -153,13 +150,13 @@ template BebouwingsComponentT
  			attribute<kW>    ASW_RVmt (..) := =
  				  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
  				  	'IsMeergezins ? Oppervlakte * Vermogens/ASW_RVmt_wh_opp + nrAansluitingen * Vermogens/ASW_RVmt_wh_asl : Oppervlakte * Vermogens/ASW_RVmt_wl_opp + nrAansluitingen * Vermogens/ASW_RVmt_wl_asl'
- 				: BCsector == Classifications/BebouwingsSectorBase/V/Util && not(.../isNieuwbouw) ? 'Oppervlakte * Vermogens/ASW_RVmt_u_opp_specific[BebouwingsType]'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte * Vermogens/ASW_RVmt_u_opp_specific[BebouwingsType]'
  				: 'const(0.0[kW],..)';
  			
  			attribute<kW>    ASW_RVlt (..) := =
  				  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
  				  	'IsMeergezins ? Oppervlakte * Vermogens/ASW_RVlt_wh_opp + nrAansluitingen * Vermogens/ASW_RVlt_wh_asl : Oppervlakte * Vermogens/ASW_RVlt_wl_opp + nrAansluitingen * Vermogens/ASW_RVlt_wl_asl'
- 				: BCsector == Classifications/BebouwingsSectorBase/V/Util && not(.../isNieuwbouw) ? 'Oppervlakte * Vermogens/ASW_RVlt_u_opp_specific[BebouwingsType]'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte * Vermogens/ASW_RVlt_u_opp_specific[BebouwingsType]'
  				: 'const(0.0[kW],..)';
  			
 			attribute<kW>    ASW_TWmt (..) := = 
@@ -397,7 +394,8 @@ template BebouwingsComponentT
 		LeerCurves/LTAS/Curve,
 		Schuiven/KostenMin,
 		Schuiven/KostenMax,
-		BebouwingsTypeDomein);
+		BebouwingsTypeDomein,
+		BO);
 
 	// voor info over gebruik hWP etc voor RW gelieve de resulterende InstallatiePerProduct te raadplegen
 
