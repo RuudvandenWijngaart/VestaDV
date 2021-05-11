@@ -16,7 +16,7 @@
 
 container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 {
-	parameter<string>   SnapShotDate := '20200101';
+	parameter<string>   SnapShotDate := '20210101';
 	parameter<units/yr> SnapShotYear := left(SnapShotDate,4)[units/yr];
 	parameter<string>   SourceDir    := '%SourceDataProjDir%/BAG/' + SnapShotDate;
 
@@ -135,6 +135,12 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 			attribute<float32>  verdiepingen_float  : = float32(AHN_hoogte) / float32(verdiepinghoogte_cm);
 			attribute<uint32>   vbo_count           := pcount(vbo/pand_rel);
 
+			attribute<string>   status;
+			attribute<uint16>   sloopjaar;
+			attribute<units/yr> sloopjaar_gecorrigeerd :=
+					(sloopjaar <= 1000w || sloopjaar[units/yr] > SnapShotYear)
+					? (0 / 0)[Units/yr]
+					: sloopjaar[Units/yr];
 			attribute<uint16>   bouwjaar;
 			attribute<units/yr> bouwjaar_gecorrigeerd :=
 				(bouwjaar <= 1000w || bouwjaar[units/yr] > SnapShotYear)
@@ -201,6 +207,7 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 		attribute<Studiegebied/buurt>                     buurt_rel                  := point_in_polygon(geometry, Studiegebied/buurt/geometry);
 
 		attribute<Units/yr>                               bouwjaar                   := rjoin(pand_id, import/pand/identificatie, import/pand/bouwjaar_gecorrigeerd);
+		attribute<Units/yr>                               sloopjaar                  := rjoin(pand_id, import/pand/identificatie, import/pand/sloopjaar_gecorrigeerd);
 		attribute<Classifications/BouwjaarWoningBestaand> BouwjaarWoningBestaand_rel := isNull(bouwjaar) ? Classifications/BouwjaarWoningBestaand/onbekend : classify(bouwjaar,Classifications/BouwjaarWoningBestaand/ClassBreak);
 
 		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := rjoin(pand_id, import/pand/identificatie, import/pand/woonpand_type);
@@ -214,6 +221,24 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 		attribute<uint8>                                  nr_verdiepingen             := rjoin(pand_id, import/pand/identificatie, import/pand/nr_verdiepingen);
 		
 		attribute<typeringen/gebruiksdoel>                gebruiksdoel                := const(Invoer/RuimtelijkeData/BAG/typeringen/gebruiksdoel/V/woon,.);
+		
+		container Export
+		{
+			attribute<string>         identificatie   (..) := ../identificatie;
+			attribute<rdc_meter>      geometry        (..) := ../geometry;
+			attribute<string>         postcode        (..) := ../postcode;
+			attribute<string>         adres           (..) := ../label;
+			
+			attribute<Units/m2>       oppervlakte     (..) := ../oppervlakte;
+			attribute<Units/yr>       bouwjaar        (..) := ../bouwjaar;
+			attribute<Units/yr>       sloopjaar       (..) := ../sloopjaar;
+			attribute<uint8>          nr_verdiepingen (..) := ../nr_verdiepingen;
+			attribute<units/pand_asl> Pand_aandeel    (..) := ../pand_aandeel;
+			attribute<string>         woningtype      (..) := classifications/WoningtypeBestaand/name[WoningtypeBestaand_rel];
+			
+			attribute<string>         pand_id         (..) := ../pand_id;
+			attribute<string>         buurt_id        (..) := Studiegebied/buurt/bu_code[../buurt_rel];
+		}
 		
 	}
 
@@ -271,6 +296,7 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 		attribute<Studiegebied/buurt>                   buurt_rel                := point_in_polygon(geometry, Studiegebied/buurt/geometry);
 
 		attribute<units/yr>                             bouwjaar                 := rjoin(pand_id, import/pand/identificatie, import/pand/bouwjaar_gecorrigeerd);
+		attribute<units/yr>                             sloopjaar                := rjoin(pand_id, import/pand/identificatie, import/pand/sloopjaar_gecorrigeerd);
 		attribute<Classifications/BouwjaarUtilBestaand> BouwjaarUtilBestaand_rel := isNull(bouwjaar) ? Classifications/BouwjaarUtilBestaand/V/onbekend :classify(bouwjaar,Classifications/BouwjaarUtilBestaand/ClassBreak);
 
 		// elk utiliteitsobject kan voor meerdere typen gebruiksfunctie zijn ingedeeld
