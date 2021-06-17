@@ -17,7 +17,7 @@ template BebouwingsComponentT
 	parameter<string> NcwRefBase;
 	// end of case parameters
 	
-	unit<uint8> PrijzenAardgas := Prijzen/AardGas/Staffel;
+	unit<uint8> PrijzenAardgas := Prijzen/AardGas/Staffel, ishidden = "true";
 
 	parameter<Classifications/BebouwingsComponent>  BC_rel   := rlookup(BCname, Classifications/BebouwingsComponent/name); // TODO_OV: Laat dit de parameter zijn en zoek de rest op.
 	parameter<Classifications/BebouwingsSectorBase> BcSector :=	Classifications/BebouwingsComponent/BebouwingsSectorBase_rel[BC_rel];
@@ -26,9 +26,10 @@ template BebouwingsComponentT
 	parameter<ratio>  BTW_Factor_gv := ='1.0 '+(Classifications/BebouwingsComponent/DraagtBTW[BC_rel] ? '+ SpecifiekeInstellingen/VAT_gv / 100[percent]' : '');
 	
 	unit<uint32>      PrevObject := ='PrevState/Bebouwing/'+ BCname;
-	unit<uint8> ModelObjectKeyDomein;
+	unit<uint8> ModelObjectKeyDomein : ishidden = "true";
 	
 	unit<uint32>   HistorischBouw := = 'subset(BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/bouwjaar == float64(Classifications/RekenJaar/Values[RekenJaar_rel]))'
+		, Descr = "bebouwing dat in het huidige historische zichtjaar is gebouwd", Source = "BAG"
 	{
 		attribute<Geography/rdc_meter>                       point             := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/point[nr_orgentity]';
 		attribute<Geography/rdc_meter>                       geometry          := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/geometry[nr_orgentity]';
@@ -80,8 +81,8 @@ template BebouwingsComponentT
 	
 	unit<uint32>      NieuwbouwBron :=
 		= Historisch ? 'HistorischBouw' :
-		 Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw  && BC_rel == Classifications/BebouwingsComponent/V/BestaandeWoning ? 'Bebouwing/NieuwbouwWoning' :
-		 Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw  && BC_rel == Classifications/BebouwingsComponent/V/BestaandeUtil   ? 'Bebouwing/NieuwbouwUtil'   :
+		 Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw  && BCsector == Classifications/BebouwingsSectorBase/V/Woning ? 'Bebouwing/NieuwbouwWoning' :
+		 Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw  && BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Bebouwing/NieuwbouwUtil'   :
 		'Bebouwing/'+ BCname;
 	
 	container NcwRefs
@@ -93,7 +94,7 @@ template BebouwingsComponentT
 		container _20 := ='NCW/'+NcwRefBase+'20';
 	}
 
-	unit<uint8> PrijzenElektriciteit := Prijzen/Elektriciteit/Staffel;
+	unit<uint8> PrijzenElektriciteit := Prijzen/Elektriciteit/Staffel, ishidden = "true";
 
 	unit<uint8> BebouwingsTypeDomein := BO/BebouwingsTypeDomein;
 
@@ -409,8 +410,8 @@ template BebouwingsComponentT
 		}
 	}
 
-	attribute<string> GebouwOptie_sel_Expr (Classifications/GebouwOptie) := 'LowerCase(LocatieSpecifiekeOpties/GebouwOpties/'+Classifications/GebouwOptie/name+') != ' + Quote('criteria/never');
-	attribute<bool>   GebouwOptie_sel      (Classifications/GebouwOptie) := ='union_data(Classifications/GebouwOptie, '+AsItemList(GebouwOptie_sel_Expr)+')';
+	attribute<string> GebouwOptie_sel_Expr (Classifications/GebouwOptie) := 'LowerCase(LocatieSpecifiekeOpties/GebouwOpties/'+Classifications/GebouwOptie/name+') != ' + Quote('criteria/never'), IsHidden = "True";
+	attribute<bool>   GebouwOptie_sel      (Classifications/GebouwOptie) := ='union_data(Classifications/GebouwOptie, '+AsItemList(GebouwOptie_sel_Expr)+')', Descr = "Lijst van potentiele gebouwopties";
 	
 	unit<uint8> BcGebouwOptie := subset(GebouwOptie_sel) 
 	{
@@ -481,16 +482,16 @@ template BebouwingsComponentT
 			+ VraagKentallenComponent/Opbrengsten/VastRechtK_Max  * Schuiven/OpbrMax);
 
 		attribute<Eur>    AansluitBijdrageG  (BO) := =
-			  BcSector == Classifications/BebouwingsSector/V/Woning ? 
+			  BCsector == Classifications/BebouwingsSectorBase/V/Woning ? 
 				'BO/isNuNieuw ? BO/nrAansluitingen * Kengetallen/Infra/AansluitTarief_nw_g : BO/nrAansluitingen * Kengetallen/Infra/AansluitTarief_bw_g'
-			: BcSector == Classifications/BebouwingsSector/V/Util ?   
+			: BCsector == Classifications/BebouwingsSectorBase/V/Util ?   
 				'BO/isNuNieuw ? BO/oppervlakte     * Kengetallen/Infra/AansluitTarief_nu_g : BO/oppervlakte     * Kengetallen/Infra/AansluitTarief_bu_g'
 			: 'const(0[Eur],BO)', Descr = "Aansluitbijdrage voor nieuwe aansluiting op het gasnet";
 			
 		attribute<Eur>    AansluitBijdrageE  (BO) := =
-			  BcSector == Classifications/BebouwingsSector/V/Woning ? 
+			  BCsector == Classifications/BebouwingsSectorBase/V/Woning ? 
 				'BO/isNuNieuw ? BO/nrAansluitingen * Kengetallen/Infra/AansluitTarief_nw_e : BO/nrAansluitingen * Kengetallen/Infra/AansluitTarief_bw_e'
-			: BcSector == Classifications/BebouwingsSector/V/Util ?   
+			: BCsector == Classifications/BebouwingsSectorBase/V/Util ?   
 				'BO/isNuNieuw ? BO/oppervlakte     * Kengetallen/Infra/AansluitTarief_nu_e : BO/oppervlakte     * Kengetallen/Infra/AansluitTarief_bu_e'
 			: 'const(0[Eur],BO)', Descr = "Aansluitbijdrage voor nieuwe aansluiting op het elektriciteitsnetnet";
 			
