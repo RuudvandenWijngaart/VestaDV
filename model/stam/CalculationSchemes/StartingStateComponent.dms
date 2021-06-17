@@ -9,7 +9,7 @@ template StartingStateComponent
 	// begin case parameters
 	unit<uint32> BebouwingsObjectSrc;
 	unit<uint32> ModelObject;
-	parameter<Classifications/BebouwingsComponent> BebouwingsComponent_rel;
+	parameter<Classifications/BebouwingsSector> BebouwingsSector_rel;
 	// end case parameters
 
 	unit<uint32>  results := BebouwingsObjectSrc
@@ -19,16 +19,18 @@ template StartingStateComponent
 		attribute<ModelObject>                             ModelObject_rel := rlookup(BebouwingsObjectSrc/ModelObjectKey, ModelObject/ModelObjectKey);
 
 		// =============== attributen die per Rekenstap kunnen wijzigen door toepassing van GebouwOpties
-		attribute<Classifications/SchilLabel>  SchilLabel_rel := =(BebouwingsComponent_rel == Classifications/BebouwingsComponent/V/BestaandeWoning) 
+		attribute<Classifications/SchilLabel>  SchilLabel_rel := =(BebouwingsSector_rel == Classifications/BebouwingsSector/V/Woning) 
 			? 'MakeDefined(BebouwingsObjectSrc/SchilLabel_rel, Classifications/schillabel/V/N)'
 			: 'ModelObject/SchilLabel_rel[ ModelObject_rel]';
 		attribute<Classifications/Schillabel>  StartLabel_rel := SchilLabel_rel;
-		attribute<units/yr> Bouwjaar  := =BebouwingsComponent_rel == Classifications/BebouwingsComponent/V/BestaandeWoning ?
+		attribute<units/yr> Bouwjaar  := =BebouwingsSector_rel == Classifications/BebouwingsSector/V/Woning ?
 			'Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/bouwjaar' : 'Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/bouwjaar';
-		attribute<units/yr> Sloopjaar := =BebouwingsComponent_rel == Classifications/BebouwingsComponent/V/BestaandeWoning ?
+		attribute<units/yr> Sloopjaar := =BebouwingsSector_rel == Classifications/BebouwingsSector/V/Woning ?
 			'Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/sloopjaar' : 'Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/sloopjaar';
 	
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel := ModelObject/StartOptie_rel[ModelObject_rel]; // laast toegepaste optie
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel := 
+			Restwarmte/GebruikRestWarmte[Planregio_rel] ? Classifications/gebiedsOptie/GebouwOptie_rel[PlanregioWarmteAllocatie_Remove[Planregio_rel]] :
+			ModelObject/StartOptie_rel[ModelObject_rel]; // laast toegepaste optie
 		container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
 			, 'Classifications/GebouwOptie/PerProduct/'+Classifications/Product/name+'[GebouwOptie_rel]'
 			, .

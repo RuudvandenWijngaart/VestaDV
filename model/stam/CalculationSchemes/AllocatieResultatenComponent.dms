@@ -73,12 +73,14 @@ template AllocatieResultatenComponent
 		}
 		container Functioneel
 		{
-			attribute<GJ_yr> V_RV     (BO) := ='merge(GebouwOptie_rel, GJ_yr, ' + AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Functioneel/RV') + ')';
-			attribute<GJ_yr> V_TW     (BO) := ='merge(GebouwOptie_rel, GJ_yr, ' + AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Functioneel/TW') + ')';
-			attribute<GJ_yr> V_Warmte (BO) := V_RV + V_TW;
-			attribute<GJ_yr> V_K      (BO) := ='merge(GebouwOptie_rel, GJ_yr, ' +AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/Functioneel/K')+')';
-			attribute<GJ_yr> V_Vent   (BO) := float64(SchilLabel_rel <= Classifications/SchilLabel/V/B) * BO_base/Functioneel/Ventilatie;
-			attribute<GJ_yr> V_App    (BO) := BO_base/Functioneel/EA;
+			attribute<GJ_yr> V_RV      (BO) := ='merge(GebouwOptie_rel, GJ_yr, ' + AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Functioneel/RV') + ')';
+			attribute<GJ_yr> V_TW      (BO) := ='merge(GebouwOptie_rel, GJ_yr, ' + AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Functioneel/TW') + ')';
+			attribute<GJ_yr> V_Warmte  (BO) := V_RV + V_TW;
+			attribute<GJ_yr> V_K       (BO) := ='merge(GebouwOptie_rel, GJ_yr, ' +AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/Functioneel/K')+')';
+			attribute<GJ_yr> V_Vent    (BO) := float64(SchilLabel_rel <= Classifications/SchilLabel/V/B) * BO_base/Functioneel/Ventilatie;
+			attribute<GJ_yr> V_App     (BO) := BO_base/Functioneel/EA;
+			attribute<GJ_yr> Totaal_LO (BO) :=    V_RV * float64(Aansluitingen/Warmte == 0.0[nrAsl]) + V_TW * float64(Aansluitingen/Warmte == 0.0[nrAsl])
+												+ V_Vent + V_K * float64(KoudeGebouw);
 		}
 		container Metervraag := for_each_nedv('V_'+Classifications/BemeterdeGebouwInput/name
 			, replace('merge(GebouwOptie_rel, GJ_yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/metervraag/@I')+')', '@I', Classifications/BemeterdeGebouwInput/name)
@@ -86,9 +88,15 @@ template AllocatieResultatenComponent
 			, GJ_yr
 			)
 		{
-			attribute<GJ_yr> V_app    (BO) := Functioneel/V_App * /Invoer/Kengetallen/Constanten/Efficiency_EA;
-			attribute<GJ_yr> V_Warmte (BO) := .../metervraag/Warmte_MT + .../metervraag/Warmte_LT;
-			attribute<GJ_yr> V_Koude  (BO) := .../metervraag/Koude;
+			attribute<GJ_yr> V_app     (BO) := Functioneel/V_App * /Invoer/Kengetallen/Constanten/Efficiency_EA;
+			attribute<GJ_yr> V_Warmte  (BO) := .../metervraag/Warmte_MT + .../metervraag/Warmte_LT;
+			attribute<GJ_yr> V_Koude   (BO) := .../metervraag/Koude;
+			attribute<GJ_yr> Totaal_LO (BO) := V_e + V_gas + V_H2 + V_pellets + V_biomassa;
+		}
+		container Omgeving
+		{
+			attribute<GJ_yr> Winst   (BO) := max_elem(0.0[GJ_yr], Functioneel/Totaal_LO - Metervraag/Totaal_LO);
+			attribute<GJ_yr> Verlies (BO) := max_elem(0.0[GJ_yr], Metervraag/Totaal_LO  - Functioneel/Totaal_LO);
 		}
 		container Opbrengsten
 		{
