@@ -19,7 +19,6 @@ template BebouwingsComponentT
 	
 	unit<uint8> PrijzenAardgas := Prijzen/AardGas/Staffel, ishidden = "true";
 
-//	parameter<Classifications/VraagKentallen/Woning>  BC_rel   := rlookup(BCname, Classifications/BebouwingsComponent/name); // TODO_OV: Laat dit de parameter zijn en zoek de rest op.
 	parameter<Classifications/BebouwingsSectorBase> BcSector :=	rlookup(BCname, Classifications/BebouwingsSectorBase/name);
 	
 	parameter<ratio>  BTW_Factor    := ='1.0 '+(Classifications/BebouwingsSectorBase/DraagtBTW[BcSector] ? '+ SpecifiekeInstellingen/VAT    / 100[percent]' : '');
@@ -28,7 +27,7 @@ template BebouwingsComponentT
 	unit<uint32>      PrevObject := ='PrevState/Bebouwing/'+ BCname;
 	unit<uint8> ModelObjectKeyDomein : ishidden = "true";
 	
-	unit<uint32>   HistorischBouw := = 'subset(BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/bouwjaar == float64(Classifications/RekenJaar/Values[RekenJaar_rel]))'
+	unit<uint32>   HistorischBouw := = 'subset(BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/bouwjaar == Zichtjaar_jaar)'
 		, Descr = "bebouwing dat in het huidige historische zichtjaar is gebouwd", Source = "BAG"
 	{
 		attribute<Geography/rdc_meter>                       point             := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/point[nr_orgentity]';
@@ -37,8 +36,8 @@ template BebouwingsComponentT
 		attribute<string>                                    label             := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/label[nr_orgentity]', DialogType = "labelText";
 		attribute<Invoer/RuimtelijkeData/StudieGebied/buurt> Buurt_rel         := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/Buurt_rel[nr_orgentity]';
 		attribute<BebouwingsTypeDomein>                      BebouwingsType    := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/BebouwingsType[nr_orgentity]';
-		attribute<units/yr>                                  Bouwjaar          := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/Bouwjaar[nr_orgentity]';
-		attribute<units/yr>                                  Sloopjaar         := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/Sloopjaar[nr_orgentity]';
+		attribute<units/yr_uint16>                           Bouwjaar          := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/Bouwjaar[nr_orgentity]';
+		attribute<units/yr_uint16>                           Sloopjaar         := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/Sloopjaar[nr_orgentity]';
 		attribute<ModelObjectKeyDomein>                      ModelObjectKey    := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/ModelObjectKey[nr_orgentity]';
 		attribute<nrAsl>                                     nrAansluitingen_i := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/nrAansluitingen_i[nr_orgentity]';
 		attribute<m2>                                        Oppervlakte_i     := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/Oppervlakte_i[nr_orgentity]';
@@ -80,7 +79,7 @@ template BebouwingsComponentT
 	}
 	
 	unit<uint32>      NieuwbouwBron :=
-		= Historisch ? 'HistorischBouw' :
+		= Classifications/Periode/isHistorisch[Periode_rel] ? 'HistorischBouw' :
 		 Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw  && BCsector == Classifications/BebouwingsSectorBase/V/Woning ? 'Bebouwing/NieuwbouwWoning' :
 		 Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw  && BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Bebouwing/NieuwbouwUtil'   :
 		'Bebouwing/'+ BCname;
@@ -176,13 +175,15 @@ template BebouwingsComponentT
 			? 'MakeDefined(merge(BebouwingsType, ratio, '+AsItemList('ResterendFactorMaps/'+BebouwingsTypeDomein/ResterendFactorName+'[gridm100_rel]')+'), 1.0)'
 			: 'const(1.0, BO)';
 
-		attribute<ratio> ResterendFactor := Bouwjaar > 2020d ? 1.0 : ResterendFactorBase * float64(IsDefined(PlanRegio_rel)); //TODO: huidig jaar parametriseren
-		attribute<bool>  Afbouw          := =Historisch ? 'const(false,.)' : 'PrevObject/ResterendNu[PrevObject_rel] > 0.0 && ResterendFactor <= 0.0';
+		attribute<ratio> ResterendFactor := Bouwjaar > 2021w ? 1.0 : ResterendFactorBase * float64(IsDefined(PlanRegio_rel)); //TODO: huidig jaar parametriseren
+		attribute<bool>  Afbouw          := =Classifications/Periode/isHistorisch[Periode_rel] ? 'const(false,.)'
+			: 'PrevObject/ResterendNu[PrevObject_rel] > 0.0 && ResterendFactor <= 0.0';
 		
-		attribute<ratio> ResterendNu     :=
-			=Historisch ? 'isdefined(Sloopjaar) && uint16(Sloopjaar) <= Classifications/RekenJaar/Values[RekenJaar_rel] ? 0.0 : 1.0'
-						: 'isdefined(Sloopjaar) && uint16(Sloopjaar) <= Classifications/RekenJaar/Values[RekenJaar_rel] ? 0.0 : Afbouw ? max_elem(PrevObject/ResterendNu[PrevObject_rel] - 0.1, 0.0) : ResterendFactor';
-						//TODO: 0.1 dynamisch afleiden van aantal zichtjaren, werkt nu alleen bij 1-jaar stappen
+		attribute<ratio> ResterendNu     := =Classifications/Periode/isHistorisch[Periode_rel] ?
+			'isdefined(Sloopjaar) && Sloopjaar <= Zichtjaar_jaar ? 0.0 : 1.0'
+			: 'isdefined(Sloopjaar) && Sloopjaar <= Zichtjaar_jaar ? 0.0 :
+			Afbouw ? max_elem(PrevObject/ResterendNu[PrevObject_rel] - 0.1, 0.0) : ResterendFactor';
+			//TODO: 0.1 dynamisch afleiden van aantal zichtjaren, werkt nu alleen bij 1-jaar stappen
 						
 		attribute<nrAsl> nrAansluitingen := ResterendNu * nrAansluitingen_i;
 		attribute<m2>    Oppervlakte     := ResterendNu * Oppervlakte_i;

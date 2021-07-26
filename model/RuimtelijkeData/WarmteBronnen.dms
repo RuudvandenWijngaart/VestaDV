@@ -39,7 +39,7 @@ container WarmteBronnen
 			attribute<MetaData/TypeInfoList> TypeInfoList_rel := MetaData/TypeInfo/TypeInfoList_rel[TypeInfo_rel];
 
 			//status == "Optie A"     warmtebron is gepland, zal uiterlijk vanaf 2030 beschikbaar zijn
-			//status == "Optie B"     warmtebron bestaat en blijft in ieder geval tot 2030 beschikbaar
+			//status == "Optie B"     warmtebron bestaat en blijft in ieder ge-val tot 2030 beschikbaar
 			//status == "Optie C"     warmtebron bestaat maar zal in 2030 niet meer beschikbaar zijn	
 
 			attribute<yr_uint16> ingebruik  := (status == "Optie A") ? 2029[yr_uint16] : 1999[yr_uint16];
@@ -56,8 +56,8 @@ container WarmteBronnen
 
 			attribute<_yr>  Rj_Onderhoud := value(MetaData/TypeInfo/JaarKosten[ TypeInfo_rel ], _yr);
 
-			container K_GJ  := for_each_nedv(classifications/Rekenstap/name, 'makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/K_GJ/'+classifications/Rekenstap/name+'[TypeInfo_rel])', ., Eur_GJ);
-			container Km_GJ := for_each_nedv(classifications/Rekenstap/name, 'makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/Km_GJ/'+classifications/Rekenstap/name+'[TypeInfo_rel])', ., Eur_GJ);
+			container K_GJ  := for_each_nedv(classifications/Zichtjaar/name, 'makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/K_GJ/'+classifications/Zichtjaar/name+'[TypeInfo_rel])', ., Eur_GJ);
+			container Km_GJ := for_each_nedv(classifications/Zichtjaar/name, 'makedefined(Productiekosten[Eur_GJ] , MetaData/TypeInfo/Km_GJ/'+classifications/Zichtjaar/name+'[TypeInfo_rel])', ., Eur_GJ);
 
 			attribute<kg_GJ>   CO2_2000  := value(MetaData/TypeInfo/CO2_2000[TypeInfo_rel],kg_GJ);
 			attribute<kg_GJ>   CO2_2010  := value(MetaData/TypeInfo/CO2_2010[TypeInfo_rel],kg_GJ);
@@ -107,12 +107,13 @@ container WarmteBronnen
 		template BronSelectie: IsHidden = "True"
 		{
 			// begin case parameters
-			parameter<string> RekenstapName;
+			parameter<string> ZichtjaarName;
 			// end case parameters
 
-			parameter<classifications/Rekenstap> Rekenstap_rel := rlookup(RekenstapName, classifications/Rekenstap/name);
-			parameter<units/yr_uint16>           Jaar          := classifications/Rekenstap/jaar[Rekenstap_rel];
-			parameter<units/yr_uint16>           ZichtJaar     := Classifications/ZichtJaar/Jaar[classify(Jaar, Classifications/ZichtJaar/Jaar)];
+			parameter<classifications/Zichtjaar> Zichtjaar_rel    := rlookup(ZichtjaarName, classifications/Zichtjaar/name);
+			parameter<units/yr_uint16>           Jaar             := classifications/Zichtjaar/jaar[Zichtjaar_rel];
+			parameter<classifications/Periode>   Periode_rel      := Classifications/ZichtJaar/Periode_rel[Zichtjaar_rel];
+			parameter<units/yr_uint16>           Periode_EindJaar := Classifications/Periode/EindJaar[Periode_rel];
 
 			unit<uint32> WarmteBronnen := data;
 
@@ -138,17 +139,17 @@ container WarmteBronnen
 				attribute<Eur_kW>                Ki_kW_max        := WarmteBronnen/Ki_kW_max[nr_OrgEntity];
 				attribute<_yr>                   Rj_Onderhoud     := WarmteBronnen/Rj_Onderhoud[nr_OrgEntity];
 				attribute<MW>                    MWth_max         := WarmteBronnen/MWth_max[nr_OrgEntity];
-				attribute<Eur_GJ>                K_GJ             := = 'WarmteBronnen/K_GJ/' +RekenstapName+'[nr_OrgEntity]';
-				attribute<Eur_GJ>                Km_GJ            := = 'WarmteBronnen/Km_GJ/'+RekenstapName+'[nr_OrgEntity]';
+				attribute<Eur_GJ>                K_GJ             := = 'WarmteBronnen/K_GJ/' +ZichtjaarName+'[nr_OrgEntity]';
+				attribute<Eur_GJ>                Km_GJ            := = 'WarmteBronnen/Km_GJ/'+ZichtjaarName+'[nr_OrgEntity]';
 				
-				attribute<kg_GJ>                 CO2_GJ           := ='R_down * WarmteBronnen/CO2_'+string(ZichtJaar)+'[nr_OrgEntity] + R_up * WarmteBronnen/CO2_'+string(min_elem(ZichtJaar+10w,2050w))+'[nr_OrgEntity]';
-				attribute<G_GJ>                  NOx_GJ           := ='R_down * WarmteBronnen/NOx_'+string(ZichtJaar)+'[nr_OrgEntity] + R_up * WarmteBronnen/NOx_'+string(min_elem(ZichtJaar+10w,2050w))+'[nr_OrgEntity]';
-				attribute<G_GJ>                  SO2_GJ           := ='R_down * WarmteBronnen/SO2_'+string(ZichtJaar)+'[nr_OrgEntity] + R_up * WarmteBronnen/SO2_'+string(min_elem(ZichtJaar+10w,2050w))+'[nr_OrgEntity]';
-				attribute<G_GJ>                  VOS_GJ           := ='R_down * WarmteBronnen/VOS_'+string(ZichtJaar)+'[nr_OrgEntity] + R_up * WarmteBronnen/VOS_'+string(min_elem(ZichtJaar+10w,2050w))+'[nr_OrgEntity]';
-				attribute<G_GJ>                  TS_GJ            := ='R_down * WarmteBronnen/TS_' +string(ZichtJaar)+'[nr_OrgEntity] + R_up * WarmteBronnen/TS_' +string(min_elem(ZichtJaar+10w,2050w))+'[nr_OrgEntity]';
+				attribute<kg_GJ>                 CO2_GJ           := ='R_up * WarmteBronnen/CO2_'+string(Periode_Eindjaar)+'[nr_OrgEntity] + R_down * WarmteBronnen/CO2_'+string(max_elem(min_elem(Periode_Eindjaar-10w,2050w), 2000w))+'[nr_OrgEntity]';
+				attribute<G_GJ>                  NOx_GJ           := ='R_up * WarmteBronnen/NOx_'+string(Periode_Eindjaar)+'[nr_OrgEntity] + R_down * WarmteBronnen/NOx_'+string(max_elem(min_elem(Periode_Eindjaar-10w,2050w), 2000w))+'[nr_OrgEntity]';
+				attribute<G_GJ>                  SO2_GJ           := ='R_up * WarmteBronnen/SO2_'+string(Periode_Eindjaar)+'[nr_OrgEntity] + R_down * WarmteBronnen/SO2_'+string(max_elem(min_elem(Periode_Eindjaar-10w,2050w), 2000w))+'[nr_OrgEntity]';
+				attribute<G_GJ>                  VOS_GJ           := ='R_up * WarmteBronnen/VOS_'+string(Periode_Eindjaar)+'[nr_OrgEntity] + R_down * WarmteBronnen/VOS_'+string(max_elem(min_elem(Periode_Eindjaar-10w,2050w), 2000w))+'[nr_OrgEntity]';
+				attribute<G_GJ>                  TS_GJ            := ='R_up * WarmteBronnen/TS_' +string(Periode_Eindjaar)+'[nr_OrgEntity] + R_down * WarmteBronnen/TS_' +string(max_elem(min_elem(Periode_Eindjaar-10w,2050w), 2000w))+'[nr_OrgEntity]';
 				
-				parameter<ratio> R_down := 1d - 0.1d * (float64(Jaar - ZichtJaar) / 1[yr]);
-				parameter<ratio> R_up   := 0.1d * (float64(Jaar - ZichtJaar) / 1[yr]);
+				parameter<ratio> R_up   := 1d - 0.1d * (float64(Periode_Eindjaar) - float64(Jaar)) / 1[yr];
+				parameter<ratio> R_down := 1d - R_up;
 			}
 			
 			unit<uint32> Bronnen := unique(BronElementen/point)
@@ -181,7 +182,7 @@ container WarmteBronnen
 			}
 		}
 		// Vooralsnog per ZichtJaar, zou ook per rekenstap kunnnen.
-		container BronSelecties := for_each_ne(Classifications/Rekenstap/name, 'BronSelectie('+Quote(Classifications/Rekenstap/name)+')');
+		container BronSelecties := for_each_ne(Classifications/Zichtjaar/name, 'BronSelectie('+Quote(Classifications/Zichtjaar/name)+')');
 
 		container linkset
 		{

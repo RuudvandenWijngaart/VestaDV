@@ -106,19 +106,16 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	{
 		attribute<string> name        := BebouwingsSector/name [nr_OrgEntity];
 		attribute<string> NcwRefBase  := BebouwingsSector/NcwRefBase[nr_OrgEntity];
-//		attribute<bool  > IsNieuwbouw := BebouwingsSector/IsNieuwbouw[nr_OrgEntity];
 	}
 	unit<uint8> UtilComponent       := subset(BebouwingsSector/nr_OrgEntity == BebouwingsSectorBase/V/Util) 
 	{
 		attribute<string> name        := BebouwingsSector/name [nr_OrgEntity];
 		attribute<string> NcwRefBase  := BebouwingsSector/NcwRefBase[nr_OrgEntity];
-//		attribute<bool  > IsNieuwbouw := BebouwingsSector/IsNieuwbouw[nr_OrgEntity];
 	}
 	unit<uint8> WoningUtilComponent := union_unit_uint8(WoningComponent, UtilComponent)
 	{
 		attribute<string> name        := union_data(., WoningComponent/Name,        UtilComponent/Name);
 		attribute<string> NcwRefBase  := union_data(., WoningComponent/NcwRefBase,  UtilComponent/NcwRefBase);
-//		attribute<bool  > IsNieuwbouw := union_data(., WoningComponent/IsNieuwbouw, UtilComponent/IsNieuwbouw);
 	}
 	
 // =========  Classificaties voor Bebouwingscomponenten
@@ -216,7 +213,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 // =========  Classificaties voor bouw/zichtjaren
 	unit<uint8> BouwjaarWoningBestaand : nrofrows = 14
 	{
-		attribute<units/yr> ClassBreak : [ -9998 ,  1930 ,  1946 ,  1965 ,  1975 ,  1992 ,  1996 ,  2000 ,  2006 ,  2011 ,  2015,    2021,    2031,    2041 ];
+		attribute<units/yr_uint16> ClassBreak : [ -9998 ,  1930 ,  1946 ,  1965 ,  1975 ,  1992 ,  1996 ,  2000 ,  2006 ,  2011 ,  2015,    2021,    2031,    2041 ];
 		attribute<string>   name       : ['v1930','v1946','v1965','v1975','v1992','v1996','v2000','v2006','v2011','v2014','v2020', 'v2030', 'v2040', 'v2050'];
 
 		attribute<string> Excel_code:
@@ -360,36 +357,78 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
 
-	unit<uint8> ZichtJaar: nrofrows = 6 
+	unit<uint8> Periode: nrofrows = 6 
 	{
-		attribute<units/yr_uint16> Jaar         : [2000, 2010, 2020, 2030, 2040, 2050];
-		attribute<bool>            RS_Mutations := Jaar > 2021[units/yr_uint16];
-		attribute<string>          label        := string(Jaar);
-		attribute<string>          name         := id(.) == 0b ? 'StartJaar' : 'J' + label; // eerste ZichtJaar wordt startjaar genoemd omdat de gebruikte data betrekking heeft op verschillende jaren.
-		attribute<string>          period_name  := 'Y' + label[id(.)-1[.]] + '_Y' + label;
-
+		attribute<units/yr_uint16> Eindjaar     : [2000, 2010, 2020, 2030, 2040, 2050];
+		attribute<units/yr_uint16> Beginjaar    : [2000, 2001, 2011, 2021, 2031, 2041];
+		attribute<bool>            IsHistorisch := Eindjaar <= 2021 [units/yr_uint16];
+		attribute<bool>            HasNieuwbouw := not(IsHistorisch);
+		attribute<yr>              nrJaren      :  [1,10,10,10,10,10];
+		attribute<string>          Label        := id(.) == 0[uint8] ? 'Startjaar' : string(Beginjaar) + '-' + string(Eindjaar);
+		attribute<string>          Name         := id(.) == 0[uint8] ? 'Startjaar' : 'Y' + string(Beginjaar) + '_' + 'Y' + string(Eindjaar);
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
 	
 	// Hier kun je meer of minder Rekenstappen per jaar gaan definieren. Pas dan ook de onderstaande attribuutdata aan.
 	// Waarschijnlijk moet de eerste Rekenstap wel verwijzen naar het eerste ZichtJaar en moeten volgende Rekenstappen niet naar eerdere jaren verwijzen.
 	
-	unit<uint8> Rekenstap := /Rekenstap
+	unit<uint8> ZichtJaar := /Rekenstap
 	{
-		attribute<ZichtJaar> ZichtJaar_rel_bebouwing  := Invoer/SpecifiekeInstellingen/BC_doNieuwbouw ? classify(Jaar + 9[units/yr_uint16], ZichtJaar/Jaar) : 0[ZichtJaar];
-		
+		attribute<Periode>   Periode_rel   := Invoer/SpecifiekeInstellingen/BC_doNieuwbouw ? classify(Jaar + 9[units/yr_uint16], Periode/Eindjaar) : 0[Periode];
 		attribute<RekenJaar> RekenJaar_rel := rlookup(jaar, RekenJaar/Values);
-//		attribute<bool>      HasMutations  := ZichtJaar/RS_Mutations[ZichtJaar_rel_bebouwing];
-		attribute<bool>      RS_Mutations  := Invoer/SpecifiekeInstellingen/BC_doNieuwbouw ? Jaar >= 2021[units/yr_uint16] : const(false,.);
-	
+		attribute<bool>      HasNieuwbouw  := Invoer/SpecifiekeInstellingen/BC_doNieuwbouw ? Periode/HasNieuwbouw[Periode_rel] : const(false,.);
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
 
-	unit<uint8> RekenJaar := unique(Rekenstap/jaar)
+	unit<uint8> RekenJaar := unique(ZichtJaar/jaar)
 	{
-		attribute<string> name := 'J' + string(Values);
+		attribute<string> name  := 'J' + string(Values);
+		attribute<string> label := string(Values);
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
+	
+	unit<uint32> Bouwdeel: nrofrows = 9 
+	{
+		attribute<string> name       : ['RB', 'RO', 'DR', 'PL', 'VL', 'MG', 'MS', 'DP', 'DS'];
+		attribute<string> label      : ['Ramen Boven', 'Ramen Onder', 'Deuren', 'Paneel', 'Vloer', 'Gevel', 'Spouwmuur', 'Plat Dak', 'Schuin Dak'];
+		attribute<yr>     Levensduur : [20, 20, 20, 30, 40, 30, 30, 35, 35], Source = "Werkwaarde";
+		attribute<ratio>  Verlies    : [0.6, 1.0, 1.0, 1.0, 0.75, 1.0, 1.0, 1.25, 1.25], Source = "Werkwaarde";
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+	unit<uint32> Isolatie: nrofrows = 4
+	{
+		attribute<string> name       : ['N1', 'N2', 'N3', 'N4'];
+		attribute<string> label      : ['zeer laag', 'laag', 'midden', 'hoog'];
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+	unit<uint32> BouwdeelIsolatie := combine(Bouwdeel,Isolatie)
+	{
+		attribute<string> name        := Bouwdeel/name[nr_1] + '_' + Isolatie/name[nr_2];
+		attribute<string> label       := Bouwdeel/label[nr_1] + ': ' + Isolatie/label[nr_2];
+		attribute<bool>   isMaatregel := nr_2 > 0[uint32];
+	}
+	unit<uint32> IsolatieMaatregel := subset(BouwdeelIsolatie/isMaatregel)
+	{
+		attribute<string> name        := BOuwdeelIsolatie/name[nr_orgentity];
+		attribute<string> label       := BOuwdeelIsolatie/label[nr_orgentity];
+		attribute<Isolatie_imp> imp   := rlookup(name, Isolatie_imp/name);
+		container kosten := for_each_nedv(Uitvoering/name, 'Isolatie_imp/Euro_m2/Ki_' + Uitvoering/name + '_opp[imp]',IsolatieMaatregel, eur_m2);
+	}
+	unit<uint32> Isolatie_imp: StorageName = "%projDir%/isolatie/isolatiekosten.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
+	{
+		attribute<string> name := bouwdeel + '_' + niveau; // PrimaryKey
+		container Euro_m2 := for_each_nedv('Ki_' + Uitvoering/name + '_opp', Uitvoering/name + '[eur_m2]', Isolatie_imp, eur_m2);
+	}
+	
+	unit<uint32> Uitvoering: nrofrows = 8
+	{
+		attribute<string> name       : ['Zst_Egw_Ind', 'Zst_Egw_Prj' , 'Zst_Mgw_Ind', 'Zst_Mgw_Prj' , 'Nat_Egw_Ind', 'Nat_Egw_Prj' , 'Nat_Mgw_Ind', 'Nat_Mgw_Prj' ];
+		attribute<string> moment     : ['Zelfstandig', 'Zelfstandig' , 'Zelfstandig', 'Zelfstandig' , 'Natuurlijk' , 'Natuurlijk'  , 'Natuurlijk' , 'Natuurlijk'  ];
+		attribute<string> bouwsoort  : ['Eengezins'  , 'Eengezins'   , 'Meergezins' , 'Meergezins'  , 'Eengezins'  , 'Eengezins'   , 'Meergezins' , 'Meergezins'  ];
+		attribute<string> schaal     : ['Individueel', 'Projectmatig', 'Individueel', 'Projectmatig', 'Individueel', 'Projectmatig', 'Individueel', 'Projectmatig'];
+		attribute<string> label      := moment +', '+ bouwsoort +', '+ schaal;
+	}
+	
 	
 // =========  Classificaties voor rapgroepen
 	// let op: de set van mogelijke RapGroeperingen is afhankelijk van de gekozen BebouwingsComponenten.
@@ -420,9 +459,9 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<string> ClassRef:
 		[
 			'Classifications/GeenOnderverdeling',
-			'Allocatie/BestaandeWoning/BO/BebouwingsTypeDomein',
-			'Allocatie/BestaandeWoning/BO/BouwjaarDomein',
-			'Allocatie/BestaandeWoning/BO/ModelObjectKeyDomein',
+			'Allocatie/Woning/BO/BebouwingsTypeDomein',
+			'Allocatie/Woning/BO/BouwjaarDomein',
+			'Allocatie/Woning/BO/ModelObjectKeyDomein',
 			'Classifications/WoningEigendom',
 			'', '', '', 
 			'',
@@ -1205,19 +1244,18 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			attribute<string> Label           := LabelWoningtype + '_' + LabelBouwjaar;
 		}
 
-		unit<uint32> ZichtJaarWonen := combine(ZichtJaar, WoningtypeNieuwbouw) // wordt gebruikt om Nieuwbouw maps en ResterdFactorMaps te lezen.
+		unit<uint32> PeriodeWonen := combine(Periode, WoningtypeNieuwbouw) // wordt gebruikt om Nieuwbouw maps en ResterdFactorMaps te lezen.
 		{
-			attribute<bool>                RS_Mutations            := ZichtJaar/RS_Mutations[nr_1];
-			attribute<string>              ZichtJaar_label         := ZichtJaar/label[nr_1];
-			attribute<string>              ZichtJaar_name          := ZichtJaar/name[nr_1];
-			attribute<string>              prev_ZichtJaar_name     := ZichtJaar/name[nr_1-1b];
-			attribute<units/yr_uint16>     ZichtJaar_jaar          := ZichtJaar/Jaar[nr_1];
-			attribute<string>              period_name             := ZichtJaar/period_name[nr_1];
+			attribute<bool>                hasNieuwbouw            := Periode/hasNieuwbouw[nr_1];
+			attribute<string>              Periode_label           := Periode/label[nr_1];
+			attribute<string>              Periode_name            := Periode/name[nr_1];
+			attribute<string>              prev_Periode_name       := Periode/name[nr_1-1b];
+			attribute<units/yr_uint16>     Periode_Eindjaar        := Periode/EindJaar[nr_1];
 			attribute<string>              Wonen_Name              := WoningtypeNieuwbouw/name[nr_2];
 			attribute<string>              Wonen_wlo_FileName      := WoningtypeNieuwbouw/wlo_FileName[nr_2];
 			attribute<WoningtypeNieuwbouw> WoningtypeNieuwbouw_rel := nr_2;
-			attribute<string>              name                    := ZichtJaar_Name + '/' + Wonen_Name;
-			attribute<string>              prev_name               := prev_ZichtJaar_Name + '/' + wonen_Name;
+			attribute<string>              name                    := Periode_name + '/' + Wonen_Name;
+			attribute<string>              prev_name               := prev_Periode_name + '/' + wonen_Name;
 			attribute<string>              label                   := name;
 
 			container V := for_each_nedv(name, 'value('+string(id(.))+', ...)', void, .);
@@ -1230,19 +1268,19 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			attribute<string> label           := LabelUtiltype + '_' + LabelBouwjaar;
 		}
 
-		unit<uint32> ZichtJaarUtiliteit := combine(ZichtJaar, UtilTypeNieuwbouw)
+		unit<uint32> PeriodeUtiliteit := combine(Periode, UtilTypeNieuwbouw)
 		{
-			attribute<bool>            RS_Mutations            := ZichtJaar/RS_Mutations[nr_1];
-			attribute<string>          ZichtJaar_label         := ZichtJaar/label[nr_1];
-			attribute<string>          ZichtJaar_name          := ZichtJaar/name[nr_1];
-			attribute<string>          prev_ZichtJaar_name     := ZichtJaar/name[nr_1-1b];
-			attribute<units/yr_uint16> ZichtJaar_jaar          := ZichtJaar/Jaar[nr_1];
-			attribute<string>          period_name             := ZichtJaar/period_name[nr_1];
-			attribute<string>          utiliteit_Name          := UtilTypeNieuwbouw/name[nr_2];
-			attribute<string>          wlo_filename_Nieuwbouw  := UtilTypeNieuwbouw/wlo_filename_Nieuwbouw[nr_2];
-			attribute<string>          name                    := ZichtJaar_Name + '/' + utiliteit_Name;
-			attribute<string>          prev_name               := prev_ZichtJaar_Name + '/' + utiliteit_Name;
-			attribute<string>          label                   := name;
+			attribute<bool>                hasNieuwbouw            := Periode/hasNieuwbouw[nr_1];
+			attribute<string>              Periode_label           := Periode/label[nr_1];
+			attribute<string>              Periode_name            := Periode/name[nr_1];
+			attribute<string>              prev_Periode_name       := Periode/name[nr_1-1b];
+			attribute<units/yr_uint16>     Periode_Eindjaar        := Periode/EindJaar[nr_1];
+			attribute<string>              Utiliteit_Name          := UtilTypeNieuwbouw/name[nr_2];
+			attribute<string>              wlo_filename_Nieuwbouw  := UtilTypeNieuwbouw/wlo_filename_Nieuwbouw[nr_2];
+			attribute<WoningtypeNieuwbouw> WoningtypeNieuwbouw_rel := nr_2;
+			attribute<string>              name                    := Periode_name + '/' + utiliteit_Name;
+			attribute<string>              prev_name               := prev_Periode_name + '/' + utiliteit_Name;
+			attribute<string>              label                   := name;
 		}
 	}
 }
