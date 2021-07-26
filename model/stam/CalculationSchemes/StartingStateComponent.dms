@@ -12,6 +12,8 @@ template StartingStateComponent
 	parameter<Classifications/BebouwingsSector> BebouwingsSector_rel;
 	// end case parameters
 
+	parameter<yr_uint16> Startjaar_jaar := Classifications/RekenJaar/values[first(Classifications/ZichtJaar/RekenJaar_rel)];
+
 	unit<uint32>  results := BebouwingsObjectSrc
 	{
 		// =============== ongewijzigde attributen uniform voor alle BC
@@ -68,6 +70,8 @@ template StartingStateComponent
 			,Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVp]
 		);
 
+		container Bouwdelen := BebouwingsObjectSrc/Bouwdelen;
+		
 		container Kapitaallasten
 		{
 			//Aansluitbijdrages
@@ -104,7 +108,7 @@ template StartingStateComponent
 		attribute<AfnameGebied> AfnameGebied_rel := const((0 / 0)[AfnameGebied], results);
 	}
 	unit<uint8> ModelObjectKeyDomein;
-	unit<uint32>   PreStartJaar := subset(Results/bouwjaar < 2000[Units/yr_uint16])
+	unit<uint32>   PreStartJaar := subset(Results/bouwjaar < Startjaar_jaar)
 	{
 		attribute<Geography/rdc_meter>                       point             := Results/point[nr_orgentity];
 		attribute<Geography/rdc_meter>                       geometry          := Results/geometry[nr_orgentity];
@@ -129,6 +133,19 @@ template StartingStateComponent
 		attribute<Classifications/AfgifteSysteem>           AfgifteSysteem_rel := Results/AfgifteSysteem_rel[nr_orgentity];
 		attribute<AfnameGebied>                             AfnameGebied_rel   := Results/AfnameGebied_rel[nr_orgentity];
 		attribute<Classifications/GebouwOptie>              GebouwOptie_rel    := Results/GebouwOptie_rel[nr_orgentity];
+		
+		Container Bouwdelen := for_each_nedv(
+			classifications/bouwdeel/name,
+			'Results/Bouwdelen/' + Classifications/Bouwdeel/Name + '[nr_orgentity]',
+			.,
+			m2)
+		{
+			container LastVervanging := for_each_nedv(
+				classifications/bouwdeel/name,
+				'(uint16(Startjaar_jaar) - mod(uint16(Startjaar_jaar - Bouwjaar), classifications/bouwdeel/levensduur[/Classifications/Bouwdeel/V/' +  /Classifications/Bouwdeel/name + ']))[yr_uint16]',
+				..,
+				yr_uint16);
+		}
 		
 		container Gebied
 		{

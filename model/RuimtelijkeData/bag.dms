@@ -212,15 +212,22 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 
 		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := rjoin(pand_id, import/pand/identificatie, import/pand/woonpand_type);
 
-		attribute<classifications/WoningtypeBestaand>     WoningtypeBestaand_rel     :=
+		attribute<classifications/WoningType>             Woningtype_rel     :=
 			(WoningtypeSnapshot_rel == typeringen/WoningtypeSnapshot/V/meergezinspand && nr_verdiepingen > 4b)
-				? classifications/WoningtypeBestaand/V/meergezinspand_hoog
-				: WoningtypeSnapshot_rel[classifications/WoningtypeBestaand]
+				? classifications/WoningType/V/meergezinspand_hoog
+				: WoningtypeSnapshot_rel[classifications/WoningType]
 		;
 
 		attribute<uint8>                                  nr_verdiepingen             := rjoin(pand_id, import/pand/identificatie, import/pand/nr_verdiepingen);
 		
 		attribute<typeringen/gebruiksdoel>                gebruiksdoel                := const(Invoer/RuimtelijkeData/BAG/typeringen/gebruiksdoel/V/woon,.);
+		
+		
+		container Bouwdelen := for_each_nedv(
+			Classifications/bouwdeel/name,
+			'oppervlakte * Classifications/Woningtype/Bouwdeeldimensies/' + Classifications/bouwdeel/name + '[Woningtype_rel]',
+			vbo_woonfunctie_studiegebied,
+			Units/m2);
 		
 		container Export
 		{
@@ -234,7 +241,7 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 			attribute<Units/yr>       sloopjaar       (..) := ../sloopjaar;
 			attribute<uint8>          nr_verdiepingen (..) := ../nr_verdiepingen;
 			attribute<units/pand_asl> Pand_aandeel    (..) := ../pand_aandeel;
-			attribute<string>         woningtype      (..) := classifications/WoningtypeBestaand/name[WoningtypeBestaand_rel];
+			attribute<string>         woningtype      (..) := classifications/WoningType/name[Woningtype_rel];
 			
 			attribute<string>         pand_id         (..) := ../pand_id;
 			attribute<string>         buurt_id        (..) := Studiegebied/buurt/bu_code[../buurt_rel];
@@ -244,8 +251,8 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 
 	container Tabel_Woningtype_Bouwjaar := for_each_nedv(
 		 classifications/BouwjaarWoningBestaand/name
-		,'sum(vbo_woonfunctie_studiegebied/BouwjaarWoningBestaand_rel == ' + string(id(classifications/BouwjaarWoningBestaand)) + '[Classifications/BouwjaarWoningBestaand] ? 1 : 0  ,vbo_woonfunctie_studiegebied/WoningtypeBestaand_rel)'
-		,classifications/WoningtypeBestaand
+		,'sum(vbo_woonfunctie_studiegebied/BouwjaarWoningBestaand_rel == ' + string(id(classifications/BouwjaarWoningBestaand)) + '[Classifications/BouwjaarWoningBestaand] ? 1 : 0  ,vbo_woonfunctie_studiegebied/Woningtype_rel)'
+		,classifications/WoningType
 		,uint32
 	);
 
