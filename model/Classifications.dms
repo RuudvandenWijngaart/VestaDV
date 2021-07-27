@@ -393,47 +393,51 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<bool>      HasNieuwbouw  := Invoer/SpecifiekeInstellingen/BC_doNieuwbouw ? Periode/HasNieuwbouw[Periode_rel] : const(false,.);
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
-
 	unit<uint8> RekenJaar := unique(ZichtJaar/jaar)
 	{
 		attribute<string> name  := 'J' + string(Values);
 		attribute<string> label := string(Values);
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
-	
+
 	unit<uint32> Bouwdeel: nrofrows = 9 
 	{
 		attribute<string> name       : ['RB', 'RO', 'DR', 'PL', 'VL', 'MG', 'MS', 'DP', 'DS'];
 		attribute<string> label      : ['Ramen Boven', 'Ramen Onder', 'Deuren', 'Paneel', 'Vloer', 'Gevel', 'Spouwmuur', 'Plat Dak', 'Schuin Dak'];
-		attribute<yr_uint16> Levensduur : [20, 20, 20, 30, 40, 30, 30, 35, 35], Source = "Werkwaarde";
-		attribute<ratio>  Verlies    : [0.6, 1.0, 1.0, 1.0, 0.75, 1.0, 1.0, 1.25, 1.25], Source = "Werkwaarde";
+		attribute<yr_uint16> Levensduur : [20, 20, 20, 30, 40, 30, 30, 35, 35], Source = "Dummygetallen";
+		attribute<ratio>  Verlies    : [0.6, 1.0, 1.0, 1.0, 0.75, 1.0, 1.0, 1.25, 1.25], Source = "Dummygetallen";
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
-	unit<uint32> Isolatie: nrofrows = 4
+	unit<uint32> IsolatieNiveau: nrofrows = 4
 	{
 		attribute<string> name       : ['N1', 'N2', 'N3', 'N4'];
 		attribute<string> label      : ['zeer laag', 'laag', 'midden', 'hoog'];
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
-	unit<uint32> BouwdeelIsolatie := combine(Bouwdeel,Isolatie)
+	unit<uint32> BouwdeelIsolatie := combine(Bouwdeel,IsolatieNiveau)
 	{
-		attribute<string> name        := Bouwdeel/name[nr_1] + '_' + Isolatie/name[nr_2];
-		attribute<string> label       := Bouwdeel/label[nr_1] + ': ' + Isolatie/label[nr_2];
-		attribute<bool>   isMaatregel := nr_2 > 0[uint32];
+		attribute<string> name               := Bouwdeel/name[nr_1] + '_' + IsolatieNiveau/name[nr_2];
+		attribute<string> label              := Bouwdeel/label[nr_1] + ': ' + IsolatieNiveau/label[nr_2];
+		
+		attribute<IsolatieMaatregel> IsolatieMaatregel_rel := rlookup(name, IsolatieMaatregel/name);
+		attribute<bool>              isActieveMaatregel    := nr_2 > 0[uint32] && Maatregel_label != '';
+		attribute<string>            Maatregel_label       := Isolatie_imp/maatregel[Isolatiemaatregel/imp[IsolatieMaatregel_rel]];
 	}
-	unit<uint32> IsolatieMaatregel := subset(BouwdeelIsolatie/isMaatregel)
+	unit<uint32> IsolatieMaatregel := subset(BouwdeelIsolatie/nr_2 > 0[uint32])
 	{
 		attribute<string> name        := BOuwdeelIsolatie/name[nr_orgentity];
 		attribute<string> label       := BOuwdeelIsolatie/label[nr_orgentity];
 		attribute<Isolatie_imp> imp   := rlookup(name, Isolatie_imp/name);
 		container kosten := for_each_nedv(Uitvoering/name, 'Isolatie_imp/Euro_m2/Ki_' + Uitvoering/name + '_opp[imp]',IsolatieMaatregel, eur_m2);
 	}
-	unit<uint32> Isolatie_imp: StorageName = "%projDir%/isolatie/isolatiekosten.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
+	unit<uint32> Isolatie_imp: StorageName = "%projDir%/isolatie/isolatiemaatregelen.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
 	{
 		attribute<string> name := bouwdeel + '_' + niveau; // PrimaryKey
+		
 		container Euro_m2 := for_each_nedv('Ki_' + Uitvoering/name + '_opp', Uitvoering/name + '[eur_m2]', Isolatie_imp, eur_m2);
+		container R_RV    := for_each_nedv(Vraagprofiel/name,'besparing_' + Vraagprofiel/name+'[percent]', Isolatie_imp, percent);
 	}
-	
+
 	unit<uint32> Uitvoering: nrofrows = 8
 	{
 		attribute<string> name       : ['Zst_Egw_Ind', 'Zst_Egw_Prj' , 'Zst_Mgw_Ind', 'Zst_Mgw_Prj' , 'Nat_Egw_Ind', 'Nat_Egw_Prj' , 'Nat_Mgw_Ind', 'Nat_Mgw_Prj' ];
@@ -441,6 +445,13 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<string> bouwsoort  : ['Eengezins'  , 'Eengezins'   , 'Meergezins' , 'Meergezins'  , 'Eengezins'  , 'Eengezins'   , 'Meergezins' , 'Meergezins'  ];
 		attribute<string> schaal     : ['Individueel', 'Projectmatig', 'Individueel', 'Projectmatig', 'Individueel', 'Projectmatig', 'Individueel', 'Projectmatig'];
 		attribute<string> label      := moment +', '+ bouwsoort +', '+ schaal;
+	}
+	
+	unit<uint32> Vraagprofiel: nrofrows = 3
+	{
+		attribute<string> name       : ['KG', 'MG', 'GG'];
+		attribute<string> label      : ['kleingebruiker', 'gemiddelde gebruiker', 'grootgebruiker'];
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
 	
 	
@@ -1263,6 +1274,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			attribute<bool>                hasNieuwbouw            := Periode/hasNieuwbouw[nr_1];
 			attribute<string>              Periode_label           := Periode/label[nr_1];
 			attribute<string>              Periode_name            := Periode/name[nr_1];
+			attribute<yr>                  nrJaren                 := Periode/nrJaren[nr_1];
 			attribute<string>              prev_Periode_name       := Periode/name[nr_1-1b];
 			attribute<units/yr_uint16>     Periode_Eindjaar        := Periode/EindJaar[nr_1];
 			attribute<string>              Wonen_Name              := WoningtypeNieuwbouw/name[nr_2];
@@ -1287,6 +1299,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			attribute<bool>                hasNieuwbouw            := Periode/hasNieuwbouw[nr_1];
 			attribute<string>              Periode_label           := Periode/label[nr_1];
 			attribute<string>              Periode_name            := Periode/name[nr_1];
+			attribute<yr>                  nrJaren                 := Periode/nrJaren[nr_1];
 			attribute<string>              prev_Periode_name       := Periode/name[nr_1-1b];
 			attribute<units/yr_uint16>     Periode_Eindjaar        := Periode/EindJaar[nr_1];
 			attribute<string>              Utiliteit_Name          := UtilTypeNieuwbouw/name[nr_2];
