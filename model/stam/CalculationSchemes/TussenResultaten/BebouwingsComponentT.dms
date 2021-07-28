@@ -344,6 +344,78 @@ template BebouwingsComponentT
 		}
 	}
 
+	//============== AcieveWoning pakketbepaling
+	unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/BouwdeelActief)
+	{
+		container IsolatieNiveau_rel := for_each_nedv(classifications/bouwdeel/name, 'BO/Bouwdelen/Isolatie/'+classifications/bouwdeel/name+'[nr_OrgEntity]', ., Classifications/IsolatieNiveau);
+		
+		container IsolatieScore := for_each_nedv(classifications/IsolatieMaatregel/name
+		,	replace(
+				'switch('
+					'case(IsolatieNiveau_rel/@BD <  @I, '
+						'MakeDefined('
+							'BO/Bouwdelen/@BD[nr_OrgEntity] '                                     // Area van bouwdeel [m2]
+							'* classifications/Bouwdeel/Verlies[classifications/Bouwdeel/V/@BD] ' // hoeveel relatief belang 
+							'* classifications/IsolatieMaatregel/R_RV/MG[@I]'                     // hoeveel besparing? TODO: varieren KG, MG, GG
+							'/ classifications/IsolatieMaatregel/kosten/Nat_Egw_Ind[@I]'          // tov kosten [per m2] TODO: varieren naar in context van toepassing zijnde kostenkolom. Allereerst Egw, Mgw
+						', -9999.0)),'
+					'case(IsolatieNiveau_rel/@BD == @I, 0.0),'
+					'-9999.0'
+				')'
+			,	'@BD', classifications/IsolatieMaatregel/bouwdeel_name
+			,	'@I',  'classifications/IsolatieMaatregel/V/'+classifications/IsolatieMaatregel/name
+			)
+		, 	., float64
+		);
+		
+		container IsolatieAmbities := for_each_ne(classifications/IsolatieAmbitie/name
+		,	replace('AmbitieT(classifications/IsolatieAmbitie/BesparingsFactor[@A])'
+			, '@A', 'classifications/IsolatieAmbitie/V/'+classifications/IsolatieAmbitie/name)
+		);
+		
+		parameter<uint32> RandomSeed := 0;
+		
+		template AmbitieT 
+		{
+			parameter<float64> beta;
+			
+			// TODO: check for overflow
+			container OddsRatio := for_each_nedv(classifications/IsolatieMaatregel/name
+			, 'exp(IsolatieScore/'+classifications/IsolatieMaatregel/name+' * beta)'
+			, BouwdeelActieveWoning, float64
+			)
+			{
+				container Total := for_each_nedv(classifications/bouwdeel/name
+				, 'add('+AsItemList(classifications/IsolatieMaatregel/name, classifications/IsolatieMaatregel/bouwdeel_rel)+')'
+				, BouwdeelActieveWoning, float64
+				);
+			}
+			
+			container P := for_each_nedv(classifications/IsolatieMaatregel/name
+			, 'OddsRatio/'+classifications/IsolatieMaatregel/name + ' / OddsRatio/Total/'+classifications/IsolatieMaatregel/bouwdeel_name
+			, BouwdeelActieveWoning, float64
+			);
+			
+			
+			container KiesBouwdelen := for_each_ne(classifications/Bouwdeel/name
+			,	'KiesBouwDeelT(classifications/Bouwdeel/V/' + classifications/Bouwdeel/name +')'
+			);
+			
+			// TODO: sample from P
+		}
+		template KiesBouwdeelT
+		{
+			parameter<classifications/Bouwdeel> bouwdeel_rel;
+			
+			container CumulP := for_each_nedv(classifications/IsolatieDoel/name
+			, 'P/'+classifications/bouwdeel/name[bouwdeel_rel]+'_'+classifications/IsolatieDoel/name
+			+ MakeDefined('+ '+classifications/IsolatieDoel/name[ID(classifications/IsolatieDoel)-1], '')
+			, BouwdeelActieveWoning, float64
+			);
+			
+		}
+	}
+	
 	//============== Voorwaarden voor het wel of niet toepassen van een gebouwoptie. Welke geldt is opgegeven in de runinstellingen per Rekenstap.
 	container Criteria := BO/Criteria
 	{
