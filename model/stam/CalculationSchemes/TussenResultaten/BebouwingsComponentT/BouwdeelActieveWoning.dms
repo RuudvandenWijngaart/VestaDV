@@ -1,0 +1,238 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2021 - Planbureau voor de Leefomgeving                  //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//           Dit is de container met rekenschema's die werken op Bebouwing              //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//============== AcieveWoning pakketbepaling =====
+unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/BouwdeelActief)
+{
+	attribute<string> code := BO/code[nr_orgentity];
+	container IsolatieNiveau_rel := for_each_nedv(classifications/bouwdeel/name, 'BO/Bouwdelen/Isolatie/'+classifications/bouwdeel/name+'[nr_OrgEntity]', ., Classifications/IsolatieNiveau);
+	
+	container IsolatieScore := for_each_nedv(classifications/IsolatieMaatregel/name
+	,	replace(
+			'switch('
+				'case(IsolatieNiveau_rel/@BD <  @I, '
+					'MakeDefined('
+						'BO/Bouwdelen/@BD[nr_OrgEntity] '                                     // Area van bouwdeel [m2]
+						'* classifications/Bouwdeel/Verlies[classifications/Bouwdeel/V/@BD] ' // hoeveel relatief belang 
+						'* classifications/IsolatieMaatregel/R_RV/MG[@I]'                     // hoeveel besparing? TODO: varieren KG, MG, GG
+						'/ classifications/IsolatieMaatregel/kosten/Nat_Egw_Ind[@I]'          // tov kosten [per m2] TODO: varieren naar in context van toepassing zijnde kostenkolom. Allereerst Egw, Mgw
+					', -9999.0)),'
+				'case(IsolatieNiveau_rel/@BD == @I, 0.0),'
+				'-9999.0'
+			')'
+		,	'@BD', classifications/IsolatieMaatregel/bouwdeel_name
+		,	'@I',  'classifications/IsolatieMaatregel/V/'+classifications/IsolatieMaatregel/name
+		)
+	, 	., float64
+	);
+	
+	container IsolatieAmbities := for_each_ne(classifications/IsolatieAmbitie/name
+	,	replace('AmbitieT(classifications/IsolatieAmbitie/BesparingsFactor[@A])'
+		, '@A', 'classifications/IsolatieAmbitie/V/'+classifications/IsolatieAmbitie/name)
+	);
+	
+	parameter<uint32> RandomSeed := 0;
+	
+	template AmbitieT 
+	{
+		parameter<float64> beta;
+		
+		// TODO: check for overflow
+		container OddsRatio := for_each_nedv(classifications/IsolatieMaatregel/name
+		, 'exp(IsolatieScore/'+classifications/IsolatieMaatregel/name+' * beta)'
+		, BouwdeelActieveWoning, float64
+		)
+		{
+			container Total := for_each_nedv(classifications/bouwdeel/name
+			, 'add('+AsItemList(classifications/IsolatieMaatregel/name, classifications/IsolatieMaatregel/bouwdeel_rel)+')'
+			, BouwdeelActieveWoning, float64
+			);
+		}
+		
+		container P := for_each_nedv(classifications/IsolatieMaatregel/name
+		, 'OddsRatio/'+classifications/IsolatieMaatregel/name + ' / OddsRatio/Total/'+classifications/IsolatieMaatregel/bouwdeel_name
+		, BouwdeelActieveWoning, float64
+		);
+		
+		
+		container KiesBouwdelen := for_each_ne(classifications/Bouwdeel/name
+		,	'KiesBouwDeelT(classifications/Bouwdeel/V/' + classifications/Bouwdeel/name +')'
+		);
+		
+		// TODO: sample from P
+	}
+	template KiesBouwdeelT
+	{
+		parameter<classifications/Bouwdeel> bouwdeel_rel;
+		
+		container CumulP := for_each_nedv(classifications/IsolatieDoel/name
+		, 'P/'+classifications/bouwdeel/name[bouwdeel_rel]+'_'+classifications/IsolatieDoel/name
+		+ MakeDefined('+ '+classifications/IsolatieDoel/name[ID(classifications/IsolatieDoel)-1], '')
+		, BouwdeelActieveWoning, float64
+		);
+		
+	}
+	
+	
+	//Placeholder voorbeeld hoe resultscontainer er uit moet zien, voor gebruik in ProductActieveWoning (waarden tijdelijk constant gegeven)
+	container results
+	{
+		container geen
+		{
+			container bouwdelen //uitkomsten per bouwdeel per ambitieniveau
+			{
+				container IsChangedNow //is er in dit ambitieniveau een verandering in het bouwdeel?
+				{
+					attribute<bool> RO (.....) := const(true,.....);
+					attribute<bool> RB (.....) := const(false,.....);  //hier linken naar uitkomsten keuze per ambitieniveau: veranderd of niet
+					attribute<bool> DR (.....) := const(true,.....);
+					attribute<bool> PL (.....) := const(false,.....);
+					attribute<bool> VL (.....) := const(true,.....);
+					attribute<bool> MG (.....) := const(false,.....);
+					attribute<bool> MS (.....) := const(true,.....);
+					attribute<bool> DP (.....) := const(false,.....);
+					attribute<bool> DS (.....) := const(true,.....);
+					attribute<bool> KR (.....) := const(false,.....);
+				}
+				attribute<Classifications/IsolatieNiveau> RO (....) := IsChangedNow/RO ? BO/Bouwdelen/Isolatie/RO[nr_orgentity] : Classifications/IsolatieNiveau/V/N3;
+				attribute<Classifications/IsolatieNiveau> RB (....) := IsChangedNow/RB ? BO/Bouwdelen/Isolatie/RB[nr_orgentity] : Classifications/IsolatieNiveau/V/N3; //hier linken naar uitkomsten keuze per ambitieniveau: welk nieuw niveau
+				attribute<Classifications/IsolatieNiveau> DR (....) := IsChangedNow/DR ? BO/Bouwdelen/Isolatie/DR[nr_orgentity] : Classifications/IsolatieNiveau/V/N3;
+				attribute<Classifications/IsolatieNiveau> PL (....) := IsChangedNow/PL ? BO/Bouwdelen/Isolatie/PL[nr_orgentity] : Classifications/IsolatieNiveau/V/N3;
+				attribute<Classifications/IsolatieNiveau> VL (....) := IsChangedNow/VL ? BO/Bouwdelen/Isolatie/VL[nr_orgentity] : Classifications/IsolatieNiveau/V/N3;
+				attribute<Classifications/IsolatieNiveau> MG (....) := IsChangedNow/MG ? BO/Bouwdelen/Isolatie/MG[nr_orgentity] : Classifications/IsolatieNiveau/V/N3;
+				attribute<Classifications/IsolatieNiveau> MS (....) := IsChangedNow/MS ? BO/Bouwdelen/Isolatie/MS[nr_orgentity] : Classifications/IsolatieNiveau/V/N3;
+				attribute<Classifications/IsolatieNiveau> DP (....) := IsChangedNow/DP ? BO/Bouwdelen/Isolatie/DP[nr_orgentity] : Classifications/IsolatieNiveau/V/N3;
+				attribute<Classifications/IsolatieNiveau> DS (....) := IsChangedNow/DS ? BO/Bouwdelen/Isolatie/DS[nr_orgentity] : Classifications/IsolatieNiveau/V/N3;
+				attribute<Classifications/IsolatieNiveau> KR (....) := IsChangedNow/KR ? BO/Bouwdelen/Isolatie/KR[nr_orgentity] : Classifications/IsolatieNiveau/V/N3;
+			}
+			container kosten //kosten van isolatiemaatregelen indien dit ambitieniveau wordt toegepast
+			{
+				attribute<eur> RO (....) := const(500[eur],....); //hier linken naar kostenberekening per ambitieniveau (nu dummygetal)
+				attribute<eur> RB (....) := const(  0[eur],....);
+				attribute<eur> DR (....) := const(400[eur],....);
+				attribute<eur> PL (....) := const(  0[eur],....);
+				attribute<eur> VL (....) := const(300[eur],....);
+				attribute<eur> MG (....) := const(  0[eur],....);
+				attribute<eur> MS (....) := const(200[eur],....);
+				attribute<eur> DP (....) := const(  0[eur],....);
+				attribute<eur> DS (....) := const(100[eur],....);
+				attribute<eur> KR (....) := const(  0[eur],....);
+				
+				attribute<eur> Ki_gv (....) := ='add('+ AsItemList(Classifications/Bouwdeel/name) + ')';
+			}
+			container functioneel //nieuwe functionele vraag indien dit ambitieniveau wordt toegepast
+			{
+				attribute<GJ_yr> RV (....) := const(20.5[GJ_yr], ....); //hier linken naar besparingsberekening per ambitieniveau (nu dummygetal)
+				attribute<GJ_yr> KD (....) := const( 7.1[GJ_yr], ....);
+				attribute<GJ_yr> VT (....) := const( 1.5[GJ_yr], ....);
+				
+				attribute<GJ_yr> TW (....) := BO/Functioneel/TW[nr_orgentity];
+				attribute<GJ_yr> EA (....) := BO/Functioneel/EA[nr_orgentity];
+				attribute<GJ_yr> KK (....) := BO/Functioneel/KK[nr_orgentity];
+				
+				attribute<Classifications/Schillabel> Schillabel_rel (....) := BO/Schillabel_rel[nr_orgentity]; //indeling in schillabels o.b.v. functionele vraag -> herbereken met nieuwe Vrv
+			}
+			container AansluitCapaciteit
+			{
+				attribute<kW> RV (....) := functioneel/RV * 0.25[kW_GJ_yr]; //later invullen (nu dummygetal)
+				attribute<kW> KD (....) := BO/AansluitCapaciteit/KD[nr_orgentity];
+				attribute<kW> TW (....) := BO/AansluitCapaciteit/TW[nr_orgentity];
+			}
+		}
+		container laag := geen;
+		container midden := geen; //straks per ambitieniveau gevuld
+		container hoog := geen;
+		container extreem := geen;
+	}
+	// end placeholder
+	
+	//TODO: voor woningen die alleen actief zijn op bouwdelen en niet op producten: hier afweging maken definitieve allocatie
+	attribute<bool> ProductActief := BO/Activatie/ProductActief[nr_orgentity];
+	unit<uint32> ProductInactieveBO := subset(not(ProductActief))
+	{
+		attribute<string> code := BouwdeelActieveWoning/code[nr_orgentity];
+		container Afweging
+		{
+			attribute<Classifications/IsolatieAmbitie> Ambitie_chosen (..) := const(Classifications/IsolatieAmbitie/V/geen, ProductInactieveBO); //Verwijzen naar gekozen niveau (nu constant als placeholder)
+			attribute<Classifications/Schillabel>      Schillabel_rel (..) := ='merge(Ambitie_chosen, Classifications/Schillabel, '+AsItemList('Results/'+Classifications/IsolatieAmbitie/name+'/functioneel/Schillabel_rel')+')';
+			
+			container bouwdelen //uitkomsten per bouwdeel per ambitieniveau
+			{
+				container isolatie := for_each_nedv(
+					Classifications/Bouwdeel/name,
+					'merge(Ambitie_chosen,Classifications/IsolatieNiveau, '+
+						replace(AsItemList( replace('Results/@IA@/Bouwdelen/@BD@', '@IA@', Classifications/IsolatieAmbitie/name)), '@BD@', Classifications/Bouwdeel/name )+')',
+					...,
+					Classifications/IsolatieNiveau);
+			}
+			container kosten := for_each_nedv(
+					Classifications/Bouwdeel/name,
+					'merge(Ambitie_chosen,Eur, '+
+						replace(AsItemList( replace('Results/@IA@/kosten/@BD@', '@IA@', Classifications/IsolatieAmbitie/name)), '@BD@', Classifications/Bouwdeel/name )+')',
+					..,
+					Eur)
+			{
+				attribute<eur> Ki_gv (...) := ='merge(Ambitie_chosen, eur, '+AsItemList('Results/'+Classifications/IsolatieAmbitie/name+'/kosten/Ki_gv')+')';
+			}
+			container functioneel := for_each_nedv(
+					Classifications/FunctioneleVraag/name,
+					'merge(Ambitie_chosen,GJ_yr, '+
+						replace(AsItemList( replace('Results/@IA@/functioneel/@PT@', '@IA@', Classifications/IsolatieAmbitie/name)), '@PT@', Classifications/FunctioneleVraag/name )+')',
+					..,
+					GJ_yr);
+			container AansluitCapaciteit := for_each_nedv(
+					Classifications/ProductType/name,
+					'merge(Ambitie_chosen,kW, '+
+						replace(AsItemList( replace('Results/@IA@/AansluitCapaciteit/@PT@', '@IA@', Classifications/IsolatieAmbitie/name)), '@PT@', Classifications/ProductType/name )+')',
+					..,
+					kW);
+		}
+		container ResultsPerBO
+		{
+			attribute<uint32>                     ProductInactieveBO_rel (BO) := rlookup(BO/code, ProductInactieveBO/code);
+			attribute<Classifications/Schillabel> Schillabel_rel         (BO) := Afweging/Schillabel_rel[ProductInactieveBO_rel];
+			
+			container bouwdelen
+			{
+				container isolatie:= for_each_nedv(
+					Classifications/Bouwdeel/name,
+					'Afweging/bouwdelen/isolatie/'+Classifications/Bouwdeel/name+'[ProductInactieveBO_rel]',
+					BO,
+					Classifications/IsolatieNiveau);
+			}
+			container kosten := for_each_nedv(
+					Classifications/Bouwdeel/name,
+					'Afweging/kosten/'+Classifications/Bouwdeel/name+'[ProductInactieveBO_rel]',
+					BO,
+					Eur)
+			{
+				attribute<eur> Ki_gv (BO) := Afweging/kosten/Ki_gv[ProductInactieveBO_rel];
+			}
+			container functioneel := for_each_nedv(
+				Classifications/FunctioneleVraag/name,
+				'Afweging/functioneel/'+Classifications/FunctioneleVraag/name+'[ProductInactieveBO_rel]',
+				BO,
+				GJ_yr);
+			container aansluitcapaciteit := for_each_nedv(
+				Classifications/ProductType/name,
+				'Afweging/aansluitcapaciteit/'+Classifications/ProductType/name+'[ProductInactieveBO_rel]',
+				BO,
+				kW);
+			
+			container metervraag := for_each_nedv(
+				Classifications/BemeterdeGebouwInput/name,
+				'const(10[GJ_yr],BO)',
+				BO,
+				GJ_yr);//TODO: recalculate metervraag met huidige installaties
+		}
+	}
+}

@@ -8,15 +8,12 @@ template StateNaAllocatieComponent
 {
 	// begin case parameters
 	unit<uint32> BO_base;
-	// end case [arameters
+	// end case parameters
 
 	unit<uint32> BO := BO_base
 	{
-		container Metervraag := for_each_nedv('V_'+Classifications/BemeterdeGebouwInput/name
-			, replace('merge(GebouwOptie_rel, GJ_yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/metervraag/@I')+')', '@I', Classifications/BemeterdeGebouwInput/name)
-			, BO
-			, GJ_yr
-			);
+		container Metervraag   := BO_base/Metervraag;
+		container BC_kentallen := BO_base/BC_kentallen;
 
 		container WarmteVraag // CalculationSchemes/WarmteVraagT is hier expliciet geinstantieerd wegens iets andere toepassing bij herberekening achteraf.
 		{
@@ -50,7 +47,7 @@ template StateNaAllocatieComponent
 
 			attribute<GJ_yr>  V_RV               (BO) := BeschikbaarheidsFactor * BO/BebouwingsComponent_UpRef/Functioneel2/V_RV;
 			attribute<GJ_yr>  V_TW               (BO) := BeschikbaarheidsFactor * BO/Functioneel/TW;
-			attribute<GJ_yr>  V_K                (BO) := BeschikbaarheidsFactor * BO/Functioneel/K;
+			attribute<GJ_yr>  V_KD               (BO) := BeschikbaarheidsFactor * BO/Functioneel/KD;
 			attribute<GJ_yr>  V_Warmte           (BO) := V_RV + V_TW;
 			attribute<Eur_yr> Oj_Warmte          (BO) := V_Warmte * BO/WarmteWet/WarmtePrijs, Source = "FO v7a F 8-10";
 			attribute<Eur_yr> Oj_VastRechtMT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtMT_T;
@@ -59,29 +56,30 @@ template StateNaAllocatieComponent
 			attribute<Eur>    Oi_AansluitBijdrage(BO) := BeschikbaarheidsFactor * BO/Opbrengsten/AansluitBijdrageT;
 		}
 		
-		container eenmalig
+		container eenmalig := for_each_nedv(
+			Classifications/GebouwOptie_eenmalig/name,
+			'BO_base/kosten/eenmalig/'+ Classifications/GebouwOptie_eenmalig/name,
+			BO,
+			Eur)
 		{
 			//Aansluitbijdrages
 			attribute<Eur> Ki_Asl_Enet (BO) := BC_kentallen/Ki_Aansl_e_asl * nraansluitingen + BC_kentallen/Ki_Aansl_e_opp * oppervlakte;
-			attribute<Eur> Ki_Asl_Gnet (BO) := Metervraag/V_gas <= 0[GJ_yr]
+			attribute<Eur> Ki_Asl_Gnet (BO) := Metervraag/gas <= 0[GJ_yr]
 				? 0[Eur]
 				: BC_kentallen/Ki_Aansl_g_asl * nraansluitingen + BC_kentallen/Ki_Aansl_g_opp * oppervlakte;
-
-			//Investeringen
-			attribute<Eur> Ki30_LO (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Ki30_LO')+')';
-			attribute<Eur> Ki20_LO (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Ki20_LO')+')';
-			attribute<Eur> Ki15_LO (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Ki15_LO')+')';
-			attribute<Eur> Ki_GV   (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Ki_GV'  )+')';
-			attribute<Eur> Ki_LTAS (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Ki_LTAS')+')';
-			
-			attribute<Eur_yr> Kj_gv_incentive(BO) := ='merge(GebouwOptie_rel, Eur_yr, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Kj_gv_incentive')+')';
-
-			//Subsidies
-			attribute<Eur> Oi_s_LO_30 (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Oi30_s_LO')+')';
-			attribute<Eur> Oi_s_LO_20 (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Oi20_s_LO')+')';
-			attribute<Eur> Oi_s_LO_15 (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Oi15_s_LO')+')';
-			attribute<Eur> Oi_s_GV    (BO) := ='merge(GebouwOptie_rel, Eur, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Oi_s_GV')+')';
 		}
+		container Jaarlijks := for_each_nedv(
+			Classifications/GebouwOptie_jaarlijks/name,
+			'BO_base/kosten/jaarlijks/'+ Classifications/GebouwOptie_jaarlijks/name,
+			BO,
+			Eur_yr);
+//		{
+			// Onderhoud en admin
+//			attribute<Eur_yr> Kj_OH_LO (BO) := ='merge(GebouwOptie_rel, Eur_yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/Kj_OH_LO')+')';
+//			attribute<Eur_yr> Kj_Adm_LO(BO) := ='merge(GebouwOptie_rel, Eur_yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/Kj_Adm_LO')+')';
+//			attribute<Eur_yr> Kj_gv_incentive_eenmalig(BO) := ='merge(GebouwOptie_rel, Eur_yr, '+AsItemList('GebouwOpties/' + BcGebouwOptie/name + '/Kj_gv_incentive')+')';
+//			attribute<Eur_yr> Kj_gv_incentive(BO) := PrevResults/Kj_gv_incentive+ Kj_gv_incentive_eenmalig;
+//		}
 		
 		container Kapitaallasten
 		{
@@ -102,20 +100,16 @@ template StateNaAllocatieComponent
 			attribute<Eur_yr> Kmi15_LO (BO) := eenmalig/Ki15_LO * NCW/mr15/AnnualisationFactor;
 			attribute<Eur_yr> Kji_gv   (BO) := PrevResults/Kji_gv   + eenmalig/Ki_gv   * NcwRefs/_30/AnnualisationFactor;
 			attribute<Eur_yr> Kmi_gv   (BO) := PrevResults/Kmi_gv   + eenmalig/Ki_gv   * NCW/mr30/AnnualisationFactor;
-			attribute<Eur_yr> Kj_gv_incentive(BO) := PrevResults/Kj_gv_incentive+ Eenmalig/Kj_gv_incentive;
 			
 			attribute<Eur_yr> Kji_LTAS (BO) := PrevResults/Kji_LTAS + eenmalig/Ki_LTAS * NcwRefs/_30/AnnualisationFactor;
 			attribute<Eur_yr> Kmi_LTAS (BO) := PrevResults/Kmi_LTAS + eenmalig/Ki_LTAS * NCW/mr30/AnnualisationFactor;
 
 			//Subsidies
-			attribute<Eur_yr> Oji_s_LO_30 (BO) := PrevResults/Oji_s_LO_30 + eenmalig/Oi_s_LO_30 * NcwRefs/_30/AnnualisationFactor;
-			attribute<Eur_yr> Oji_s_LO_20 (BO) := PrevResults/Oji_s_LO_20 + eenmalig/Oi_s_LO_20 * NcwRefs/_20/AnnualisationFactor;
-			attribute<Eur_yr> Oji_s_LO_15 (BO) := PrevResults/Oji_s_LO_15 + eenmalig/Oi_s_LO_15 * NcwRefs/_15/AnnualisationFactor;
-			attribute<Eur_yr> Oji_s_gv    (BO) := PrevResults/Oji_s_gv    + eenmalig/Oi_s_gv    * NcwRefs/_30/AnnualisationFactor;
+			attribute<Eur_yr> Oji_s_LO_30 (BO) := PrevResults/Oji_s_LO_30 + eenmalig/Oi30_LO * NcwRefs/_30/AnnualisationFactor;
+			attribute<Eur_yr> Oji_s_LO_20 (BO) := PrevResults/Oji_s_LO_20 + eenmalig/Oi20_LO * NcwRefs/_20/AnnualisationFactor;
+			attribute<Eur_yr> Oji_s_LO_15 (BO) := PrevResults/Oji_s_LO_15 + eenmalig/Oi15_LO * NcwRefs/_15/AnnualisationFactor;
+			attribute<Eur_yr> Oji_s_gv    (BO) := PrevResults/Oji_s_gv    + eenmalig/Oi_gv   * NcwRefs/_30/AnnualisationFactor;
 			
-			// Onderhoud en admin
-			attribute<Eur_yr> Kj_OH_LO (BO) := ='merge(GebouwOptie_rel, Eur_yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/Kj_OH_LO')+')';
-			attribute<Eur_yr> Kj_Adm_LO(BO) := ='merge(GebouwOptie_rel, Eur_yr, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/Kj_Adm_LO')+')';
 		}
 	}
 }
