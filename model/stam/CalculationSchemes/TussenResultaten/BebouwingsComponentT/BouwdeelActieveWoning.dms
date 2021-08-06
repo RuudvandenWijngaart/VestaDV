@@ -14,6 +14,8 @@
 unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/BouwdeelActief)
 {
 	attribute<string> code := BO/code[nr_orgentity];
+	attribute<dpoint> Geometry := BO/Geometry[nr_OrgEntity];
+	
 	container IsolatieNiveau_rel := for_each_nedv(classifications/bouwdeel/name, 'BO/Bouwdelen/Isolatie/'+classifications/bouwdeel/name+'[nr_OrgEntity]', ., Classifications/IsolatieNiveau);
 		
 	container IsolatieAmbities := for_each_ne(classifications/IsolatieAmbitie/name
@@ -57,8 +59,9 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 		);
 		
 		// TODO: check for overflow
+		parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(classifications/IsolatieMaatregel/bouwdeel_rel) )
 		container OddsRatio := for_each_nedv(classifications/IsolatieMaatregel/name
-		, 'exp(IsolatieScore/'+classifications/IsolatieMaatregel/name+' * beta)'
+		, 'exp(min_elem(IsolatieScore/'+classifications/IsolatieMaatregel/name+' * beta, LOG_MAX_FLOAT64))'
 		, BouwdeelActieveWoning, float64
 		)
 		{
@@ -90,6 +93,9 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 		, BouwdeelActieveWoning, float64
 		);
 		
+		parameter<uint32> Seed := 0; // TODO: Koppelen aan generieke reproduceerbare seeder
+		attribute<float64> rnd (BouwdeelActieveWoning) := rnd_uniform(Seed + bouwdeel_rel, BouwdeelActieveWoning, range(float64, 0.0, 1.0));
+		attribute<classifications/IsolatieDoel> IsolatieDoel_rel(BouwdeelActieveWoning) := ='argmax('+AsItemList('CumulP/'+classifications/IsolatieDoel/name+' >= rnd')+')[classifications/IsolatieDoel]';
 	}
 	
 	//Placeholder voorbeeld hoe resultscontainer er uit moet zien, voor gebruik in ProductActieveWoning (waarden tijdelijk constant gegeven)
@@ -103,7 +109,10 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 			
 			container Bouwdelen {
 				container Isolatie := for_each_nedv(classifications/Bouwdeel/name
-				,	'BO/Bouwdelen/Isolatie/'+classifications/Bouwdeel/name // TODO: Hier verwijzen naar voor dit ambitieniveau gekozen doel-isolatie
+				,	replace(
+						'union_data(AWxIA, '+AsItemList(replace('IsolatieAmbities/@IA/KiesBouwdelen/@BD/IsolatieDoel_rel', '@IA', Classifications/IsolatieAmbitie/name))+')'
+					,	'@BD', classifications/Bouwdeel/name
+					)
 				,	..,  Classifications/IsolatieNiveau
 				);
 			}
