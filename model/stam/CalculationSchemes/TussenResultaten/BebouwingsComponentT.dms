@@ -40,6 +40,22 @@ template BebouwingsComponentT
 		attribute<Classifications/Schillabel>                Schillabel_rel    := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/Schillabel_rel[nr_orgentity]';
 		attribute<Classifications/Schillabel>                Defaultlabel_rel  := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/Defaultlabel_rel[nr_orgentity]';
 		
+		attribute<ModelObject>                               ModelObject_rel := rlookup(ModelObjectKey, ModelObject/ModelObjectKey);
+		
+		container Functioneel
+		{
+			container RV_N1_per_Bouwdeel := for_each_nedv(
+				Classifications/bouwdeel/name,
+				'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/Functioneel/RV_N1_per_Bouwdeel/'+Classifications/bouwdeel/name+'[nr_orgentity]',
+				..,
+				GJ_yr);
+			container BaseValues := for_each_nedv(
+				Classifications/functionelevraag/name,
+				'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/Functioneel/BaseValues/'+Classifications/functionelevraag/name+'[nr_orgentity]',
+				..,
+				GJ_yr);
+		}
+		
 		container BemeterdeGebouwInput_rel :=  for_each_nedv(
 				classifications/Product/name,
 				'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/BemeterdeGebouwInput_rel/'+classifications/Product/name+'[nr_orgentity]',
@@ -57,6 +73,9 @@ template BebouwingsComponentT
 				'Classifications/schillabel/default_bouwdeelkwaliteit/'+classifications/bouwdeel/name+'[Defaultlabel_rel]',
 				..,
 				Classifications/IsolatieNiveau);
+				
+			attribute<m2>    Totaal             (..) := ='BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/Bouwdelen/Totaal[nr_orgentity]';
+			attribute<ratio> Norm_verliesfactor (..) := ='BeginSituatie/StartingStateComponenten/'+ BCname +'/Results/Bouwdelen/Norm_verliesfactor[nr_orgentity]';
 		}
 		
 		container Gebied
@@ -265,74 +284,38 @@ template BebouwingsComponentT
  				: 'const(0.0[kW],..)';
 		}
 
-		container Functioneel
+		container Functioneel := =Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw ? 'union/result' : 'PrevObject'
 		{
-			container DragerSpecifiekeOpties := SpecifiekeInstellingen/RuimtelijkeVraag/Drager;
+			container Gedragfactor := SpecifiekeInstellingen/RuimtelijkeVraag/Gedrag;
 
 			attribute<ratio> Klimaateffect (..) := KlimaatFactorMap[gridm100_rel];
 
-			attribute<GJ_yr> VT (..) := SchilLabel_rel <= Classifications/SchilLabel/V/B ? Ventilatie : const(0[GJ_yr], ..);
-			attribute<GJ_yr> KK (..) :=  =
-					  '('	
-					+ (all(ModelObject/V_KK_asl == 0[GJ_yr_asl])
-						? ''
-						: 'NrAansluitingen * ModelObject/V_KK_asl[Model_rel]')
-					+ (all(ModelObject/V_KK_opp == 0[GJ_yr_m2]) 
-						? ''
-						: '+ Oppervlakte * ModelObject/V_KK_opp[Model_rel]')
-					+ ')'
-					;
+			attribute<GJ_yr> VT (..) := BaseValues/VT * Gedragfactor/VT * ResterendNu;
+			attribute<GJ_yr> KK (..) := BaseValues/KK * Gedragfactor/KK * ResterendNu;
+			attribute<GJ_yr> EA (..) := BaseValues/EA * Gedragfactor/EA * ResterendNu;
+			attribute<GJ_yr> TW (..) := BaseValues/TW * Gedragfactor/TW * ResterendNu;
 			
-			attribute<GJ_yr> TW(..) := (nrAansluitingen * ModelObject/V_TW_asl [Model_rel] + Oppervlakte * ModelObject/V_TW_opp [Model_rel]) * DragerSpecifiekeOpties/TapWater;
-			attribute<GJ_yr> KD(..) := =
-					  '('	
-					+ (all(ModelObject/V_KD_asl == 0[GJ_yr_asl])
-						? ''
-						: 'NrAansluitingen * ModelObject/V_KD_asl[Model_rel]')
-					+ (all(ModelObject/V_KD_opp == 0[GJ_yr_m2]) 
-						? ''
-						: '+ Oppervlakte * ModelObject/V_KD_opp[Model_rel]')
-					+ ')'
-					+ ' * DragerSpecifiekeOpties/Koude * ( 1.0 + 3.66 *(1.0 - Klimaateffect))';
-
-			attribute<GJ_yr> EA(..) := (nrAansluitingen * ModelObject/V_EA_asl [Model_rel] + Oppervlakte * ModelObject/V_EA_opp [Model_rel]) * DragerSpecifiekeOpties/ElektrischeApparatuur;
-
-			container RV_raw := for_each_nedv(Classifications/Schillabel/name
-			 , replace(
-				'(nrAansluitingen * ModelObject/V_RV_asl/@SL@[Model_rel] + Oppervlakte * ModelObject/V_RV_opp/@SL@[Model_rel])'
-					'* DragerSpecifiekeOpties/RuimteVerwarming'
-					'* Klimaateffect'
-				,'@SL@', Classifications/Schillabel/name)
-			 ,..
-			 , GJ_yr
-			);
+			attribute<GJ_yr> KD (..) := BaseValues/KD * Gedragfactor/KD * ResterendNu * ( 1.0 + 3.66 *(1.0 - Klimaateffect));
 			
-			container RV_x_label := for_each_nedv(
-				 Classifications/Schillabel/name
-				,replace(
-					'not(Startlabel_rel == Classifications/Schillabel/V/N) && Schillabel_rel > Classifications/Schillabel/V/@SL@ ? min_elem(StartlabelRV, RV_raw/@SL@) : RV_raw/@SL@'
-					, '@SL@', Classifications/Schillabel/name)
-			 	,..
-			 	, GJ_yr)
-			{			
-				attribute<GJ_yr> N (...) := RV_raw/N;
-			}
-
-			attribute<GJ_yr> RV           (..) := ='merge(Schillabel_rel, GJ_yr, '+AsItemList('RV_raw/'+Classifications/Schillabel/name)+')';	
-			attribute<GJ_yr> StartlabelRV (..) := ='merge(Startlabel_rel, GJ_yr, '+AsItemList('RV_raw/'+Classifications/Schillabel/name)+')';
-			attribute<GJ_yr> Ventilatie   (..) := =
-				'('
-					+ (all(ModelObject/V_VT_asl == 0[GJ_yr_asl]) ? '' : 'NrAansluitingen * ModelObject/V_VT_asl + ')
-					+ 'Oppervlakte * ModelObject/V_VT_opp[Model_rel]'
-				+ ') 
-				* DragerSpecifiekeOpties/ElektrischeApparatuur'
-				;
+			attribute<GJ_yr> RV (..) := const(10[GJ_yr],..);//REMOVE
+			
+			container BaseValues := for_each_nedv(
+				Classifications/FunctioneleVraag/name,
+				(Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw ? 'union/result' : 'PrevObject') + '/Functioneel/BaseValues/' + Classifications/FunctioneleVraag/name,
+				..,
+				GJ_yr);
+			container RV_N1_per_bouwdeel := for_each_nedv(
+				Classifications/bouwdeel/name,
+				(Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw ? 'union/result' : 'PrevObject') + '/Functioneel/RV_N1_per_bouwdeel/' + Classifications/bouwdeel/name,
+				..,
+				GJ_yr);
+				
+			container RV_N1_per_bouwdeel_now := for_each_nedv(
+				Classifications/bouwdeel/name,
+				'RV_N1_per_bouwdeel/'+ Classifications/bouwdeel/name+ ' * Gedragfactor/RV * ResterendNu * Klimaateffect',
+				..,
+				GJ_yr);
 		}
-		container metervraag := for_each_nedv(
-			Classifications/BemeterdeGebouwInput/name,
-			'const(10[GJ_yr],BO)',
-			BO,
-			GJ_yr);//TODO: recalculate metervraag met huidige installaties
 		
 		container Activatie
 		{
@@ -557,7 +540,11 @@ template BebouwingsComponentT
 				BouwdeelActieveWoning/ProductInactieveBO/ResultsPerBO/functioneel/'+classifications/FunctioneleVraag/name+',
 				BO/functioneel/'+classifications/FunctioneleVraag/name+')',
 			BO,
-			GJ_yr);
+			GJ_yr)
+			{
+				container BaseValues := BO/Functioneel/BaseValues;
+				container RV_N1_Per_Bouwdeel := BO/Functioneel/RV_N1_Per_Bouwdeel;
+			}
 		
 		container aansluitcapaciteit := BO/aansluitcapaciteit
 		{

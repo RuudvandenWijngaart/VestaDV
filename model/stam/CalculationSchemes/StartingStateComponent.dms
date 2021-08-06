@@ -36,6 +36,30 @@ template StartingStateComponent
 		attribute<Classifications/GebouwOptie> GebouwOptie_rel := 
 			Restwarmte/GebruikRestWarmte[Planregio_rel] ? Classifications/gebiedsOptie/GebouwOptie_rel[PlanregioWarmteAllocatie_Remove[Planregio_rel]] :
 			ModelObject/StartOptie_rel[ModelObject_rel]; // laast toegepaste optie
+		
+		container Functioneel
+		{
+			attribute<GJ_yr> RV_N1 (..) := BaseValues/RV, IntegrityCheck ="abs(RV_N1_per_Bouwdeel/Total - RV_N1) < 0.001";
+		
+			container RV_N1_per_Bouwdeel := for_each_nedv(
+				Classifications/bouwdeel/name,
+					'RV_N1 / Bouwdelen/Totaal
+				*	Bouwdelen/'+ Classifications/bouwdeel/name + '
+				*	Classifications/bouwdeel/verlies[Classifications/bouwdeel/V/'+Classifications/bouwdeel/name+'] / Bouwdelen/Norm_verliesfactor',
+				..,
+				GJ_yr)
+				{
+					attribute<GJ_yr> Total (...) := ='add('+AsItemList(Classifications/bouwdeel/name)+')';
+				}
+			
+			container BaseValues := for_each_nedv(
+				Classifications/FunctioneleVraag/name,
+				'Invoer/Kengetallen/Bebouwing/'+Classifications/BebouwingsSector/name[BebouwingsSector_rel]+'/Results/Asl/'+Classifications/FunctioneleVraag/name+'[ModelObject_rel]* nrAansluitingen_i +
+				 Invoer/Kengetallen/Bebouwing/'+Classifications/BebouwingsSector/name[BebouwingsSector_rel]+'/Results/Opp/'+Classifications/FunctioneleVraag/name+'[ModelObject_rel] * Oppervlakte_i',
+				..,
+				GJ_yr);
+		}
+		
 			
 		container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
 			, 'Classifications/GebouwOptie/PerProduct/'+Classifications/Product/name+'[GebouwOptie_rel]'
@@ -95,7 +119,17 @@ template StartingStateComponent
 			,Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVp]
 		);
 
-		container Bouwdelen := BebouwingsObjectSrc/Bouwdelen;
+		container Bouwdelen := BebouwingsObjectSrc/Bouwdelen
+		{
+			container BouwDeelVerliesFactor := for_each_nedv(
+				Classifications/Bouwdeel/name,
+				'Classifications/Bouwdeel/Verlies[Classifications/Bouwdeel/V/'+Classifications/Bouwdeel/name+'] * Bouwdelen/'+Classifications/Bouwdeel/name+'',
+				(..),
+				m2);
+			
+			
+			attribute<ratio> Norm_verliesfactor (..) := ='add('+AsItemList('BouwDeelVerliesFactor/'+Classifications/Bouwdeel/name)+') / Totaal';
+		}
 		
 		container Kapitaallasten
 		{
@@ -159,6 +193,20 @@ template StartingStateComponent
 		attribute<Classifications/AfgifteSysteem>           AfgifteSysteem_rel := Results/AfgifteSysteem_rel[nr_orgentity];
 		attribute<AfnameGebied>                             AfnameGebied_rel   := Results/AfnameGebied_rel[nr_orgentity];
 		attribute<Classifications/GebouwOptie>              GebouwOptie_rel    := Results/GebouwOptie_rel[nr_orgentity];
+		
+		container Functioneel
+		{
+			container RV_N1_per_Bouwdeel := for_each_nedv(
+				Classifications/Bouwdeel/name,
+				'Results/Functioneel/RV_N1_per_Bouwdeel/'+Classifications/Bouwdeel/name+'[nr_orgentity]',
+				..,
+				GJ_yr);
+			container BaseValues := for_each_nedv(
+				Classifications/FunctioneleVraag/name,
+				'Results/Functioneel/BaseValues/'+Classifications/FunctioneleVraag/name+'[nr_orgentity]',
+				..,
+				GJ_yr);
+		}
 		
 		container BemeterdeGebouwInput_rel :=  for_each_nedv(
 			classifications/Product/name,
