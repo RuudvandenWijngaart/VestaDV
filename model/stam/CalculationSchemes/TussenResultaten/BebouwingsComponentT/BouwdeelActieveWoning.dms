@@ -118,7 +118,29 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 			}
 			// hier te berekenen: Funcionele vraag en Aansluitcapaciteit
 		}
+		attribute<bool> Inactief(BO) := not(not(BO/Afbouw) && BO/Activatie/BouwdeelActief);
+		unit<uint32> Inactief_selected := select_unit(Inactief);
+		
+		unit<uint32> AWxIAuIW := union_unit(AWxIA, Inactief_selected)
+		,	Descr = "union van AWxIA met niet overlappende niet bouwdeel geactiveerde woningen"
+		{
+			attribute<BO> Woning_rel := union_data(AWxIAuIW, AWxIA/Woning_rel, select_data(Inactief_selected, ID(BO)));
+			
+			attribute<Classifications/IsolatieAmbitie> IsolatieAmbitie_rel := union_data(AWxIAuIW, AWxIA/IsolatieAmbitie_rel, const((0/0)[Classifications/IsolatieAmbitie], Inactief_selected) );
+			
+			container Bouwdelen {
+				container Isolatie := for_each_nedv(classifications/Bouwdeel/name
+				,	replace(
+						'union_data(AWxIAuIW, AWxIA/Bouwdelen/Isolatie/@BD, select_data(Inactief_selected, BO/Bouwdelen/Isolatie/@BD))'
+					,	'@BD', classifications/Bouwdeel/name
+					)
+				,	..,  Classifications/IsolatieNiveau
+				);
+			}
+			
+		}
 	}
+	
 
 	container results
 	{
