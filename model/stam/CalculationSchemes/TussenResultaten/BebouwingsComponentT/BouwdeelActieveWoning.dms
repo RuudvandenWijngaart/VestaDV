@@ -109,31 +109,64 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 			
 			container Bouwdelen
 			{
-				container Isolatie := for_each_nedv(classifications/Bouwdeel/name
-				,	replace(
+				container Isolatie := for_each_nedv(
+					classifications/Bouwdeel/name,
+					replace(
 						'union_data(AWxIA, '+AsItemList(replace('IsolatieAmbities/@IA/KiesBouwdelen/@BD/IsolatieDoel_rel', '@IA', Classifications/IsolatieAmbitie/name))+')'
-					,	'@BD', classifications/Bouwdeel/name
-					)
-				,	..,  Classifications/IsolatieNiveau
-				);
+						,'@BD', classifications/Bouwdeel/name),
+					..,
+					Classifications/IsolatieNiveau)
+				{
+					attribute<Classifications/Schillabel> Schillabel_rel (...) := const(Classifications/Schillabel/V/B,...); //TODO: methode schillabel afleiden van isolatiegraad
+				}
 				container IsChangedNow := for_each_nedv(
 					classifications/Bouwdeel/name,
 					'Isolatie/' + classifications/Bouwdeel/name + ' > BO/Bouwdelen/isolatie/'+ classifications/Bouwdeel/name+'[Woning_rel]',
 					..,
 					bool);
-				
 				container IsolatieMaatregel_rel := for_each_nedv(
 					classifications/Bouwdeel/name,
 					'not(IsChangedNow/'+classifications/Bouwdeel/name+') ? (0/0)[Classifications/IsolatieMaatregel] : rlookup('+quote(classifications/Bouwdeel/name+ '_')+' + Classifications/IsolatieNiveau/name[Isolatie/' + classifications/Bouwdeel/name + '[Classifications/IsolatieNiveau]], Classifications/IsolatieMaatregel/name)',
 					..,
 					Classifications/IsolatieMaatregel);
-					
-				container Ki_gv
+				container Ki_gv := for_each_nedv(
+					classifications/Bouwdeel/name,
+					'makedefined(BO/Bouwdelen/'+classifications/Bouwdeel/name+'[Woning_rel] * Classifications/IsolatieMaatregel/kosten/Zst_Egw_Ind[IsolatieMaatregel_rel/'+classifications/Bouwdeel/name+'], 0.0[Eur])', //TODO: variatie kostenkental
+					..,
+					Eur)
 				{
 					attribute<Eur> Totaal (...):= ='add('+AsItemList(Classifications/bouwdeel/name)+')';
 				}
 			}
-			container Functioneel;
+			container Functioneel
+			{
+				attribute<GJ_yr> VT (..) := BO/Functioneel/VT[Woning_rel];
+				attribute<GJ_yr> KK (..) := BO/Functioneel/KK[Woning_rel];
+				attribute<GJ_yr> EA (..) := BO/Functioneel/EA[Woning_rel];
+				attribute<GJ_yr> TW (..) := BO/Functioneel/TW[Woning_rel];
+				attribute<GJ_yr> KD (..) := BO/Functioneel/KD[Woning_rel];
+				attribute<GJ_yr> RV (..) := RV_per_Bouwdeel_now/Totaal;
+			
+				container BouwdeelIsolatie_rel := for_each_nedv(
+					classifications/Bouwdeel/name,
+					'not(Bouwdelen/IsChangedNow/'+classifications/Bouwdeel/name+
+					')? rlookup('+quote(classifications/Bouwdeel/name+ '_')+' + Classifications/IsolatieNiveau/name[BO/Bouwdelen/Isolatie/' + classifications/Bouwdeel/name + '[WOning_rel][Classifications/IsolatieNiveau]], Classifications/BouwdeelIsolatie/name)
+					: rlookup('+quote(classifications/Bouwdeel/name+ '_')+' + Classifications/IsolatieNiveau/name[Bouwdelen/Isolatie/' + classifications/Bouwdeel/name + '[Classifications/IsolatieNiveau]], Classifications/BouwdeelIsolatie/name)',
+					..,
+					Classifications/BouwdeelIsolatie);
+				
+				container RV_per_Bouwdeel_now := for_each_nedv(
+					classifications/Bouwdeel/name,
+					'BO/Functioneel/RV_N1_per_Bouwdeel_now/'+classifications/Bouwdeel/name+'[Woning_rel] * makedefined(Classifications/IsolatieMaatregel/R_RV/MG[Classifications/BouwdeelIsolatie/IsolatieMaatregel_rel[BouwdeelIsolatie_rel/'+classifications/Bouwdeel/name+']] / 100[percent], 1.0[ratio])',
+					..,
+					GJ_yr) //TODO: R_RV afhankelijk van profiel
+				{
+					attribute<GJ_yr> Totaal (...):= ='add('+AsItemList(Classifications/bouwdeel/name)+')';
+				}
+			}
+			
+			
+			
 			container Aansluitcapaciteit;
 			// hier te berekenen: Funcionele vraag en Aansluitcapaciteit
 		}
