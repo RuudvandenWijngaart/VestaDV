@@ -38,64 +38,65 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 		
 		parameter<EUR> CombiFactor := beta * VerbruiksIndicatie * EnergiePrijs * Duration;
 		
-		container IsolatieScore := for_each_nedv(classifications/IsolatieMaatregel/name
+		attribute<Float64> BesparingsFactor(classifications/BouwdeelIsolatie) := // hoeveel besparing in verlies; TODO: varieren KG, MG, GG 		
+			classifications/Bouwdeel/Verlies[classifications/BouwdeelIsolatie/bouwdeel_rel] // hoeveel relatief belang 
+		*	MakeDefined(classifications/IsolatieMaatregel/R_RV/MG[invert(classifications/IsolatieMaatregel/BouwdeelIsolatie_rel)] / value(100, Percent), 0.0);
+			
+		attribute<EUR> Besparing(classifications/BouwdeelIsolatie) := BesparingsFactor * Combifactor; // TODO: varieren KG, MG, GG en aansluiten op statisch berekende factoren
+		
+		attribute<EUR_m2> Kosten   (classifications/BouwdeelIsolatie) :=  // tov kosten [per m2] TODO: varieren naar in context van toepassing zijnde kostenkolom. Allereerst Egw, Mgw
+			MakeDefined(classifications/IsolatieMaatregel/kosten/Nat_Egw_Ind[invert(classifications/IsolatieMaatregel/BouwdeelIsolatie_rel)], 0[EUR_m2]);
+		
+		container IsolatieScore := for_each_nedv(classifications/BouwdeelIsolatie/name
 		,	replace(
-				'switch('
-					'case(IsolatieNiveau_rel/@BD <  @I, '
-						'MakeDefined('
-							'BO/Bouwdelen/@BD[nr_OrgEntity] *'                                         // Area van bouwdeel [m2]
-							'( classifications/Bouwdeel/Verlies[classifications/Bouwdeel/V/@BD] '      // hoeveel relatief belang 
-							'* (classifications/IsolatieMaatregel/R_RV/MG[@I] / value(100, Percent))'  // hoeveel besparing in verlies; TODO: varieren KG, MG, GG
-							'* Combifactor / TotalArea'
-							'- classifications/IsolatieMaatregel/kosten/Nat_Egw_Ind[@I])'              // tov kosten [per m2] TODO: varieren naar in context van toepassing zijnde kostenkolom. Allereerst Egw, Mgw
-						', -9999.0)),'
-					'case(IsolatieNiveau_rel/@BD == @I, 0.0),'
-					'-9999.0'
+				'iif(IsolatieNiveau_rel/@BD <=  @I'
+				',	BO/Bouwdelen/@BD[nr_OrgEntity]'
+					'*	(	Besparing[@I]  / TotalArea'
+						'-	iif(IsolatieNiveau_rel/@BD > @I, kosten[@I], 0[EUR_m2])'
+						')'
+				',	-10.0'
 				')'
-			,	'@BD', classifications/IsolatieMaatregel/bouwdeel_name
-			,	'@I',  'classifications/IsolatieMaatregel/V/'+classifications/IsolatieMaatregel/name
+			,	'@BD', classifications/BouwdeelIsolatie/bouwdeel_name
+			,	'@I',  'classifications/BouwdeelIsolatie/V/'+classifications/BouwdeelIsolatie/name
 			)
 		, 	ActieveWoning, float64
 		);
 		
 		// TODO: check for overflow
-		parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(classifications/IsolatieMaatregel/bouwdeel_rel) )
-		container OddsRatio := for_each_nedv(classifications/IsolatieMaatregel/name
-		, 'exp(min_elem(IsolatieScore/'+classifications/IsolatieMaatregel/name+' * beta, LOG_MAX_FLOAT64))'
+		parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(classifications/BouwdeelIsolatie/bouwdeel_rel) )
+		container OddsRatio := for_each_nedv(classifications/BouwdeelIsolatie/name
+		, 'exp(min_elem(IsolatieScore/'+classifications/BouwdeelIsolatie/name+' * beta, LOG_MAX_FLOAT64))'
 		, BouwdeelActieveWoning, float64
 		)
 		{
 			container Total := for_each_nedv(classifications/bouwdeel/name
-			, 'add('+AsItemList(classifications/IsolatieMaatregel/name, classifications/IsolatieMaatregel/bouwdeel_rel)+')'
+			, 'add('+AsItemList(classifications/BouwdeelIsolatie/name, classifications/BouwdeelIsolatie/bouwdeel_rel)+')'
 			, BouwdeelActieveWoning, float64
 			);
 		}
 		
-		container P := for_each_nedv(classifications/IsolatieMaatregel/name
-		, 'OddsRatio/'+classifications/IsolatieMaatregel/name + ' / OddsRatio/Total/'+classifications/IsolatieMaatregel/bouwdeel_name
+		container P := for_each_nedv(classifications/BouwdeelIsolatie/name
+		, 'OddsRatio/'+classifications/BouwdeelIsolatie/name + ' / OddsRatio/Total/'+classifications/BouwdeelIsolatie/bouwdeel_name
 		, BouwdeelActieveWoning, float64
 		);
-		
-		
+			
 		container KiesBouwdelen := for_each_ne(classifications/Bouwdeel/name
 		,	'KiesBouwDeelT(classifications/Bouwdeel/V/' + classifications/Bouwdeel/name +')'
 		);
-		
-		// TODO: sample from P
 	}
 	template KiesBouwdeelT
 	{
 		parameter<classifications/Bouwdeel> bouwdeel_rel;
 		
-		container CumulP := for_each_nedv(classifications/IsolatieDoel/name
-		, 'P/'+classifications/bouwdeel/name[bouwdeel_rel]+'_'+classifications/IsolatieDoel/name
-		+ MakeDefined('+ '+classifications/IsolatieDoel/name[ID(classifications/IsolatieDoel)-1], '')
+		container CumulP := for_each_nedv(classifications/IsolatieNiveau/name
+		, 'P/'+classifications/bouwdeel/name[bouwdeel_rel]+'_'+classifications/IsolatieNiveau/name
+		+ MakeDefined('+ '+classifications/IsolatieNiveau/name[ID(classifications/IsolatieNiveau)-1], '')
 		, BouwdeelActieveWoning, float64
 		);
 		
 		parameter<uint32> Seed := 0; // TODO: Koppelen aan generieke reproduceerbare seeder
 		attribute<float64> rnd (BouwdeelActieveWoning) := rnd_uniform(Seed + bouwdeel_rel, BouwdeelActieveWoning, range(float64, 0.0, 1.0));
-		attribute<classifications/IsolatieDoel> IsolatieDoel_rel(BouwdeelActieveWoning) := ='argmax('+AsItemList('CumulP/'+classifications/IsolatieDoel/name+' >= rnd')+')[classifications/IsolatieDoel]';
+		attribute<classifications/IsolatieNiveau> IsolatieNiveau_rel(BouwdeelActieveWoning) := ='argmax('+AsItemList('CumulP/'+classifications/IsolatieNiveau/name+' >= rnd')+')[classifications/IsolatieNiveau]';
 	}
 	
 	//Placeholder voorbeeld hoe resultscontainer er uit moet zien, voor gebruik in ProductActieveWoning (waarden tijdelijk constant gegeven)
@@ -112,7 +113,7 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 				container Isolatie := for_each_nedv(
 					classifications/Bouwdeel/name,
 					replace(
-						'union_data(AWxIA, '+AsItemList(replace('IsolatieAmbities/@IA/KiesBouwdelen/@BD/IsolatieDoel_rel', '@IA', Classifications/IsolatieAmbitie/name))+')'
+						'union_data(AWxIA, '+AsItemList(replace('IsolatieAmbities/@IA/KiesBouwdelen/@BD/IsolatieNiveau_rel', '@IA', Classifications/IsolatieAmbitie/name))+')'
 						,'@BD', classifications/Bouwdeel/name),
 					..,
 					Classifications/IsolatieNiveau)
