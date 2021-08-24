@@ -24,7 +24,8 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 		, '@A', 'classifications/IsolatieAmbitie/V/'+classifications/IsolatieAmbitie/name)
 	)
 	{
-		container geen {
+		container geen // overef bij 'geen' bouwdeel isolatieniveaus's die er al zijn
+		{
 			container KiesBouwdelen := for_each_nedv(
 				classifications/Bouwdeel/name+'/IsolatieNiveau_rel', 
 				'BouwdeelActieveWoning/IsolatieNiveau_rel/'+classifications/Bouwdeel/name,
@@ -113,19 +114,32 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 	//Placeholder voorbeeld hoe resultscontainer er uit moet zien, voor gebruik in ProductActieveWoning (waarden tijdelijk constant gegeven)
 	container spook_results 
 	{
+		unit<uint32> IAxAW := combine(classifications/IsolatieAmbitie, BouwdeelActieveWoning)
+		{
+			container Isolatie := for_each_nedv(
+				classifications/Bouwdeel/name,
+				replace(
+					'union_data(IAxAW, '+AsItemList(replace('IsolatieAmbities/@IA/KiesBouwdelen/@BD/IsolatieNiveau_rel', '@IA', Classifications/IsolatieAmbitie/name))+')'
+					,'@BD', classifications/Bouwdeel/name),
+				IAxAW,
+				Classifications/IsolatieNiveau);
+		}
 		unit<uint32> AWxIA := combine(BouwdeelActieveWoning, classifications/IsolatieAmbitie)
 		,	Descr = "iedere (relevante) isolatie ambitie voor iedere op bouwdeel geactiveerde woning"  //AKA Spookwoning
 		{
-			attribute<BO> Woning_rel := BouwdeelActieveWoning/nr_OrgEntity[nr_1];
+			attribute<BouwdeelActieveWoning>           BouwdeelActieveWoning_rel := nr_1;
+			attribute<classifications/IsolatieAmbitie> IsolatieAmbitie_rel := nr_2;
 			
-			attribute<Classifications/IsolatieAmbitie> IsolatieAmbitie_rel := nr_2;
+			attribute<BO> BO_rel := BouwdeelActieveWoning/BO_rel[BouwdeelActieveWoning_rel];
+			
+			attribute<IAxAW> IAxAW_rel := combine_data(IAxAW, nr_2, nr_1);
 			
 			container Bouwdelen
 			{
 				container Isolatie := for_each_nedv(
 					classifications/Bouwdeel/name,
 					replace(
-						'union_data(AWxIA, '+AsItemList(replace('IsolatieAmbities/@IA/KiesBouwdelen/@BD/IsolatieNiveau_rel', '@IA', Classifications/IsolatieAmbitie/name))+')'
+						'IAxAW/Isolatie/@BD[IAxAW_rel]'
 						,'@BD', classifications/Bouwdeel/name),
 					AWxIA,
 					Classifications/IsolatieNiveau)
@@ -134,7 +148,7 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 				}
 				container IsChangedNow := for_each_nedv(
 					classifications/Bouwdeel/name,
-					replace('Isolatie/@BD > BO/Bouwdelen/isolatie/@BD[Woning_rel]'
+					replace('Isolatie/@BD > BO/Bouwdelen/isolatie/@BD[BO_rel]'
 					,	'@BD', classifications/Bouwdeel/name),
 					AWxIA,
 					bool);
@@ -151,7 +165,7 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 				
 				container Ki_gv := for_each_nedv(
 					classifications/Bouwdeel/name,
-					replace('makedefined(BO/Bouwdelen/@BD[Woning_rel] * Classifications/IsolatieMaatregel/kosten/Zst_Egw_Ind[IsolatieMaatregel_rel/@BD], 0.0[Eur])' //TODO: variatie kostenkental
+					replace('makedefined(BO/Bouwdelen/@BD[BO_rel] * Classifications/IsolatieMaatregel/kosten/Zst_Egw_Ind[IsolatieMaatregel_rel/@BD], 0.0[Eur])' //TODO: variatie kostenkental
 					,	'@BD', classifications/Bouwdeel/name),
 					AWxIA, 
 					Eur)
@@ -161,28 +175,28 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 			}
 			container Functioneel
 			{
-				attribute<GJ_yr> VT (..) := BO/Functioneel/VT[Woning_rel];
-				attribute<GJ_yr> KK (..) := BO/Functioneel/KK[Woning_rel];
-				attribute<GJ_yr> EA (..) := BO/Functioneel/EA[Woning_rel];
-				attribute<GJ_yr> TW (..) := BO/Functioneel/TW[Woning_rel];
-				attribute<GJ_yr> KD (..) := BO/Functioneel/KD[Woning_rel];
+				attribute<GJ_yr> VT (..) := BO/Functioneel/VT[BO_rel];
+				attribute<GJ_yr> KK (..) := BO/Functioneel/KK[BO_rel];
+				attribute<GJ_yr> EA (..) := BO/Functioneel/EA[BO_rel];
+				attribute<GJ_yr> TW (..) := BO/Functioneel/TW[BO_rel];
+				attribute<GJ_yr> KD (..) := BO/Functioneel/KD[BO_rel];
 				attribute<GJ_yr> RV (..) := RV_per_Bouwdeel_now/Totaal * Correction_RV;
 				
-				attribute<Kwh_yr_m2> Kwh_m2 (..) := (RV_per_Bouwdeel_now/Totaal / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / BO/Oppervlakte[Woning_rel];
+				attribute<Kwh_yr_m2> Kwh_m2 (..) := (RV_per_Bouwdeel_now/Totaal / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / BO/Oppervlakte[BO_rel];
 				
 				attribute<ratio> Correction_RV (..) := 1.0[ratio] + Invoer/Kengetallen/Constanten/Rebound_A * Invoer/Kengetallen/Constanten/Rebound_B ^ Kwh_m2;
 			
 				container BouwdeelIsolatie_rel := for_each_nedv(
 					classifications/Bouwdeel/name,
 					'not(Bouwdelen/IsChangedNow/'+classifications/Bouwdeel/name+
-					')? rlookup('+quote(classifications/Bouwdeel/name+ '_')+' + Classifications/IsolatieNiveau/name[BO/Bouwdelen/Isolatie/' + classifications/Bouwdeel/name + '[WOning_rel][Classifications/IsolatieNiveau]], Classifications/BouwdeelIsolatie/name)
+					')? rlookup('+quote(classifications/Bouwdeel/name+ '_')+' + Classifications/IsolatieNiveau/name[BO/Bouwdelen/Isolatie/' + classifications/Bouwdeel/name + '[BO_rel][Classifications/IsolatieNiveau]], Classifications/BouwdeelIsolatie/name)
 					: rlookup('+quote(classifications/Bouwdeel/name+ '_')+' + Classifications/IsolatieNiveau/name[Bouwdelen/Isolatie/' + classifications/Bouwdeel/name + '[Classifications/IsolatieNiveau]], Classifications/BouwdeelIsolatie/name)',
 					..,
 					Classifications/BouwdeelIsolatie);
 				
 				container RV_per_Bouwdeel_now := for_each_nedv(
 					classifications/Bouwdeel/name,
-					'BO/Functioneel/RV_N1_per_Bouwdeel_now/'+classifications/Bouwdeel/name+'[Woning_rel] * (1.0[ratio] - makedefined(Classifications/IsolatieMaatregel/R_RV/MG[Classifications/BouwdeelIsolatie/IsolatieMaatregel_rel[BouwdeelIsolatie_rel/'+classifications/Bouwdeel/name+']] / 100[percent], 1.0[ratio]))',
+					'BO/Functioneel/RV_N1_per_Bouwdeel_now/'+classifications/Bouwdeel/name+'[BO_rel] * (1.0[ratio] - makedefined(Classifications/IsolatieMaatregel/R_RV/MG[Classifications/BouwdeelIsolatie/IsolatieMaatregel_rel[BouwdeelIsolatie_rel/'+classifications/Bouwdeel/name+']] / 100[percent], 1.0[ratio]))',
 					..,
 					GJ_yr) //TODO: R_RV afhankelijk van profiel
 				{
@@ -202,7 +216,7 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 		unit<uint32> AWxIAuIW := union_unit(AWxIA, Inactief_selected)
 		,	Descr = "union van AWxIA met niet overlappende niet bouwdeel geactiveerde woningen"
 		{
-			attribute<BO> Woning_rel := union_data(AWxIAuIW, AWxIA/Woning_rel, select_data(Inactief_selected, ID(BO)));
+			attribute<BO> BO_rel := union_data(AWxIAuIW, AWxIA/BO_rel, select_data(Inactief_selected, ID(BO)));
 			
 			attribute<Classifications/IsolatieAmbitie> IsolatieAmbitie_rel := union_data(AWxIAuIW, AWxIA/IsolatieAmbitie_rel, const((0/0)[Classifications/IsolatieAmbitie], Inactief_selected) );
 			
