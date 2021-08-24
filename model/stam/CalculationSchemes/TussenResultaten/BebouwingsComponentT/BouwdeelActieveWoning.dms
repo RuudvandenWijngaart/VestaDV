@@ -101,8 +101,9 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 	}
 	
 	//Placeholder voorbeeld hoe resultscontainer er uit moet zien, voor gebruik in ProductActieveWoning (waarden tijdelijk constant gegeven)
-	container spook_results {
-		unit<uint32> AWxIA := combine(.., classifications/IsolatieAmbitie)
+	container spook_results 
+	{
+		unit<uint32> AWxIA := combine(BouwdeelActieveWoning, classifications/IsolatieAmbitie)
 		,	Descr = "iedere (relevante) isolatie ambitie voor iedere op bouwdeel geactiveerde woning"  //AKA Spookwoning
 		{
 			attribute<BO> Woning_rel := BouwdeelActieveWoning/nr_OrgEntity[nr_1];
@@ -116,25 +117,33 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 					replace(
 						'union_data(AWxIA, '+AsItemList(replace('IsolatieAmbities/@IA/KiesBouwdelen/@BD/IsolatieNiveau_rel', '@IA', Classifications/IsolatieAmbitie/name))+')'
 						,'@BD', classifications/Bouwdeel/name),
-					..,
+					AWxIA,
 					Classifications/IsolatieNiveau)
 				{
 					attribute<Classifications/Schillabel> Schillabel_rel (...) := const(Classifications/Schillabel/V/B,...); //TODO: methode schillabel afleiden van isolatiegraad
 				}
 				container IsChangedNow := for_each_nedv(
 					classifications/Bouwdeel/name,
-					'Isolatie/' + classifications/Bouwdeel/name + ' > BO/Bouwdelen/isolatie/'+ classifications/Bouwdeel/name+'[Woning_rel]',
-					..,
+					replace('Isolatie/@BD > BO/Bouwdelen/isolatie/@BD[Woning_rel]'
+					,	'@BD', classifications/Bouwdeel/name),
+					AWxIA,
 					bool);
+					
 				container IsolatieMaatregel_rel := for_each_nedv(
 					classifications/Bouwdeel/name,
-					'not(IsChangedNow/'+classifications/Bouwdeel/name+') ? (0/0)[Classifications/IsolatieMaatregel] : rlookup('+quote(classifications/Bouwdeel/name+ '_')+' + Classifications/IsolatieNiveau/name[Isolatie/' + classifications/Bouwdeel/name + '[Classifications/IsolatieNiveau]], Classifications/IsolatieMaatregel/name)',
-					..,
+					replace(
+						'not(IsChangedNow/@BD) '
+							'? (0/0)[Classifications/IsolatieMaatregel] '
+							': classifications/BouwdeelIsolatie/IsolatieMaatregel_rel[combine_data(classifications/BouwdeelIsolatie, classifications/Bouwdeel/V/@BD , Isolatie/@BD)]'
+					,	'@BD', classifications/Bouwdeel/name),
+					AWxIA, 
 					Classifications/IsolatieMaatregel);
+				
 				container Ki_gv := for_each_nedv(
 					classifications/Bouwdeel/name,
-					'makedefined(BO/Bouwdelen/'+classifications/Bouwdeel/name+'[Woning_rel] * Classifications/IsolatieMaatregel/kosten/Zst_Egw_Ind[IsolatieMaatregel_rel/'+classifications/Bouwdeel/name+'], 0.0[Eur])', //TODO: variatie kostenkental
-					..,
+					replace('makedefined(BO/Bouwdelen/@BD[Woning_rel] * Classifications/IsolatieMaatregel/kosten/Zst_Egw_Ind[IsolatieMaatregel_rel/@BD], 0.0[Eur])' //TODO: variatie kostenkental
+					,	'@BD', classifications/Bouwdeel/name),
+					AWxIA, 
 					Eur)
 				{
 					attribute<Eur> Totaal (...):= ='add('+AsItemList(Classifications/bouwdeel/name)+')';
@@ -216,29 +225,15 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 	{
 		parameter<classifications/IsolatieAmbitie> IsolatieAmbitie_rel;
 		
-		attribute<spook_results/AWxIA> AWxIA_rel(BouwdeelActieveWoning) := combine_data(spook_results/AWxIA, BO_rel, IsolatieAmbitie_rel);
+		attribute<spook_results/AWxIA> AWxIA_rel(BouwdeelActieveWoning) := combine_data(spook_results/AWxIA, ID(BouwdeelActieveWoning), IsolatieAmbitie_rel);
 		
 		//uitkomsten per bouwdeel per ambitieniveau
 		container bouwdelen := for_each_nedv(classifications/Bouwdeel/name,
-			replace('IsChangedNow/@BD ? spook_results/AWxIA/Bouwdelen/Isolatie/@BD[AWxIA_rel] : Classifications/IsolatieNiveau/V/N3'
+			replace('spook_results/AWxIA/Bouwdelen/Isolatie/@BD[AWxIA_rel]'
 			,	'@BD', classifications/Bouwdeel/name)
-		,	BouwdeelActieveWoning, classifications/IsolatieNiveau)
+		,	BouwdeelActieveWoning, classifications/IsolatieNiveau
+		);
 			
-		{
-			container IsChangedNow //is er in dit ambitieniveau een verandering in het bouwdeel?
-			{
-				attribute<bool> RO (BouwdeelActieveWoning) := const(true,.....);
-				attribute<bool> RB (BouwdeelActieveWoning) := const(false,.....);  //hier linken naar uitkomsten keuze per ambitieniveau: veranderd of niet
-				attribute<bool> DR (BouwdeelActieveWoning) := const(true,.....);
-				attribute<bool> PL (BouwdeelActieveWoning) := const(false,.....);
-				attribute<bool> VL (BouwdeelActieveWoning) := const(true,.....);
-				attribute<bool> MG (BouwdeelActieveWoning) := const(false,.....);
-				attribute<bool> MS (BouwdeelActieveWoning) := const(true,.....);
-				attribute<bool> DP (BouwdeelActieveWoning) := const(false,.....);
-				attribute<bool> DS (BouwdeelActieveWoning) := const(true,.....);
-				attribute<bool> KR (BouwdeelActieveWoning) := const(false,.....);
-			}
-		}
 		
 		//kosten van isolatiemaatregelen indien dit ambitieniveau wordt toegepast
 		container kosten := for_each_nedv(classifications/Bouwdeel/name,
