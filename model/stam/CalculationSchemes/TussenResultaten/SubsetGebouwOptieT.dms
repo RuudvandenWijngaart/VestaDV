@@ -1,31 +1,35 @@
 template SubsetGebouwOptieT
 {
 	// begin case parameters
+	
 	unit<uint32> ActiefObject;
-	parameter<Classifications/GebouwOptie> GebouwOptie_rel;
-	parameter<string> Criterium_expr;
+	attribute<Classifications/GebouwOptie> GebouwOptie_rel(ActiefObject);
+	attribute<bool> Criterium (ActiefObject);
 	parameter<Classifications/IsolatieAmbitie> IsolatieAmbitie_rel;
 	// end case parameters
 	
-	
-	attribute<Classifications/SchilLabel> SchilLabel_ambitie (ActiefObject) := =IsDefined(IsolatieAmbitie_rel) ? 
-		'BouwdeelActieveWoning/Results/' + Classifications/IsolatieAmbitie/name[IsolatieAmbitie_rel] + '/Functioneel/schillabel_rel[BouwdeelActieveWoning_rel]' : 'BO/Schillabel_rel[BO_rel]',
-		Descr = "Indien actief op bouwdelen: schillabel horende bij gekozen invulling ambitieniveau, indien inactief op bouwdelen: schillabel horende bij huidige isolatiegraad";
 
-	attribute<uint32> BO_rel (ActiefObject) := rlookup(ActiefObject/code, BO/code);
+	attribute<Classifications/SchilLabel> SchilLabel_ambitie (ActiefObject) := // TODO: to state of ActiefObject
+		=IsDefined(IsolatieAmbitie_rel) 
+		? 'BouwdeelActieveWoning/Results/' + Classifications/IsolatieAmbitie/name[IsolatieAmbitie_rel] + '/Functioneel/schillabel_rel[ActiefObject/BAW_rel]'
+		: 'BO/Schillabel_rel[ActiefObject/BO_rel]'
+	,	Descr = "Indien actief op bouwdelen: schillabel horende bij gekozen invulling ambitieniveau, indien inactief op bouwdelen: schillabel horende bij huidige isolatiegraad";
+//REMOVE	attribute<uint32> BO_rel (ActiefObject) := ActiefObject/BO_rel;
 	attribute<bool> Geschikt (ActiefObject) := SchilLabel_ambitie <= Classifications/GebouwOptie/Min_schillabel_rel[GebouwOptie_rel], Descr = "Voldoet de woning aan de isolatienorm voor deze gebouwoptie?";
 	
 	//===== Selectie van woningen die voldoen aan de minimale isolatiegraad voor de gebouwoptie in kwestie =====
-	unit<uint32> GeschiktObject := subset(Geschikt)
+	unit<uint32> GeschiktObject := subset(Geschikt && Criterium)
 	{
-		attribute<string>                     code                      := ActiefObject/code[nr_orgentity];
-		attribute<uint32>                     BO_rel                    := ../BO_rel[nr_orgentity];
-		attribute<Classifications/SchilLabel> SchilLabel_ambitie        := ../SchilLabel_ambitie[nr_orgentity];
-		attribute<string>                     Schillabel_name           := Classifications/SchilLabel/name[SchilLabel_ambitie];
-		attribute<uint32>                     BouwdeelActieveWoning_rel := rlookup(code, BouwdeelActieveWoning/code);	
+		attribute<ActiefObject>               ActiefObject_rel   := nr_orgentity;
+		attribute<uint32>                     BO_rel             := ActiefObject/BO_rel[ActiefObject_rel];
+		attribute<Classifications/SchilLabel> SchilLabel_rel     := ../SchilLabel_ambitie[ActiefObject_rel];
+//	REMOVE	attribute<string>                     Schillabel_name    := Classifications/SchilLabel/name[SchilLabel_ambitie];
+//	REMOVE	attribute<BAW>                        BAW_rel            := BAW_rel[ActiefObject_rel]; 
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel   := ../GebouwOptie_rel[ActiefObject_rel];
+		attribute<uint32>                     BAW_rel            := ActiefObject/BAW_rel[ActiefObject_rel];
 	}
 	
-	parameter<string> SrcRef := IsDefined(IsolatieAmbitie_rel) ? '[GeschiktObject/BouwdeelActieveWoning_rel]' : '[GeschiktObject/BO_rel]';	
+	parameter<string> SrcRef := IsDefined(IsolatieAmbitie_rel) ? '[ActiefObject/BAW_rel[GeschiktObject/ActiefObject_rel]]' : '[GeschiktObject/BO_rel]';	
 	parameter<string> BouwdeelSrc := IsDefined(IsolatieAmbitie_rel) ? 'BouwdeelActieveWoning/Results/' + Classifications/IsolatieAmbitie/name[IsolatieAmbitie_rel] + '/Bouwdelen' : 'BO/Bouwdelen/Isolatie';
 	container Bouwdelen := for_each_nedv(
 		Classifications/Bouwdeel/Name,
@@ -34,23 +38,25 @@ template SubsetGebouwOptieT
 		Classifications/IsolatieNiveau);
 	
 	//===== Installaties die horen bij de gebouwoptie in kwestie =====	
-	attribute<Classifications/Installatie> Installatie_rel (Classifications/Product) := 
-		= 'union_data(Classifications/Product, ' + AsItemList('Classifications/GebouwOptie/Installatie_rel/'+Classifications/Product/name+'[GebouwOptie_rel]') + ')';	
+	container Installatie_rel := for_each_nedv(Classifications/Product/name
+		,	replace('Classifications/GebouwOptie/Installatie_rel/@PN[GeschiktObject/GebouwOptie_rel]', '@PN', Classifications/Product/name)
+		,	GeschiktObject, Classifications/Installatie
+		);
 		
 	//===== InstallatiePerProduct geeft per BebouwingsObject of per SchilLabel voor ieder Product de te kiezen of al aanwezige installatie =====
+	parameter<string> IPP_active_cond := 'AND(Installatie_rel/@PN != Classifications/Installatie/V/geen, BO/Activatie/Producten/@PN[GeschiktObject/BO_rel])';
+	parameter<string> IPP_active_expr := 'Installatie_rel/@PN';
+	parameter<string> IPP_default_expr := 'BO/InstallatiePerProduct/@PN[GeschiktObject/BO_rel]';
+			
 	container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
-		, Installatie_rel != Classifications/Installatie/V/geen
-			? 'BO/Activatie/Producten/'+ Classifications/Product/name +'[GeschiktObject/BO_rel]
-				? const(Classifications/Installatie/V/' + Classifications/Installatie/name[Installatie_rel] + ', GeschiktObject)
-				: BO/InstallatiePerProduct/' + Classifications/Product/name + '[GeschiktObject/BO_rel]' 
-			: 'BO/InstallatiePerProduct/' + Classifications/Product/name + '[GeschiktObject/BO_rel]'
+		, replace(IPP_active_cond+'?'+IPP_active_expr+':'+IPP_default_expr, '@PN', Classifications/Product/name)
 		, GeschiktObject
 		, Classifications/Installatie
 	);
 	
 	//===== Performance_rel geeft per BebouwingsObject of per SchilLabel voor ieder Product het performance profiel obv (InstallatieNaam, SchilLabel of x, ProductType {RV, TW of K} ) =====
 	container Performance_key1 := for_each_nedv(Classifications/Product/name
-		, 'Classifications/Installatie/name[InstallatiePerProduct/'+Classifications/Product/name+']+''.'' + GeschiktObject/Schillabel_name + ''.' + Classifications/Product/TypeName+''''
+		, 'Classifications/Installatie/name[InstallatiePerProduct/'+Classifications/Product/name+']+''.'' + Classifications/SchilLabel/name[GeschiktObject/Schillabel_rel] + ''.' + Classifications/Product/TypeName+''''
 		, GeschiktObject
 		, string
 		)
@@ -131,8 +137,8 @@ template SubsetGebouwOptieT
 
 	parameter<string> KX_expr :=
 		'add('
-			'VerbruiksOpties/GebouwOptie/K@X_asl[GebouwOptie_rel] * BO/nrAansluitingen[GeschiktObject/BO_rel],  '
-			'VerbruiksOpties/GebouwOptie/K@X_opp[GebouwOptie_rel] * BO/Oppervlakte[GeschiktObject/BO_rel] , ' 
+			'VerbruiksOpties/GebouwOptie/K@X_asl[GeschiktObject/GebouwOptie_rel] * BO/nrAansluitingen[GeschiktObject/BO_rel],  '
+			'VerbruiksOpties/GebouwOptie/K@X_opp[GeschiktObject/GebouwOptie_rel] * BO/Oppervlakte[GeschiktObject/BO_rel] , ' 
 			'K@X_cap'
 		+')'
 	,	isHidden = "True";
@@ -146,7 +152,7 @@ template SubsetGebouwOptieT
 	
 	
 	parameter<string> Ki_GVSrc := IsDefined(IsolatieAmbitie_rel) ? 'BouwdeelActieveWoning/Results/' + Classifications/IsolatieAmbitie/name[IsolatieAmbitie_rel] + '/Kosten/Ki_gv' : '';
-	attribute<Eur   > Ki_GV       (GeschiktObject) := =IsDefined(IsolatieAmbitie_rel) ? Ki_GVSrc+'[GeschiktObject/BouwdeelActieveWoning_rel]' : 'const(0[eur], GeschiktObject)';
+	attribute<Eur   > Ki_GV       (GeschiktObject) := =IsDefined(IsolatieAmbitie_rel) ? Ki_GVSrc+'[GeschiktObject/BAW_rel]' : 'const(0[eur], GeschiktObject)';
 
 	attribute<Eur>    Ki_totaal   (GeschiktObject) := Ki_LO   + Ki_GV + Ki_LTAS;
 	attribute<Eur>    Ki30_totaal (GeschiktObject) := Ki30_LO + Ki_GV + Ki_LTAS;
@@ -288,8 +294,8 @@ template SubsetGebouwOptieT
 			{
 				attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_org (GeschiktObject) := BO/InstallatiePerProduct/VT[GeschiktObject/BO_rel];
 				
-				attribute<bool> IsAlabel (GeschiktObject) := GeschiktObject/Schillabel_ambitie == classifications/schillabel/V/A;  //TODO: hier afweging invoegen
-				attribute<bool> IsBlabel (GeschiktObject) := GeschiktObject/Schillabel_ambitie == classifications/schillabel/V/B;  //TODO: hier afweging invoegen
+				attribute<bool> IsAlabel (GeschiktObject) := GeschiktObject/Schillabel_rel == classifications/schillabel/V/A;  //TODO: hier afweging invoegen
+				attribute<bool> IsBlabel (GeschiktObject) := GeschiktObject/Schillabel_rel == classifications/schillabel/V/B;  //TODO: hier afweging invoegen
 				
 				attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_def (GeschiktObject) :=
 					  IsAlabel ? Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V/WTW
@@ -429,8 +435,6 @@ template SubsetGebouwOptieT
 	attribute<Eur_yr> Kmi15_LO (GeschiktObject) := Ki15_LO * NCW/mr15/AnnualisationFactor;
 	attribute<Eur_yr> Kmi_LO   (GeschiktObject) := Kmi30_LO + Kmi20_LO + Kmi15_LO;
 
-	attribute<bool> Criterium (GeschiktObject) := = (Criterium_expr == '') ? 'Criteria/Always[GeschiktObject/BO_rel]' : Criterium_expr + '[GeschiktObject/BO_rel]';
-
 	parameter<float64> S_gv := (1.0 - EIA_Opties/Rs_GebouwVerbetering), Descr = "eigen aandeel investering op gebouwverbetering na aftrek van subsidies";
 	parameter<float64> S_lo := (1.0 - EIA_Opties/Rs_LokaleOpwekking  ), Descr = "eigen aandeel investering op lokale opwekking na aftrek van subsidies";
 
@@ -458,87 +462,81 @@ template SubsetGebouwOptieT
 		+ (Kj_OH_LO + Kj_Adm_LO)
 		+ Km_verbruik;
 		
-	attribute<Eur_yr> kosten (GeschiktObject) := = (LocatieSpecifiekeOpties/GebouwOpties/KiesMaatschappelijk)
-		? 'kosten_m'
-		: 'kosten_j';
+	attribute<Eur_yr> kosten (GeschiktObject) := =(LocatieSpecifiekeOpties/GebouwOpties/KiesMaatschappelijk) ? 'kosten_m' : 'kosten_j';
 
-	attribute<Eur_yr> kosten_or_undefined (GeschiktObject) := = (Criterium_expr == '') 
-		? 'kosten'
-		: '('+Criterium_expr + '[GeschiktObject/BO_rel])
-			? kosten 
-			: (0/0)[Eur_yr]';
+	attribute<Eur_yr> kosten_or_undefined (GeschiktObject) := Criterium[GeschiktObject/ActiefObject_rel] ? kosten : (0/0)[Eur_yr];
 			
-	attribute<Eur_yr> kosten_tbv_afweging (ActiefObject) := kosten_or_undefined[rlookup(ActiefObject/code, GeschiktObject/code)];
-	
-	attribute<GeschiktObject> GeschiktObject_rel (ActiefObject) := rlookup(ActiefObject/code, GeschiktObject/code);
+	attribute<GeschiktObject> ActiefObject_GeschiktObject_rel(ActiefObject) := invert(GeschiktObject/ActiefObject_rel); // TODO OPT: mergeback
+	attribute<Eur_yr> kosten_tbv_afweging (ActiefObject) := kosten_or_undefined[ActiefObject_GeschiktObject_rel]; 
 	
 	container results
 	{
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel (ActiefObject) := const(../GebouwOptie_rel, ActiefObject);
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel (ActiefObject) :=  ActiefObject/GebouwOptie_rel; // TODO: Wegsubstitueren
 
-		attribute<Classifications/Schillabel>  Schillabel_rel  (ActiefObject) := GeschiktObject/SchilLabel_ambitie[rlookup(ActiefObject/code, GeschiktObject/code)];
+		attribute<Classifications/Schillabel>  Schillabel_rel  (ActiefObject) := ActiefObject/SchilLabel_rel;  // TODO: Wegsubstitueren
 		
 		container BemeterdeGebouwInput_rel := for_each_nedv(
 			Classifications/Product/name,
-			'.../BemeterdeGebouwInput_rel/'+Classifications/Product/name+'[GeschiktObject_rel]',
+			'.../BemeterdeGebouwInput_rel/'+Classifications/Product/name+'[invert(GeschiktObject/ActiefObject_rel)]', 
 			ActiefObject,
 			Classifications/BemeterdeGebouwInput);
 		container eenmalig
 		{
-			attribute<Eur>    Ki30_LO        (ActiefObject) := .../Ki30_LO              [GeschiktObject_rel];
-			attribute<Eur>    Ki20_LO        (ActiefObject) := .../Ki20_LO              [GeschiktObject_rel];
-			attribute<Eur>    Ki15_LO        (ActiefObject) := .../Ki15_LO              [GeschiktObject_rel];
-			attribute<Eur>    Ki_gv          (ActiefObject) := .../Ki_GV                [GeschiktObject_rel];
-			attribute<Eur>    Ki_LTAS        (ActiefObject) := .../Ki_LTAS              [GeschiktObject_rel];
+			attribute<Eur>    Ki30_LO        (ActiefObject) := .../Ki30_LO              [ActiefObject_GeschiktObject_rel];
+			attribute<Eur>    Ki20_LO        (ActiefObject) := .../Ki20_LO              [ActiefObject_GeschiktObject_rel];
+			attribute<Eur>    Ki15_LO        (ActiefObject) := .../Ki15_LO              [ActiefObject_GeschiktObject_rel];
+			attribute<Eur>    Ki_gv          (ActiefObject) := .../Ki_GV                [ActiefObject_GeschiktObject_rel];
+			attribute<Eur>    Ki_LTAS        (ActiefObject) := .../Ki_LTAS              [ActiefObject_GeschiktObject_rel];
 			
-			attribute<Eur>    Ki_DK          (ActiefObject) := OverigeInstallaties/zonPV/afweging/Ki_zonPV     [GeschiktObject_rel] + .../Functioneel/ZonB/Afweging/Ki_zonB[GeschiktObject_rel];
-			attribute<Eur>    Ki_VT          (ActiefObject) := OverigeInstallaties/ventilatie/afweging/Ki_vent [GeschiktObject_rel];
-			attribute<Eur>    Ki_KK          (ActiefObject) := OverigeInstallaties/koken/afweging/Ki_koken     [GeschiktObject_rel];
+			attribute<Eur>    Ki_DK          (ActiefObject) := OverigeInstallaties/zonPV/afweging/Ki_zonPV     [ActiefObject_GeschiktObject_rel] 
+			                                                 + .../Functioneel/ZonB/Afweging/Ki_zonB[ActiefObject_GeschiktObject_rel];
+			attribute<Eur>    Ki_VT          (ActiefObject) := OverigeInstallaties/ventilatie/afweging/Ki_vent [ActiefObject_GeschiktObject_rel];
+			attribute<Eur>    Ki_KK          (ActiefObject) := OverigeInstallaties/koken/afweging/Ki_koken     [ActiefObject_GeschiktObject_rel];
 			
-			attribute<Eur>    Oi_gv          (ActiefObject) := .../Oi_s_GV              [GeschiktObject_rel];
-			attribute<Eur>    Oi30_LO        (ActiefObject) := .../Oi30_s_LO            [GeschiktObject_rel];
-			attribute<Eur>    Oi20_LO        (ActiefObject) := .../Oi20_s_LO            [GeschiktObject_rel];
-			attribute<Eur>    Oi15_LO        (ActiefObject) := .../Oi15_s_LO            [GeschiktObject_rel];
+			attribute<Eur>    Oi_gv          (ActiefObject) := .../Oi_s_GV              [ActiefObject_GeschiktObject_rel];
+			attribute<Eur>    Oi30_LO        (ActiefObject) := .../Oi30_s_LO            [ActiefObject_GeschiktObject_rel];
+			attribute<Eur>    Oi20_LO        (ActiefObject) := .../Oi20_s_LO            [ActiefObject_GeschiktObject_rel];
+			attribute<Eur>    Oi15_LO        (ActiefObject) := .../Oi15_s_LO            [ActiefObject_GeschiktObject_rel];
 		}
 		container jaarlijks
 		{
-			attribute<Eur_yr> Kj_oh_LO       (ActiefObject) := .../Kj_OH_LO             [GeschiktObject_rel];
-			attribute<Eur_yr> Kj_adm_LO      (ActiefObject) := .../Kj_adm_LO            [GeschiktObject_rel];
-			attribute<Eur_yr> Kj_elek        (ActiefObject) := meterprijzen/Pj_e        [GeschiktObject_rel] *  metervraag/Vj_e;
-			attribute<Eur_yr> Kj_gas         (ActiefObject) := meterprijzen/Pj_gas      [GeschiktObject_rel] *  metervraag/Vj_gas;
+			attribute<Eur_yr> Kj_oh_LO       (ActiefObject) := .../Kj_OH_LO             [ActiefObject_GeschiktObject_rel];
+			attribute<Eur_yr> Kj_adm_LO      (ActiefObject) := .../Kj_adm_LO            [ActiefObject_GeschiktObject_rel];
+			attribute<Eur_yr> Kj_elek        (ActiefObject) := meterprijzen/Pj_e        [ActiefObject_GeschiktObject_rel] *  metervraag/Vj_e;
+			attribute<Eur_yr> Kj_gas         (ActiefObject) := meterprijzen/Pj_gas      [ActiefObject_GeschiktObject_rel] *  metervraag/Vj_gas;
 			attribute<Eur_yr> Kj_biomassa    (ActiefObject) := meterprijzen/Pj_biomassa *  metervraag/Vj_biomassa;
 			attribute<Eur_yr> Kj_olie        (ActiefObject) := meterprijzen/Pj_olie     *  metervraag/Vj_olie;
 			attribute<Eur_yr> Kj_pellets     (ActiefObject) := meterprijzen/Pj_pellets  *  metervraag/Vj_pellets;
 			attribute<Eur_yr> Kj_H2          (ActiefObject) := meterprijzen/Pj_H2       *  metervraag/Vj_H2;
-			attribute<Eur_yr> Kj_vastrecht_g (ActiefObject) := VastRechtBijdrageG       [GeschiktObject_rel];
+			attribute<Eur_yr> Kj_vastrecht_g (ActiefObject) := VastRechtBijdrageG       [ActiefObject_GeschiktObject_rel];
 		}
 		container metervraag := for_each_nedv(
 			'Vj_'+Classifications/BemeterdeGebouwInput/name,
-			'.../metervraag/'+Classifications/BemeterdeGebouwInput/name+'[GeschiktObject_rel]',
+			'.../metervraag/'+Classifications/BemeterdeGebouwInput/name+'[ActiefObject_GeschiktObject_rel]',
 			ActiefObject,
 			GJ_yr);
 			
 		container functioneel := for_each_nedv(
 			'V_'+Classifications/FunctioneleVraag/name,
-			'.../functioneel/'+Classifications/FunctioneleVraag/name+'[GeschiktObject_rel]',
+			'.../functioneel/'+Classifications/FunctioneleVraag/name+'[ActiefObject_GeschiktObject_rel]',
 			ActiefObject,
 			GJ_yr);
 			
 		container InstallatiePerProduct  := for_each_nedv(
 			Classifications/Product/name,
-			'.../InstallatiePerProduct/'+Classifications/Product/name+'[GeschiktObject_rel]',
+			'.../InstallatiePerProduct/'+Classifications/Product/name+'[ActiefObject_GeschiktObject_rel]',
 			ActiefObject,
 			Classifications/Installatie)
 		{
-			attribute<Classifications/AfgifteSysteem>                             AS (ActiefObject) := AfgifteSysteem_rel                                 [GeschiktObject_rel];	
-			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (ActiefObject) := OverigeInstallaties/ventilatie/Installatietype_rel [GeschiktObject_rel];
-			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (ActiefObject) := OverigeInstallaties/zonPV/Installatietype_rel      [GeschiktObject_rel];
-			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (ActiefObject) := OverigeInstallaties/koken/Installatietype_rel      [GeschiktObject_rel];
+			attribute<Classifications/AfgifteSysteem>                             AS (ActiefObject) := AfgifteSysteem_rel                                 [ActiefObject_GeschiktObject_rel];	
+			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (ActiefObject) := OverigeInstallaties/ventilatie/Installatietype_rel [ActiefObject_GeschiktObject_rel];
+			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (ActiefObject) := OverigeInstallaties/zonPV/Installatietype_rel      [ActiefObject_GeschiktObject_rel];
+			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (ActiefObject) := OverigeInstallaties/koken/Installatietype_rel      [ActiefObject_GeschiktObject_rel];
 		}
 		
 		container Bouwdelen := for_each_nedv(
 			Classifications/Bouwdeel/Name,
-			'.../Bouwdelen/' + Classifications/Bouwdeel/Name + '[GeschiktObject_rel]',
+			'.../Bouwdelen/' + Classifications/Bouwdeel/Name + '[ActiefObject_GeschiktObject_rel]',
 			ActiefObject,
 			Classifications/IsolatieNiveau);
 	}
