@@ -195,6 +195,7 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 			import/vbo/gebruiksdoelen/woon
 		&& Studiegebied/selected_per_gemeente[import/vbo/gemeente_rel]
 		&& IsDefined(import/vbo/pand_rel)
+		&& IsDefined(import/pand/woonpand_type[import/vbo/pand_rel]) // TODO: Check with Folckert, see Trello MTA #15 
 		&& import/vbo/oppervlak_filters/wonen >=  10[Units/m2]
 		&& import/vbo/oppervlak_filters/wonen < 1000[Units/m2]
 		)
@@ -207,7 +208,9 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 		attribute<string>                                 label                      := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/adres_key);
 
 		attribute<rdc_meter>                              geometry                   := import/vbo/geometry[nr_OrgEntity];
-		attribute<string>                                 postcode                   := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/postcode);
+		attribute<import/nummeraanduiding>                nummeraanduiding_rel       := rlookup(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie);
+		
+		attribute<string>                                 postcode                   := import/nummeraanduiding/postcode[nummeraanduiding_rel];
 
 		attribute<Units/m2>                               oppervlakte                := import/vbo/oppervlak_filters/wonen[nr_OrgEntity];
 		attribute<string>                                 pand_id                    := import/vbo/pand_id[nr_OrgEntity];
@@ -216,20 +219,18 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
  
 		attribute<Studiegebied/buurt>                     buurt_rel                  := point_in_polygon(geometry, Studiegebied/buurt/geometry);
 
-		attribute<Units/yr_uint16>                        bouwjaar                   := rjoin(pand_id, import/pand/identificatie, import/pand/bouwjaar_gecorrigeerd);
-		attribute<Units/yr_uint16>                        sloopjaar                  := rjoin(pand_id, import/pand/identificatie, import/pand/sloopjaar_gecorrigeerd);
+		attribute<Units/yr_uint16>                        bouwjaar                   := import/pand/bouwjaar_gecorrigeerd [pand_rel];
+		attribute<Units/yr_uint16>                        sloopjaar                  := import/pand/sloopjaar_gecorrigeerd[pand_rel];
 		attribute<Classifications/BouwjaarWoningBestaand> BouwjaarWoningBestaand_rel := isNull(bouwjaar) ? Classifications/BouwjaarWoningBestaand/onbekend : classify(bouwjaar,Classifications/BouwjaarWoningBestaand/ClassBreak);
 
-		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := rjoin(pand_id, import/pand/identificatie, import/pand/woonpand_type);
+		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := import/pand/woonpand_type[pand_rel];
 
 		attribute<classifications/WoningType>             Woningtype_rel     :=
 			(WoningtypeSnapshot_rel == typeringen/WoningtypeSnapshot/V/meergezinspand && nr_verdiepingen > 4b)
 				? classifications/WoningType/V/meergezinspand_hoog
 				: WoningtypeSnapshot_rel[classifications/WoningType]
 		;
-
-
-		attribute<uint8>                                  nr_verdiepingen             := rjoin(pand_id, import/pand/identificatie, import/pand/nr_verdiepingen);
+		attribute<uint8>                                  nr_verdiepingen             := import/pand/nr_verdiepingen[pand_rel];
 		
 		attribute<typeringen/gebruiksdoel>                gebruiksdoel                := const(Invoer/RuimtelijkeData/BAG/typeringen/gebruiksdoel/V/woon,.);
 		
