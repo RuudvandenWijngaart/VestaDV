@@ -112,6 +112,7 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 	}
 	
 	//Placeholder voorbeeld hoe resultscontainer er uit moet zien, voor gebruik in ProductActieveWoning (waarden tijdelijk constant gegeven)
+	
 	container spook_results 
 	{
 		unit<uint32> IAxAW := combine(classifications/IsolatieAmbitie, BouwdeelActieveWoning)
@@ -170,168 +171,97 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 					AWxIA, 
 					Eur)
 				{
-					attribute<Eur> Totaal (...):= ='add('+AsItemList(Classifications/bouwdeel/name)+')';
+					attribute<Eur> Totaal(AWxIA) := ='add('+AsItemList(Classifications/bouwdeel/name)+')';
 				}
 			}
+			attribute<Eur> KI_gv(AWxIA):= Bouwdelen/Ki_gv/Totaal;
+			
+			// hier te berekenen: Funcionele vraag en Aansluitcapaciteit
 			container Functioneel
 			{
-				attribute<GJ_yr> VT (..) := BO/Functioneel/VT[BO_rel];
-				attribute<GJ_yr> KK (..) := BO/Functioneel/KK[BO_rel];
-				attribute<GJ_yr> EA (..) := BO/Functioneel/EA[BO_rel];
-				attribute<GJ_yr> TW (..) := BO/Functioneel/TW[BO_rel];
-				attribute<GJ_yr> KD (..) := BO/Functioneel/KD[BO_rel];
-				attribute<GJ_yr> RV (..) := RV_per_Bouwdeel_now/Totaal * Correction_RV;
+				attribute<GJ_yr> VT (AWxIA) := BO/Functioneel/VT[BO_rel];
+				attribute<GJ_yr> KK (AWxIA) := BO/Functioneel/KK[BO_rel];
+				attribute<GJ_yr> EA (AWxIA) := BO/Functioneel/EA[BO_rel];
+				attribute<GJ_yr> TW (AWxIA) := BO/Functioneel/TW[BO_rel];
+				attribute<GJ_yr> KD (AWxIA) := BO/Functioneel/KD[BO_rel];
+				attribute<GJ_yr> RV (AWxIA) := RV_per_Bouwdeel_now/Totaal * Correction_RV;
 				
-				attribute<Kwh_yr_m2> Kwh_m2 (..) := (RV_per_Bouwdeel_now/Totaal / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / BO/Oppervlakte[BO_rel];
+				attribute<Kwh_yr_m2> Kwh_m2 (AWxIA) := (RV_per_Bouwdeel_now/Totaal / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / BO/Oppervlakte[BO_rel];
 				
-				attribute<ratio> Correction_RV (..) := 1.0[ratio] + Invoer/Kengetallen/Constanten/Rebound_A * Invoer/Kengetallen/Constanten/Rebound_B ^ Kwh_m2;
+				attribute<ratio> Correction_RV (AWxIA) := 1.0[ratio] + Invoer/Kengetallen/Constanten/Rebound_A * Invoer/Kengetallen/Constanten/Rebound_B ^ Kwh_m2;
 			
 				container BouwdeelIsolatie_rel := for_each_nedv(
 					classifications/Bouwdeel/name,
 					'not(Bouwdelen/IsChangedNow/'+classifications/Bouwdeel/name+
 					')? rlookup('+quote(classifications/Bouwdeel/name+ '_')+' + Classifications/IsolatieNiveau/name[BO/Bouwdelen/Isolatie/' + classifications/Bouwdeel/name + '[BO_rel][Classifications/IsolatieNiveau]], Classifications/BouwdeelIsolatie/name)
 					: rlookup('+quote(classifications/Bouwdeel/name+ '_')+' + Classifications/IsolatieNiveau/name[Bouwdelen/Isolatie/' + classifications/Bouwdeel/name + '[Classifications/IsolatieNiveau]], Classifications/BouwdeelIsolatie/name)',
-					..,
+					AWxIA,
 					Classifications/BouwdeelIsolatie);
 				
 				container RV_per_Bouwdeel_now := for_each_nedv(
 					classifications/Bouwdeel/name,
 					'BO/Functioneel/RV_N1_per_Bouwdeel_now/'+classifications/Bouwdeel/name+'[BO_rel] * (1.0[ratio] - makedefined(Classifications/IsolatieMaatregel/R_RV/MG[Classifications/BouwdeelIsolatie/IsolatieMaatregel_rel[BouwdeelIsolatie_rel/'+classifications/Bouwdeel/name+']] / 100[percent], 1.0[ratio]))',
-					..,
+					AWxIA,
 					GJ_yr) //TODO: R_RV afhankelijk van profiel
 				{
 					attribute<GJ_yr> Totaal (...):= ='add('+AsItemList(Classifications/bouwdeel/name)+')';
 				}
 			}
+			//indeling in schillabels o.b.v. functionele vraag -> herbereken met nieuwe Vrv
+			attribute<Classifications/Schillabel> Schillabel_rel (AWxIA) := BO/Schillabel_rel[BO_rel]; 
 			
-			
-			
-			container Aansluitcapaciteit;
-			// hier te berekenen: Funcionele vraag en Aansluitcapaciteit
-		}
-		
-		attribute<bool> Inactief(BO) := not(not(BO/Afbouw) && BO/Activatie/BouwdeelActief);
-		unit<uint32> Inactief_selected := select_unit(Inactief);
-		
-		unit<uint32> AWxIAuIW := union_unit(AWxIA, Inactief_selected)
-		,	Descr = "union van AWxIA met niet overlappende niet bouwdeel geactiveerde woningen"
-		{
-			attribute<BO> BO_rel := union_data(AWxIAuIW, AWxIA/BO_rel, select_data(Inactief_selected, ID(BO)));
-			
-			attribute<Classifications/IsolatieAmbitie> IsolatieAmbitie_rel := union_data(AWxIAuIW, AWxIA/IsolatieAmbitie_rel, const((0/0)[Classifications/IsolatieAmbitie], Inactief_selected) );
-			
-			container Bouwdelen
+			container Aansluitcapaciteit //TODO: later invullen (nu dummygetal)
 			{
-				container Isolatie := for_each_nedv(classifications/Bouwdeel/name
-				,	replace(
-						'union_data(AWxIAuIW, AWxIA/Bouwdelen/Isolatie/@BD, select_data(Inactief_selected, BO/Bouwdelen/Isolatie/@BD))'
-					,	'@BD', classifications/Bouwdeel/name
-					)
-				,	AWxIAuIW,  Classifications/IsolatieNiveau
-				);
-				
-				container Ki_gv := for_each_nedv(
-					classifications/Bouwdeel/name,
-					'union_data(AWxIAuIW, AWxIA/Bouwdelen/Ki_gv/'+classifications/Bouwdeel/name+', const(0.0[Eur], Inactief_selected))',	
-					AWxIAuIW,
-					Eur)
-				{
-					attribute<Eur> Totaal (...):= ='add('+AsItemList(Classifications/bouwdeel/name)+')';
-				}
-				
+				attribute<kW> RV (AWxIA) := functioneel/RV * 0.25[kW_GJ_yr];
+				attribute<kW> KD (AWxIA) := BO/AansluitCapaciteit/KD[BO_rel];
+				attribute<kW> TW (AWxIA) := BO/AansluitCapaciteit/TW[BO_rel];
 			}
-			
-		}
+		}	
 	}
-	
-	container results := for_each_ne(classifications/IsolatieAmbitie/name, 'ResultsT(classifications/IsolatieAmbitie/V/'+classifications/IsolatieAmbitie/name+')');
-	template resultsT
-	{
-		parameter<classifications/IsolatieAmbitie> IsolatieAmbitie_rel;
 		
-		attribute<spook_results/AWxIA> AWxIA_rel(BouwdeelActieveWoning) := combine_data(spook_results/AWxIA, ID(BouwdeelActieveWoning), IsolatieAmbitie_rel);
-		
-		//uitkomsten per bouwdeel per ambitieniveau
-		container bouwdelen := for_each_nedv(classifications/Bouwdeel/name,
-			replace('spook_results/AWxIA/Bouwdelen/Isolatie/@BD[AWxIA_rel]'
-			,	'@BD', classifications/Bouwdeel/name)
-		,	BouwdeelActieveWoning, classifications/IsolatieNiveau
-		);
-			
-		
-		//kosten van isolatiemaatregelen indien dit ambitieniveau wordt toegepast
-		container kosten := for_each_nedv(classifications/Bouwdeel/name,
-			replace('spook_results/AWxIA/Bouwdelen/Ki_gv/@BD[AWxIA_rel]',	'@BD', classifications/Bouwdeel/name)
-		,	BouwdeelActieveWoning, eur)
-		{
-			attribute<eur> Ki_gv(BouwdeelActieveWoning) := ='add('+AsItemList(classifications/Bouwdeel/name)+')';
-		}
-		
-		//nieuwe functionele vraag indien dit ambitieniveau wordt toegepast
-		container functioneel
-		{
-			attribute<GJ_yr> RV (BouwdeelActieveWoning) := spook_results/AWxIA/functioneel/RV[AWxIA_rel];
-			attribute<GJ_yr> KD (BouwdeelActieveWoning) := const( 7.1[GJ_yr], BouwdeelActieveWoning);
-			attribute<GJ_yr> VT (BouwdeelActieveWoning) := const( 1.5[GJ_yr], BouwdeelActieveWoning);
-			
-			attribute<GJ_yr> TW (BouwdeelActieveWoning) := BO/Functioneel/TW[nr_orgentity];
-			attribute<GJ_yr> EA (BouwdeelActieveWoning) := BO/Functioneel/EA[nr_orgentity];
-			attribute<GJ_yr> KK (BouwdeelActieveWoning) := BO/Functioneel/KK[nr_orgentity];
-			
-			attribute<Classifications/Schillabel> Schillabel_rel (BouwdeelActieveWoning) := BO/Schillabel_rel[nr_orgentity]; //indeling in schillabels o.b.v. functionele vraag -> herbereken met nieuwe Vrv
-		}
-		container AansluitCapaciteit
-		{
-			attribute<kW> RV (BouwdeelActieveWoning) := functioneel/RV * 0.25[kW_GJ_yr]; //later invullen (nu dummygetal)
-			attribute<kW> KD (BouwdeelActieveWoning) := BO/AansluitCapaciteit/KD[nr_orgentity];
-			attribute<kW> TW (BouwdeelActieveWoning) := BO/AansluitCapaciteit/TW[nr_orgentity];
-		}
-	}
-	
 	//TODO: voor woningen die alleen actief zijn op bouwdelen en niet op producten: hier afweging maken definitieve allocatie
-	attribute<bool> ProductActief := BO/Activatie/ProductActief[nr_orgentity];
+	attribute<bool> ProductActief := BO/Activatie/ProductActief[BouwdeelActieveWoning/BO_rel];
 	unit<uint32> ProductInactieveBO := subset(not(ProductActief))
 	{
-		attribute<string> code := BouwdeelActieveWoning/code[nr_orgentity];
+		attribute<BouwdeelActieveWoning> BouwdeelActieveWoning_rel := nr_OrgEntity;
+		attribute<BO> BO_rel := BouwdeelActieveWoning/BO_rel[BouwdeelActieveWoning_rel];
+		
 		container Afweging
 		{
-			attribute<Classifications/IsolatieAmbitie> Ambitie_chosen (..) := const(Classifications/IsolatieAmbitie/V/geen, ProductInactieveBO); //Verwijzen naar gekozen niveau (nu constant als placeholder)
-			attribute<Classifications/Schillabel>      Schillabel_rel (..) := ='merge(Ambitie_chosen, Classifications/Schillabel, '+AsItemList('Results/'+Classifications/IsolatieAmbitie/name+'/functioneel/Schillabel_rel[nr_orgentity]')+')';
+			attribute<Classifications/IsolatieAmbitie> Ambitie_chosen (ProductInactieveBO) := const(Classifications/IsolatieAmbitie/V/geen, ProductInactieveBO); //Verwijzen naar gekozen niveau (TODO: nu constant als placeholder)
+			attribute<spook_results/AWxIA> spook_results_rel(ProductInactieveBO) := combine_data(spook_results/AWxIA, ID(ProductInactieveBO), Ambitie_chosen);
+			attribute<Classifications/Schillabel>      Schillabel_rel (ProductInactieveBO) := spook_results/AWxIA/Schillabel_rel[spook_results_rel];
 			
 			container bouwdelen //uitkomsten per bouwdeel per ambitieniveau
 			{
 				container isolatie := for_each_nedv(
 					Classifications/Bouwdeel/name,
-					'merge(Ambitie_chosen,Classifications/IsolatieNiveau, '+
-						replace(AsItemList( replace('Results/@IA@/Bouwdelen/@BD@[nr_orgentity]', '@IA@', Classifications/IsolatieAmbitie/name)), '@BD@', Classifications/Bouwdeel/name )+')',
-					...,
+					replace('spook_results/AWxIA/Bouwdelen/Isolatie/@BD@[spook_results_rel]', '@BD@', Classifications/Bouwdeel/name ),
+					ProductInactieveBO,
 					Classifications/IsolatieNiveau);
 			}
 			container kosten := for_each_nedv(
 					Classifications/Bouwdeel/name,
-					'merge(Ambitie_chosen,Eur, '+
-						replace(AsItemList( replace('Results/@IA@/kosten/@BD@[nr_orgentity]', '@IA@', Classifications/IsolatieAmbitie/name)), '@BD@', Classifications/Bouwdeel/name )+')',
+					replace('spook_results/AWxIA/Bouwdelen/Ki_gv/@BD@[spook_results_rel]', '@BD@', Classifications/Bouwdeel/name ),
 					..,
 					Eur)
 			{
-				attribute<eur> Ki_gv (...) := ='merge(Ambitie_chosen, eur, '+AsItemList('Results/'+Classifications/IsolatieAmbitie/name+'/kosten/Ki_gv')+')';
+				attribute<eur> Ki_gv (...) := spook_results/AWxIA/Ki_gv[spook_results_rel];
 			}
 			container functioneel := for_each_nedv(
 					Classifications/FunctioneleVraag/name,
-					'merge(Ambitie_chosen,GJ_yr, '+
-						replace(AsItemList( replace('Results/@IA@/functioneel/@PT@[nr_orgentity]', '@IA@', Classifications/IsolatieAmbitie/name)), '@PT@', Classifications/FunctioneleVraag/name )+')',
+					replace('spook_results/AWxIA/functioneel/@PT@[spook_results_rel]', '@PT@', Classifications/FunctioneleVraag/name ),
 					..,
 					GJ_yr);
 			container AansluitCapaciteit := for_each_nedv(
 					Classifications/ProductType/name,
-					'merge(Ambitie_chosen,kW, '+
-						replace(AsItemList( replace('Results/@IA@/AansluitCapaciteit/@PT@[nr_orgentity]', '@IA@', Classifications/IsolatieAmbitie/name)), '@PT@', Classifications/ProductType/name )+')',
+					replace('spook_results/AWxIA/AansluitCapaciteit/@PT@[spook_results_rel]', '@PT@', Classifications/ProductType/name ),
 					..,
 					kW);
 		}
 		container ResultsPerBO
 		{
-			attribute<uint32>                     ProductInactieveBO_rel (BO) := rlookup(BO/code, ProductInactieveBO/code);
+			attribute<uint32>                     ProductInactieveBO_rel (BO) := invert(ProductInactieveBO/BO_rel);
 			attribute<Classifications/Schillabel> Schillabel_rel         (BO) := Afweging/Schillabel_rel[ProductInactieveBO_rel];
 			
 			container bouwdelen
