@@ -1,0 +1,159 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2021 - Planbureau voor de Leefomgeving                  //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+Template FunctioneelToMetervraag
+{
+	unit<uint32> VraagBO;
+	
+	container SPF := for_each_nedv(Classifications/Product/name
+			, replace('Classifications/Performance/SPF_@S[PerformancePerProduct/@P]', '@P', Classifications/Product/name, '@S', Classifications/Product/ServiceName)
+			, VraagBO
+			, float64
+		)
+	{	
+		
+		//===== Performance_rel geeft per BebouwingsObject of per SchilLabel voor ieder Product het performance profiel obv (InstallatieNaam, SchilLabel of x, ProductType {RV, TW of K} ) =====
+		container Performance_key1 := for_each_nedv(Classifications/Product/name
+			, 'Classifications/Installatie/name[VraagBO/InstallatiePerProduct/'+Classifications/Product/name+']+''.'' + Classifications/SchilLabel/name[VraagBO/Schillabel_rel] + ''.' + Classifications/Product/TypeName+''''
+			, VraagBO
+			, string
+			)
+		 , isHidden = "True";
+	
+		container Performance_key2 := for_each_nedv(Classifications/Product/name
+			, 'Classifications/Installatie/name[VraagBO/InstallatiePerProduct/'+Classifications/Product/name+']+''.x.' + Classifications/Product/TypeName+''''
+			, VraagBO
+			, string
+			)
+		 , isHidden = "True";
+		 
+		container PerformancePerProduct := for_each_nedv(Classifications/Product/name
+			,replace(
+				'MakeDefined('
+					'rlookup(Performance_key1/@P, Classifications/Performance/code), '
+					'rlookup(Performance_key2/@P, Classifications/Performance/code),'
+					'rlookup(''geen.x.x'', Classifications/Performance/code)'
+				')'
+				, '@P'
+				, Classifications/Product/name)
+			, VraagBO
+			, Classifications/Performance
+			);
+	}
+	
+	container ZonB
+	{
+		attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> Installatietype_rel (VraagBO) := VraagBO/InstallatiePerProduct/DK;
+			
+		attribute<m2>    Area      (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Dakaandeel [Installatietype_rel] * (VraagBO/Bouwdelen/DS + VraagBO/Bouwdelen/DP);
+		attribute<kW>    P         (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Pdak_opp   [Installatietype_rel] * Area;
+		attribute<GJ_yr> Oj_TW_max (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Opbr_cap_tw[Installatietype_rel] * P;
+		attribute<GJ_yr> Oj_TW     (VraagBO) := min_elem(Oj_TW_max, VraagBO/Functioneel/TW);
+	}
+	
+	container Functioneel_per_product
+	{
+		attribute<float64> RVb (VraagBO) := ='VraagBO/Functioneel/RV *        Classifications/Performance/P_Vol[SPF/PerformancePerProduct/RVb] ';
+		attribute<float64> RVp (VraagBO) := ='VraagBO/Functioneel/RV * (1.0 - Classifications/Performance/P_Vol[SPF/PerformancePerProduct/RVb])';
+		attribute<float64> TWb (VraagBO) := ='(VraagBO/Functioneel/TW - ZonB/Oj_TW) *        Classifications/Performance/P_Vol[SPF/PerformancePerProduct/TWb] ';
+		attribute<float64> TWp (VraagBO) := ='(VraagBO/Functioneel/TW - ZonB/Oj_TW) * (1.0 - Classifications/Performance/P_Vol[SPF/PerformancePerProduct/TWb])';
+		attribute<float64> KDb (VraagBO) := ='VraagBO/Functioneel/KD *        Classifications/Performance/P_Vol[SPF/PerformancePerProduct/KDb] ';
+		attribute<float64> KDp (VraagBO) := ='VraagBO/Functioneel/KD * (1.0 - Classifications/Performance/P_Vol[SPF/PerformancePerProduct/KDb])';
+	}
+	
+	container metervraag_per_product := for_each_nedv(Classifications/Product/name
+		, replace('Functioneel_per_product/@P / SPF/@P', '@P', Classifications/Product/name)
+		, VraagBO
+		, float64
+	);
+
+	container BemeterdeGebouwInput_rel := for_each_nedv(Classifications/Product/name
+		, 'rlookup(Classifications/Performance/Input_rel, Classifications/BemeterdeGebouwInput/nr_OrgEntity)[SPF/PerformancePerProduct/'+Classifications/Product/name+']'
+		, VraagBO
+		, Classifications/BemeterdeGebouwInput
+	);
+	
+	container Expr_impl 
+	{
+		attribute<string> MeterVraagExpr_asVector(Classifications/Product) := 'metervraag_base/' + Classifications/Product/name;
+
+		attribute<string> aggr_OudLabel(Classifications/BemeterdeGebouwInput) := 
+			replace('add('++AsItemList(replace('BemeterdeGebouwInput_rel/@P == Classifications/BemeterdeGebouwInput/V/@I ? metervraag_per_product/@P: 0[GJ_yr]', '@P', Classifications/Product/name))+')'
+			, '@I', Classifications/BemeterdeGebouwInput/name
+			);
+	}
+
+	container metervraag_per_input := for_each_nedv(Classifications/BemeterdeGebouwInput/name
+		, Expr_impl/aggr_OudLabel
+		, VraagBO
+		, GJ_yr);
+	
+	container Koken
+	{
+		attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> Installatietype_rel (VraagBO) := VraagBO/InstallatiePerProduct/KK;
+			
+		attribute<Classifications/BemeterdeGebouwInput> BemeterdeGebouwInput_rel (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/BemeterdeGebouwInput_rel [Installatietype_rel];
+		attribute<ratio> SPF     (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/SPF[Installatietype_rel];
+		attribute<GJ_yr> Vj_elek (VraagBO) := float64(BemeterdeGebouwInput_rel == Classifications/BemeterdeGebouwInput/V/e)  * (VraagBO/functioneel/KK / SPF);
+		attribute<GJ_yr> Vj_gas  (VraagBO) := float64(BemeterdeGebouwInput_rel ==Classifications/BemeterdeGebouwInput/V/Gas) * (VraagBO/functioneel/KK / SPF);
+	}
+		
+	container eEffect
+	{
+		container volume := for_each_nedv(Classifications/Product/name
+			, replace(
+				'Classifications/Performance/eEffect_vol[SPF/PerformancePerProduct/@P] * metervraag_per_product/@P'
+				, '@P'
+				, Classifications/Product/name
+			  )
+			, VraagBO
+			, GJ_yr
+		)
+		{
+			attribute<GJ_yr> Vj_elek (VraagBO) := ='add('+AsItemList(Classifications/Product/name)+')';
+		}
+
+		container capaciteit := for_each_nedv(Classifications/Installatie/name
+		, replace(
+			'add('+
+				AsItemList(
+					replace('Classifications/Performance/eEffect_cap[SPF/PerformancePerProduct/@P] * float64(VraagBO/InstallatiePerProduct/@P == Classifications/Installatie/V/@I)'
+					,	'@P', Classifications/Product/name
+					)
+				)+
+			') * CapaciteitPerInstallatie/@I'
+			, '@I', Classifications/Installatie/name)
+			, VraagBO
+			, GJ_yr
+		)
+		{
+			attribute<GJ_yr> Vj_elek(VraagBO) := ='add('+AsItemList(Classifications/Installatie/name)+')';
+		}
+		
+		container ventilatie
+		{
+			attribute<ratio> SPF     (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/SPF[VraagBO/InstallatiePerProduct/VT];
+			attribute<GJ_yr> Vj_elek (VraagBO) := VraagBO/functioneel/VT / SPF;
+		}
+		
+		container ZonPV
+		{
+			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> Installatietype_rel (VraagBO) := VraagBO/InstallatiePerProduct/DK;
+			
+			attribute<m2>    Area    (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Dakaandeel[Installatietype_rel] * (VraagBO/Bouwdelen/DS + VraagBO/Bouwdelen/DP);
+			attribute<kW>    P       (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Pdak_opp  [Installatietype_rel] * Area;
+			attribute<GJ_yr> Oj_elek (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Opbr_cap_e[Installatietype_rel] * P;
+		}
+			
+		attribute<GJ_yr> Vj_elek (VraagBO) := volume/Vj_elek + capaciteit/Vj_elek + ventilatie/Vj_elek - ZonPV/Oj_elek;
+	}
+	
+	container result := metervraag_per_input
+	{
+		attribute<GJ_yr> e   (VraagBO) := metervraag_per_input/e   + eEffect/Vj_elek;
+		attribute<GJ_yr> gas (VraagBO) := metervraag_per_input/gas + Koken/Vj_gas;
+	}
+}
