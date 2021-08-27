@@ -1,0 +1,40 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2021 - Planbureau voor de Leefomgeving                  //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+Template BerekenFunctioneel
+{
+	unit<uint32> BOdomain;
+	unit<uint32> PrevState;
+	attribute<PrevState> PrevState_rel (BOdomain);
+
+	attribute<GJ_yr> VT (BOdomain) := PrevState/Functioneel_base/VT[PrevState_rel];
+	attribute<GJ_yr> KK (BOdomain) := PrevState/Functioneel_base/KK[PrevState_rel];
+	attribute<GJ_yr> EA (BOdomain) := PrevState/Functioneel_base/EA[PrevState_rel];
+	attribute<GJ_yr> TW (BOdomain) := PrevState/Functioneel_base/TW[PrevState_rel];
+	attribute<GJ_yr> KD (BOdomain) := PrevState/Functioneel_base/KD[PrevState_rel];
+	attribute<GJ_yr> RV (BOdomain) := RV_per_Bouwdeel_now/Totaal * Correction_RV;
+	
+	attribute<Kwh_yr_m2> Kwh_m2 (BOdomain) := (RV_per_Bouwdeel_now/Totaal / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / PrevState/Oppervlakte[PrevState_rel];
+	
+	attribute<ratio> Correction_RV (BOdomain) := 1.0[ratio] + Invoer/Kengetallen/Constanten/Rebound_A * Invoer/Kengetallen/Constanten/Rebound_B ^ Kwh_m2;
+
+	container BouwdeelIsolatie_rel := for_each_nedv(
+		classifications/Bouwdeel/name,
+		'not(Bouwdelen/IsChangedNow/'+classifications/Bouwdeel/name+
+		')? rlookup('+quote(classifications/Bouwdeel/name+ '_')+' + Classifications/IsolatieNiveau/name[PrevState/Bouwdelen/Isolatie/' + classifications/Bouwdeel/name + '[PrevState_rel][Classifications/IsolatieNiveau]], Classifications/BouwdeelIsolatie/name)
+		: rlookup('+quote(classifications/Bouwdeel/name+ '_')+' + Classifications/IsolatieNiveau/name[Bouwdelen/Isolatie/' + classifications/Bouwdeel/name + '[Classifications/IsolatieNiveau]], Classifications/BouwdeelIsolatie/name)',
+		BOdomain,
+		Classifications/BouwdeelIsolatie);
+	
+	container RV_per_Bouwdeel_now := for_each_nedv(
+		classifications/Bouwdeel/name,
+		'PrevState/Functioneel_base/RV_N1_per_Bouwdeel_now/'+classifications/Bouwdeel/name+'[PrevState_rel] * (1.0[ratio] - makedefined(Classifications/IsolatieMaatregel/R_RV/MG[Classifications/BouwdeelIsolatie/IsolatieMaatregel_rel[BouwdeelIsolatie_rel/'+classifications/Bouwdeel/name+']] / 100[percent], 1.0[ratio]))',
+		BOdomain,
+		GJ_yr) //TODO: R_RV afhankelijk van profiel
+	{
+		attribute<GJ_yr> Totaal (BOdomain):= ='add('+AsItemList(Classifications/bouwdeel/name)+')';
+	}
+}
