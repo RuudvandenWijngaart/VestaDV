@@ -124,10 +124,15 @@ template SubsetGebouwOptieT
 	attribute<Eur   > Ki_LO       (GeschiktObject) := =replace(KX_expr, '@X', 'i');
 	attribute<Eur   > Ki30_LO     (GeschiktObject) := =replace(KX_expr, '@X', 'i30');
 	attribute<Eur   > Ki20_LO     (GeschiktObject) := =replace(KX_expr, '@X', 'i20');
-	attribute<Eur   > Ki15_LO     (GeschiktObject) := =replace(KX_expr, '@X', 'i15');		
-	attribute<Eur_yr> KJ_OH_LO    (GeschiktObject) := =replace(KX_expr, '@X', 'j_OH');
-	attribute<Eur_yr> Kj_Adm_LO   (GeschiktObject) := =replace(KX_expr, '@X', 'j_Adm');
+	attribute<Eur   > Ki15_LO     (GeschiktObject) := =replace(KX_expr, '@X', 'i15');	
 	
+	container Jaarlijks := Kj_verbruik
+	{	
+		attribute<Eur_yr> KJ_OH_LO       (GeschiktObject) := =replace(KX_expr, '@X', 'j_OH');
+		attribute<Eur_yr> Kj_Adm_LO      (GeschiktObject) := =replace(KX_expr, '@X', 'j_Adm');
+		attribute<Eur_yr> Kj_Vastrecht_g (GeschiktObject) := VastRechtBijdrageG; // bijdrage en heffingskortingen voor E, MT en LT zijn voor alle GebouwOpties hetzelfde, dus niet relevant voor de afweging.
+
+	}
 	
 	attribute<Eur   > Ki_gv       (GeschiktObject) := ActiefObject/Ki_GV[GeschiktObject/ActiefObject_rel];
 
@@ -161,7 +166,6 @@ template SubsetGebouwOptieT
 			}
 			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_rel (GeschiktObject) := Afweging/Installatietype_def;
 		}
-		
 		container zonB
 		{
 			container afweging
@@ -242,6 +246,10 @@ template SubsetGebouwOptieT
 		}
 	}
 	
+	attribute<Eur> Ki_DK (GeschiktObject) := OverigeInstallaties/ZonB/Afweging/Ki_zonB + OverigeInstallaties/ZonPV/Afweging/Ki_zonPV;
+	attribute<Eur> Ki_KK (GeschiktObject) := OverigeInstallaties/Koken/Afweging/Ki_koken;
+	attribute<Eur> Ki_VT (GeschiktObject) := OverigeInstallaties/Ventilatie/Afweging/Ki_vent;
+	
 	container metervraag := Func2Meter/result;
 	
 	
@@ -263,24 +271,25 @@ template SubsetGebouwOptieT
 		parameter<Eur_GJ> Pm_H2       := Pj_H2;
 	}
 
-	attribute<Eur_yr> Kj_verbruik(GeschiktObject) :=
-	  meterprijzen/Pj_e        *  metervraag/e
-	+ meterprijzen/Pj_gas      *  metervraag/gas
-	+ meterprijzen/Pj_biomassa *  metervraag/biomassa
-	+ meterprijzen/Pj_olie     *  metervraag/olie
-	+ meterprijzen/Pj_pellets  *  metervraag/pellets
-	+ meterprijzen/Pj_H2       *  metervraag/H2;
-
-	attribute<Eur_yr> Km_verbruik(GeschiktObject) :=
-	  meterprijzen/Pm_e        *  metervraag/e
-	+ meterprijzen/Pm_gas      *  metervraag/gas
-	+ meterprijzen/Pm_biomassa *  metervraag/biomassa
-	+ meterprijzen/Pm_olie     *  metervraag/olie
-	+ meterprijzen/Pm_pellets  *  metervraag/pellets
-	+ meterprijzen/Pm_H2       *  metervraag/H2;
+	container Kj_verbruik := for_each_nedv(
+		'Kj_' + Classifications/BemeterdeGebouwInput/name,
+		replace('meterprijzen/Pj_@E@ * metervraag/@E@', '@E@', Classifications/BemeterdeGebouwInput/name),
+		GeschiktObject,
+		Eur_yr)
+		{
+			attribute<Eur_yr> Totaal (GeschiktObject) := ='add('+AsItemList('Kj_'+Classifications/BemeterdeGebouwInput/name)+')';
+			attribute<Eur_yr> Kj_elek (GeschiktObject) := Kj_e;
+		}
+	container Km_verbruik := for_each_nedv(
+		Classifications/BemeterdeGebouwInput/name,
+		replace('meterprijzen/Pm_@E@ * metervraag/@E@', '@E@', Classifications/BemeterdeGebouwInput/name),
+		GeschiktObject,
+		Eur_yr)
+		{
+			attribute<Eur_yr> Totaal (GeschiktObject) := ='add('+AsItemList(Classifications/BemeterdeGebouwInput/name)+')';
+		}
 
 	attribute<Eur_yr> VastRechtBijdrageG (GeschiktObject) := BO/nrAansluitingen[GeschiktObject/BO_rel] * float64(metervraag/gas != 0[GJ_yr])* Kengetallen/Infra/jaarlijksVast_g, Descr = "VastRechtBijdrage voor aansluiting op het gasnet";
-	attribute<Eur_yr> Kj_Vastrecht       (GeschiktObject) := VastRechtBijdrageG; // bijdrage en heffingskortingen voor E, MT en LT zijn voor alle GebouwOpties hetzelfde, dus niet relevant voor de afweging.
 	
 	attribute<Eur_yr> Kji_GV   (GeschiktObject) := Ki_GV   * NcwRefs/_30/AnnualisationFactor;
 	attribute<Eur_yr> Kji_LTAS (GeschiktObject) := Ki_LTAS * NcwRefs/_30/AnnualisationFactor;
@@ -299,20 +308,20 @@ template SubsetGebouwOptieT
 	parameter<float64> S_gv := (1.0 - EIA_Opties/Rs_GebouwVerbetering), Descr = "eigen aandeel investering op gebouwverbetering na aftrek van subsidies";
 	parameter<float64> S_lo := (1.0 - EIA_Opties/Rs_LokaleOpwekking  ), Descr = "eigen aandeel investering op lokale opwekking na aftrek van subsidies";
 
-	attribute<Eur> Oi30_s_LO (GeschiktObject) := Ki30_LO * EIA_Opties/Rs_LokaleOpwekking;
-	attribute<Eur> Oi20_s_LO (GeschiktObject) := Ki20_LO * EIA_Opties/Rs_LokaleOpwekking;
-	attribute<Eur> Oi15_s_LO (GeschiktObject) := Ki15_LO * EIA_Opties/Rs_LokaleOpwekking; 
-	attribute<Eur> Oi_s_GV   (GeschiktObject) := Ki_gv   * EIA_Opties/Rs_GebouwVerbetering; 
+	attribute<Eur> Oi30_LO (GeschiktObject) := Ki30_LO * EIA_Opties/Rs_LokaleOpwekking;
+	attribute<Eur> Oi20_LO (GeschiktObject) := Ki20_LO * EIA_Opties/Rs_LokaleOpwekking;
+	attribute<Eur> Oi15_LO (GeschiktObject) := Ki15_LO * EIA_Opties/Rs_LokaleOpwekking; 
+	attribute<Eur> Oi_GV   (GeschiktObject) := Ki_gv   * EIA_Opties/Rs_GebouwVerbetering; 
 	
 	attribute<Eur_yr> Kj_gv_incentive (GeschiktObject) := 
-		  Kj_verbruik            * EIA_Opties/R_VerbruikSplitIncentiveFactor
-		+ Kj_vastrecht           * EIA_Opties/R_VastrechtSplitIncentiveFactor;
+		  Kj_verbruik/totaal       * EIA_Opties/R_VerbruikSplitIncentiveFactor
+		+ jaarlijks/Kj_vastrecht_g * EIA_Opties/R_VastrechtSplitIncentiveFactor;
 
 	attribute<Eur_yr> kosten_j (GeschiktObject) :=
 		  Kji_GV * S_gv          * BTW_Factor_gv
 		+ Kji_LO * S_lo          * BTW_Factor
 		+ Kji_LTAS               * BTW_Factor
-		+ (Kj_OH_LO + Kj_Adm_LO) * BTW_Factor
+		+ (jaarlijks/Kj_OH_LO + jaarlijks/Kj_Adm_LO) * BTW_Factor
 		+ Kj_gv_incentive        * BTW_Factor
 		;
 
@@ -320,8 +329,8 @@ template SubsetGebouwOptieT
 		  Kmi_GV
 		+ Kmi_LO
 		+ Kmi_LTAS
-		+ (Kj_OH_LO + Kj_Adm_LO)
-		+ Km_verbruik;
+		+ (jaarlijks/Kj_OH_LO + jaarlijks/Kj_Adm_LO)
+		+ Km_verbruik/totaal;
 		
 	attribute<Eur_yr> kosten (GeschiktObject) := =(LocatieSpecifiekeOpties/GebouwOpties/KiesMaatschappelijk) ? 'kosten_m' : 'kosten_j';
 
@@ -340,9 +349,12 @@ template SubsetGebouwOptieT
 				Eur);
 		container jaarlijks := for_each_nedv(
 				Classifications/GebouwOptie_jaarlijks/name,
-				replace('.../@PT@', '@PT@', Classifications/GebouwOptie_jaarlijks/name ),
+				replace('.../jaarlijks/@PT@', '@PT@', Classifications/GebouwOptie_jaarlijks/name ),
 				GeschiktObject,
-				Eur_yr);
+				Eur_yr)
+				{
+					attribute<Eur_yr> Kj_elek (GeschiktObject) := Kj_verbruik/e;
+				}
 				
 		container metervraag := Func2Meter/result;
 	}
