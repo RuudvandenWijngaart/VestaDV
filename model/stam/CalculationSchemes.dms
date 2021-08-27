@@ -11,7 +11,6 @@ container CalculationSchemes: Using = "Units;Geography"
 	#include <NieuwbouwUtilOperaties.dms>
 	#include <LegeBebouwingsComponent.dms>
 	#include <BebouwingsOperaties.dms>
-	template BebouwingsComponentDoetNietMee;
 	#include <StartingStateComponent.dms>
 	#include <TussenResultaten.dms>	
 	#include <Payments.dms>
@@ -20,8 +19,15 @@ container CalculationSchemes: Using = "Units;Geography"
 	#include <StateNaAllocatieComponent.dms>
 	#include <AllocatieResultatenComponent.dms>
 	#include <BerekenFunctioneel.dms>
-	#include <FunctioneelToMetervraag.dms>
-	
+	#include <FunctioneelToMetervraag.dms>	#include <EnergiePrijzen.dms>
+	#include <KostenBatenSchema.dms>
+	#include <KostenWoningen.dms>
+	#include <KostenUtiliteit.dms>
+	#include <NcwSchema.dms>
+	#include <AanbodOpties.dms>
+	#include <Rapportage.dms>
+
+	// template om vraag naar warmte en koude te berekenenen voor gebiedsopties
 	template WarmteVraagT
 	{
 		// begin case parameters
@@ -53,7 +59,7 @@ container CalculationSchemes: Using = "Units;Geography"
 		attribute<m2>     Oppervlakte        (BO) := BeschikbaarheidsFactor * BO/Oppervlakte;
 
 		//Vraag
-		attribute<GJ_yr>  V_RV               (BO) := BeschikbaarheidsFactor * BO/BebouwingsComponent_UpRef/Functioneel2/V_RV;
+		attribute<GJ_yr>  V_RV               (BO) := BeschikbaarheidsFactor * BO/BebouwingsObjectMetGebouwOptie/Functioneel/RV;
 		attribute<GJ_yr>  V_TW               (BO) := BeschikbaarheidsFactor * BO/Functioneel/TW;
 		attribute<GJ_yr>  V_K                (BO) := BeschikbaarheidsFactor * BO/Functioneel/K;
 		attribute<GJ_yr>  V_Warmte           (BO) := V_RV + V_TW;
@@ -66,11 +72,7 @@ container CalculationSchemes: Using = "Units;Geography"
 		attribute<Eur>    Oi_AansluitBijdrage(BO) := BeschikbaarheidsFactor * BO/Opbrengsten/AansluitBijdrageT;
 	}
 
-	#include <EnergiePrijzen.dms>
-	#include <KostenBatenSchema.dms>
-	#include <KostenWoningen.dms>
-	#include <KostenUtiliteit.dms>
-
+	// template om de kosten van leidingen te berekenenen in euro per meter, afhankelijke van capaciteit
 	template BuisKosten
 	{
 		// begin case parameters
@@ -80,10 +82,11 @@ container CalculationSchemes: Using = "Units;Geography"
 
 		attribute<Eur_m> K_min (LeidingDomein) := Capaciteit > 0[MW] ? 400[Eur_m] + 210[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.5 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
 		attribute<Eur_m> K_max (LeidingDomein) := Capaciteit > 0[MW] ? 800[Eur_m] + 200[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.6 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
-		attribute<Eur_m> K_m   (LeidingDomein) := (K_min * Schuiven/KostenMin + K_max * Schuiven/KostenMax) * Leercurves/MTnet/curve;
-		attribute<Eur_m> aK_m  (LeidingDomein) := Invoer/Kengetallen/Constanten/Omwegfactor * K_m; // K_hoofd_m incl omwegfactor
+		attribute<Eur_m> K_m   (LeidingDomein) := (K_min * Schuiven/KostenMin + K_max * Schuiven/KostenMax) * Leercurves/MTnet/curve, descr = "kosten per meter, exclusief omwegfactor";
+		attribute<Eur_m> aK_m  (LeidingDomein) := Invoer/Kengetallen/Constanten/Omwegfactor * K_m, descr = "kosten per meter, inclusief omwegfactor";
 	}
 	
+	// template om leercurve te bepalen zoals die geldig is in een specifiek zichtjaar
 	template MaakCurve
 	{
 		//parameters
@@ -95,10 +98,6 @@ container CalculationSchemes: Using = "Units;Geography"
 		parameter<ratio>   Base     := CurveMin * Schuiven/CurveMin + CurveMax * Schuiven/CurveMax;
 		parameter<ratio>   Curve    := Base * Schuiven/LerenAan + 1[ratio] * Schuiven/LerenUit;
 	}
-
-	#include <NcwSchema.dms>
-	#include <AanbodOpties.dms>
-	#include <Rapportage.dms>
 	
 	template NieuwbouwUnite
 	{
