@@ -1,3 +1,9 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2021 - Planbureau voor de Leefomgeving                  //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
 template SubsetGebouwOptieT
 {
 	// begin case parameters	
@@ -19,6 +25,13 @@ template SubsetGebouwOptieT
 		attribute<Classifications/SchilLabel>  SchilLabel_rel   := ActiefObject/SchilLabel_rel[ActiefObject_rel];
 		attribute<Classifications/GebouwOptie> GebouwOptie_rel  := ../GebouwOptie_rel[ActiefObject_rel];
 		
+		container AansluitCapaciteit
+		{
+			attribute<kW> RV (GeschiktObject) := ActiefObject/AansluitCapaciteit/RV[ActiefObject_rel];
+			attribute<kW> TW (GeschiktObject) := ActiefObject/AansluitCapaciteit/TW[ActiefObject_rel];
+			attribute<kW> KD (GeschiktObject) := ActiefObject/AansluitCapaciteit/KD[ActiefObject_rel];
+		}
+
 		container Bouwdelen := for_each_nedv(Classifications/Bouwdeel/name
 			,	replace('BO/Bouwdelen/@BN[BO_rel]', '@BN', Classifications/Bouwdeel/name)
 			,	GeschiktObject, m2
@@ -48,7 +61,7 @@ template SubsetGebouwOptieT
 		)
 		{
 			attribute<Classifications/AfgifteSysteem> AS (GeschiktObject) :=  max_elem(
-				 BO/AfgifteSysteem_rel[BO_rel]
+				 BO/InstallatiePerProduct/AS[BO_rel]
 				,Classifications/Performance/AfgifteSysteem_rel[Func2Meter/SPF/PerformancePerProduct/RVb]
 				,Classifications/Performance/AfgifteSysteem_rel[Func2Meter/SPF/PerformancePerProduct/RVp]);
 			
@@ -67,31 +80,12 @@ template SubsetGebouwOptieT
 	container Func2Meter := CalculationSchemes/FunctioneelToMetervraag(GeschiktObject);
 	
 	// cap_prod geeft per BebouwingsObject of per SchilLabel voor ieder Product de benodigde capaciteit obv het vastgestelde profiel.
-	container CapaciteitPerProduct 
-	{				
-		attribute<kW> RVb (GeschiktObject) := ActiefObject/AansluitCapaciteit/RV[GeschiktObject/ActiefObject_rel] * Classifications/Performance/P_cap[Func2Meter/SPF/PerformancePerProduct/RVb];
-		attribute<kW> TWb (GeschiktObject) := ActiefObject/AansluitCapaciteit/TW[GeschiktObject/ActiefObject_rel] * Classifications/Performance/P_cap[Func2Meter/SPF/PerformancePerProduct/TWb];
-		attribute<kW> KDb (GeschiktObject) := ActiefObject/AansluitCapaciteit/KD[GeschiktObject/ActiefObject_rel] * Classifications/Performance/P_cap[Func2Meter/SPF/PerformancePerProduct/KDb];
-		attribute<kW> RVp (GeschiktObject) := ActiefObject/AansluitCapaciteit/RV[GeschiktObject/ActiefObject_rel] - RVb;
-		attribute<kW> TWp (GeschiktObject) := ActiefObject/AansluitCapaciteit/TW[GeschiktObject/ActiefObject_rel] - TWb;
-		attribute<kW> KDp (GeschiktObject) := ActiefObject/AansluitCapaciteit/KD[GeschiktObject/ActiefObject_rel] - KDb;
-	}
-
-	container CapaciteitPerInstallatie := for_each_nedv(Classifications/Installatie/name
-		, replace('max_elem('
-				'add(CapaciteitPerProduct/RVb * float64(GeschiktObject/InstallatiePerProduct/RVb == @VI), CapaciteitPerProduct/RVp * float64(GeschiktObject/InstallatiePerProduct/RVp == @VI)), '
-				'add(CapaciteitPerProduct/TWb * float64(GeschiktObject/InstallatiePerProduct/TWb == @VI), CapaciteitPerProduct/TWp * float64(GeschiktObject/InstallatiePerProduct/TWp == @VI)), '
-				'add(CapaciteitPerProduct/KDb * float64(GeschiktObject/InstallatiePerProduct/KDb == @VI), CapaciteitPerProduct/Kdp * float64(GeschiktObject/InstallatiePerProduct/Kdp == @VI)) '
-			')[kW]'
-			, '@VI', 'Classifications/Installatie/V/' + Classifications/Installatie/name)
-		, GeschiktObject
-		, kW
-	);
+	
 
 	parameter<string> KX_cap_Expr :=
 		'add('+
 			AsItemList(
-				replace('CapaciteitPerInstallatie/@I * VerbruiksOpties/Installatie/K@X_cap[Classifications/Installatie/V/@I]'
+				replace('Func2Meter/eEffect/CapaciteitPerInstallatie/@I * VerbruiksOpties/Installatie/K@X_cap[Classifications/Installatie/V/@I]'
 				, '@I', Classifications/Installatie/name)
 			)+
 		')'
@@ -106,7 +100,7 @@ template SubsetGebouwOptieT
 
 
 	attribute<Eur   > Ki_LTAS (GeschiktObject) := 
-		(GeschiktObject/InstallatiePerProduct/AS >= Classifications/AfgifteSysteem/V/LTAS) && (BO/AfgifteSysteem_rel[GeschiktObject/BO_rel] < Classifications/AfgifteSysteem/V/LTAS)
+		(GeschiktObject/InstallatiePerProduct/AS >= Classifications/AfgifteSysteem/V/LTAS) && (BO/InstallatiePerProduct/AS[GeschiktObject/BO_rel] < Classifications/AfgifteSysteem/V/LTAS)
 			? (BO/IsMeergezins[GeschiktObject/BO_rel]
 				? BO/BCkentallen/Ki_LTAS_h_asl 
 				: BO/BCkentallen/Ki_LTAS_l_asl) * BO/nrAansluitingen[GeschiktObject/BO_rel] + BO/BCkentallen/Ki_LTAS_opp * BO/Oppervlakte[GeschiktObject/BO_rel]

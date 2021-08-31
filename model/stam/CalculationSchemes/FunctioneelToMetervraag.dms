@@ -115,7 +115,25 @@ Template FunctioneelToMetervraag
 		{
 			attribute<GJ_yr> Vj_elek (VraagBO) := ='add('+AsItemList(Classifications/Product/name)+')';
 		}
-
+		container CapaciteitPerProduct 
+		{				
+			attribute<kW> RVb (VraagBO) := VraagBO/AansluitCapaciteit/RV * Classifications/Performance/P_cap[SPF/PerformancePerProduct/RVb];
+			attribute<kW> TWb (VraagBO) := VraagBO/AansluitCapaciteit/TW * Classifications/Performance/P_cap[SPF/PerformancePerProduct/TWb];
+			attribute<kW> KDb (VraagBO) := VraagBO/AansluitCapaciteit/KD * Classifications/Performance/P_cap[SPF/PerformancePerProduct/KDb];
+			attribute<kW> RVp (VraagBO) := VraagBO/AansluitCapaciteit/RV - RVb;
+			attribute<kW> TWp (VraagBO) := VraagBO/AansluitCapaciteit/TW - TWb;
+			attribute<kW> KDp (VraagBO) := VraagBO/AansluitCapaciteit/KD - KDb;
+		}
+		container CapaciteitPerInstallatie := for_each_nedv(Classifications/Installatie/name
+		, replace('max_elem('
+				'add(CapaciteitPerProduct/RVb * float64(VraagBO/InstallatiePerProduct/RVb == @VI), CapaciteitPerProduct/RVp * float64(VraagBO/InstallatiePerProduct/RVp == @VI)), '
+				'add(CapaciteitPerProduct/TWb * float64(VraagBO/InstallatiePerProduct/TWb == @VI), CapaciteitPerProduct/TWp * float64(VraagBO/InstallatiePerProduct/TWp == @VI)), '
+				'add(CapaciteitPerProduct/KDb * float64(VraagBO/InstallatiePerProduct/KDb == @VI), CapaciteitPerProduct/Kdp * float64(VraagBO/InstallatiePerProduct/Kdp == @VI)) '
+			')[kW]'
+			, '@VI', 'Classifications/Installatie/V/' + Classifications/Installatie/name)
+		, VraagBO
+		, kW
+		);
 		container capaciteit := for_each_nedv(Classifications/Installatie/name
 		, replace(
 			'add('+

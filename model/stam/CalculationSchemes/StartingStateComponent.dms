@@ -42,7 +42,11 @@ template StartingStateComponent
 			Restwarmte/GebruikRestWarmte[Planregio_rel] ? Classifications/gebiedsOptie/GebouwOptie_rel[PlanregioWarmteAllocatie_Remove[Planregio_rel]] :
 			ModelObject/StartOptie_rel[ModelObject_rel]; // laast toegepaste optie
 		
-		container Functioneel
+		container Functioneel := for_each_nedv(
+				Classifications/FunctioneleVraag/name,
+				'BaseValues/'+ Classifications/FunctioneleVraag/name,
+				.,
+				GJ_yr)
 		{
 			attribute<bool> RV_N1_check(..) := abs(RV_N1_per_Bouwdeel/Total - BaseValues/RV) < 0.001;
 			attribute<GJ_yr> RV_N1 (..) := BaseValues/RV, IntegrityCheck ="RV_N1_check";
@@ -86,44 +90,26 @@ template StartingStateComponent
 			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (..) := const(Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/V/Gas, ..);
 			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (..) := const(Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Nat, ..);
 			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (..) := const(Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/geen,..);
+
+			attribute<Classifications/AfgifteSysteem> AfgifteSysteem_init (..) := const(Classifications/AfgifteSysteem/V/MTAS, ..);
+			attribute<Classifications/AfgifteSysteem> AS (..) := max_elem(
+				 AfgifteSysteem_init
+				,Classifications/Performance/AfgifteSysteem_rel[Metervraag/SPF/PerformancePerProduct/RVb]
+				,Classifications/Performance/AfgifteSysteem_rel[Metervraag/SPF/PerformancePerProduct/RVp]
+			);
 		}
 		
+		container Func2Meter := CalculationSchemes/FunctioneelToMetervraag(.);
 		container BemeterdeGebouwInput_rel := for_each_nedv(Classifications/Product/name
-			, 'rlookup(Classifications/Performance/Input_rel, Classifications/BemeterdeGebouwInput/nr_OrgEntity)[PerformancePerProduct/'+Classifications/Product/name+']'
+			, 'rlookup(Classifications/Performance/Input_rel, Classifications/BemeterdeGebouwInput/nr_OrgEntity)[SPF/PerformancePerProduct/'+Classifications/Product/name+']'
 			, .
 			, Classifications/BemeterdeGebouwInput
 			);
-			
-		container Performance_key1 := for_each_nedv(Classifications/Product/name
-			, 'Classifications/Installatie/name[InstallatiePerProduct/'+Classifications/Product/name+']+''.'' + Classifications/SchilLabel/name[SchilLabel_rel] + ''.' + Classifications/Product/TypeName+''''
-			, .
-			, string
-		), isHidden = "True";
 
-		container Performance_key2 := for_each_nedv(Classifications/Product/name
-			, 'Classifications/Installatie/name[InstallatiePerProduct/'+Classifications/Product/name+']+''.x.' + Classifications/Product/TypeName+''''
-			,.
-			, string
-		), isHidden = "True";
-
-		container PerformancePerProduct := for_each_nedv(Classifications/Product/name
-			,	replace(
-					'MakeDefined('
-						'rlookup(Performance_key1/@P, Classifications/Performance/code), '
-						'rlookup(Performance_key2/@P, Classifications/Performance/code),'
-						'rlookup(''geen.x.x'', Classifications/Performance/code)'
-					')'
-				, '@P', Classifications/Product/name)
-			, .
-			, Classifications/Performance
-		);
-
-		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_init := const(Classifications/AfgifteSysteem/V/MTAS, .);
-		attribute<Classifications/AfgifteSysteem> AfgifteSysteem_rel  := max_elem(
-			 AfgifteSysteem_init
-			,Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVb]
-			,Classifications/Performance/AfgifteSysteem_rel[PerformancePerProduct/RVp]
-		);
+		container SPF        := Func2Meter/SPF
+		{
+			container PerformancePerProduct := Func2Meter/SPF/PerformancePerProduct;
+		}
 
 		container Bouwdelen := BebouwingsObjectSrc/Bouwdelen
 		{
@@ -196,7 +182,6 @@ template StartingStateComponent
 		unit<uint8>  BebouwingsTypeDomein := Results/BebouwingsTypeDomein;
 		unit<uint32> AfnameGebied         := Results/AfnameGebied;
 		
-		attribute<Classifications/AfgifteSysteem>           AfgifteSysteem_rel := Results/AfgifteSysteem_rel[nr_orgentity];
 		attribute<AfnameGebied>                             AfnameGebied_rel   := Results/AfnameGebied_rel[nr_orgentity];
 		attribute<Classifications/GebouwOptie>              GebouwOptie_rel    := Results/GebouwOptie_rel[nr_orgentity];
 		
@@ -213,12 +198,26 @@ template StartingStateComponent
 				..,
 				GJ_yr);
 		}
-		
+
 		container BemeterdeGebouwInput_rel :=  for_each_nedv(
 			classifications/Product/name,
 			'Results/BemeterdeGebouwInput_rel/' + Classifications/Product/Name + '[nr_orgentity]',
 			.,
 			Classifications/BemeterdeGebouwInput );
+		
+		container SPF := for_each_nedv(
+			classifications/Product/name,
+			'Results/SPF/' + Classifications/Product/Name + '[nr_orgentity]',
+			.,
+			float64)
+		{
+			container PerformancePerProduct :=  for_each_nedv(
+			classifications/Product/name,
+			'Results/SPF/PerformancePerProduct/' + Classifications/Product/Name + '[nr_orgentity]',
+			..,
+			Classifications/Performance);
+		}
+
 		Container Bouwdelen := for_each_nedv(
 			classifications/bouwdeel/name,
 			'Results/Bouwdelen/' + Classifications/Bouwdeel/Name + '[nr_orgentity]',
@@ -284,12 +283,13 @@ template StartingStateComponent
 					attribute<yr_uint16> KK (...) := Results/InstallatiePerProduct/LastVervanging/KK[nr_orgentity];
 					attribute<yr_uint16> VT (...) := Results/InstallatiePerProduct/LastVervanging/VT[nr_orgentity];
 					attribute<yr_uint16> DK (...) := Results/InstallatiePerProduct/LastVervanging/DK[nr_orgentity];
+					attribute<yr_uint16> AS (...) := Results/InstallatiePerProduct/LastVervanging/AS[nr_orgentity];
 				}
 			
 			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (..) := Results/InstallatiePerProduct/KK[nr_orgentity];
 			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (..) := Results/InstallatiePerProduct/VT[nr_orgentity];
 			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (..) := Results/InstallatiePerProduct/DK[nr_orgentity];
-			
+			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> AS (..) := Results/InstallatiePerProduct/DK[nr_orgentity];
 		}
 	}
 }
