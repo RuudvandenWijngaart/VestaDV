@@ -1,0 +1,168 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2021 - Planbureau voor de Leefomgeving                  //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//           Dit is de container met rekenschema's die werken op Bebouwing              //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//====== Berekeningen voor woningen die actief zijn op minimaal één functioneel product =====
+unit<uint32> ActieveWoning := subset(not(BO/Afbouw) && (BO/Activatie/ProductActief || BO/Activatie/BouwdeelActief))
+{		
+	attribute<BO> BO_rel := nr_OrgEntity;
+	attribute<ActieveWoning> per_BO(BO) := invert(BO_rel);
+	
+	unit<uint32> xInvesteringsOptie := union_unit(ProductActieveWoning/xIsolatieAmbitie/PAW_xInvesteringsOptie, BouwdeelActieveWoning/ProductInactieveAmbitie)
+	{
+		parameter<string> constr_expr2 := 'union_data(xInvesteringsOptie, ProductActieveWoning/xIsolatieAmbitie/PAW_xInvesteringsOptie/@A, BouwdeelActieveWoning/ProductInactieveAmbitie/@A)';
+		
+		attribute<ActieveWoning> ActieveWoning_rel := union_data(xInvesteringsOptie
+		,	ProductActieveWoning/xIsolatieAmbitie/PAW_xInvesteringsOptie/ProductActieveWoning_rel
+		,	ID(BouwdeelActieveWoning/ProductInactieveAmbitie) + #ProductActieveWoning
+		)[ActieveWoning];
+		
+		container Bouwdelen {
+			container Isolatie := for_each_nedv(Classifications/Bouwdeel/name
+			,	replace(constr_expr2, '@A', 'Bouwdelen/Isolatie/@BN', '@BN', Classifications/Bouwdeel/name)
+			,	xInvesteringsOptie, Classifications/IsolatieNiveau
+			);
+		}
+		container AansluitCapaciteit
+		{
+			attribute<kW> RV (xInvesteringsOptie) := =replace(constr_expr2, '@A', 'AansluitCapaciteit/RV');
+			attribute<kW> KD (xInvesteringsOptie) := =replace(constr_expr2, '@A', 'AansluitCapaciteit/KD');
+			attribute<kW> TW (xInvesteringsOptie) := =replace(constr_expr2, '@A', 'AansluitCapaciteit/TW');
+		}
+	}
+	
+	unit<uint32> xGebouwOptie := union_unit(ProductActieveWoning/xIsolatieAmbitie/xGebouwOptie, BouwdeelActieveWoning/ProductInactieveAmbitie)
+	{
+			parameter<string> constr_expr2 := 'union_data(xGebouwOptie, ProductActieveWoning/xIsolatieAmbitie/xGebouwOptie/@A, BouwdeelActieveWoning/ProductInactieveAmbitie/@A)';
+			parameter<string> constr_expr1 := 'union_data(xGebouwOptie, ProductActieveWoning/xIsolatieAmbitie/xGebouwOptie/@A, const(@C, BouwdeelActieveWoning/ProductInactieveAmbitie))';
+			
+			attribute<BO>                          BO_rel          := =replace(constr_expr2, '@A', 'BO_rel');
+			attribute<Classifications/GebouwOptie> GebouwOptie_rel := =replace(constr_expr1, '@A', 'GebouwOptie_rel', '@C', 'Classifications/GebouwOptie/V/geen');
+			
+			// voor ProductInactieveAmbitie wordt GebouwOptieCategorie Hybride genoteerd, hoewel die woning ook Ketel of AllElectric kan zijn; als er maar 1 categorie is zodat keuzeset goed is
+			// TODO: Check dat AansluitCapaciteit niet ook van categorie afhangt of gaat afhangen
+			// TODO2: AansluitCapaciteit enkel afhankelijk van xIsolatieAmbitie of xInvesteringsOptie ? Dan liever niet uit gebouwoptie ophalen
+			attribute<Classifications/GebouwOptieCategorie>  Categorie_rel := =replace(constr_expr1, '@A', 'Categorie_rel', '@C', 'Classifications/GebouwOptieCategorie/V/Hybride');
+			attribute<Classifications/IsolatieAmbitie> IsolatieAmbitie_rel := =replace(constr_expr2, '@A', 'IsolatieAmbitie_rel');
+			attribute<xInvesteringsOptie> xInvesteringsOptie_rel := union_data(., ProductActieveWoning/xIsolatieAmbitie/xGebouwOptie/PAW_xInvesteringsOptie_rel, ID(BouwdeelActieveWoning/ProductInactieveAmbitie)+#ProductActieveWoning/xIsolatieAmbitie/PAW_xInvesteringsOptie)[xInvesteringsOptie];
+			
+			attribute<bool> Criterium := =replace(constr_expr1, '@A', 'Criterium', '@C', 'true');
+			
+			attribute<Classifications/SchilLabel>  Schillabel_rel := =replace(constr_expr2, '@A', 'SchilLabel_rel');
+			
+			container Bouwdelen {
+				container Isolatie := for_each_nedv(Classifications/Bouwdeel/name
+				,	replace('xInvesteringsOptie/Bouwdelen/Isolatie/@BN[xInvesteringsOptie_rel]', '@BN', Classifications/Bouwdeel/name)
+				,	xGebouwOptie, Classifications/IsolatieNiveau
+				);
+			}
+			container AansluitCapaciteit
+			{
+				attribute<kW> RV (xGebouwOptie) := =replace(constr_expr2, '@A', 'AansluitCapaciteit/RV');
+				attribute<kW> KD (xGebouwOptie) := =replace(constr_expr2, '@A', 'AansluitCapaciteit/KD');
+				attribute<kW> TW (xGebouwOptie) := =replace(constr_expr2, '@A', 'AansluitCapaciteit/TW');
+			}
+			container functioneel := for_each_nedv(
+				Classifications/FunctioneleVraag/name,
+				replace(constr_expr2
+				,	'@A', 'functioneel/@PT'
+				,	'@PT', Classifications/FunctioneleVraag/name ),
+				xGebouwOptie,
+				GJ_yr);
+			attribute<EUR> Ki_gv := =replace(constr_expr2, '@A', 'Ki_gv');
+	}
+
+	container GeschikteOptieBerekening := SubsetGebouwOptieT(xGebouwOptie);
+			
+	unit<uint32> GeschikteOptie := GeschikteOptieBerekening/results
+	{
+		attribute<xGebouwOptie> xGebouwOptie_rel := nr_OrgEntity;
+		attribute<xInvesteringsOptie> xInvesteringsOptie_rel := xGebouwOptie/xInvesteringsOptie_rel[xGebouwOptie_rel];
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel := xGebouwOptie/GebouwOptie_rel[xGebouwOptie_rel];
+	}
+	
+	// Kies GebouwOptie per xInvesteringsOptie
+	container Choice_per_xInvesteringsOptie {
+		attribute<GeschikteOptie>              GeschikteOptie_rel (xInvesteringsOptie) := min_index(GeschikteOptie/kosten_tbv_afweging, GeschikteOptie/xInvesteringsOptie_rel);		
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel    (xInvesteringsOptie) := GeschikteOptie/GebouwOptie_rel[GeschikteOptie_rel];		
+		attribute<eur_yr>                      kosten_tbv_afweging(xInvesteringsOptie) := GeschikteOptie/kosten_tbv_afweging[GeschikteOptie_rel];
+	}	
+	
+	// Kies uit results_Per_xInvesteringsOptie een InvesteringsOptie per ProductActieveWoning
+	container Choice_per_ActieveWoning
+	{
+		attribute<xInvesteringsOptie>  xInvesteringsOptie_rel(ActieveWoning) := min_index( Choice_per_xInvesteringsOptie/kosten_tbv_afweging, xInvesteringsOptie/ActieveWoning_rel);		
+		attribute<GeschikteOptie>  GeschikteOptie_rel(ActieveWoning)     := Choice_per_xInvesteringsOptie/GeschikteOptie_rel[ xInvesteringsOptie_rel ];
+	}
+	container Choice_Per_BO {
+		attribute<xInvesteringsOptie> xInvesteringsOptie_rel(BO) := Choice_per_ActieveWoning/xInvesteringsOptie_rel[per_BO];
+		attribute<GeschikteOptie>     GeschikteOptie_rel   (BO) := Choice_per_ActieveWoning/GeschikteOptie_rel[per_BO];
+	}
+	
+	container results
+	{
+		attribute<eur_yr>                      kosten_tbv_afweging (BO) := Choice_per_xInvesteringsOptie/kosten_tbv_afweging[Choice_per_BO/xInvesteringsOptie_rel];
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel     (BO) := GeschikteOptie/GebouwOptie_rel    [Choice_per_BO/GeschikteOptie_rel];
+		attribute<Classifications/Schillabel>  Schillabel_rel      (BO) := GeschikteOptie/SchilLabel_rel     [Choice_per_BO/GeschikteOptie_rel];
+		
+		container BemeterdeGebouwInput_rel := for_each_nedv(
+				Classifications/Product/name,
+				replace('GeschikteOptie/BemeterdeGebouwInput_rel/@PT@[Choice_per_BO/GeschikteOptie_rel]', '@PT@', Classifications/Product/name ),
+				BO,
+				Classifications/BemeterdeGebouwInput);
+		container eenmalig := for_each_nedv(
+				Classifications/GebouwOptie_eenmalig/name,
+				replace('GeschikteOptie/eenmalig/@PT@[Choice_per_BO/GeschikteOptie_rel]', '@PT@', Classifications/GebouwOptie_eenmalig/name ),
+				BO,
+				Eur);
+		container jaarlijks := for_each_nedv(
+				Classifications/GebouwOptie_jaarlijks/name,
+				replace('GeschikteOptie/jaarlijks/@PT@[Choice_per_BO/GeschikteOptie_rel]', '@PT@', Classifications/GebouwOptie_jaarlijks/name ),
+				BO,
+				Eur_yr);
+		container metervraag := for_each_nedv(
+				Classifications/BemeterdeGebouwInput/name,
+				replace('GeschikteOptie/metervraag/@PT@[Choice_per_BO/GeschikteOptie_rel]', '@PT@', Classifications/BemeterdeGebouwInput/name ),
+				BO,
+				GJ_yr);
+		container functioneel := for_each_nedv(
+				Classifications/FunctioneleVraag/name,
+				replace('GeschikteOptie/functioneel/@PT@[Choice_per_BO/GeschikteOptie_rel]', '@PT@', Classifications/FunctioneleVraag/name ),
+				BO,
+				GJ_yr);
+			
+		container InstallatiePerProduct := for_each_nedv(
+				Classifications/Product/name,
+				replace('GeschikteOptie/InstallatiePerProduct/@PT@[Choice_per_BO/GeschikteOptie_rel]', '@PT@', Classifications/Product/name ),
+				BO,
+				Classifications/Installatie)
+		{
+			attribute<Classifications/AfgifteSysteem>                             AS (BO) := GeschikteOptie/InstallatiePerProduct/AS[Choice_per_BO/GeschikteOptie_rel];
+			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (BO) := GeschikteOptie/InstallatiePerProduct/VT[Choice_per_BO/GeschikteOptie_rel];
+			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (BO) := GeschikteOptie/InstallatiePerProduct/DK[Choice_per_BO/GeschikteOptie_rel];
+			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (BO) := GeschikteOptie/InstallatiePerProduct/KK[Choice_per_BO/GeschikteOptie_rel];
+		}
+		
+		container Bouwdelen {
+			container Isolatie := for_each_nedv(
+				Classifications/Bouwdeel/name,
+				replace('xInvesteringsOptie/Bouwdelen/Isolatie/@PT@[Choice_per_BO/xInvesteringsOptie_rel]', '@PT@', Classifications/Bouwdeel/name ),
+				BO,
+				Classifications/IsolatieNiveau);
+		}
+		container AansluitCapaciteit
+		{
+			attribute<kW> RV (BO) := xInvesteringsOptie/AansluitCapaciteit/RV[Choice_per_BO/xInvesteringsOptie_rel];
+			attribute<kW> KD (BO) := xInvesteringsOptie/AansluitCapaciteit/KD[Choice_per_BO/xInvesteringsOptie_rel];
+			attribute<kW> TW (BO) := xInvesteringsOptie/AansluitCapaciteit/TW[Choice_per_BO/xInvesteringsOptie_rel];
+		}
+	}
+}
