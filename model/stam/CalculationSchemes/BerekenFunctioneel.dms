@@ -21,19 +21,35 @@ Template BerekenFunctioneel
 	
 	attribute<ratio> Correction_RV (BOdomain) := 1.0[ratio] + Invoer/Kengetallen/Constanten/Rebound_A * Invoer/Kengetallen/Constanten/Rebound_B ^ Kwh_m2;
 
+	// TODO: Kunnen we hier niet gewoon Bouwdelen/Isolatie nemen, ook als not(IsChanged) ?
+	container IsolatieNiveau_rel := for_each_nedv(
+		classifications/Bouwdeel/name,
+		replace(
+			'not(Bouwdelen/IsChangedNow/@BN@)'
+			'? PrevState/Bouwdelen/Isolatie/@BN@[PrevState_rel]'
+			': Bouwdelen/Isolatie/@BN@'
+		,	'@BN@', classifications/Bouwdeel/name),
+		BOdomain,
+		Classifications/IsolatieNiveau);
+		
 	container BouwdeelIsolatie_rel := for_each_nedv(
 		classifications/Bouwdeel/name,
-		'not(Bouwdelen/IsChangedNow/'+classifications/Bouwdeel/name+
-		')? rlookup('+quote(classifications/Bouwdeel/name+ '_')+' + Classifications/IsolatieNiveau/name[PrevState/Bouwdelen/Isolatie/' + classifications/Bouwdeel/name + '[PrevState_rel][Classifications/IsolatieNiveau]], Classifications/BouwdeelIsolatie/name)
-		: rlookup('+quote(classifications/Bouwdeel/name+ '_')+' + Classifications/IsolatieNiveau/name[Bouwdelen/Isolatie/' + classifications/Bouwdeel/name + '[Classifications/IsolatieNiveau]], Classifications/BouwdeelIsolatie/name)',
+		replace(
+			'combine_data(Classifications/BouwdeelIsolatie, classifications/Bouwdeel/V/@BN@, IsolatieNiveau_rel/@BN@)'
+		,	'@BN@', classifications/Bouwdeel/name),
 		BOdomain,
 		Classifications/BouwdeelIsolatie);
 	
+	 //TODO: R_RV afhankelijk van profiel
+	attribute<ratio> R_RV(Classifications/BouwdeelIsolatie):= Classifications/IsolatieMaatregel/R_RV/MG[Classifications/BouwdeelIsolatie/IsolatieMaatregel_rel] / 100[percent];
+	
 	container RV_per_Bouwdeel_now := for_each_nedv(
 		classifications/Bouwdeel/name,
-		'PrevState/Functioneel_base/RV_N1_per_Bouwdeel_now/'+classifications/Bouwdeel/name+'[PrevState_rel] * (1.0[ratio] - makedefined(Classifications/IsolatieMaatregel/R_RV/MG[Classifications/BouwdeelIsolatie/IsolatieMaatregel_rel[BouwdeelIsolatie_rel/'+classifications/Bouwdeel/name+']] / 100[percent], 1.0[ratio]))',
+		replace(
+			'PrevState/Functioneel_base/RV_N1_per_Bouwdeel_now/@BN@[PrevState_rel] * makedefined(1.0[ratio] - R_RV[BouwdeelIsolatie_rel/@BN@], 0.0[ratio])'
+		,	'@BN@', classifications/Bouwdeel/name),
 		BOdomain,
-		GJ_yr) //TODO: R_RV afhankelijk van profiel
+		GJ_yr)
 	{
 		attribute<GJ_yr> Totaal (BOdomain):= ='add('+AsItemList(Classifications/bouwdeel/name)+')';
 	}
