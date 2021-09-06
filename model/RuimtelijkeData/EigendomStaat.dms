@@ -1,0 +1,127 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2021 - Planbureau voor de Leefomgeving                  //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container EigendomStaat
+{
+	// inlezen puntenbestand woningcorporaties
+	unit<uint32> Corporatiebezit_data
+	:   StorageName = "%SourceDataProjDir%/EigendomStaat/CorporatieBezit.shp"
+	,   StorageType  = "gdal.vect"
+	,	DialogType      = "Map"
+	,	StorageReadOnly = "True"
+	{
+	   attribute<string>                   Label        := 'C_'+string(OBJECTID), DialogType = "LabelText";
+	   attribute<rdc_meter>                geometry;
+	   attribute<Classifications/Eigendom> Eigendom_rel := const(Classifications/Eigendom/V/WoonCorp,.); //eigendomstatus als attribuut
+	   attribute<m2>                       Oppervlak; 
+	   attribute<yr_uint16>                BOUWJAAR_W; 
+	}
+
+	// inlezen puntenbestand particuliere huur
+	unit<uint32> Particulierehuur_data
+	:   StorageName = "%SourceDataProjDir%/EigendomStaat/ParticuliereHuur.shp"
+	,   StorageType  = "gdal.vect"
+	,	DialogType      = "Map"
+	,	StorageReadOnly = "True"
+	{
+	   attribute<string>                   Label        := 'H_'+string(OBJECTID), DialogType = "LabelText";
+	   attribute<rdc_meter>                geometry;
+	   attribute<Classifications/Eigendom> Eigendom_rel := const(Classifications/Eigendom/V/PartHuur,.); //eigendomstatus als attribuut
+	   attribute<m2>                       Oppervlak; 
+	   attribute<yr_uint16>                BOUWJAAR_W;
+	   attribute<float64>                  Zonnepanelen_flt :=float64(replace(ZONNEPANEL, ',', '.')); //aantal zonnepanelen in particuliere huurbestand wordt als string gelezen omdat het commas bevat i.p.v. punten
+	}
+	
+	//samenvoegen bovenstaande puntenbestanden tot gezamenlijke entiteit
+	unit<uint32> EigendomStaat_data := union_unit(Corporatiebezit_data, Particulierehuur_data)
+	{ 
+		attribute<string>                   Label        := union_data(., Corporatiebezit_data/Label       , Particulierehuur_data/Label);
+	  	attribute<rdc_meter>                geometry     := union_data(., Corporatiebezit_data/geometry    , Particulierehuur_data/geometry);
+	  	attribute<Classifications/Eigendom> Eigendom_rel := union_data(., Corporatiebezit_data/Eigendom_rel, Particulierehuur_data/Eigendom_rel);
+		attribute<m2>                       Oppervlakte  := union_data(., Corporatiebezit_data/Oppervlak   , Particulierehuur_data/Oppervlak);
+		attribute<yr_uint16>                Bouwjaar     := union_data(., Corporatiebezit_data/BOUWJAAR_W  , Particulierehuur_data/BOUWJAAR_W);
+	
+		//verwarmingsmethode wordt in oorspronkelijke bestanden als beschrijvende string gegeven
+		attribute<string> Verwarming := union_data(., Corporatiebezit_data/Verwarming  , Particulierehuur_data/Verwarming);
+
+		//op basis van bovenstaande string wordt afgeleid welke installatie aanwezig is:
+		//warmtepomp wordt geïnterpreteerd als lucht/water warmtepomp
+		//alle varianten CV ketels, ongeacht collectief/individueel of jaar van installatie worden als hr-ketel geclassificeerd
+		//indien onbekend: null
+		attribute<Classifications/Installatie> RV_installatie_rel := 
+				Verwarming == 'Warmtepomp' ? Classifications/Installatie/V/eWP_lw
+			:	Verwarming == 'Stadsverwarming' ? Classifications/Installatie/V/gebiedsoptie
+			:	Verwarming == 'Gaskachels' ? Classifications/Installatie/V/hr
+			:	Verwarming == 'Individuele CV-ketels geïnstalleerd in of na 1998' ? Classifications/Installatie/V/hr
+			:	Verwarming == 'Individuele CV-ketels geïnstalleerd voor 1998' ? Classifications/Installatie/V/hr
+			:	Verwarming == 'Gemeenschappelijk CV-ketel, geïnstalleerd in of na 1998' ? Classifications/Installatie/V/hr
+			:	Verwarming == 'Gemeenschappelijke CV-ketel, geïnstalleerd voor 1998' ? Classifications/Installatie/V/hr
+			:	(0/0)[Classifications/Installatie];
+
+		//van bovenstaande informatie wordt een binair attribuut afgeleid als indicatie of er blokverwarming aanwezig is
+		attribute<bool> isBlokverwarming := Verwarming == 'Gemeenschappelijk CV-ketel, geïnstalleerd in of na 1998' || Verwarming == 'Gemeenschappelijke CV-ketel, geïnstalleerd voor 1998';
+		
+		//tapwaterbereidingsmethode wordt in oorspronkelijke bestanden als beschrijvende string gegeven
+		attribute<string> Tapwater := union_data(., Corporatiebezit_data/warm_water  , Particulierehuur_data/warm_water);
+
+		//op basis van de beschrijving wordt afgeleid welke installatie aanwezig is
+		//geisers zijn geclassificeerd onder hr-ketels
+		//indien is opgegeven dat er geen apart toestel aanwezig is wordt dit gelijkgesteld aan ruimteverwarming
+		//indien onbekend: null
+		attribute<Classifications/Installatie> TW_installatie_rel := 
+				Tapwater == 'Een geiser' ? Classifications/Installatie/V/hr
+			:	Tapwater == 'Een elektrische boiler' ? Classifications/Installatie/V/eBoiler
+			:	Tapwater == 'Geen apart toestel' && RV_installatie_rel == Classifications/Installatie/V/gebiedsoptie ? Classifications/Installatie/V/gebiedsoptie
+			:	Tapwater == 'Geen apart toestel' && RV_installatie_rel == Classifications/Installatie/V/eWP_lw  ? Classifications/Installatie/V/eWP_lw
+			:	(0/0)[Classifications/Installatie];
+
+		//ventilatiemethode wordt in oorspronkelijke bestanden als beschrijvende string gegeven
+		attribute<string>                   Ventilatie   := union_data(., Corporatiebezit_data/Ventilatie  , Particulierehuur_data/Ventilatie);
+		
+		//aanwezige installatie ventilatie wordt afgeleid van beschrijving
+		//indien onbekend: null
+		attribute<Kengetallen/OverigeInstallaties/VT/Installatietypes> VT_installatie_rel :=
+				Ventilatie == 'Mechanische afzuiging' ? Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Mech
+			:	Ventilatie == 'Balansventilatie' ? Kengetallen/OverigeInstallaties/VT/Installatietypes/V/WTW
+			:	(0/0)[Kengetallen/OverigeInstallaties/VT/Installatietypes];
+
+		//binaire indicatie of zonneboiler aanwezig is en een getal voor het aantal zonnepanelen
+		attribute<string>                   Zonneboiler  := union_data(., Corporatiebezit_data/Zonneboile  , Particulierehuur_data/Zonneboile);
+		attribute<bool>                     hasZonB      := Zonneboiler == 'Ja';
+		attribute<float64>                  Zonnepanelen := union_data(., Corporatiebezit_data/Zonnepanel  , Particulierehuur_data/Zonnepanelen_flt);
+
+		//beschrijving wordt gebruikt om situatie van installaties op dak af te leiden
+		//indien geen zonnepanelen, wel zonneboiler dan V/ZonB (alleen zonneboiler)
+		//indien wel zonnepanelen, ook zonneboiler dan V/ZonB_PVkl (zonneboiler met klein ZonPV)
+		//indien geen zonneboiler en beperkt aantal zonnepanelen: V/ZonPV_kl (klein = tot maximaal 40% van pandoppervlak belegd, uitgaande van standaard panelen van 1,0m*1,7m)
+		//indien geen zonneboiler en groot aantal zonnepanelen: V/ZonPV_gr (groot = meer dan 40% van pandoppervlak belegd, uitgaande van standaard panelen van 1,0m*1,7m)
+		attribute<Kengetallen/OverigeInstallaties/DK/Installatietypes> DK_installatie_rel :=
+				Zonnepanelen == 0d && hasZonB ? Kengetallen/OverigeInstallaties/DK/Installatietypes/V/ZonB
+			:	Zonnepanelen >  0d && hasZonB ? Kengetallen/OverigeInstallaties/DK/Installatietypes/V/ZonB_PVkl
+			:	Zonnepanelen * 1.7d <= 0.4d * float64(Oppervlakte) && not(hasZonB) ? Kengetallen/OverigeInstallaties/DK/Installatietypes/V/ZonPV_kl
+			:	Zonnepanelen * 1.7d >  0.4d * float64(Oppervlakte) && not(hasZonB) ? Kengetallen/OverigeInstallaties/DK/Installatietypes/V/ZonPV_gr
+			:	(0/0)[Kengetallen/OverigeInstallaties/DK/Installatietypes];
+
+		//ruimtelijke matching om bijbehorend BAG pand per punt te bepalen
+		attribute<BAG/import/pand>          Pand_rel     := point_in_polygon(geometry, pand/geometry);
+	}
+
+	//afgeleidde attributen vastgesteld per BAG pand
+	unit<uint32> Pand := BAG/import/pand
+	{
+		attribute<rdc_meter>                   Geometry (poly) := BAG/import/pand/geometry;
+
+		//eigendomstatus wordt afgeleid van gekoppelde puntattributen, uitgaande van meest voorkomende status. Indien onbekend wordt koop verondersteld.
+		attribute<Classifications/Eigendom>    Eigendom_rel    := makedefined(modus(EigendomStaat_data/Eigendom_rel,       EigendomStaat_data/Pand_rel), Classifications/Eigendom/V/Koop);
+
+		//installaties RV/TW/VT/DK worden afgeleid van gekoppelde puntattributen, uitgaande van meest voorkomende installatietype.
+		//indien onbekend RV/TW wordt een hr-ketel verondersteld. indien onbekend VT wordt natuurlijke ventilatie verondersteld en bij onbekend DK wordt een leeg dak verondersteld.
+		attribute<Classifications/Installatie> Installatie_RV  := makedefined(modus(EigendomStaat_data/RV_installatie_rel, EigendomStaat_data/Pand_rel), Classifications/Installatie/V/hr);
+		attribute<Classifications/Installatie> Installatie_TW  := makedefined(modus(EigendomStaat_data/TW_installatie_rel, EigendomStaat_data/Pand_rel), Classifications/Installatie/V/hr);
+		attribute<Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatie_VT  := makedefined(modus(EigendomStaat_data/VT_installatie_rel, EigendomStaat_data/Pand_rel), Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Nat);
+		attribute<Kengetallen/OverigeInstallaties/DK/Installatietypes> Installatie_DK  := makedefined(modus(EigendomStaat_data/DK_installatie_rel, EigendomStaat_data/Pand_rel), Kengetallen/OverigeInstallaties/DK/Installatietypes/V/geen);
+	}
+}
