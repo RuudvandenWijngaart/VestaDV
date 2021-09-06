@@ -10,18 +10,27 @@
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
+
+
 container Vastgoed
 {
-	parameter<string> Scenario := 'WLO_hoog_DichtBij'; //Keuze uit:
+	unit<uint8> NieuwbouwWoningType: nrofrows = 4
+	{
+		attribute<string> name     : [ 'rijtjeswoning', 'appartement', 'twee_onder_1_kap', 'vrijstaand'];
+	}
+	parameter<string> Scenario := 'WLO_hoog_EnZoVoort'; //Keuze uit:
 		//WLO_hoog_DichtBij, WLO_hoog_EnZoVoort, WLO_hoog_Ruim, WLO_hoog_Verbonden
 		//WLO_laag_DichtBij, WLO_laag_EnZoVoort, WLO_laag_Ruim, WLO_laag_Verbonden
 		
-	unit<uint8> Periode: nrofrows = 3
+	unit<uint8> Periode := subset(Classifications/Periode/HasNieuwbouw)
 	{
-		attribute<string>          name         : ['J2021_J2030', 'J2031_J2040', 'J2041_J2050'], DialogType = "LabelText";
-		attribute<units/yr_uint16> StartPeriode : [2021, 2031, 2041];
-		attribute<units/yr_uint16> EindePeriode : [2030, 2040, 2050]; 
-		attribute<string>          directory    : ['J21_J50', 'J21_J50', 'J21_J50']; // in SD/Vastgoed/[x]
+		attribute<string>          name         := Classifications/Periode/name[nr_OrgEntity], DialogType = "LabelText";
+		attribute<string>          label        := name;
+		attribute<string>          RO_directory := Classifications/Periode/RO_directory[nr_OrgEntity];
+		attribute<yr>              nrJaren      := Classifications/Periode/nrJaren[nr_OrgEntity];
+		attribute<Classifications/BouwjaarWoningBestaand> BouwjaarKlasse_rel : [ 11, 12, 13];
+
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
 	unit<uint8> VastgoedFiles: nrofrows = 2
 	{
@@ -30,46 +39,216 @@ container Vastgoed
 	
 	container VastgoedPeriode := for_each_ne(
 		 Periode/name
-		,'LeesVastgoed(
-			  '+ quote(Periode/directory) +'
-			, '+ string(Periode/StartPeriode) +'[units/yr_uint16]
-			, '+ string(Periode/EindePeriode) +'[units/yr_uint16]
-			, Scenario)
-			');
+		,'LeesVastgoed(Periode/V/' + Periode/name + ')'
+		);
 	
 	template LeesVastgoed
 	{
 		//case parameters
-		parameter<string>          PeriodeNaam;
-		parameter<units/yr_uint16> StartPeriode;
-		parameter<units/yr_uint16> EindePeriode;
-		parameter<string>          ScenarioNaam;
+		parameter<Periode>          Periode_rel;
 		//end case parameters
 		
-		container Data :=
+		container Nieuwbouw :=
 			for_each_ndva(
-				 VastgoedFiles/name
+				 NieuwbouwWoningType/name
 				,Geography/rdc_grids/m100
 				,float32
-				,'%SourceDataProjDir%/Vastgoed/'+ PeriodeNaam +'/' + VastgoedFiles/name + '/' + ScenarioNaam + '_Wonen_totaal' + '.tif'
+				,'%SourceDataProjDir%/RO/' + '20210906_RO_' + Scenario + '/Bouw_' + Periode/name[Periode_rel] + '/' + NieuwbouwWoningType/name + '.tif'
+			);
+		container NieuwbouwPerJaar :=
+			for_each_nedv(
+				 NieuwbouwWoningType/name
+				,'Nieuwbouw/' + NieuwbouwWoningType/name + '/ float32(Periode/nrJaren[Periode_rel])'
+				,Geography/rdc_grids/m100
+				,float32
 			)
-		{
-			attribute<float32> BouwPerJaar  (Geography/rdc_grids/m100) := Bouw  / float32(EindePeriode - StartPeriode);
-			attribute<float32> SloopPerJaar (Geography/rdc_grids/m100) := Sloop / float32(EindePeriode - StartPeriode);
-		}
+			{
+				unit<uint32> BO_tussenwoning := subset(NieuwbouwPerJaar/rijtjeswoning > 0f)
+				{
+					attribute<rdc_meter>                  geometry       := Geography/rdc_grids/m100/Point[nr_OrgEntity];
+					attribute<float32>                    nr_bouwunits   := NieuwbouwPerJaar/rijtjeswoning[nr_OrgEntity] * 0.70f; //Gemiddeld 70% tussenwoningen op aandeel rijwoningen in BAG 2021-01-01
+					attribute<nrAsl>                      nr_aansl       := float64(nr_bouwunits) * 1.0[yr] * 1.0[nrAsl];
+					attribute<Classifications/WoningType> Woningtype_rel := const(Classifications/WoningType/V/tussenwoning,.);
+				}
+				unit<uint32> BO_hoekwoning := subset(NieuwbouwPerJaar/rijtjeswoning > 0f)
+				{
+					attribute<rdc_meter>                  geometry       := Geography/rdc_grids/m100/Point[nr_OrgEntity];
+					attribute<float32>                    nr_bouwunits   := NieuwbouwPerJaar/rijtjeswoning[nr_OrgEntity] * 0.30f; //Gemiddeld 30% hoekwoningen op aandeel rijwoningen in BAG 2021-01-01
+					attribute<nrAsl>                      nr_aansl       := float64(nr_bouwunits) * 1.0[yr] * 1.0[nrAsl];
+					attribute<Classifications/WoningType> Woningtype_rel := const(Classifications/WoningType/V/hoekwoning,.);
+				}
+				unit<uint32> BO_meergezinspand_laag_midden := subset(NieuwbouwPerJaar/appartement > 0f)
+				{
+					attribute<rdc_meter>                  geometry       := Geography/rdc_grids/m100/Point[nr_OrgEntity];
+					attribute<float32>                    nr_bouwunits   := NieuwbouwPerJaar/rijtjeswoning[nr_OrgEntity] * 0.52f; //Gemiddeld 52% appartement laag/midden op aandeel appartementen in BAG 2021-01-01
+					attribute<nrAsl>                      nr_aansl       := float64(nr_bouwunits) * 1.0[yr] * 1.0[nrAsl];
+					attribute<Classifications/WoningType> Woningtype_rel := const(Classifications/WoningType/V/meergezinspand_laag_midden,.);
+				}
+				unit<uint32> BO_meergezinspand_hoog := subset(NieuwbouwPerJaar/appartement > 0f)
+				{
+					attribute<rdc_meter>                  geometry       := Geography/rdc_grids/m100/Point[nr_OrgEntity];
+					attribute<float32>                    nr_bouwunits   := NieuwbouwPerJaar/rijtjeswoning[nr_OrgEntity] * 0.48f; //Gemiddeld 48% appartemen hoog op aandeel appartementen in BAG 2021-01-01
+					attribute<nrAsl>                      nr_aansl       := float64(nr_bouwunits) * 1.0[yr] * 1.0[nrAsl];
+					attribute<Classifications/WoningType> Woningtype_rel := const(Classifications/WoningType/V/meergezinspand_hoog,.);
+				}
+				unit<uint32> BO_vrijstaand := subset(NieuwbouwPerJaar/vrijstaand > 0f)
+				{
+					attribute<rdc_meter>                  geometry       := Geography/rdc_grids/m100/Point[nr_OrgEntity];
+					attribute<float32>                    nr_bouwunits   := NieuwbouwPerJaar/rijtjeswoning[nr_OrgEntity];
+					attribute<nrAsl>                      nr_aansl       := float64(nr_bouwunits) * 1.0[yr] * 1.0[nrAsl];
+					attribute<Classifications/WoningType> Woningtype_rel := const(Classifications/WoningType/V/vrijstaand,.);
+				}
+				unit<uint32> BO_twee_onder_1_kap := subset(NieuwbouwPerJaar/twee_onder_1_kap > 0f)
+				{
+					attribute<rdc_meter>                  geometry       := Geography/rdc_grids/m100/Point[nr_OrgEntity];
+					attribute<float32>                    nr_bouwunits   := NieuwbouwPerJaar/rijtjeswoning[nr_OrgEntity];
+					attribute<nrAsl>                      nr_aansl       := float64(nr_bouwunits) * 1.0[yr] * 1.0[nrAsl];
+					attribute<Classifications/WoningType> Woningtype_rel := const(Classifications/WoningType/V/twee_onder_1_kap,.);
+				}
+
+				unit<uint32> BO_perjaar := union_unit(BO_tussenwoning,BO_hoekwoning,BO_meergezinspand_laag_midden,BO_meergezinspand_hoog,BO_vrijstaand,BO_twee_onder_1_kap)
+				{
+					attribute<rdc_meter>                  geometry       := union_data(.,BO_tussenwoning/geometry,BO_hoekwoning/geometry,BO_meergezinspand_laag_midden/geometry,BO_meergezinspand_hoog/geometry,BO_vrijstaand/geometry,BO_twee_onder_1_kap/geometry);
+					attribute<nrAsl>                      nr_aansl       := union_data(.,BO_tussenwoning/nr_aansl,BO_hoekwoning/nr_aansl,BO_meergezinspand_laag_midden/nr_aansl,BO_meergezinspand_hoog/nr_aansl,BO_vrijstaand/nr_aansl,BO_twee_onder_1_kap/nr_aansl);
+					attribute<Classifications/WoningType> Woningtype_rel := union_data(.,BO_tussenwoning/Woningtype_rel,BO_hoekwoning/Woningtype_rel,BO_meergezinspand_laag_midden/Woningtype_rel,BO_meergezinspand_hoog/Woningtype_rel,BO_vrijstaand/Woningtype_rel,BO_twee_onder_1_kap/Woningtype_rel);
+				}
+			}
+		container ResterendFactor :=
+			for_each_ndva(
+				 NieuwbouwWoningType/name
+				,Geography/rdc_grids/m100
+				,float32
+				,'%SourceDataProjDir%/RO/' + '20210906_RO_' + Scenario + '/Sloop_' + Periode/name[Periode_rel] + '/' + NieuwbouwWoningType/name + '.tif'
+			);
 	}
-	
-	unit<uint8> BouwKaarten := Classifications/Rekenstap
+
+
+	container NieuwbouwObjecten := for_each_ne(
+			Periode/name
+		,	'Nieuwbouw_properties(VastgoedPeriode/'+Periode/name+'/NieuwbouwPerJaar/BO_perjaar, Periode/V/'+Periode/name+')'
+			);
+
+	template Nieuwbouw_properties
 	{
-		attribute<units/yr_uint16> Jaar        (.) := /Classifications/Rekenstap/jaar;
-		attribute<string>          name        (.) := 'B_' + string(Jaar);
-		attribute<periode>         Periode_rel (.) := classify(Jaar, Periode/StartPeriode);
-		
-		container Nieuwbouw :=
-			for_each_nedv(name, isnull(Periode_rel) ? 'const(0f,Geography/rdc_grids/m100)' : 'VastgoedPeriode/' +Periode/name[periode_rel]+ '/Data/BouwPerJaar' ,Geography/rdc_grids/m100 ,float32 );
+		//case parameters
+		unit<uint32> NB;
+		parameter<Periode> Periode_rel;
+		//end parameters
+
+		unit<uint32> BebouwingsObject := NB
+		{
+
+			attribute<string>                      Code            := TypeName +string( Periode/name[Periode_rel] )+string( Geometry ) ;
+			attribute<string>                      TypeName        := Classifications/WoningType/name[Woningtype_rel];
+			attribute<string>                      label           := Code, DialogType = "LabelText";
+			attribute<rdc_meter>                   Geometry        := NB/geometry;
+			attribute<rdc_meter>                   Point           := geometry;
+			attribute<nrAsl>                       nrAansluitingen_i := (1d / float64(Periode/nrJaren[Periode_rel])) * NB/nr_aansl * 1[yr];
+			attribute<Classifications/WoningType>  Woningtype_rel  := NB/Woningtype_rel;
+			attribute<Classifications/WoningType>  BebouwingsType  := Woningtype_rel;
+			attribute<m2>                          Oppervlakte_i   := (1d / float64(Periode/nrJaren[Periode_rel])) * Classifications/WoningType/Default_oppervlak_Nieuwbouw[Woningtype_rel] * nr_aansl * 1[yr];
+			attribute<units/pand_asl>              Pand_aandeel    := Classifications/WoningType/Pand_aandeel[Woningtype_rel];
+			attribute<yr_uint16>                   Sloopjaar       := Const(2100[yr_uint16],.);
+			attribute<StudieGebied/Buurt>          Buurt_rel       := Point_in_polygon(Geometry, StudieGebied/Buurt/Geometry);
+			attribute<Geography/rdc_grids/m100>    gridm100_rel    := Geometry[Geography/rdc_grids/m100];
+			attribute<Classifications/Eigendom>    Eigendom_rel    := const(Classifications/Eigendom/V/Koop,.); //TODO: eigendomssituatie nieuwbouw opnemen
+			attribute<Classifications/GebouwOptie> GebouwOptie_rel := const(rlookup(DefaultInstellingen/Basis/StartGebouwOpties/NieuwbouwWoning, Classifications/GebouwOptie/name),.);
 			
-		container Sloop :=
-			for_each_nedv(name, isnull(Periode_rel) ? 'const(0f,Geography/rdc_grids/m100)' : 'VastgoedPeriode/' +Periode/name[periode_rel]+ '/Data/SloopPerJaar' ,Geography/rdc_grids/m100 ,float32 );
-		
-	}			
-}
+			attribute<Classifications/BouwjaarWoningBestaand> BouwjaarKlasse_rel := const(Periode/BouwjaarKlasse_rel[Periode_rel],.);
+
+			attribute<Classifications/combines/WoningtypeBouwjaarBestaand> ModelObjectKey  := combine_data( Classifications/combines/WoningtypeBouwjaarBestaand , Woningtype_rel , BouwjaarKlasse_rel) ;
+			attribute<Kengetallen/Bebouwing/Woning/Results>                ModelObject_rel := rlookup(ModelObjectKey, Kengetallen/Bebouwing/Woning/Results/ModelObjectKey);
+
+			attribute<Classifications/Schillabel> Schillabel_rel := rjoin(ModelObjectKey, Kengetallen/Bebouwing/Woning/Results/ModelObjectKey, Kengetallen/Bebouwing/Woning/Results/schillabel_rel);
+
+			container Bouwdelen := for_each_nedv(
+			Classifications/bouwdeel/name,
+			'Oppervlakte_i * Classifications/Woningtype/Bouwdeeldimensies/' + Classifications/bouwdeel/name + '[Woningtype_rel]',
+			.,
+			Units/m2)
+			{
+				container Isolatie := for_each_nedv(
+					classifications/bouwdeel/name,
+					'Classifications/schillabel/default_bouwdeelkwaliteit/'+classifications/bouwdeel/name+'[Schillabel_rel]',
+					..,
+					Classifications/IsolatieNiveau);
+
+				container BouwDeelVerliesFactor := for_each_nedv(
+					Classifications/Bouwdeel/name,
+					'Classifications/Bouwdeel/Verlies[Classifications/Bouwdeel/V/'+Classifications/Bouwdeel/name+'] * Bouwdelen/'+Classifications/Bouwdeel/name+'',
+					(..),
+					m2);
+			
+				attribute<ratio> Norm_verliesfactor (..) := ='add('+AsItemList('BouwDeelVerliesFactor/'+Classifications/Bouwdeel/name)+') / Totaal';
+				
+				attribute<m2>    Totaal             (..) := ='add('+AsItemList(Classifications/bouwdeel/name)+')';
+			}
+			container Gebied
+			{
+				attribute<float64> n      (..) := float64(nr_aansl);
+				attribute<float64> MEAN_x (..) := float64(pointCol(Geometry));
+				attribute<float64> MEAN_y (..) := float64(pointRow(Geometry));
+				attribute<float64> SSD_xx (..) := const(10000.0 / 12.0, BebouwingsObject);
+				attribute<float64> SSD_xy (..) := const(    0.0 / 12.0, BebouwingsObject);
+				attribute<float64> SSD_yy (..) := const(10000.0 / 12.0, BebouwingsObject);
+			}
+			container Kapitaallasten := for_each_nedv(
+				Classifications/Gebouw_Kapitaallasten/name,
+				'const(0[Eur_yr], BebouwingsObject)',
+				BebouwingsObject,
+				Eur_yr);
+
+			container Functioneel := for_each_nedv(
+				Classifications/FunctioneleVraag/name,
+				'BaseValues/'+ Classifications/FunctioneleVraag/name,
+				.,
+				GJ_yr)
+			{
+				attribute<bool> RV_N1_check(..) := abs(RV_N1_per_Bouwdeel/Total - BaseValues/RV) < 0.001;
+				attribute<GJ_yr> RV_N1 (..) := BaseValues/RV, IntegrityCheck ="RV_N1_check";
+			
+				container RV_N1_per_Bouwdeel := for_each_nedv(
+					Classifications/bouwdeel/name,
+						'BaseValues/RV / Bouwdelen/Totaal
+					*	Bouwdelen/'+ Classifications/bouwdeel/name + '
+					*	Classifications/bouwdeel/verlies[Classifications/bouwdeel/V/'+Classifications/bouwdeel/name+'] / Bouwdelen/Norm_verliesfactor',
+					..,
+					GJ_yr)
+					{
+						attribute<GJ_yr> Total (...) := ='add('+AsItemList(Classifications/bouwdeel/name)+')';
+					}
+				
+				container BaseValues := for_each_nedv(
+					Classifications/FunctioneleVraag/name,
+					'Invoer/Kengetallen/Bebouwing/Woning/Results/Asl/'+Classifications/FunctioneleVraag/name+'[ModelObject_rel] * nrAansluitingen_i +
+					 Invoer/Kengetallen/Bebouwing/Woning/Results/Opp/'+Classifications/FunctioneleVraag/name+'[ModelObject_rel] * Oppervlakte_i',
+					..,
+					GJ_yr);
+			}
+
+
+			container InstallatiePerProduct := for_each_nedv(
+					Classifications/Product/name
+				, 	'Classifications/GebouwOptie/PerProduct/'+Classifications/Product/name+'[GebouwOptie_rel]'
+				, 	.
+				, 	Classifications/Installatie)
+			{
+				attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (..) := const(Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/V/Elek, ..);
+				attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (..) := const(Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V/WTW, ..);
+				attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (..) := const(Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/ZonPV_kl,..);
+
+				attribute<Classifications/AfgifteSysteem> AS (..) := const(Classifications/AfgifteSysteem/V/LTAS, ..);
+			}
+
+			container Func2Meter:= CalculationSchemes/FunctioneelToMetervraag ( . );
+			container SPF := Func2Meter/SPF;
+			container BemeterdeGebouwInput_rel := for_each_nedv(Classifications/Product/name
+				, 'rlookup(Classifications/Performance/Input_rel, Classifications/BemeterdeGebouwInput/nr_OrgEntity)[SPF/PerformancePerProduct/'+Classifications/Product/name+']'
+				, .
+				, Classifications/BemeterdeGebouwInput
+				);
+
+			container Criteria;
+		}	
+	}
+}			
