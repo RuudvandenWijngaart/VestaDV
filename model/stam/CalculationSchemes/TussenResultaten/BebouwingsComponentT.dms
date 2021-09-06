@@ -294,7 +294,8 @@ template BebouwingsComponentT
 		}
 		container Functioneel := CalculationSchemes/BerekenFunctioneel(BO, BO, id(.));
 
-		container Metervraag := CalculationSchemes/FunctioneelToMetervraag(BO, SPF); 
+		container MetervraagBerekening := CalculationSchemes/FunctioneelToMetervraag(BO, SPF); 
+		container Metervraag := MetervraagBerekening/result;
 		
 		container Activatie
 		{
@@ -446,107 +447,17 @@ template BebouwingsComponentT
 	
 	#include <ProductActieveWoning.dms>
 	#include <BouwdeelActieveWoning.dms>
+	#include <ActieveWoning.dms>
 	
-	unit<uint32> BebouwingsObjectMetGebouwOptie := BO
+	unit<uint32> BebouwingsObjectMetGebouwOptie := ActieveWoning/BebouwingsObjectMetGebouwOptie
 	{
 		container BC_kentallen := ../BC_kentallen;
-		attribute<classifications/schillabel>  Schillabel_rel  := makedefined(ProductActieveWoning/Results/schillabel_rel, BouwdeelActieveWoning/ProductInactieveBO/ResultsPerBO/schillabel_rel, BO/Schillabel_rel);
-		attribute<classifications/gebouwoptie> GebouwOptie_rel := makedefined(ProductActieveWoning/Results/gebouwoptie_rel, BO/gebouwoptie_rel);
-	
-		container bouwdelen := BO/bouwdelen
+		
+		container functioneel := ActieveWoning/BebouwingsObjectMetGebouwOptie/functioneel
 		{
-			container lastvervanging := for_each_nedv(
-				classifications/bouwdeel/name,
-				'isolatie/'+classifications/bouwdeel/name+' != BO/bouwdelen/isolatie/'+classifications/bouwdeel/name+'?'+
-					  'Zichtjaar_jaar'+
-					': BO/bouwdelen/lastvervanging/'+classifications/bouwdeel/name+'',
-				BO,
-				yr_uint16);
-			container isolatie := for_each_nedv(
-				classifications/bouwdeel/name,
-				'makedefined(
-					ProductActieveWoning/Results/Bouwdelen/isolatie/'+classifications/bouwdeel/name+',
-					BouwdeelActieveWoning/ProductInactieveBO/ResultsPerBO/Bouwdelen/Isolatie/'+classifications/bouwdeel/name+',
-					BO/Bouwdelen/Isolatie/'+classifications/bouwdeel/name+')',
-				BO,
-				Classifications/IsolatieNiveau);
-		}
-		
-		container InstallatiePerProduct := for_each_nedv(
-				classifications/Product/name,
-				'makedefined(
-					ProductActieveWoning/Results/InstallatiePerProduct/'+classifications/Product/name+',
-					BO/InstallatiePerProduct/'+classifications/Product/name+')',
-				BO,
-				Classifications/Installatie)
-		{
-			container LastVervanging := for_each_nedv(
-				classifications/Product/name,
-				'InstallatiePerProduct/'+classifications/Product/name+' != BO/InstallatiePerProduct/'+classifications/Product/name+'?'+
-					  'Zichtjaar_jaar'+
-					': BO/InstallatiePerProduct/lastvervanging/'+classifications/Product/name+'',
-				BO,
-				yr_uint16);
-				
-			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (BO) := makedefined(ProductActieveWoning/Results/InstallatiePerProduct/KK, BO/InstallatiePerProduct/KK);
-			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (BO) := makedefined(ProductActieveWoning/Results/InstallatiePerProduct/VT, BO/InstallatiePerProduct/VT);
-			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (BO) := makedefined(ProductActieveWoning/Results/InstallatiePerProduct/DK, BO/InstallatiePerProduct/DK);
-			attribute<Classifications/AfgifteSysteem>                             AS (BO) := makedefined(ProductActieveWoning/Results/InstallatiePerProduct/AS, BO/InstallatiePerProduct/AS);
-		}
-		
-		container BemeterdeGebouwInput_rel := for_each_nedv(
-				classifications/Product/name,
-				'makedefined(
-					ProductActieveWoning/Results/BemeterdeGebouwInput_rel/'+classifications/Product/name+',
-					BO/BemeterdeGebouwInput_rel/'+classifications/Product/name+')',
-				BO,
-				Classifications/BemeterdeGebouwInput);
-				
-		container metervraag := for_each_nedv(
-			classifications/BemeterdeGebouwInput/name,
-			'makedefined(
-				ProductActieveWoning/Results/metervraag/'+classifications/BemeterdeGebouwInput/name+',
-				BouwdeelActieveWoning/ProductInactieveBO/ResultsPerBO/metervraag/'+classifications/BemeterdeGebouwInput/name+',
-				BO/metervraag/result/'+classifications/BemeterdeGebouwInput/name+')',
-			BO,
-			GJ_yr);
-		
-		container functioneel := for_each_nedv(
-			classifications/FunctioneleVraag/name,
-			'makedefined(
-				ProductActieveWoning/Results/functioneel/'+classifications/FunctioneleVraag/name+',
-				BouwdeelActieveWoning/ProductInactieveBO/ResultsPerBO/functioneel/'+classifications/FunctioneleVraag/name+',
-				BO/functioneel/'+classifications/FunctioneleVraag/name+')',
-			BO,
-			GJ_yr)
-			{
-				container BaseValues := BO/Functioneel_base/BaseValues;
-				container RV_N1_Per_Bouwdeel := BO/Functioneel_base/RV_N1_Per_Bouwdeel;
-			}
-		
-		container aansluitcapaciteit := BO/aansluitcapaciteit
-		{
-			attribute<kW> RV (BO) := makedefined(BouwdeelActieveWoning/ProductInactieveBO/ResultsPerBO/AansluitCapaciteit/RV, BO/AansluitCapaciteit/RV);
-			attribute<kW> KD (BO) := makedefined(BouwdeelActieveWoning/ProductInactieveBO/ResultsPerBO/AansluitCapaciteit/KD, BO/AansluitCapaciteit/KD);
-			attribute<kW> TW (BO) := makedefined(BouwdeelActieveWoning/ProductInactieveBO/ResultsPerBO/AansluitCapaciteit/TW, BO/AansluitCapaciteit/TW);
-		}
-		
-		container kosten
-		{
-			container eenmalig := for_each_nedv(
-				Classifications/GebouwOptie_eenmalig/name,
-				'makedefined(ProductActieveWoning/Results/eenmalig/'+Classifications/GebouwOptie_eenmalig/name+', 0.0[eur])',
-				BO,
-				Eur)
-			{
-				attribute<eur> Ki_gv (BO) := makedefined(BouwdeelActieveWoning/ProductInactieveBO/ResultsPerBO/kosten/Ki_gv, ProductActieveWoning/Results/eenmalig/Ki_gv, 0.0[eur]);
-			}
-			container jaarlijks := for_each_nedv(
-				Classifications/GebouwOptie_jaarlijks/name,
-				'makedefined(ProductActieveWoning/Results/jaarlijks/'+Classifications/GebouwOptie_jaarlijks/name+', 0.0[eur_yr])',
-				BO,
-				Eur_yr);
-		}
+			container BaseValues := BO/Functioneel_base/BaseValues; // TODO: check of dit weg kan
+			container RV_N1_Per_Bouwdeel := BO/Functioneel_base/RV_N1_Per_Bouwdeel; // TODO: check of dit weg kan
+		}		
 	}
 	
 	unit<uint32> Results := BebouwingsObjectMetGebouwOptie
