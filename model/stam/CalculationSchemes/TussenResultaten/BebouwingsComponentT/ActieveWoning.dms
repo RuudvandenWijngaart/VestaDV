@@ -99,7 +99,26 @@ unit<uint32> ActieveWoning := subset(not(BO/Afbouw) && (BO/Activatie/ProductActi
 	// Kies uit results_Per_xInvesteringsOptie een InvesteringsOptie per ProductActieveWoning
 	container Choice_per_ActieveWoning
 	{
-		attribute<xInvesteringsOptie>  xInvesteringsOptie_rel(ActieveWoning) := min_index( Choice_per_xInvesteringsOptie/kosten_tbv_afweging, xInvesteringsOptie/ActieveWoning_rel);		
+		attribute<xInvesteringsOptie>  min_xInvesteringsOptie_rel   (ActieveWoning) := min_index( Choice_per_xInvesteringsOptie/kosten_tbv_afweging, xInvesteringsOptie/ActieveWoning_rel);
+		
+		parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(xInvesteringsOptie/ActieveWoning_rel) )
+		parameter<uint32> Seed := 1; // TODO: Koppelen aan generieke reproduceerbare seeder
+		parameter<float64> beta := 10.0 / max(choice_per_xInvesteringsOptie/kosten_tbv_afweging); // monetary sensitivity
+		 
+		attribute<Float64> MaxKosten     (ActieveWoning)      := max(Choice_per_xInvesteringsOptie/kosten_tbv_afweging, xInvesteringsOptie/ActieveWoning_rel);
+		attribute<Float64> Geschiktheid  (xInvesteringsOptie) := MaxKosten[xInvesteringsOptie/ActieveWoning_rel] - Choice_per_xInvesteringsOptie/kosten_tbv_afweging;
+		attribute<Float64> OddsRatio     (xInvesteringsOptie) := IsDefined(Geschiktheid) ? exp(min_elem(Geschiktheid * beta, LOG_MAX_FLOAT64)) : 0.0;
+		attribute<Float64> TotalOddsRatio(ActieveWoning)      := sum(OddsRatio, xInvesteringsOptie/ActieveWoning_rel);
+		attribute<Float64> Probability   (xInvesteringsOptie) := OddsRatio / TotalOddsRatio[xInvesteringsOptie/ActieveWoning_rel];
+		attribute<Float64> CumulProb     (xInvesteringsOptie) := cumulate(Probability, xInvesteringsOptie/ActieveWoning_rel);
+		attribute<Float64> rnd           (ActieveWoning)      := rnd_uniform(Seed, ActieveWoning, range(float64, 0.0, 1.0));
+		attribute<bool>    isSelected    (xInvesteringsOptie) := CumulProb - Probability <= rnd[xInvesteringsOptie/ActieveWoning_rel] && rnd[xInvesteringsOptie/ActieveWoning_rel] < CumulProb;
+		attribute<uint32>  nrSelected    (ActieveWoning)      := sum_uint32(isSelected, xInvesteringsOptie/ActieveWoning_rel);
+		attribute<xInvesteringsOptie>  SCurve_xInvesteringsOptie_rel(ActieveWoning) := max_index( isSelected, xInvesteringsOptie/ActieveWoning_rel);
+		
+		attribute<xInvesteringsOptie>  xInvesteringsOptie_rel(ActieveWoning) := SCurve_xInvesteringsOptie_rel;
+
+		
 		attribute<GeschikteOptie>  GeschikteOptie_rel(ActieveWoning)     := Choice_per_xInvesteringsOptie/GeschikteOptie_rel[ xInvesteringsOptie_rel ];
 	}
 	container Choice_Per_BO {
