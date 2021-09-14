@@ -19,6 +19,7 @@ template StartingStateComponent
 		// =============== ongewijzigde attributen uniform voor alle BC
 		attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel   := BebouwingsObjectSrc/buurt_rel;
 		attribute<ModelObject>                             ModelObject_rel := rlookup(BebouwingsObjectSrc/ModelObjectKey, ModelObject/ModelObjectKey);
+		attribute<Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data> Aflevergebied_rel := point_in_polygon(point, Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data/geometry);
 
 		// =============== attributen die per Rekenstap kunnen wijzigen door toepassing van GebouwOpties
 		attribute<Classifications/SchilLabel>  SchilLabel_rel := =(BebouwingsSector_rel == Classifications/BebouwingsSector/V/Woning) 
@@ -163,30 +164,39 @@ template StartingStateComponent
 	unit<uint8> ModelObjectKeyDomein;
 	unit<uint32>   PreStartJaar := subset(Results/bouwjaar < Startjaar_jaar)
 	{
-		attribute<Geography/rdc_meter>                       point             := Results/point[nr_orgentity];
-		attribute<Geography/rdc_meter>                       geometry          := Results/geometry[nr_orgentity];
-		attribute<string>                                    code              := Results/code[nr_orgentity];
-		attribute<string>                                    label             := Results/label[nr_orgentity], DialogType = "labelText";
-		attribute<Invoer/RuimtelijkeData/StudieGebied/buurt> Buurt_rel         := Results/Buurt_rel[nr_orgentity];
-		attribute<BebouwingsTypeDomein>                      BebouwingsType    := Results/BebouwingsType[nr_orgentity];
-		attribute<units/yr_uint16>                           Bouwjaar          := Results/Bouwjaar[nr_orgentity];
-		attribute<units/yr_uint16>                           Sloopjaar         := Results/Sloopjaar[nr_orgentity];
-		attribute<Classifications/Eigendom>                  Eigendom_rel      := Results/Eigendom_rel[nr_orgentity];
-		attribute<ratio>                                     ResterendNu       := const(1.0,.);
-		attribute<ModelObjectKeyDomein>                      ModelObjectKey    := Results/ModelObjectKey[nr_orgentity];
-		attribute<nrAsl>                                     nrAansluitingen_i := Results/nrAansluitingen_i[nr_orgentity];
-		attribute<m2>                                        Oppervlakte_i     := Results/Oppervlakte_i[nr_orgentity];
-		attribute<pand_asl>                                  pand_aandeel      := Results/pand_aandeel[nr_orgentity];
-		attribute<Classifications/Schillabel>                Schillabel_rel    := Results/Schillabel_rel[nr_orgentity];
-		attribute<Classifications/Schillabel>                Defaultlabel_rel  := Results/Defaultlabel_rel[nr_orgentity];
-		attribute<Classifications/WarmteOptie>               WarmteOptie_rel   := Results/WarmteOptie_rel[nr_orgentity];
-		attribute<Classifications/Schillabel>                Startlabel_rel    := Results/Startlabel_rel[nr_orgentity];
+		unit<uint32> buurt         := Invoer/RuimtelijkeData/StudieGebied/buurt;
+		unit<uint32> Aflevergebied := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data;
+		
+		attribute<Geography/rdc_meter>         point             := Results/point[nr_orgentity];
+		attribute<Geography/rdc_meter>         geometry          := Results/geometry[nr_orgentity];
+		attribute<string>                      code              := Results/code[nr_orgentity];
+		attribute<string>                      label             := Results/label[nr_orgentity], DialogType = "labelText";
+		attribute<buurt>                       Buurt_rel         := Results/Buurt_rel[nr_orgentity];
+		attribute<Aflevergebied>               Aflevergebied_rel := Results/Aflevergebied_rel[nr_OrgEntity];
+		attribute<BebouwingsTypeDomein>        BebouwingsType    := Results/BebouwingsType[nr_orgentity];
+		attribute<units/yr_uint16>             Bouwjaar          := Results/Bouwjaar[nr_orgentity];
+		attribute<units/yr_uint16>             Sloopjaar         := Results/Sloopjaar[nr_orgentity];
+		attribute<Classifications/Eigendom>    Eigendom_rel      := Results/Eigendom_rel[nr_orgentity];
+		attribute<ratio>                       ResterendNu       := const(1.0,.);
+		attribute<ModelObjectKeyDomein>        ModelObjectKey    := Results/ModelObjectKey[nr_orgentity];
+		attribute<nrAsl>                       nrAansluitingen_i := Results/nrAansluitingen_i[nr_orgentity];
+		attribute<m2>                          Oppervlakte_i     := Results/Oppervlakte_i[nr_orgentity];
+		attribute<pand_asl>                    pand_aandeel      := Results/pand_aandeel[nr_orgentity];
+		attribute<Classifications/Schillabel>  Schillabel_rel    := Results/Schillabel_rel[nr_orgentity];
+		attribute<Classifications/Schillabel>  Defaultlabel_rel  := Results/Defaultlabel_rel[nr_orgentity];
+		attribute<Classifications/WarmteOptie> WarmteOptie_rel   := Results/WarmteOptie_rel[nr_orgentity];
+		attribute<Classifications/Schillabel>  Startlabel_rel    := Results/Startlabel_rel[nr_orgentity];
 		
 		unit<uint8>  BebouwingsTypeDomein := Results/BebouwingsTypeDomein;
 		unit<uint32> AfnameGebied         := Results/AfnameGebied;
 		
-		attribute<AfnameGebied>                             AfnameGebied_rel   := Results/AfnameGebied_rel[nr_orgentity];
-		attribute<Classifications/GebouwOptie>              GebouwOptie_rel    := Results/GebouwOptie_rel[nr_orgentity];
+		attribute<AfnameGebied>                AfnameGebied_rel   := Results/AfnameGebied_rel[nr_orgentity];
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel    := Results/GebouwOptie_rel[nr_orgentity];
+		
+		container AansluitMogelijkheid
+		{
+			attribute<bool> Gas(PreStartJaar) := not(IsDefined(Aflevergebied_rel) && Aflevergebied/Jaar[Aflevergebied_rel] <= Startjaar_jaar) && Results/bouwjaar[nr_orgentity] < 2025w; // TODO: Check! 
+		}
 		
 		container Functioneel
 		{
