@@ -1,0 +1,190 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//              Configuratie voor project: BAG FSS Files > Make Snapshot              //
+//                                                                                    //
+//                              Object Vision 2018                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+// In deze configuratie worden een aantal overzichten gemaakt behorend bij een.       //
+// snapshot                                                                           //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container overzichten
+{
+	container impl
+	{
+		unit<uint8> numericlist: nrofrows = 10
+		{
+			attribute<string> values := string(id(.));
+		}
+		unit<uint8> alphabetlist: nrofrows = 26
+		{
+			attribute<string> values: ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
+		}
+
+		parameter<string> tab     := '\t';
+		parameter<string> newline := '\n';
+
+		unit<uint32> rapport_items := SubTree_PropValues(rapport,'fullname')
+		{
+			attribute<string> expr       := union_data(.,rapport_items_expr/expr);
+			attribute<string> name       := union_data(.,rapport_items_name/name);
+			attribute<string> valuesunit := union_data(.,rapport_items_valuesunit/valuesunit);
+		}
+
+		unit<uint32> rapport_items_expr       := SubTree_PropValues(rapport,'expr');
+		unit<uint32> rapport_items_name       := SubTree_PropValues(rapport,'name');
+		unit<uint32> rapport_items_valuesunit := SubTree_PropValues(rapport,'valuesunit');
+
+		unit<uint32> rapport_items_sel  := Subset(strcount(lowercase(rapport_items/FullName),'impl') == 0 && lowercase(rapport_items/name) <> 'per_objecttype')
+		{
+			attribute<string> fullname   := rapport_items/fullname[nr_OrgEntity];
+			attribute<string> name       := rapport_items/name[nr_OrgEntity];
+			attribute<string> expr       := rapport_items/expr[nr_OrgEntity];
+			attribute<bool>   isDataItem := strcount(lowercase(rapport_items/valuesunit[nr_OrgEntity]),'unknown') == 0;
+
+			attribute<uint32> level    := strcount(fullname, '/') - 4;
+
+			attribute<uint32> relpos   := strpos(fullname, 'rapport');
+			attribute<string> relname  := isDataItem ? substr(fullname, relpos, strlen(fullname) - relpos) : quote(name);
+			attribute<string> label    := repeat(tab,level) + name + ': ';
+		}
+
+		parameter<string> seperator:= ' + ' + quote(newline) + ' + ';
+		parameter<string> genereer_rapport_expr:=
+			AsList(
+				quote(rapport_items_sel/label) + ' + ' + 'string(' + rapport_items_sel/relname + ')'
+				, seperator
+			);
+		parameter<string> genereer_rapport:= = genereer_rapport_expr
+		,	StorageName = "= SnapshotDir + '/overzicht.txt'"
+		,	StorageType = "str";
+	}
+
+	container rapport
+	{
+		parameter<string> BAG_historie      := FSSDir;
+		parameter<int32>  BAG_snapshotdatum := prik_datum;
+
+		container per_objecttype := for_each_ne(
+			 'aantal_' + typeringen/objecttypes/name
+			,'overzichten/per_objecttype(
+				'+ typeringen/objecttypes/name + '/results/unique 
+				, /typeringen/status/' + typeringen/objecttypes/name +
+			')'
+		);
+
+		container mogelijke_fouten
+		{
+			container missing
+			{
+				parameter<uint32> ligplaats_zonder_geometry            := sum(uint32(isNull(ligplaats/results/unique/geometry_mm)));
+				parameter<uint32> standplaats_zonder_geometry          := sum(uint32(isNull(standplaats/results/unique/geometry_mm)));
+				parameter<uint32> pand_zonder_geometry                 := sum(uint32(isNull(pand/results/unique/geometry_mm)));
+				parameter<uint32> vbo_zonder_geometry                  := sum(uint32(isNull(vbo/results/unique/geometry_mm)));
+				parameter<uint32> woonplaats_zonder_geometry           := sum(uint32(isNull(woonplaats/results/unique/geometry_mm)));
+
+				parameter<uint32> pand_zonder_bouwjaar                 := sum(uint32(isNull(pand/results/unique/bouwjaar)));
+
+				parameter<uint32> vbo_zonder_oppervlakte               := sum(uint32(isNull(vbo/results/unique/oppervlakte)));
+
+				parameter<uint32> nummeraanduidingen_zonder_huisnummer := sum(uint32(isNull(nummeraanduiding/results/unique/huisnummer)));
+				parameter<uint32> nummeraanduidingen_zonder_postcode   := sum(uint32(isNull(nummeraanduiding/results/unique/postcode)));
+			}
+
+			container vreemdewaarden
+			{
+				parameter<uint32> pand_bouwjaren_voor_1051_of_na_2020             := sum(uint32(pand/results/unique/bouwjaar   < int16(1051) || pand/results/unique/bouwjaar   >= int16(2020)));
+				parameter<uint32> vbo_oppervlakte_kleiner_5_of_groter_500000      := sum(uint32(vbo/results/unique/oppervlakte < int32(5)    || vbo/results/unique/oppervlakte >= int32(500000)));
+
+				parameter<uint32> nummeraanduiding_postcodes_ongelijk_6_karakters :=
+					sum(
+						uint32(
+							isNull(rlookup(substr(nummeraanduiding/results/unique/postcode,0,1), impl/numericlist/values)) ||
+							isNull(rlookup(substr(nummeraanduiding/results/unique/postcode,1,1), impl/numericlist/values)) ||
+							isNull(rlookup(substr(nummeraanduiding/results/unique/postcode,2,1), impl/numericlist/values)) ||
+							isNull(rlookup(substr(nummeraanduiding/results/unique/postcode,3,1), impl/numericlist/values)) ||
+							isNull(rlookup(substr(lowercase(nummeraanduiding/results/unique/postcode),4,1), impl/alphabetlist/values)) ||
+							isNull(rlookup(substr(lowercase(nummeraanduiding/results/unique/postcode),5,1), impl/alphabetlist/values))
+						)
+					);
+			}
+
+			container referentieel
+			{
+				parameter<uint32> ligplaats_nummeraanduiding_id_zonder_record_in_nummeraanduiding        := sum(uint32(isNull(rlookup(ligplaats/results/unique/nummeraanduiding_id           , nummeraanduiding/results/unique/identificatie))));
+				parameter<uint32> ligplaats_nevenadres_zonder_record_in_nummeraanduiding                 := sum(uint32(isNull(rlookup(ligplaats/results/unique/nevenadres/nummeraanduiding_id, nummeraanduiding/results/unique/identificatie))));
+
+				parameter<uint32> standplaats_nummeraanduiding_id_zonder_record_in_nummeraanduiding      := sum(uint32(isNull(rlookup(standplaats/results/unique/nummeraanduiding_id           , nummeraanduiding/results/unique/identificatie))));
+				parameter<uint32> standplaats_nevenadres_zonder_record_in_nummeraanduiding               := sum(uint32(isNull(rlookup(standplaats/results/unique/nevenadres/nummeraanduiding_id, nummeraanduiding/results/unique/identificatie))));
+
+				parameter<uint32> vbo_nummeraanduiding_id_zonder_record_in_nummeraanduiding              := sum(uint32(isNull(rlookup(vbo/results/unique/nummeraanduiding_id           , nummeraanduiding/results/unique/identificatie))));
+				parameter<uint32> vbo_nevenadres_zonder_record_in_nummeraanduiding                       := sum(uint32(isNull(rlookup(vbo/results/unique/nevenadres/nummeraanduiding_id, nummeraanduiding/results/unique/identificatie))));
+				parameter<uint32> vbo_zonder_gereletareed_pand                                           := sum(uint32(isNull(rlookup(vbo/results/unique/identificatie,                  vbo/results/unique/gerelateerdPand/vbo_id))));
+
+				parameter<uint32> vbo_pand_id_zonder_record_in_pand                                      := sum(uint32(isNull(rlookup(vbo/results/unique/gerelateerdPand/pand_id, pand/results/unique/identificatie))));
+				parameter<uint32> vbo_pand_id_niet_in_gerelateerd_pand_geometrie                         := sum(uint32(!any(impl/pand_id_is_pand_id_geom,impl/unique_rel)));
+
+				parameter<uint32> nummeraanduiding_openbareruimte_id_zonder_record_in_openbareruimte     := sum(uint32(isNull(rlookup(nummeraanduiding/results/unique/openbareruimte_id, openbareruimte/results/unique/identificatie))));
+				parameter<uint32> nummeraanduiding_gerelateerdeWoonplaats_id_zonder_record_in_woonplaats := sum(uint32(isNull(rlookup(nummeraanduiding/results/unique/gerelateerdeWoonplaats/woonplaats_id, woonplaats/results/unique/identificatie))));
+
+				parameter<uint32> openbareruimte_gerelateerdeWoonplaats_id_zonder_record_in_woonplaats   := sum(uint32(isNull(rlookup(openbareruimte/results/unique/woonplaats_id, woonplaats/results/unique/identificatie))));
+
+				container impl
+				{
+					attribute<string>              pand_id_geom            (vbo/results/unique/gerelateerdPand) := rjoin(vbo/results/unique/gerelateerdPand/vbo_id, vbo/results/unique/identificatie, vbo/results/unique/pand_id_geom);
+					attribute<bool>                pand_id_is_pand_id_geom (vbo/results/unique/gerelateerdPand) := vbo/results/unique/gerelateerdPand/pand_id == pand_id_geom;
+					attribute<vbo/results/unique>  unique_rel              (vbo/results/unique/gerelateerdPand) := rlookup(vbo/results/unique/gerelateerdPand/vbo_id, vbo/results/unique/identificatie);
+				}
+			}
+
+			container incorrecte_geometrie
+			{
+				parameter<uint32> ligplaats_minder_dan_3_punten   := sum(uint32(impl/ligplaats_nr_points < 3));
+				parameter<uint32> standplaats_minder_dan_3_punten := sum(uint32(impl/standplaats_nr_points < 3));
+				parameter<uint32> pand_minder_dan_3_punten        := sum(uint32(impl/pand_nr_points < 3));
+				parameter<uint32> woonplaats_minder_dan_3_punten  := sum(uint32(impl/woonplaats_nr_points < 3));
+
+				container impl
+				{
+					unit<uint32>      ligplaats_pointset  := Sequence2Points(ligplaats/results/unique/geometry_mm);
+					attribute<uint32> ligplaats_nr_points (ligplaats/results/unique) := max(ligplaats_pointset/ordinal, ligplaats_pointset/SequenceNr) + 1;
+
+					unit<uint32>      standplaats_pointset  := Sequence2Points(standplaats/results/unique/geometry_mm);
+					attribute<uint32> standplaats_nr_points (standplaats/results/unique) := max(standplaats_pointset/ordinal, standplaats_pointset/SequenceNr) + 1;
+
+					unit<uint32>      pand_pointset  := Sequence2Points(pand/results/unique/geometry_mm);
+					attribute<uint32> pand_nr_points (pand/results/unique) := max(pand_pointset/ordinal, pand_pointset/SequenceNr) + 1;
+
+					unit<uint32>      woonplaats_pointset  := Sequence2Points(woonplaats/results/unique/geometry_mm);
+					attribute<uint32> woonplaats_nr_points (woonplaats/results/unique) := max(woonplaats_pointset/ordinal, woonplaats_pointset/SequenceNr) + 1;
+				}
+			}
+		}
+	}
+
+	template per_objecttype
+	{
+		// begin case parameters
+		unit<uint32> impl_src;
+		unit<uint8>  impl_statustype;
+		//
+
+		parameter<uint32> totaal    := #impl_src;
+
+		parameter<uint32> onderzoek := sum(uint32(impl_src/meta/IS_ONDERZOEK));
+		parameter<uint32> correctie := sum(uint32(impl_src/meta/IS_CORRECTIE));
+		parameter<uint32> officieel := sum(uint32(impl_src/meta/IS_OFFICIEEL));
+		
+		container impl
+		{
+			attribute<uint32> pcount (impl_statustype) := pcount(rlookup(lowercase(impl_src/meta/STATUS), impl_statustype/label));
+		}
+
+		parameter<string> status_lijst :=
+			overzichten/impl/newline + overzichten/impl/tab + overzichten/impl/tab + asList(impl_statustype/label + ': ' + string(impl/pcount), overzichten/impl/newline + overzichten/impl/tab + overzichten/impl/tab);
+	}
+}
