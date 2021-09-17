@@ -128,9 +128,12 @@ template BebouwingsComponentT
 
 	unit<uint8> BebouwingsTypeDomein := BO/BebouwingsTypeDomein;
 
-	container union := =Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw ? 'CalculationSchemes/BebouwingsOperaties/union(PrevObject, NieuwbouwBron)' : '..';
+	parameter<bool> doNieuwbouw := Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw;
+	container union := = doNieuwbouw ? 'CalculationSchemes/BebouwingsOperaties/union(PrevObject, NieuwbouwBron)' : '..';
 
-	unit<uint32> BO := =Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw ? 'union/result' : 'PrevObject'
+	unit<uint32> BO_base := = doNieuwbouw ? 'union/result' : 'PrevObject';
+	
+	unit<uint32> BO := BO_base
 	{
 		container BebouwingsComponent_UpRef := ..; // TODO_OV: used sporadically, try to avoid this CHECK
 		container NcwRefs                   := BebouwingsComponent_UpRef/NcwRefs;
@@ -141,7 +144,7 @@ template BebouwingsComponentT
 		unit<uint32>    ModelObjectDomain := ModelObject;
 		attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel (BO) := BO/buurt_rel;
 		attribute<ModelObject>                             Model_rel     (BO) := rlookup(BO/ModelObjectKey, ModelObject/ModelObjectKey), KeepData = "True";
-		attribute<PrevObject>                              PrevObject_rel(BO) := rlookup(BO/code, PrevObject/code);
+		attribute<PrevObject>                              PrevObject_rel(BO) := = doNieuwbouw ? 'rlookup(BO/code, PrevObject/code)' : 'ID(PrevObject)';
 
 		unit<uint32>  AfnameGebied         := PrevState/AfnameGebied;
 
@@ -151,13 +154,14 @@ template BebouwingsComponentT
 		attribute<Classifications/WarmteOptie> WarmteOptie_rel (BO) := PrevObject/WarmteOptie_rel[PrevObject_rel];
 		attribute<Classifications/Schillabel>  Startlabel_rel  (BO) := PrevObject/Startlabel_rel[PrevObject_rel];
 		attribute<BO> Bo_rel (BO) := id(.);
-	
-		container AansluitMogelijkheid 
+		
+		container Aansluitingen
 		{
 			container BWN := Invoer/RuimtelijkeData/BestaandeWarmtenetten;
 			
-			attribute<bool> Gas(BO) := not(WarmteNet) && PrevObject/AansluitMogelijkheid/Gas[Bo/PrevObject_rel];
-			attribute<bool> H2 (BO) := const(false, BO);
+			attribute<nrAsl> PrevGNet        (BO) := PrevObject/Aansluitingen/GNet[BO/PrevObject_rel];
+			attribute<bool> GeenGasafsluiting(BO) := not(WarmteNet) && (PrevGNet > 0[nrAsl]);
+			attribute<nrAsl> GNet            (BO) := GeenGasafsluiting ? PrevObject/Aansluitingen/GNet[Bo/PrevObject_rel] : 0[nrAsl];
 			
 			attribute<bool> WarmteNet(BO) := BWN/Aflevergebied_data/Startjaar[BO/Aflevergebied_rel] <= Zichtjaar_jaar;
 			attribute<bool> KoudeNet (BO) := WarmteNet && BWN/AfleverType/HeeftKoude[ BWN/Aflevergebied_data/Type_rel[ BO/Aflevergebied_rel ] ];
@@ -166,10 +170,22 @@ template BebouwingsComponentT
 //			attribute<bool> LT_Warmte(BO):= WarmteNet && Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data/IsLT[BO/Aflevergebied_rel];
 		}
 		
+		// TODO: wat te doen met NieuwbouwBron installaties ? 
+		// N.B.: voor nieuwe woningen geldt: not(IsDefined(PrevObject_rel))
+		container PrevInstallatiePerProduct := for_each_nedv(Classifications/Product/name
+		, replace('PrevObject/InstallatiePerProduct/@PN[PrevObject_rel]', '@PN', Classifications/Product/name)
+		, BO, Classifications/Installatie
+		);
+		
+		// Vervang Installaties voor RV en TW wanneer Gas zojuist is afgesloten. \
+		// Gebruik daarvoor kenmerk Classifications/Installatie/Gasvervanger
 		container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
-		, 'PrevObject/InstallatiePerProduct/'+Classifications/Product/name+'[PrevObject_rel]'
-		, BO
-		, Classifications/Installatie
+		,	replace('Aansluitingen/GeenGasafsluiting'
+				'? PrevInstallatiePerProduct/@PN '
+				': Classifications/Installatie/Gasvervanger[PrevInstallatiePerProduct/@PN]'
+			,	'@PN', Classifications/Product/name
+			)
+		,	BO, Classifications/Installatie
 		)
 		{
 			container LastVervanging := for_each_nedv(Classifications/Product/name
@@ -326,8 +342,8 @@ template BebouwingsComponentT
 				'>= Classifications/Installatie/Levensduur[InstallatiePerProduct/'+ classifications/product/name +']',
 				(..),
 				bool);
-			attribute<bool> BouwdeelActief (..) := ='add('+AsItemList('float64(Bouwdelen/'+Classifications/bouwdeel/name+')')+') > 0d';
-			attribute<bool> ProductActief  (..) := ='add('+AsItemList('float64(Producten/'+Classifications/product/name+')')+') > 0d';
+			attribute<bool> BouwdeelActief (..) := ='add('+AsItemList('uint8(Bouwdelen/'+Classifications/bouwdeel/name+')')+') > 0b';
+			attribute<bool> ProductActief  (..) := ='add('+AsItemList('uint8(Producten/'+Classifications/product/name+')')+') > 0b';
 		}
 		
 /*		container Activatie
