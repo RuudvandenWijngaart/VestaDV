@@ -33,28 +33,26 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 		
 		attribute<BO> BO_rel  := BouwdeelActieveWoning/BO_rel[BouwdeelActieveWoning_rel];
 
-		attribute<classifications/IsolatieAmbitie    > IsolatieAmbitie_rel := classifications/IsolatieVerbetering/IsolatieAmbitie_rel[IsolatieVerbetering_rel];
+		attribute<classifications/IsolatieAmbitie> IsolatieAmbitie_rel := classifications/IsolatieVerbetering/IsolatieAmbitie_rel[IsolatieVerbetering_rel];
 		
 		attribute<float64> beta(Classifications/IsolatieVerbetering) := classifications/IsolatieAmbitie/BesparingsFactor[classifications/IsolatieVerbetering/IsolatieAmbitie_rel];
 		
-		parameter<GJ_Yr>   VerbruiksIndicatie := 1000[m3_yr] * Invoer/Kengetallen/Constanten/GasEnergie; // indicatie verbruik per woning in GJ_Jr TODO:koppelen aan verbruiken in BO
-		parameter<EUR_GJ>  EnergiePrijs := 0.6[EUR_m3] / Invoer/Kengetallen/Constanten/GasEnergie; // indicatie kosten per GJ TODO: koppelen aan actuele prijzen in zichtjaar
-		parameter<Yr>      Duration := 40[yr]; // afschrijftijd voor rentabiliteitsafweging
+		parameter<GJ_Yr>   VerbruiksIndicatie := mean(BO/Functioneel/RV)                             , descr = "indicatie verbruik per woning in GJ_Jr";
+		parameter<EUR_GJ>  EnergiePrijs       := first(prijzen/Aardgas/Staffel/KGJ_eindgebruik_excl) , descr = "kosten per GJ";
+		parameter<Yr>      Duration           := mean(Classifications/Bouwdeel/Levensduur[yr])       , descr = "afschrijftijd voor rentabiliteitsafweging";
+		parameter<EUR>     CombiFactor        := (VerbruiksIndicatie * EnergiePrijs * Duration);
 		
-		
-		parameter<EUR> CombiFactor := (VerbruiksIndicatie * EnergiePrijs * Duration);
-		
-		// hoeveel besparing in verlies; TODO: varieren KG, MG, GG 		
+		// hoeveel besparing in verlies	
 		attribute<Float64> BesparingsFactor(classifications/BouwdeelIsolatie) := 
 			classifications/Bouwdeel/Verlies[classifications/BouwdeelIsolatie/bouwdeel_rel] // hoeveel relatief belang 
 		*	MakeDefined(classifications/IsolatieMaatregel/R_RV[invert(classifications/IsolatieMaatregel/BouwdeelIsolatie_rel)] / value(100, Percent), 0.0);
 		
 		unit<uint32> BDIxIV := combine(classifications/BouwdeelIsolatie, classifications/IsolatieVerbetering) 
 		{		
-			attribute<classifications/BouwdeelIsolatie>    BouwdeelIsolatie_rel := nr_1;
+			attribute<classifications/BouwdeelIsolatie>    BouwdeelIsolatie_rel    := nr_1;
 			attribute<classifications/IsolatieVerbetering> IsolatieVerbetering_rel := nr_2;
 			
-			attribute<EUR> Besparing := BesparingsFactor[nr_1] * beta[nr_2] * Combifactor; // TODO: varieren KG, MG, GG en aansluiten op statisch berekende factoren
+			attribute<EUR> Besparing := BesparingsFactor[nr_1] * beta[nr_2] * Combifactor;
 			
 			attribute<EUR_m2> Kosten   (classifications/BouwdeelIsolatie) :=  // tov kosten [per m2] TODO: varieren naar in context van toepassing zijnde kostenkolom. Allereerst Egw, Mgw
 				MakeDefined(classifications/IsolatieMaatregel/kosten/Nat_Egw_Ind[invert(classifications/IsolatieMaatregel/BouwdeelIsolatie_rel)], 0[EUR_m2]);
@@ -74,22 +72,7 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 			)
 		, 	AmbitieBerekening, float64
 		);
-/*
-		container IsolatieScore := for_each_nedv(classifications/BouwdeelIsolatie/name
-		,	replace(
-				'iif(IsolatieNiveau_rel/@BD[BouwdeelActieveWoning_rel] <=  @I'
-				',	BO/Bouwdelen/@BD[BO_rel]'
-					'*	(	BDIxIV/Besparing[@BDIxIV]  '
-					'/	TotalArea[BouwdeelActieveWoning_rel] - iif(IsolatieNiveau_rel/@BD[BouwdeelActieveWoning_rel] > @I, BDIxIV/kosten[@I], 0[EUR_m2]))'
-				',	(0.0 / 0.0)'
-				')'
-			,	'@BDIxIV', 'combine_data(BDIxIV, @I, IsolatieVerbetering_rel)'
-			,	'@BD', classifications/BouwdeelIsolatie/bouwdeel_name
-			,	'@I',  'classifications/BouwdeelIsolatie/V/'+classifications/BouwdeelIsolatie/name
-			)
-		, 	AmbitieBerekening, float64
-		);
-*/		
+
 		// TODO: check for overflow
 		parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(classifications/BouwdeelIsolatie/bouwdeel_rel) )
 		container OddsRatio := for_each_nedv(classifications/BouwdeelIsolatie/name
