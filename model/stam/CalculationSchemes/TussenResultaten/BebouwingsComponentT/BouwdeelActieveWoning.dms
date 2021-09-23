@@ -41,53 +41,50 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 		parameter<Yr>      Duration           := mean(Classifications/Bouwdeel/Levensduur[yr])       , descr = "afschrijftijd voor rentabiliteitsafweging";
 		parameter<EUR>     CombiFactor        := (VerbruiksIndicatie * EnergiePrijs * Duration);
 		
-		// hoeveel besparing in verlies	
-		attribute<Float64> BesparingsFactor(classifications/BouwdeelIsolatie) := 
-			classifications/Bouwdeel/Verlies[classifications/BouwdeelIsolatie/bouwdeel_rel] // hoeveel relatief belang 
-		*	MakeDefined(classifications/IsolatieMaatregel/R_RV[invert(classifications/IsolatieMaatregel/BouwdeelIsolatie_rel)] / value(100, Percent), 0.0);
+		// hoeveel besparing in verlies
 		
-		unit<uint32> BDIxIV := combine(classifications/BouwdeelIsolatie, classifications/IsolatieVerbetering) 
-		{		
-			attribute<classifications/BouwdeelIsolatie>    BouwdeelIsolatie_rel    := nr_1;
-			attribute<classifications/IsolatieVerbetering> IsolatieVerbetering_rel := nr_2;
-			
-			attribute<EUR> Besparing := BesparingsFactor[nr_1] * beta[nr_2] * Combifactor;
-			
-			attribute<EUR_m2> Kosten   (classifications/BouwdeelIsolatie) :=  // tov kosten [per m2] TODO: varieren naar in context van toepassing zijnde kostenkolom. Allereerst Egw, Mgw
-				MakeDefined(classifications/IsolatieMaatregel/kosten/Nat_Egw_Ind[invert(classifications/IsolatieMaatregel/BouwdeelIsolatie_rel)], 0[EUR_m2]);
-		}
+		// xx_N1 behoeft geen afweging, geen besparing noch kosten.
+		attribute<Float64> BesparingsFactor(classifications/IsolatieMaatregel) := 
+			classifications/Bouwdeel/Verlies[classifications/IsolatieMaatregel/bouwdeel_rel] // hoeveel relatief belang 
+		*	MakeDefined(classifications/IsolatieMaatregel/R_RV / value(100, Percent), 0.0);
 		
-		container IsolatieScore := for_each_nedv(classifications/BouwdeelIsolatie/name
+		unit<uint32> IMxUV := classifications/IsolatieMaatregel/xUitvoering;
+		
+		// IsolatieScore: xx_N1 behoeft geen afweging, geen besparing en ook 0 kosten; 
+		// huidig niveau's (indien > N1) behoeven wel afweging teneinde tegenwicht te bieden voor besparingen bij volgended IsolatieNiveau's
+		container IsolatieScore := for_each_nedv(classifications/IsolatieMaatregel/name
 		,	replace(
-				'iif(IsolatieNiveau_rel/@BD[BouwdeelActieveWoning_rel] <=  @I'
+				'iif(IsolatieNiveau_rel/@BD[BouwdeelActieveWoning_rel] <=  @IN'
 				',	BO/Bouwdelen/@BD[BO_rel]'
-					'*	(	BDIxIV/Besparing[@BDIxIV]  '
-					'/	TotalArea[BouwdeelActieveWoning_rel] - iif(IsolatieNiveau_rel/@BD[BouwdeelActieveWoning_rel] < @I, BDIxIV/kosten[@I], 0[EUR_m2]))'
+					'*	( Combifactor * BesparingsFactor[@IM] * beta[IsolatieVerbetering_rel]  '
+					'/	TotalArea[BouwdeelActieveWoning_rel] - iif(IsolatieNiveau_rel/@BD[BouwdeelActieveWoning_rel] < @IN, IMxUV/kosten[@IMxUV], 0[EUR_m2]))'
 				',	(0.0 / 0.0)'
 				')'
-			,	'@BDIxIV', 'combine_data(BDIxIV, @I, IsolatieVerbetering_rel)'
-			,	'@BD', classifications/BouwdeelIsolatie/bouwdeel_name
-			,	'@I',  'classifications/BouwdeelIsolatie/V/'+classifications/BouwdeelIsolatie/name
+			,	'@BD',    classifications/IsolatieMaatregel/bouwdeel_name
+			,	'@IN',    'classifications/IsolatieNiveau/V/'+classifications/IsolatieMaatregel/IsolatieNiveau_name
+			
+			,	'@IMxUV', 'combine_data(IMxUV, @IM, BO/Activatie/Uitvoering[BO_rel])'
+			,	'@IM',    'classifications/IsolatieMaatregel/V/'+classifications/IsolatieMaatregel/name
 			)
 		, 	AmbitieBerekening, float64
 		);
 
 		// TODO: check for overflow
 		parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(classifications/BouwdeelIsolatie/bouwdeel_rel) )
-		container OddsRatio := for_each_nedv(classifications/BouwdeelIsolatie/name
+		container OddsRatio := for_each_nedv(classifications/IsolatieMaatregel/name
 		,	replace('IsDefined(IsolatieScore/@BDI) ? exp(min_elem(IsolatieScore/@BDI * beta[IsolatieVerbetering_rel], LOG_MAX_FLOAT64)) : 0.0'
-			,	'@BDI', classifications/BouwdeelIsolatie/name)
+			,	'@BDI', classifications/IsolatieMaatregel/name)
 		,	AmbitieBerekening, float64
 		)
 		{
 			container Total := for_each_nedv(classifications/bouwdeel/name
-			, 'add(1.0, '+AsItemList(classifications/BouwdeelIsolatie/name, classifications/BouwdeelIsolatie/bouwdeel_rel)+')'
+			, 'add(1.0, '+AsItemList(classifications/IsolatieMaatregel/name, classifications/IsolatieMaatregel/bouwdeel_rel)+')'
 			, AmbitieBerekening, float64
 			);
 		}
 		
-		container P := for_each_nedv(classifications/BouwdeelIsolatie/name
-		, 'OddsRatio/'+classifications/BouwdeelIsolatie/name + ' / OddsRatio/Total/'+classifications/BouwdeelIsolatie/bouwdeel_name
+		container P := for_each_nedv(classifications/IsolatieMaatregel/name
+		, 'OddsRatio/'+classifications/IsolatieMaatregel/name + ' / OddsRatio/Total/'+classifications/IsolatieMaatregel/bouwdeel_name
 		, AmbitieBerekening, float64
 		);
 			
@@ -165,9 +162,9 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 		parameter<classifications/Bouwdeel> bouwdeel_rel;
 		attribute<classifications/IsolatieNiveau> OrgIsolatieNiveau_rel(BouwdeelActieveWoning);
 		
-		container CumulP := for_each_nedv(classifications/IsolatieNiveau/name
-		, 'P/'+classifications/bouwdeel/name[bouwdeel_rel]+'_'+classifications/IsolatieNiveau/name
-		+ MakeDefined('+ '+classifications/IsolatieNiveau/name[ID(classifications/IsolatieNiveau)-1], '')
+		container CumulP := for_each_nedv(classifications/IsolatieDoel/name
+		, 'P/'+classifications/bouwdeel/name[bouwdeel_rel]+'_'+classifications/IsolatieDoel/name
+		+ MakeDefined('+ '+classifications/IsolatieDoel/name[ID(classifications/IsolatieDoel)-1], '')
 		, AmbitieBerekening, float64
 		);
 		
@@ -177,8 +174,7 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 		attribute<bool> Activatie (BouwdeelActieveWoning) := ='BO/Activatie/Bouwdelen/'+classifications/Bouwdeel/name[bouwdeel_rel]+'[BO_rel]';
 
 		attribute<classifications/IsolatieNiveau> NewIsolatieNiveau_rel(AmbitieBerekening) := 
-			not(Activatie[BouwdeelActieveWoning_rel]) ? OrgIsolatieNiveau_rel[BouwdeelActieveWoning_rel]
-		:	CumulP/n1 >= rnd[BouwdeelActieveWoning_rel] ? classifications/IsolatieNiveau/V/n1 
+			not(Activatie[BouwdeelActieveWoning_rel]) ? OrgIsolatieNiveau_rel[BouwdeelActieveWoning_rel]			
 		:	CumulP/n2 >= rnd[BouwdeelActieveWoning_rel] ? classifications/IsolatieNiveau/V/n2 
 		:	CumulP/n3 >= rnd[BouwdeelActieveWoning_rel] ? classifications/IsolatieNiveau/V/n3 
 		:	CumulP/n4 >= rnd[BouwdeelActieveWoning_rel] ? classifications/IsolatieNiveau/V/n4
