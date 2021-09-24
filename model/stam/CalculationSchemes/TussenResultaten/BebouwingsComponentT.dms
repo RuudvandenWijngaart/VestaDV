@@ -62,8 +62,23 @@ template BebouwingsComponentT
 		,	replace('BeginSituatieResults/InstallatiePerProduct/@PN[nr_OrgEntity]'
 			,	'@PN', Classifications/Product/name
 			)
-		,	HistorischBouw, Classifications/Installatie
-		);
+		,	HistorischBouw, Classifications/Installatie)
+		{
+			container LastVervanging := for_each_nedv(Classifications/Product/name
+			,	replace('BeginSituatieResults/InstallatiePerProduct/LastVervanging/@PN[nr_OrgEntity]'
+				,	'@PN', Classifications/Product/name)
+			, HistorischBouw, yr_uint16)
+			{
+				attribute<yr_uint16> KK (HistorischBouw) := BeginSituatieResults/InstallatiePerProduct/LastVervanging/KK[nr_OrgEntity];
+				attribute<yr_uint16> VT (HistorischBouw) := BeginSituatieResults/InstallatiePerProduct/LastVervanging/VT[nr_OrgEntity];
+				attribute<yr_uint16> DK (HistorischBouw) := BeginSituatieResults/InstallatiePerProduct/LastVervanging/DK[nr_OrgEntity];
+			}
+			
+			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (HistorischBouw) := BeginSituatieResults/InstallatiePerProduct/KK[nr_OrgEntity];
+			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (HistorischBouw) := BeginSituatieResults/InstallatiePerProduct/VT[nr_OrgEntity];
+			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (HistorischBouw) := BeginSituatieResults/InstallatiePerProduct/DK[nr_OrgEntity];
+			attribute<Classifications/AfgifteSysteem>                             AS (HistorischBouw) := BeginSituatieResults/InstallatiePerProduct/AS[nr_OrgEntity];
+		}
 		
 		container BemeterdeGebouwInput_rel :=  for_each_nedv(
 				classifications/Product/name,
@@ -190,23 +205,25 @@ template BebouwingsComponentT
 				': Classifications/Installatie/Gasvervanger[BO_base/InstallatiePerProduct/@PN]'
 			,	'@PN', Classifications/Product/name
 			)
-		,	BO, Classifications/Installatie
-		)
+		,	BO, Classifications/Installatie)
 		{
 			container LastVervanging := for_each_nedv(Classifications/Product/name
-				, 'PrevObject/InstallatiePerProduct/LastVervanging/'+Classifications/Product/name+'[PrevObject_rel]'
-				, BO
-				, yr_uint16)
-				{
-					attribute<yr_uint16> KK (BO) := PrevObject/InstallatiePerProduct/LastVervanging/KK[PrevObject_rel];
-					attribute<yr_uint16> VT (BO) := PrevObject/InstallatiePerProduct/LastVervanging/VT[PrevObject_rel];
-					attribute<yr_uint16> DK (BO) := PrevObject/InstallatiePerProduct/LastVervanging/DK[PrevObject_rel];
-				}
+			,	replace('(Aansluitingen/GeenGasafsluiting || Classifications/Installatie/GeenGasvervanger[BO_base/InstallatiePerProduct/@PN])'
+					'? BO_base/InstallatiePerProduct/LastVervanging/@PN '
+					': zichtjaar_jaar'
+				,	'@PN', Classifications/Product/name
+				)
+			, BO, yr_uint16)
+			{
+				attribute<yr_uint16> KK (BO) := (Aansluitingen/GeenGasafsluiting || Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/GeenGasvervanger[BO_base/InstallatiePerProduct/KK]) ? BO_base/InstallatiePerProduct/LastVervanging/KK : zichtjaar_jaar;
+				attribute<yr_uint16> VT (BO) := (Aansluitingen/GeenGasafsluiting || Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/GeenGasvervanger[BO_base/InstallatiePerProduct/VT]) ? BO_base/InstallatiePerProduct/LastVervanging/VT : zichtjaar_jaar;
+				attribute<yr_uint16> DK (BO) := (Aansluitingen/GeenGasafsluiting || Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/GeenGasvervanger[BO_base/InstallatiePerProduct/DK]) ? BO_base/InstallatiePerProduct/LastVervanging/DK : zichtjaar_jaar;
+			}
 			
-			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (BO) := PrevObject/InstallatiePerProduct/KK[PrevObject_rel];
-			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (BO) := PrevObject/InstallatiePerProduct/VT[PrevObject_rel];
-			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (BO) := PrevObject/InstallatiePerProduct/DK[PrevObject_rel];
-			attribute<Classifications/AfgifteSysteem>                             AS (BO) := PrevObject/InstallatiePerProduct/AS[PrevObject_rel];
+			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (BO) := Aansluitingen/GeenGasafsluiting ? BO_base/InstallatiePerProduct/KK : Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/Gasvervanger[BO_base/InstallatiePerProduct/KK];
+			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (BO) := Aansluitingen/GeenGasafsluiting ? BO_base/InstallatiePerProduct/VT : Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Gasvervanger[BO_base/InstallatiePerProduct/VT];
+			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (BO) := Aansluitingen/GeenGasafsluiting ? BO_base/InstallatiePerProduct/DK : Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Gasvervanger[BO_base/InstallatiePerProduct/DK];
+			attribute<Classifications/AfgifteSysteem>                             AS (BO) := BO_base/InstallatiePerProduct/AS; // TODO: blijft na afsluiting gas; igv LT warmtenet, daar regelen?
 		}
 		
 		attribute<AfnameGebied>                   AfnameGebied_rel   (BO) := PrevObject/AfnameGebied_rel[PrevObject_rel];
