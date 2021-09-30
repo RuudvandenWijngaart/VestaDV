@@ -97,6 +97,59 @@ container Maatschappelijk: Source = "FO v7a C6", isHidden = "true"
 				,	'@IN', Classifications/Installatie/name)
 			,	void, uint32
 			);			
+			
+			unit<uint32> I := Classifications/Installatie;
+			unit<uint32> II := combine(I, I);
+			
+			attribute<II> InstallatieGetalRV_rel(BO) := combine_data(II, BO/InstallatiePerProduct/RVb, BO/InstallatiePerProduct/RVp);
+			attribute<II> InstallatieGetalTW_rel(BO) := combine_data(II, BO/InstallatiePerProduct/TWb, BO/InstallatiePerProduct/TWp);
+			attribute<II> InstallatieGetalKD_rel(BO) := combine_data(II, BO/InstallatiePerProduct/KDb, BO/InstallatiePerProduct/KDp);
+
+			unit<uint32> InstallatieGetalOV := combine(Classifications/AfgifteSysteem
+					, Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes 
+					, Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes 
+					, Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes 
+			);
+			
+			attribute<uint32> InstallatieGetalOV_rel(BO) := 
+				combine_data(InstallatieGetalOV, 
+					BO/InstallatiePerProduct/AS, 
+					combine_data(combine(Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes, Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes, Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes)
+					,	BO/InstallatiePerProduct/VT
+					,	combine_data(combine(Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes, Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes)
+						,	BO/InstallatiePerProduct/DK
+						,	BO/InstallatiePerProduct/KK
+						)
+					)
+				);
+
+			unit<uint32> Voorkomend_InstallatieGetalRV := unique(InstallatieGetalRV_rel) { attribute<.> per_BO(BO) := rlookup(InstallatieGetalRV_rel, values); }
+			unit<uint32> Voorkomend_InstallatieGetalTW := unique(InstallatieGetalTW_rel) { attribute<.> per_BO(BO) := rlookup(InstallatieGetalTW_rel, values); }
+			unit<uint32> Voorkomend_InstallatieGetalKD := unique(InstallatieGetalKD_rel) { attribute<.> per_BO(BO) := rlookup(InstallatieGetalKD_rel, values); }
+			unit<uint32> Voorkomend_InstallatieGetalOV := unique(InstallatieGetalOV_rel) { attribute<.> per_BO(BO) := rlookup(InstallatieGetalOV_rel, values); }
+			
+			unit<uint32> InstallatieGetal := combine(Voorkomend_InstallatieGetalRV
+					, Voorkomend_InstallatieGetalTW
+					, Voorkomend_InstallatieGetalKD
+					, Voorkomend_InstallatieGetalOV
+			);
+			
+			attribute<uint32> InstallatieGetal_rel(BO) := 
+				combine_data(InstallatieGetal, 
+					Voorkomend_InstallatieGetalRV/per_BO, 
+					combine_data(combine(Voorkomend_InstallatieGetalTW , Voorkomend_InstallatieGetalKD, Voorkomend_InstallatieGetalOV)
+					,	Voorkomend_InstallatieGetalTW/per_BO
+					,	combine_data(combine(Voorkomend_InstallatieGetalKD, Voorkomend_InstallatieGetalOV)
+						,	Voorkomend_InstallatieGetalKD/per_BO
+						,	Voorkomend_InstallatieGetalOV/per_BO
+						)
+					)
+				);
+			unit<uint32> Voorkomend_InstallatieGetal := unique(InstallatieGetal_rel) { attribute<.> per_BO(BO) := rlookup(InstallatieGetal_rel, values); }
+			
+			// evenzo voor iedere voorkomende combinatie van Bouwdelen: 4^10
+			attribute<uint64> BouwdeelGetal(BO) := =repeat('(', #Classifications/Bouwdeel) + 'UInt64(0)'+AsList(replace('*UInt64(4)+UInt64(BO/Bouwdelen/Isolatie/@BD))', '@BD', Classifications/Bouwdeel/name), '');
+			unit<uint32> VoorkomendBouwdeelGetal := unique( BouwdeelGetal )  { attribute<.> per_BO(BO) := rlookup(BouwdeelGetal, values); }
 		}
 		attribute<Eur>    Ki_GebouwVerbetering  (PlanRegio) := ='add('+AsItemList('sum(Allocatie/'+Classifications/BebouwingsSector/name+'/BO/eenmalig/Ki_gv, BebouwingsComponenten/'+Classifications/BebouwingsSector/name+'/results/PlanRegio_rel)')+')';
 		attribute<Eur_yr> Kmi_GebouwVerbetering (PlanRegio) := ='add('+AsItemList('sum(Allocatie/'+Classifications/BebouwingsSector/name+'/BO/KapitaalLasten/Kmi_gv, BebouwingsComponenten/'+Classifications/BebouwingsSector/name+'/results/PlanRegio_rel)')+')';
