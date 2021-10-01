@@ -58,5 +58,66 @@ container BestaandeWarmtenetten
 	{
 	   attribute<string> name  := Values;
 	   attribute<string> label := name;
+
+	   attribute<float64> nr_HWK := sum(float64(Puntbronnen_data/TypeInfoList_rel == TypeInfoList/V/HulpKetel), Puntbronnen_data/Warmtenet_rel), Descr = "aantal Hulpketels in warmtenet";
+	   attribute<ratio>   RP_HWK := makedefined(0.85[Ratio] / nr_HWK, 0.0[ratio]), Descr = "Aandeel vermogen per hulpketel";
+
+	   attribute<percent> Aandeel_zon := sum(float64(Puntbronnen_data/Type == 'Zonthermie') * Puntbronnen_data/P_vol, Puntbronnen_data/Warmtenet_rel);
+	   attribute<percent> Aandeel_avi := sum(float64(Puntbronnen_data/Type == 'AVI' ||    Puntbronnen_data/Type == 'AVI/Industrie') * Puntbronnen_data/P_vol, Puntbronnen_data/Warmtenet_rel);
+	   attribute<percent> Aandeel_hwk := sum(float64(Puntbronnen_data/Type == 'Hulpketel' ) * Puntbronnen_data/P_vol, Puntbronnen_data/Warmtenet_rel);
+	   attribute<percent> Aandeel_bmc := sum(float64(Puntbronnen_data/Type == 'BMC'       ) * Puntbronnen_data/P_vol, Puntbronnen_data/Warmtenet_rel);
+	}
+
+
+	unit<uint32> TypeInfoList := Invoer/Kengetallen/WarmteBronnen/MetaData/TypeInfoList;
+	unit<uint32> TypeInfo     := Invoer/Kengetallen/WarmteBronnen/MetaData/TypeInfo;
+
+	unit<uint32> Puntbronnen_data
+	:   StorageName     = "%SourceDataProjDir%/infra/BestaandeWarmtenetten/puntbronnen.shp"
+	,   StorageType     = "gdal.vect"
+	,	DialogData      = "geometry"
+	,	DialogType      = "Map"
+	,	StorageReadOnly = "True"
+	{
+		
+	   attribute<rdc_meter> geometry   ;
+	   attribute<rdc_mm   > geometry_mm := geometry[rdc_mm];
+
+	   attribute<string>      label := Eigenaar + ' ' + Warmtenet;
+	   attribute<percent>     P_vol; 
+
+	   attribute<TypeInfo>     TypeInfo_rel     := rlookup(TypeInfoList_rel, TypeInfo/TypeInfoList_rel);
+	   attribute<TypeInfoList> TypeInfoList_rel := switch(
+	   		  case(Type == 'AVI'       , TypeInfoList/V/AVI)
+	   		, case(Type == 'STEG'      , TypeInfoList/V/STEG)
+	   		, case(Type == 'BMC'       , TypeInfoList/V/BMC)
+	   		, case(Type == 'BioWKK'    , TypeInfoList/V/BioWKK)
+	   		, case(Type == 'Gasketel'  , TypeInfoList/V/HulpKetel)
+	   		, case(Type == 'Hulpketel' , TypeInfoList/V/HulpKetel)
+	   		, case(Type == 'Gasturbine', TypeInfoList/V/Gasturbine)
+	   		, case(Type == 'Geothermie', TypeInfoList/V/Geothermie)
+	   		, case(Type == 'WKK'       , TypeInfoList/V/WijkWKK)
+	   		, case(Type == 'Gasmotor'  , TypeInfoList/V/Gasmotor)
+	   		, TypeInfoList/V/Industrie);
+
+		attribute<Eur_kW>  Ki_kW_min := TypeInfo/Ki_KW_max[TypeInfo_rel];
+		attribute<Eur_kW>  Ki_kW_max := TypeInfo/Ki_KW_min[TypeInfo_rel];
+		attribute<Celsius> Temp_bron := TypeInfo/Temp_default[TypeInfo_rel];
+		attribute<ratio>   P_cap     := not(TypeInfoList_rel == TypeInfoList/V/HulpKetel) ? TypeInfo/Pcap_default[TypeInfo_rel] : Warmtenetten/RP_HWK[Warmtenet_rel];
+		attribute<_yr>     R_OH      := TypeInfo/JaarKosten[_yr][TypeInfo_rel];
+
+		container K_GJ := for_each_nedv(classifications/Zichtjaar/name
+			, replace('TypeInfo/K_GJ/@X[TypeInfo_rel]', '@X', classifications/Zichtjaar/name)
+			, .
+			, Eur_GJ
+		);
+		container Km_GJ := for_each_nedv(classifications/Zichtjaar/name
+			, replace('TypeInfo/Km_GJ/@X[TypeInfo_rel]', '@X', classifications/Zichtjaar/name)
+			, .
+			, Eur_GJ
+		);
+
+		attribute<Leverancier>  Leverancier_rel := rlookup(Eigenaar, Leverancier/name);
+		attribute<Warmtenetten> Warmtenet_rel   := rlookup(Warmtenet, Warmtenetten/name);
 	}
 }
