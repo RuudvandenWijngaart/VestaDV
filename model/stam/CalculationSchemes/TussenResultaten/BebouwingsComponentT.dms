@@ -357,27 +357,49 @@ template BebouwingsComponentT
 		
 		container Activatie
 		{
-			container Bouwdelen := for_each_nedv(
+
+			attribute<float32> Verhuiskans   (..) := rnd_uniform(0, .., range(float32, 0f, 1f)); //TODO Seed 0: afhankelijk maken van global seed
+			attribute<bool>    Verhuismoment (..) := Verhuiskans > 0.95f; //TODO verhuiskans parameteriseren via invoerbestand
+
+			container Bouwdelen_base := for_each_nedv(
 				classifications/bouwdeel/name,
-				'BO/Bouwdelen/Isolatie/'+ classifications/bouwdeel/name +' == Classifications/IsolatieNiveau/V/N4 ? false 
+				'Verhuismoment || BouwdeelNormering ? true : BO/Bouwdelen/Isolatie/'+ classifications/bouwdeel/name +' == Classifications/IsolatieNiveau/V/N4 ? false 
 				: Zichtjaar_jaar - BO/Bouwdelen/LastVervanging/' + classifications/bouwdeel/name +
 				'>= Classifications/Bouwdeel/Levensduur[Classifications/Bouwdeel/V/'+ classifications/bouwdeel/name +']',
 				(..),
 				bool);
 			container Producten := for_each_nedv(
 				classifications/product/name,
-				'Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name +
+				'Verhuismoment || ProductNormering? true : Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name +
 				'>= Classifications/Installatie/Levensduur[InstallatiePerProduct/'+ classifications/product/name +']',
 				(..),
 				bool);
+
+			container Bouwdelen := Bouwdelen_base
+			{
+				attribute<Bool> RenovatieMoment (...) := ='add('+AsItemList('uint8(Bouwdelen_base/'+Classifications/bouwdeel/name+')')+') > 2b';
+				attribute<Bool> MS (...) := RenovatieMoment || Bouwdelen_base/MG ? true : Bouwdelen_base/MS;
+				attribute<Bool> PL (...) := RenovatieMoment || Bouwdelen_base/MG ? true : Bouwdelen_base/PL;
+				attribute<Bool> MG (...) := RenovatieMoment ? true : Bouwdelen_base/MG;
+				attribute<Bool> DP (...) := RenovatieMoment ? true : Bouwdelen_base/DP;
+				attribute<Bool> DS (...) := RenovatieMoment ? true : Bouwdelen_base/DS;
+				attribute<Bool> RB (...) := RenovatieMoment ? true : Bouwdelen_base/RB;
+				attribute<Bool> RO (...) := RenovatieMoment ? true : Bouwdelen_base/RO;
+				attribute<Bool> KR (...) := RenovatieMoment ? true : Bouwdelen_base/KR;
+				attribute<Bool> VL (...) := RenovatieMoment ? true : Bouwdelen_base/VL;
+				attribute<Bool> DR (...) := RenovatieMoment ? true : Bouwdelen_base/DR;
+			}
+			
 			attribute<bool> BouwdeelVervanging (..) := ='add('+AsItemList('uint8(Bouwdelen/'+Classifications/bouwdeel/name+')')+') > 0b';
 			attribute<bool> ProductVervanging  (..) := ='add('+AsItemList('uint8(Producten/'+Classifications/product/name+')')+') > 0b';
 
 			attribute<bool> BouwdeelNormering (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
 			attribute<bool> ProductNormering  (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
 
-			attribute<bool> BouwdeelActief (..) := (BouwdeelVervanging || BouwdeelNormering) && not(Afbouw || Aanbouw);
-			attribute<bool> ProductActief  (..) := (ProductVervanging  || ProductNormering ) && not(Afbouw || Aanbouw);
+			
+
+			attribute<bool> BouwdeelActief (..) := BouwdeelVervanging && not(Afbouw || Aanbouw);
+			attribute<bool> ProductActief  (..) := ProductVervanging  && not(Afbouw || Aanbouw);
 
 
 			attribute<classifications/Uitvoering> Uitvoering (..) := switch(
