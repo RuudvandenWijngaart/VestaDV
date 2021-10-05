@@ -62,10 +62,21 @@ container BestaandeWarmtenetten
 	   attribute<float64> nr_HWK := sum(float64(Puntbronnen_data/TypeInfoList_rel == TypeInfoList/V/HulpKetel), Puntbronnen_data/Warmtenet_rel), Descr = "aantal Hulpketels in warmtenet";
 	   attribute<ratio>   RP_HWK := makedefined(0.85[Ratio] / nr_HWK, 0.0[ratio]), Descr = "Aandeel vermogen per hulpketel";
 
-	   attribute<percent> Aandeel_zon := sum(float64(Puntbronnen_data/Type == 'Zonthermie') * Puntbronnen_data/P_vol, Puntbronnen_data/Warmtenet_rel);
-	   attribute<percent> Aandeel_avi := sum(float64(Puntbronnen_data/Type == 'AVI' ||    Puntbronnen_data/Type == 'AVI/Industrie') * Puntbronnen_data/P_vol, Puntbronnen_data/Warmtenet_rel);
-	   attribute<percent> Aandeel_hwk := sum(float64(Puntbronnen_data/Type == 'Hulpketel' ) * Puntbronnen_data/P_vol, Puntbronnen_data/Warmtenet_rel);
-	   attribute<percent> Aandeel_bmc := sum(float64(Puntbronnen_data/Type == 'BMC'       ) * Puntbronnen_data/P_vol, Puntbronnen_data/Warmtenet_rel);
+	   attribute<Eur_kW>  Ki_kw_min := sum(Puntbronnen_data/ki_kw_max * Puntbronnen_data/P_cap, Puntbronnen_data/Warmtenet_rel);
+	   attribute<Eur_kW>  Ki_kw_max := sum(Puntbronnen_data/ki_kw_min * Puntbronnen_data/P_cap, Puntbronnen_data/Warmtenet_rel);
+	   attribute<Celsius> T_bron    := max(Puntbronnen_data/Temp_bron, Puntbronnen_data/Warmtenet_rel);
+	   attribute<_yr>     R_OH      := sum(Puntbronnen_data/R_OH * Puntbronnen_data/P_cap, Puntbronnen_data/Warmtenet_rel);
+
+	   container K_GJ := for_each_nedv(classifications/Zichtjaar/name
+			, replace('sum(Puntbronnen_data/K_GJ/@X * Puntbronnen_data/P_vol_r, Puntbronnen_data/Warmtenet_rel)', '@X', classifications/Zichtjaar/name)
+			, .
+			, Eur_GJ
+		);
+		container Km_GJ := for_each_nedv(classifications/Zichtjaar/name
+			, replace('sum(Puntbronnen_data/Km_GJ/@X * Puntbronnen_data/P_vol_r, Puntbronnen_data/Warmtenet_rel)', '@X', classifications/Zichtjaar/name)
+			, .
+			, Eur_GJ
+		);
 	}
 
 
@@ -85,6 +96,7 @@ container BestaandeWarmtenetten
 
 	   attribute<string>      label := Eigenaar + ' ' + Warmtenet;
 	   attribute<percent>     P_vol; 
+	   attribute<ratio>       P_vol_r := P_vol / 100[percent];
 
 	   attribute<TypeInfo>     TypeInfo_rel     := rlookup(TypeInfoList_rel, TypeInfo/TypeInfoList_rel);
 	   attribute<TypeInfoList> TypeInfoList_rel := switch(
@@ -100,8 +112,8 @@ container BestaandeWarmtenetten
 	   		, case(Type == 'Gasmotor'  , TypeInfoList/V/Gasmotor)
 	   		, TypeInfoList/V/Industrie);
 
-		attribute<Eur_kW>  Ki_kW_min := TypeInfo/Ki_KW_max[TypeInfo_rel];
-		attribute<Eur_kW>  Ki_kW_max := TypeInfo/Ki_KW_min[TypeInfo_rel];
+		attribute<Eur_kW>  Ki_kW_min := TypeInfo/Ki_KW_min[TypeInfo_rel];
+		attribute<Eur_kW>  Ki_kW_max := TypeInfo/Ki_KW_max[TypeInfo_rel];
 		attribute<Celsius> Temp_bron := TypeInfo/Temp_default[TypeInfo_rel];
 		attribute<ratio>   P_cap     := not(TypeInfoList_rel == TypeInfoList/V/HulpKetel) ? TypeInfo/Pcap_default[TypeInfo_rel] : Warmtenetten/RP_HWK[Warmtenet_rel];
 		attribute<_yr>     R_OH      := TypeInfo/JaarKosten[_yr][TypeInfo_rel];
