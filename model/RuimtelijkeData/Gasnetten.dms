@@ -1,0 +1,66 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2021 - Planbureau voor de Leefomgeving                  //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container Gasnetten
+{
+	container Enexis_data
+	{
+		unit<uint32> Multistory_noord
+		:   StorageName     = "%SourceDataProjDir%/infra/Gasnetten/Enexis/IMKL-Appurtenance_G_Multistory_Connection_ligging/IMKL-Appurtenance_G_Multistory_Connection_Noord_ligging.shp"
+		,   StorageType     = "gdal.vect"
+		,	DialogData      = "geometry"
+		,	DialogType      = "Map"
+		,	StorageReadOnly = "True"
+		{
+		   attribute<rdc_meter> geometry   ;
+		   attribute<rdc_mm   > geometry_mm := geometry[rdc_mm];
+		}
+		unit<uint32> Multistory_zuid
+		:   StorageName     = "%SourceDataProjDir%/infra/Gasnetten/Enexis/IMKL-Appurtenance_G_Multistory_Connection_ligging/IMKL-Appurtenance_G_Multistory_Connection_Zuid_ligging.shp"
+		,   StorageType     = "gdal.vect"
+		,	DialogData      = "geometry"
+		,	DialogType      = "Map"
+		,	StorageReadOnly = "True"
+		{
+		   attribute<rdc_meter> geometry   ;
+		   attribute<rdc_mm   > geometry_mm := geometry[rdc_mm];
+		}
+		unit<uint32> Service_noord
+		:   StorageName     = "%SourceDataProjDir%/infra/Gasnetten/Enexis/IMKL-Appurtenance_G_Service_Connection_ligging/IMKL-Appurtenance_G_Service_Connection_Noord_ligging.shp"
+		,   StorageType     = "gdal.vect"
+		,	DialogData      = "geometry"
+		,	DialogType      = "Map"
+		,	StorageReadOnly = "True"
+		{
+		   attribute<rdc_meter> geometry   ;
+		   attribute<rdc_mm   > geometry_mm := geometry[rdc_mm];
+		}
+		unit<uint32> Service_zuid
+		:   StorageName     = "%SourceDataProjDir%/infra/Gasnetten/Enexis/IMKL-Appurtenance_G_Service_Connection_ligging/IMKL-Appurtenance_G_Service_Connection_Zuid_ligging.shp"
+		,   StorageType     = "gdal.vect"
+		,	DialogData      = "geometry"
+		,	DialogType      = "Map"
+		,	StorageReadOnly = "True"
+		{
+		   attribute<rdc_meter> geometry   ;
+		   attribute<rdc_mm   > geometry_mm := geometry[rdc_mm];
+		}
+		unit<uint32> Aansluitingen := union_unit(Multistory_noord, Multistory_zuid, Service_noord, Service_zuid)
+		{
+			attribute<rdc_meter>       geometry    := union_data(., Multistory_noord/geometry   , Multistory_zuid/geometry   , Service_noord/geometry   , Service_zuid/geometry   );
+			attribute<rdc_mm   >       geometry_mm := union_data(., Multistory_noord/geometry_mm, Multistory_zuid/geometry_mm, Service_noord/geometry_mm, Service_zuid/geometry_mm);
+			attribute<nrAsl>           nr_aansl    := const(1.0[nrAsl],.);
+		    attribute<BAG/import/pand> Pand_rel    := point_in_polygon(geometry_mm, pand/Geom_inf);
+		}
+		unit<uint32> Pand := BAG/import/pand
+		{
+			attribute<rdc_meter> Geometry    (poly) := BAG/import/pand/geometry;
+			attribute<rdc_mm   > Geometry_mm (poly) := BAG/import/pand/geometry_mm;
+			attribute<rdc_mm   > Geom_inf    (poly) := polygon_i16D(Geometry_mm, 100d);
+			attribute<nrAsl>     nr_aansl           := sum(Aansluitingen/nr_aansl, Aansluitingen/Pand_rel);
+		}
+	}	
+}
