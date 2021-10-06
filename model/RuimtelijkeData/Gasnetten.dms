@@ -6,6 +6,19 @@
 
 container Gasnetten
 {
+	unit<uint32> Gasnetbeheervlak
+		:   StorageName     = "%SourceDataProjDir%/infra/Gasnetten/Gasnetbeheervlakken.shp"
+		,   StorageType     = "gdal.vect"
+		,	DialogData      = "geometry"
+		,	DialogType      = "Map"
+		,	StorageReadOnly = "True"
+	{
+		attribute<rdc_meter> geometry    (poly);
+		attribute<rdc_mm   > geometry_mm (poly):= geometry[rdc_mm];
+		attribute<string>    label := 'NB_' + netBeheerd;
+
+		container V := for_each_nedv(label, 'value('+string(id(.))+', ..)', void, .);
+	}
 	container Enexis_data
 	{
 		unit<uint32> Multistory_noord
@@ -53,14 +66,25 @@ container Gasnetten
 			attribute<rdc_meter>       geometry    := union_data(., Multistory_noord/geometry   , Multistory_zuid/geometry   , Service_noord/geometry   , Service_zuid/geometry   );
 			attribute<rdc_mm   >       geometry_mm := union_data(., Multistory_noord/geometry_mm, Multistory_zuid/geometry_mm, Service_noord/geometry_mm, Service_zuid/geometry_mm);
 			attribute<nrAsl>           nr_aansl    := const(1.0[nrAsl],.);
-		    attribute<BAG/import/pand> Pand_rel    := point_in_polygon(geometry_mm, pand/Geom_inf);
+		    attribute<BAG/import/pand> Pand_rel_1  := point_in_polygon(geometry_mm, polygon_i4D(pand/geometry_mm, 1000d));
+		    attribute<BAG/import/pand> Pand_rel_2  := point_in_polygon(geometry_mm, polygon_i4D(pand/pand_2/geometry_mm, 2000d));
 		}
-		unit<uint32> Pand := BAG/import/pand
+		unit<uint32> Pand := subset(BAG/import/pand/nr_woningen > 0u && BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_ENX)
 		{
-			attribute<rdc_meter> Geometry    (poly) := BAG/import/pand/geometry;
-			attribute<rdc_mm   > Geometry_mm (poly) := BAG/import/pand/geometry_mm;
-			attribute<rdc_mm   > Geom_inf    (poly) := polygon_i16D(Geometry_mm, 100d);
-			attribute<nrAsl>     nr_aansl           := sum(Aansluitingen/nr_aansl, Aansluitingen/Pand_rel);
+			attribute<rdc_meter> Geometry    (poly) := BAG/import/pand/geometry[nr_orgentity];
+			attribute<rdc_mm   > Geometry_mm (poly) := BAG/import/pand/geometry_mm[nr_orgentity];
+			attribute<nrAsl>     nr_aansl           := sum(Aansluitingen/nr_aansl, Aansluitingen/Pand_rel_1);
+			attribute<pand_2>    Pand_2_rel         := invert(pand_2/nr_orgentity);
+
+			unit<uint32> Pand_2 := subset(not(nr_aansl > 0[nrAsl]))
+			{
+				attribute<rdc_meter> Geometry    (poly) := ../geometry[nr_orgentity];
+				attribute<rdc_mm   > Geometry_mm (poly) := ../geometry_mm[nr_orgentity];
+				attribute<nrAsl>     nr_aansl           := sum(Aansluitingen/nr_aansl, Aansluitingen/Pand_rel_2);
+				attribute<Bool>      HeeftGas           := nr_aansl > 0[nrAsl];
+			}
+
+			attribute<Bool>      HeeftGas           := nr_aansl > 0[nrAsl] || Pand_2/HeeftGas[Pand_2_rel];
 		}
 	}	
 }
