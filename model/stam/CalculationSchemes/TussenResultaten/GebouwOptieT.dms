@@ -230,22 +230,22 @@ template SubsetGebouwOptieT
 		
 		container koken
 		{
+			unit<uint32> Inst := Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes;
 			container Afweging
 			{
-				attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> Installatietype_org (GeschiktObject) := BO/InstallatiePerProduct/KK[GeschiktObject/BO_rel];
-				
-				attribute<bool> Gasloos (GeschiktObject) := Func2Meter/metervraag_per_input/Gas == 0.0[GJ_yr], Descr = "Gebruikt de woning nog gas, buiten koken om?"; //TODO: hier afweging invoegen
-				
-				attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> Installatietype_def (GeschiktObject) := gasloos
-					? Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/V/Elek
-					: Installatietype_org;
-				
-				attribute<bool> IsChangedNow (GeschiktObject) := Installatietype_org != Installatietype_def;
-				attribute<eur>  Ki_koken     (GeschiktObject) := float64(IsChangedNow) * BO/nrAansluitingen[GeschiktObject/BO_rel] * 
-					( Schuiven/KostenMin * Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/Ki_asl_min[Installatietype_def]
-					+ Schuiven/KostenMax * Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/Ki_asl_max[Installatietype_def]);
+				parameter<uint32> seed := 0;
+				attribute<bool>    KokenActief         (GeschiktObject) := Zichtjaar_jaar - BO/InstallatiePerProduct/LastVervanging/KK[GeschiktObject/BO_rel] >= Inst/Levensduur[Installatietype_org];
+				attribute<float32> Probability_gasloos (GeschiktObject) := rnd_uniform(seed, GeschiktObject, range(float32, 0f, 1f)); //TODO: seed afhankelijk maken van global seed
+				attribute<Inst>    Installatietype_org (GeschiktObject) := BO/InstallatiePerProduct/KK[GeschiktObject/BO_rel], Descr = "uitgangssituatie qua koken";
+				attribute<bool>    Gasloos             (GeschiktObject) := Func2Meter/metervraag_per_input/Gas == 0.0[GJ_yr], Descr = "Gebruikt de woning nog gas, buiten koken om?";
+				attribute<bool>    Overstap            (GeschiktObject) := not(KokenActief) ? false : Probability_gasloos > 0.95f; //TODO overstapkans parameteriseren via invoerbestand
+				attribute<Inst>    Installatietype_def (GeschiktObject) := gasloos || overstap ? Inst/V/Elek : Installatietype_org, Descr = "nieuwe situatie qua koken";
+				attribute<bool>    IsChangedNow        (GeschiktObject) := Installatietype_org != Installatietype_def;
+				attribute<eur>     Ki_koken            (GeschiktObject) := float64(IsChangedNow) * BO/nrAansluitingen[GeschiktObject/BO_rel] * 
+																			( Schuiven/KostenMin * Leercurves/Koken/curve * Inst/Ki_asl_min[Installatietype_def]
+																			+ Schuiven/KostenMax * Leercurves/Koken/curve * Inst/Ki_asl_max[Installatietype_def]), Descr = "investeringskosten eventuele overstap";
 			}
-			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> Installatietype_rel (GeschiktObject) := Afweging/Installatietype_def;
+			attribute<Inst> Installatietype_rel (GeschiktObject) := Afweging/Installatietype_def;
 		}
 	}
 	
