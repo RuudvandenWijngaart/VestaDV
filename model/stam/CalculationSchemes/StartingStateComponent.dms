@@ -1,6 +1,6 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 //                                                                                      //
-//                   (C) Hestia 2021 - Planbureau voor de Leefomgeving                  //
+//                   (C) Hestia 2021 - PBL & TNO                                        //
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,10 +40,14 @@ template StartingStateComponent
 		unit<uint32> BestaandWarmtenet     := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Warmtenetten;
 		attribute<BestaandAflevergebied> BestaandAflevergebied_rel := point_in_polygon(BebouwingsObjectSrc/point , BestaandAflevergebied/Geometry);
 		attribute<BestaandWarmtenet>     BestaandWarmtenet_rel     := BestaandAflevergebied/Warmtenet_rel[BestaandAflevergebied_rel];
-			
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel := 
-			Restwarmte/GebruikRestWarmte[Planregio_rel] ? Classifications/gebiedsOptie/GebouwOptie_rel[PlanregioWarmteAllocatie_Remove[Planregio_rel]] :
-			ModelObject/StartOptie_rel[ModelObject_rel]; // laast toegepaste optie
+		
+		attribute<bool> Gasloos := BebouwingsObjectSrc/Gasloos;
+
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel :=
+				gasloos && not(isdefined(BestaandAflevergebied_rel)) && Defaultlabel_rel >  Classifications/schillabel/V/C ? Classifications/GebouwOptie/V/Bioketel_zKD
+			:	gasloos && not(isdefined(BestaandAflevergebied_rel)) && Defaultlabel_rel <= Classifications/schillabel/V/C ? Classifications/GebouwOptie/V/LweWP_zKD
+			:	isdefined(BestaandAflevergebied_rel) && BestaandAflevergebied/Startjaar[BestaandAflevergebied_rel] <= 2000w ?  Classifications/GebouwOptie/V/Gebied_zK
+			:	ModelObject/StartOptie_rel[ModelObject_rel];
 		
 		container Functioneel := for_each_nedv(
 				Classifications/FunctioneleVraag/name,
@@ -90,7 +94,7 @@ template StartingStateComponent
 					attribute<yr_uint16> DK (...) := (uint16(Startjaar_jaar) - mod(uint16(Startjaar_jaar - Bouwjaar), Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Levensduur[InstallatiePerProduct/DK]))[yr_uint16];
 				}
 				
-			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (..) := const(Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/V/Gas, ..);
+			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (..) := Gasloos || isdefined(BestaandAflevergebied_rel) ? Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/V/Elek : Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/V/Gas;
 			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (..) := const(Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Nat, ..);
 			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (..) := const(Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/geen,..);
 

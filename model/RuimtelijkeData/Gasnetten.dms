@@ -1,6 +1,6 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 //                                                                                      //
-//                   (C) Hestia 2021 - Planbureau voor de Leefomgeving                  //
+//                   (C) Hestia 2021 - PBL & TNO                                        //
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -67,15 +67,13 @@ container Gasnetten
 			attribute<rdc_mm   >       geometry_mm := union_data(., Multistory_noord/geometry_mm, Multistory_zuid/geometry_mm, Service_noord/geometry_mm, Service_zuid/geometry_mm);
 			attribute<nrAsl>           nr_aansl    := const(1.0[nrAsl],.);
 
-		    attribute<BAG/import/pand> Pand_rel_1  := point_in_polygon(geometry_mm, pand/geometry_mm);
-		    attribute<BAG/import/pand> Pand_rel_2  := connect/arcID;
+		    attribute<pand> Pand_rel_1  := point_in_polygon(geometry_mm, pand/geometry_mm);
+		    attribute<pand/pand_2> Pand_rel_2  := connect/arcID;
 
-		    container connect := connect_info(pand/pand_2/geometry_mm, geometry_mm, 4000000d);
-		    /*
-		    attribute<BAG/import/pand> Pand_rel_2  := point_in_polygon(geometry_mm, polygon_i4D(pand/pand_2/geometry_mm, 2000d));
-		    */
+		    attribute<float64> maxDist := const(4d,Aansluitingen);
+		    container connect := connect_info(pand/pand_2/geometry, geometry, maxDist); 		    
 		}
-		unit<uint32> Pand := subset(BAG/import/pand/nr_woningen > 0u && BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_ENX)
+		unit<uint32> Pand := subset(BAG/import/pand/nr_verdiepingen > 0.0[uint8] && BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_ENX)
 		{
 			attribute<rdc_meter> Geometry    (poly) := BAG/import/pand/geometry[nr_orgentity];
 			attribute<rdc_mm   > Geometry_mm (poly) := BAG/import/pand/geometry_mm[nr_orgentity];
@@ -90,7 +88,118 @@ container Gasnetten
 				attribute<Bool>      HeeftGas           := nr_aansl > 0[nrAsl];
 			}
 
-			attribute<Bool>      HeeftGas           := nr_aansl > 0[nrAsl] || Pand_2/HeeftGas[Pand_2_rel];
+			attribute<Bool>      Gasloos           := not(nr_aansl > 0[nrAsl] || Pand_2/HeeftGas[Pand_2_rel]);
 		}
 	}	
+	container Liander_data
+	{
+		unit<uint32> Leidingen
+		:   StorageName     = "%SourceDataProjDir%/infra/Gasnetten/Liander/Gas leidingen.shp"
+		,   StorageType     = "gdal.vect"
+		,	DialogData      = "geometry"
+		,	DialogType      = "Map"
+		,	StorageReadOnly = "True"
+		{
+		   attribute<rdc_meter> geometry    (arc);
+		   attribute<rdc_mm   > geometry_mm (arc) := geometry[rdc_mm];
+		}
+		unit<uint32> AansluitLeidingen := subset(Leidingen/NETVLAK == 'Lage Druk' && Leidingen/SUBNETTYPE == 'Aansluitnet')
+		{
+		   attribute<rdc_meter> geometry    (arc) := Leidingen/geometry[nr_orgentity];
+		   attribute<rdc_mm   > geometry_mm (arc) := Leidingen/geometry_mm[nr_orgentity];
+		}
+		unit<uint32> Aansluitingen := sequence2points(AansluitLeidingen/geometry)
+		{
+			attribute<pand> Pand_rel_1  := point_in_polygon(point, pand/geometry);
+
+			attribute<float64> maxDist := const(4d,Aansluitingen);
+		    container connect_2 := connect_info(pand/pand_2/geometry, point, maxDist);
+		    attribute<pand/pand_2> Pand_rel_2  := connect_2/arcID;
+		    attribute<nrAsl>           nr_aansl    := const(1.0[nrAsl],.);
+		    
+		    container connect_3 := connect_info(pand/pand_2/pand_3/geometry, point, maxDist);
+		    attribute<pand/pand_2/pand_3> Pand_rel_3  := connect_3/arcID;
+		}
+		unit<uint32> Pand := subset(BAG/import/pand/nr_verdiepingen > 0.0[uint8] && BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_002Liander)
+		{
+			attribute<rdc_meter> Geometry    (poly) := BAG/import/pand/geometry[nr_orgentity];
+			attribute<rdc_mm   > Geometry_mm (poly) := BAG/import/pand/geometry_mm[nr_orgentity];
+			attribute<nrAsl>     nr_aansl           := sum(Aansluitingen/nr_aansl, Aansluitingen/Pand_rel_1);
+			attribute<pand_2>    Pand_2_rel         := invert(pand_2/nr_orgentity);
+
+			unit<uint32> Pand_2 := subset(not(nr_aansl > 0[nrAsl]))
+			{
+				attribute<rdc_meter> Geometry    (poly) := ../geometry[nr_orgentity];
+				attribute<rdc_mm   > Geometry_mm (poly) := ../geometry_mm[nr_orgentity];
+				attribute<nrAsl>     nr_aansl           := sum(Aansluitingen/nr_aansl, Aansluitingen/Pand_rel_2);
+				attribute<pand_3>    Pand_3_rel         := invert(pand_3/nr_orgentity);
+
+				unit<uint32> Pand_3 := subset(not(nr_aansl > 1[nrAsl]))
+				{
+					attribute<rdc_meter> Geometry    (poly) := ../geometry[nr_orgentity];
+					attribute<rdc_mm   > Geometry_mm (poly) := ../geometry_mm[nr_orgentity];
+					attribute<nrAsl>     nr_aansl           := sum(Aansluitingen/nr_aansl, Aansluitingen/Pand_rel_3);
+					attribute<Bool>      HeeftGas           := nr_aansl > 0[nrAsl];
+				}
+				attribute<Bool>      HeeftGas           := nr_aansl > 0[nrAsl] || Pand_3/HeeftGas[Pand_3_rel];
+			}
+			attribute<Bool>      Gasloos           := not(nr_aansl > 0[nrAsl] || Pand_2/HeeftGas[Pand_2_rel]);
+		}
+	}
+	container Enduris_data
+	{
+		unit<uint32> Leidingen
+		:   StorageName     = "%SourceDataProjDir%/infra/Gasnetten/Enduris/Gas leidingen.shp"
+		,   StorageType     = "gdal.vect"
+		,	DialogData      = "geometry"
+		,	DialogType      = "Map"
+		,	StorageReadOnly = "True"
+		{
+		   attribute<rdc_meter> geometry    (arc);
+		   attribute<rdc_mm   > geometry_mm (arc) := geometry[rdc_mm];
+		}
+		unit<uint32> Pand := subset(BAG/import/pand/nr_verdiepingen > 0.0[uint8] && BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_enduris)
+		{
+			unit<uint32> points := sequence2points(Geometry)
+			{
+				attribute<float64> maxDist := const(2500d,.);
+				container connect := connect_info(Leidingen/Geometry, Point, maxDist);
+				attribute<bool> connected := isdefined(connect/arcid);
+			}
+			attribute<rdc_meter> Geometry    (poly) := BAG/import/pand/geometry[nr_orgentity];
+			attribute<rdc_mm>    Geometry_mm (poly) := BAG/import/pand/geometry_mm[nr_orgentity];
+			attribute<Bool>      Gasloos            := not(sum(uint8(points/connected), points/SequenceNr) > 0[uint8]);
+		}
+	}	
+	container Stedin_data
+	{
+		unit<uint32> Leidingen
+		:   StorageName     = "%SourceDataProjDir%/infra/Gasnetten/stedin_gasvervangingsdata_01012021/gasvervangingsdata.shp"
+		,   StorageType     = "gdal.vect"
+		,	DialogData      = "geometry"
+		,	DialogType      = "Map"
+		,	StorageReadOnly = "True"
+		{
+		   attribute<rdc_meter> geometry    (arc);
+		   attribute<rdc_mm   > geometry_mm (arc) := geometry[rdc_mm];
+		}
+		unit<uint32> Pand := subset(BAG/import/pand/nr_verdiepingen > 0.0[uint8] && (BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_stedin || BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_stedinDNWG))
+		{
+			unit<uint32> points := sequence2points(Geometry)
+			{
+				attribute<float64> maxDist := const(2500d,.);
+				container connect := connect_info(Leidingen/Geometry, Point, maxDist);
+				attribute<bool> connected := isdefined(connect/arcid);
+			}
+			attribute<rdc_meter> Geometry    (poly) := BAG/import/pand/geometry[nr_orgentity];
+			attribute<rdc_mm>    Geometry_mm (poly) := BAG/import/pand/geometry_mm[nr_orgentity];
+			attribute<Bool>      Gasloos            := not(sum(uint8(points/connected), points/SequenceNr) > 0[uint8]);
+		}
+	}	
+
+	attribute<bool> Gasloos (BAG/import/pand) := 	
+		Stedin_data/pand/Gasloos[invert(Stedin_data/pand/nr_orgentity)] ||
+		Enduris_data/pand/Gasloos[invert(Enduris_data/pand/nr_orgentity)] ||
+		Liander_data/pand/Gasloos[invert(Liander_data/pand/nr_orgentity)] ||
+		Enexis_data/pand/Gasloos[invert(Enexis_data/pand/nr_orgentity)]  ;
 }
