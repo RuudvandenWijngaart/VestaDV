@@ -34,6 +34,7 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 		attribute<classifications/IsolatieVerbetering> IsolatieVerbetering_rel := value(ID(.) % #IV, IV); // nr_2
 		
 		attribute<BO> BO_rel  := BouwdeelActieveWoning/BO_rel[BouwdeelActieveWoning_rel];
+//		attribute<classifications/Eigendom> eigendom_rel  := BO/Eigendom_rel[BO_rel];
 
 		attribute<classifications/IsolatieAmbitie> IsolatieAmbitie_rel := IV/IsolatieAmbitie_rel[IsolatieVerbetering_rel];
 		
@@ -74,11 +75,17 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 			)
 		, 	AmbitieBerekening, float64
 		);
-
+		container SpecificBeta := for_each_nedv(classifications/IsolatieMaatregel/name
+		,	replace('float64(Classifications/Scurve_isolatie/beta[@EDxIM])'
+			,	'@EDxIM', 'combine_data(Classifications/Scurve_isolatie, BO/Eigendom_rel[BO_rel], @IM)'
+			,	'@IM',    'classifications/IsolatieMaatregel/V/'+classifications/IsolatieMaatregel/name
+			)
+		,	AmbitieBerekening, float64
+		);
 		// TODO: check for overflow
 		parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(classifications/BouwdeelIsolatie/bouwdeel_rel) )
 		container OddsRatio := for_each_nedv(classifications/IsolatieMaatregel/name
-		,	replace('IsDefined(IsolatieScore/@BDI) ? exp(min_elem(IsolatieScore/@BDI * beta[IsolatieVerbetering_rel], LOG_MAX_FLOAT64)) : 0.0'
+		,	replace('IsDefined(IsolatieScore/@BDI) ? exp(min_elem(IsolatieScore/@BDI * beta[IsolatieVerbetering_rel] * SpecificBeta/@BDI, LOG_MAX_FLOAT64)) : 0.0'
 			,	'@BDI', classifications/IsolatieMaatregel/name)
 		,	AmbitieBerekening, float64
 		)
@@ -88,7 +95,6 @@ unit<uint32> BouwdeelActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Bouw
 			, AmbitieBerekening, float64
 			);
 		}
-		
 		container P := for_each_nedv(classifications/IsolatieMaatregel/name
 		, 'OddsRatio/'+classifications/IsolatieMaatregel/name + ' / OddsRatio/Total/'+classifications/IsolatieMaatregel/bouwdeel_name
 		, AmbitieBerekening, float64
