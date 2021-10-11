@@ -656,6 +656,8 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	{
 		attribute<string> name  := FunctioneleVraag/name[nr_orgentity];
 		attribute<string> label := name, DialogType = "LabelText";
+		
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
 
 	unit<uint32> ServiceNiveau : nrofrows = 2
@@ -751,6 +753,35 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<bool>  GeenGasvervanger := Gasvervanger == ID(.);
 	}
 
+	// prepare unique number by combining all possible Performance key attribute values
+	unit<uint8> SchillabelEx  := union_unit_uint8(Schillabel, range(uint8,0,1))
+	{
+		attribute<string> name := union_data(., SchilLabel/name, 'x');
+		container V // only describe required constants
+		{
+			parameter<..> x := rlookup('x', name);
+		}
+	}
+	unit<uint8> ProductTypeEx := union_unit_uint8(ProductType, range(uint8,0,3))
+	{
+		attribute<string> name := union_data(., ProductType/name, 'e', 'geen', 'x');
+	}
+	
+	unit<uint32> SP  := combine(SchillabelEx, ProductTypeEx)
+	{
+		attribute<string> name := nr_1->name + '.' + nr_2->name;
+	}
+	unit<uint32> ISP := combine(Installatie, SP)
+	{
+		attribute<string> code := nr_1->name + '.' + nr_2->name;
+		attribute<Performance> Performance_rel := invert(Performance/ISP_rel);
+		
+		container V // only describe required constants
+		{
+			parameter<..> geen_x_x := rlookup('geen.x.x', code), IntegrityCheck = "IsDefined(this)";
+		}
+	}
+	
 	// te lezen van .csv files
 	unit<uint32> Performance_imp: StorageName = "%projDir%/installaties/Performance.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
 	{
@@ -773,6 +804,12 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<Installatie> Installatie_rel := rlookup(Installatie_name, Installatie/name), IntegrityCheck="IsDefined(this)";
 		attribute<SchilLabel>  schillabel_rel  := rlookup(schillabel_name,  schillabel/name ), IntegrityCheck="IsDefined(this) || schillabel_name == 'x'";
 		attribute<ProductType> ProductType_rel := rlookup(ProductType_Name, ProductType/name), IntegrityCheck="IsDefined(this) || ProductType_Name == 'e' || ProductType_Name == 'geen'";
+		
+		attribute<SchilLabelEx>  schillabelEx_rel  := rlookup(schillabel_name,  schillabelEx/name ), IntegrityCheck="IsDefined(this)";
+		attribute<ProductTypeEx> ProductTypeEx_rel := rlookup(ProductType_Name, ProductTypeEx/name), IntegrityCheck="IsDefined(this)";
+		
+		attribute<ISP> ISP_rel := combine_data(ISP, Installatie_rel, combine_data(SP, schillabelEx_rel, ProductTypeEx_rel))
+		,	IntegrityCheck = "code == ISP_rel->code";
 
 		attribute<AfgifteSysteem> AfgifteSysteem_rel := rlookup(AS_Name, AfgifteSysteem/name), IntegrityCheck = "IsDefined(this)";
 		attribute<Input>          Input_rel          := rlookup(Input_Name, Input/name),       IntegrityCheck = "IsDefined(this) || Input_name == 'geen'";
