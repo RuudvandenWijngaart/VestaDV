@@ -1,7 +1,6 @@
-
 //////////////////////////////////////////////////////////////////////////////////////////
 //                                                                                      //
-//                   (C) Hestia 2021 - Planbureau voor de Leefomgeving                  //
+//                   (C) Hestia 2021 - PBL & TNO                                        //
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -12,12 +11,12 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 
 //====== Berekeningen voor woningen die actief zijn op minimaal één functioneel product =====
-unit<uint32> ProductActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/ProductActief)
+unit<uint32> ProductActieveWoning := select_orgrel(not(BO/Afbouw) && BO/Activatie/ProductActief)
 {		
-	attribute<BO> BO_rel := nr_OrgEntity;
-	attribute<dpoint> Geometry := BO/Geometry[BO_rel];
+	attribute<BO> BO_rel := org_rel;
+	attribute<dpoint> Geometry := select_data(ProductActieveWoning, BO/Geometry);
 	
-	attribute<ProductActieveWoning> per_BO   (BO) := invert(ProductActieveWoning/BO_rel);
+	attribute<ProductActieveWoning> per_BO   (BO) := invert(BO_rel);
 	
 	//====== Indeling van gebouwopties in categorieën: ketelopties (vaak gas), all-electric opties, en hybride opties =====
 	unit<uint8> OptiesHere := subset(IsDefined(classifications/gebouwoptie/categorie_rel))
@@ -34,10 +33,10 @@ unit<uint32> ProductActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Produ
 	attribute<bool> is_BouwdeelActief     := BO/Activatie/BouwdeelActief[BO_rel], Descr = "Check of ook bouwdelen actief zijn";
 	
 	//====== Berekeningen voor woningen die actief zijn op minimaal één functioneel product en ook op één of meerdere bouwdelen =====
-	unit<uint32> sub_BouwdeelActief   := subset(is_BouwdeelActief)
+	unit<uint32> sub_BouwdeelActief   := select_orgrel(is_BouwdeelActief)
 	{
-		attribute<ProductActieveWoning> ProductActieveWoning_rel := nr_OrgEntity;
-		attribute<BO>                   BO_rel                   := ProductActieveWoning/BO_rel[ProductActieveWoning_rel];
+		attribute<ProductActieveWoning> ProductActieveWoning_rel := org_rel;
+		attribute<BO>                   BO_rel                   := select_data(sub_BouwdeelActief, ProductActieveWoning/BO_rel);
 		
 		attribute<BouwdeelActieveWoning> BouwdeelActieveWoning_rel := rlookup(BO_rel, BouwdeelActieveWoning/BO_rel);
 		
@@ -47,20 +46,20 @@ unit<uint32> ProductActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Produ
 			attribute<sub_BouwdeelActief> sub_BouwdeelActief_rel := nr_1;
 			attribute<classifications/IsolatieAmbitie> IsolatieAmbitie_rel := nr_2;
 			
-			attribute<BO> BO_rel := sub_BouwdeelActief/BO_rel[sub_BouwdeelActief_rel];
+			attribute<BO> BO_rel := sub_BouwdeelActief_rel->BO_rel;
 			
-			attribute<BouwdeelActieveWoning> BouwdeelActieveWoning_rel := sub_BouwdeelActief/BouwdeelActieveWoning_rel[sub_BouwdeelActief_rel];
+			attribute<BouwdeelActieveWoning> BouwdeelActieveWoning_rel := sub_BouwdeelActief_rel->BouwdeelActieveWoning_rel;
 			attribute<BouwdeelActieveWoning/AmbitieBerekening> AmbitieBerekening_rel := combine_data(BouwdeelActieveWoning/AmbitieBerekening, BouwdeelActieveWoning_rel, IsolatieAmbitie_rel);
-			attribute<ProductActieveWoning> ProductActieveWoning_rel := sub_BouwdeelActief/ProductActieveWoning_rel[sub_BouwdeelActief_rel];
+			attribute<ProductActieveWoning> ProductActieveWoning_rel := sub_BouwdeelActief_rel->ProductActieveWoning_rel;
 			
-			attribute<Classifications/SchilLabel> SchilLabel_rel := BouwdeelActieveWoning/AmbitieBerekening/schillabel_rel[AmbitieBerekening_rel];
-			attribute<Eur   > Ki_gv  := BouwdeelActieveWoning/AmbitieBerekening/Ki_gv[AmbitieBerekening_rel];
-			attribute<Eur_yr> Kji_gv := BouwdeelActieveWoning/AmbitieBerekening/Kji_gv[AmbitieBerekening_rel];
-			attribute<Eur_yr> Kmi_gv := BouwdeelActieveWoning/AmbitieBerekening/Kmi_gv[AmbitieBerekening_rel];
+			attribute<Classifications/SchilLabel> SchilLabel_rel := AmbitieBerekening_rel->schillabel_rel;
+			attribute<Eur   > Ki_gv  := AmbitieBerekening_rel->Ki_gv ;
+			attribute<Eur_yr> Kji_gv := AmbitieBerekening_rel->Kji_gv;
+			attribute<Eur_yr> Kmi_gv := AmbitieBerekening_rel->Kmi_gv;
 			
 			container Bouwdelen {
 				container Isolatie := for_each_nedv(Classifications/Bouwdeel/name
-				,	replace('BouwdeelActieveWoning/AmbitieBerekening/Bouwdelen/Isolatie/@BN[AmbitieBerekening_rel]', '@BN', Classifications/Bouwdeel/name)
+				,	replace('AmbitieBerekening_rel->Bouwdelen/Isolatie/@BN', '@BN', Classifications/Bouwdeel/name)
 				,	xIsolatieAmbitie, Classifications/IsolatieNiveau
 				);
 			}
@@ -147,7 +146,7 @@ unit<uint32> ProductActieveWoning := subset(not(BO/Afbouw) && BO/Activatie/Produ
 		// TODO OPTIMIZE: consider gebruik Optie_xIsolatieAmbitie zonder transponeren in fast mode
 //		unit<uint32> xGebouwOptie := combine(xIsolatieAmbitie, OptiesHere) 
 		unit<uint32> xGebouwOptie_Org := range(uint32, 0, #xIsolatieAmbitie * #OptiesHere); // TODO OPTIMIZE: consider gebruik Optie_xIsolatieAmbitie zonder transponeren in fast mode
-		unit<uint32> xGebouwOptie := TiledUnit((256*256)[xGebouwOptie_Org])
+		unit<uint32> xGebouwOptie := TiledUnit(Invoer/TechnischeInstellingen/TileSize[xGebouwOptie_Org])
 		{
 			attribute<xIsolatieAmbitie>  xIsolatieAmbitie_rel := value(ID(.) / #OptiesHere, xIsolatieAmbitie); //nr_1
 			attribute<OptiesHere>        OptiesHere_rel       := value(ID(.) % #OptiesHere, OptiesHere); //nr_2

@@ -1,6 +1,6 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 //                                                                                      //
-//                   (C) VESTA 2020 - Planbureau voor de Leefomgeving                   //
+//                   (C) Hestia 2021 - PBL & TNO                                        //
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -164,6 +164,7 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 			attribute<float32>                       bouwlagen_fictief := float32(vbo_oppervlak / footprint);
 			attribute<uint32>                        nr_woningen       := pcount(vbo_woonfunctie_studiegebied/pand_rel);
 			attribute<Gasnetten/Gasnetbeheervlak>    Netbeheer_rel     := point_in_polygon(centroid(geometry), Gasnetten/Gasnetbeheervlak/geometry);
+			attribute<Classifications/SchilLabel>    Schillabel_mode   := modus(BeginSituatie/StartingStateComponenten/Woning/Results/schillabel_rel, BeginSituatie/StartingStateComponenten/Woning/Results/pand_rel);
 		}
 		
 		unit<uint32> nummeraanduiding
@@ -190,7 +191,7 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 		}
 	}
 
-	unit<uint32> vbo_woonfunctie_studiegebied := Subset(
+	unit<uint32> vbo_woonfunctie_studiegebied := select_orgrel(
 			import/vbo/gebruiksdoelen/woon
 		&& Studiegebied/selected_per_gemeente[import/vbo/gemeente_rel]
 		&& IsDefined(import/vbo/pand_rel)
@@ -203,34 +204,35 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 	,	FreeData   = "False"
 	,	KeepData   = "True"
 	{
-		attribute<string>                                 identificatie              := import/vbo/identificatie[nr_OrgEntity];
-		attribute<string>                                 label                      := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/adres_key);
+		attribute<string>                                 identificatie              := select_data(., import/vbo/identificatie);
+		attribute<string>                                 label                      := rjoin(select_data(., import/vbo/nummeraanduiding_id), import/nummeraanduiding/identificatie, import/nummeraanduiding/adres_key);
 
-		attribute<rdc_meter>                              geometry                   := import/vbo/geometry[nr_OrgEntity];
-		attribute<import/nummeraanduiding>                nummeraanduiding_rel       := rlookup(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie);
+		attribute<rdc_meter>                              geometry                   := select_data(., import/vbo/geometry);
+		attribute<import/nummeraanduiding>                nummeraanduiding_rel       := rlookup(select_data(., import/vbo/nummeraanduiding_id), import/nummeraanduiding/identificatie);
 		
 		attribute<string>                                 postcode                   := import/nummeraanduiding/postcode[nummeraanduiding_rel];
 
-		attribute<Units/m2>                               oppervlakte                := import/vbo/oppervlak_filters/wonen[nr_OrgEntity];
-		attribute<string>                                 pand_id                    := import/vbo/pand_id[nr_OrgEntity];
-		attribute<import/pand>                            pand_rel                   := import/vbo/pand_rel[nr_OrgEntity];
+		attribute<Units/m2>                               oppervlakte                := select_data(., import/vbo/oppervlak_filters/wonen);
+		attribute<string>                                 pand_id                    := select_data(., import/vbo/pand_id );
+		attribute<import/pand>                            pand_rel                   := select_data(., import/vbo/pand_rel);
 		attribute<units/pand_asl>                         pand_aandeel               := 1.0 / value(import/pand/nr_woningen[pand_rel],units/asl_pand);
  
 		attribute<Studiegebied/buurt>                       buurt_rel                  := point_in_polygon(geometry, Studiegebied/buurt/geometry);
 		attribute<BestaandeWarmtenetten/Aflevergebied_data> Aflevergebied_rel          := point_in_polygon(geometry, BestaandeWarmtenetten/Aflevergebied_data/geometry);
 
-		attribute<Units/yr_uint16>                        bouwjaar                   := import/pand/bouwjaar_gecorrigeerd [pand_rel];
-		attribute<Units/yr_uint16>                        sloopjaar                  := import/pand/sloopjaar_gecorrigeerd[pand_rel];
-		attribute<Classifications/BouwjaarWoningBestaand> BouwjaarWoningBestaand_rel := isNull(bouwjaar) ? Classifications/BouwjaarWoningBestaand/onbekend : classify(bouwjaar,Classifications/BouwjaarWoningBestaand/ClassBreak);
+		attribute<Units/yr_uint16>                        bouwjaar                   := pand_rel->bouwjaar_gecorrigeerd;
+		attribute<Units/yr_uint16>                        sloopjaar                  := pand_rel->sloopjaar_gecorrigeerd;
+		attribute<Classifications/BouwjaarWoning>         BouwjaarWoning_rel         := isNull(bouwjaar) ? Classifications/BouwjaarWoning/onbekend : classify(bouwjaar,Classifications/BouwjaarWoning/ClassBreak);
 		attribute<Classifications/Eigendom>               Eigendom_rel               := EigendomStaat/pand/Eigendom_rel[pand_rel];
-		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := import/pand/woonpand_type[pand_rel];
+		attribute<bool>                                   Gasloos                    := Gasnetten/Gasloos[pand_rel];
+		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := pand_rel->woonpand_type;
 
 		attribute<classifications/WoningType>             Woningtype_rel     :=
 			(WoningtypeSnapshot_rel == typeringen/WoningtypeSnapshot/V/meergezinspand && nr_verdiepingen > 4b)
 				? classifications/WoningType/V/meergezinspand_hoog
 				: WoningtypeSnapshot_rel[classifications/WoningType]
 		;
-		attribute<uint8>                                  nr_verdiepingen             := import/pand/nr_verdiepingen[pand_rel];
+		attribute<uint8>                                  nr_verdiepingen             := pand_rel->nr_verdiepingen;
 		
 		attribute<typeringen/gebruiksdoel>                gebruiksdoel                := const(Invoer/RuimtelijkeData/BAG/typeringen/gebruiksdoel/V/woon,.);
 		
@@ -254,8 +256,8 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 			attribute<string>         adres           (..) := ../label;
 			
 			attribute<Units/m2>       oppervlakte     (..) := ../oppervlakte;
-			attribute<Units/yr>       bouwjaar        (..) := ../bouwjaar;
-			attribute<Units/yr>       sloopjaar       (..) := ../sloopjaar;
+			attribute<Units/yr_uint16>bouwjaar        (..) := ../bouwjaar;
+			attribute<Units/yr_uint16>sloopjaar       (..) := ../sloopjaar;
 			attribute<uint8>          nr_verdiepingen (..) := ../nr_verdiepingen;
 			attribute<units/pand_asl> Pand_aandeel    (..) := ../pand_aandeel;
 			attribute<string>         woningtype      (..) := classifications/WoningType/name[Woningtype_rel];
@@ -267,8 +269,8 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 	}
 
 	container Tabel_Woningtype_Bouwjaar := for_each_nedv(
-		 classifications/BouwjaarWoningBestaand/name
-		,'sum(vbo_woonfunctie_studiegebied/BouwjaarWoningBestaand_rel == ' + string(id(classifications/BouwjaarWoningBestaand)) + '[Classifications/BouwjaarWoningBestaand] ? 1 : 0  ,vbo_woonfunctie_studiegebied/Woningtype_rel)'
+		 classifications/BouwjaarWoning/name
+		,'sum(vbo_woonfunctie_studiegebied/BouwjaarWoning_rel == ' + string(id(classifications/BouwjaarWoning)) + '[Classifications/BouwjaarWoning] ? 1 : 0  ,vbo_woonfunctie_studiegebied/Woningtype_rel)'
 		,classifications/WoningType
 		,uint32
 	);
@@ -319,8 +321,8 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 
 		attribute<Studiegebied/buurt>                   buurt_rel                := point_in_polygon(geometry, Studiegebied/buurt/geometry);
 
-		attribute<units/yr>                             bouwjaar                 := rjoin(pand_id, import/pand/identificatie, import/pand/bouwjaar_gecorrigeerd);
-		attribute<units/yr>                             sloopjaar                := rjoin(pand_id, import/pand/identificatie, import/pand/sloopjaar_gecorrigeerd);
+		attribute<yr_uint16>                             bouwjaar                 := rjoin(pand_id, import/pand/identificatie, import/pand/bouwjaar_gecorrigeerd);
+		attribute<yr_uint16>                             sloopjaar                := rjoin(pand_id, import/pand/identificatie, import/pand/sloopjaar_gecorrigeerd);
 		attribute<Classifications/BouwjaarUtilBestaand> BouwjaarUtilBestaand_rel := isNull(bouwjaar) ? Classifications/BouwjaarUtilBestaand/V/onbekend :classify(bouwjaar,Classifications/BouwjaarUtilBestaand/ClassBreak);
 
 		// elk utiliteitsobject kan voor meerdere typen gebruiksfunctie zijn ingedeeld

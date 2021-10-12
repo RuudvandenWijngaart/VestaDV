@@ -1,6 +1,6 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 //                                                                                      //
-//                   (C) Hestia 2021 - Planbureau voor de Leefomgeving                  //
+//                   (C) Hestia 2021 - PBL & TNO                                        //
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,10 +44,49 @@ container EigendomStaat
 	  	attribute<Classifications/Eigendom> Eigendom_rel := union_data(., Corporatiebezit_data/Eigendom_rel, Particulierehuur_data/Eigendom_rel);
 		attribute<m2>                       Oppervlakte  := union_data(., Corporatiebezit_data/Oppervlak   , Particulierehuur_data/Oppervlak);
 		attribute<yr_uint16>                Bouwjaar     := union_data(., Corporatiebezit_data/BOUWJAAR_W  , Particulierehuur_data/BOUWJAAR_W);
+		attribute<string>                   Verwarming   := union_data(., Corporatiebezit_data/Verwarming  , Particulierehuur_data/Verwarming);
+		attribute<string>                   Tapwater     := union_data(., Corporatiebezit_data/warm_water  , Particulierehuur_data/warm_water);
+		attribute<string>                   Ventilatie   := union_data(., Corporatiebezit_data/Ventilatie  , Particulierehuur_data/Ventilatie);
+		attribute<string>                   Zonneboiler  := union_data(., Corporatiebezit_data/Zonneboile  , Particulierehuur_data/Zonneboile);
+		attribute<float64>                  Zonnepanelen := union_data(., Corporatiebezit_data/Zonnepanel  , Particulierehuur_data/Zonnepanelen_flt);
 	
-		//verwarmingsmethode wordt in oorspronkelijke bestanden als beschrijvende string gegeven
-		attribute<string> Verwarming := union_data(., Corporatiebezit_data/Verwarming  , Particulierehuur_data/Verwarming);
+		attribute<string>                   Type         := union_data(., Corporatiebezit_data/woning_typ  , Particulierehuur_data/woning_typ);
+		attribute<string>                   glas_huisk   := union_data(., Corporatiebezit_data/glas_huisk  , Particulierehuur_data/glas_huisk);
+		attribute<string>                   glas_slaap   := union_data(., Corporatiebezit_data/glas_slaap  , Particulierehuur_data/glas_slaap);
+		attribute<string>                   isolatie_m   := union_data(., Corporatiebezit_data/isolatie_m  , Particulierehuur_data/isolatie_m);
+		attribute<string>                   isolatie_d   := union_data(., Corporatiebezit_data/isolatie_d  , Particulierehuur_data/isolatie_d);
+		attribute<string>                   isolatie_v   := union_data(., Corporatiebezit_data/isolatie_v  , Particulierehuur_data/isolatie_v);
 
+		attribute<Classifications/IsolatieNiveau> N_RO :=
+			  glas_huisk ==  'Enkel glas'   ||   glas_huisk ==  'Dubbel glas' ?  Classifications/IsolatieNiveau/V/N1
+			: glas_huisk ==  'HR glas' ?  Classifications/IsolatieNiveau/V/N3
+			: glas_huisk ==  'Drievoudig glas' ?  Classifications/IsolatieNiveau/V/N4
+			: (0/0)[Classifications/IsolatieNiveau];
+
+		attribute<Classifications/IsolatieNiveau> N_RB :=
+			  glas_slaap ==  'Enkel glas'   ||   glas_slaap ==  'Dubbel glas' ?  Classifications/IsolatieNiveau/V/N1
+			: glas_slaap ==  'HR glas' ?  Classifications/IsolatieNiveau/V/N3
+			: glas_slaap ==  'Drievoudig glas' ?  Classifications/IsolatieNiveau/V/N4
+			: (0/0)[Classifications/IsolatieNiveau];
+
+		attribute<Classifications/IsolatieNiveau> N_Mx :=
+			  isolatie_m ==  'Gevel niet extra geïsoleerd' ?  Classifications/IsolatieNiveau/V/N1
+			: isolatie_m ==  'Gevel extra geïsoleerd' || isolatie_m ==  'Ongeveer 12 cm isolatie (aantoonbare Rc-waarde 3,0)' ?  Classifications/IsolatieNiveau/V/N2
+			: (0/0)[Classifications/IsolatieNiveau];
+
+		attribute<Classifications/IsolatieNiveau> N_Dx :=
+			  isolatie_d ==  'Dak niet extra geïsoleerd' ?  Classifications/IsolatieNiveau/V/N1
+			: isolatie_d ==  'Dak extra geïsoleerd'  ?  Classifications/IsolatieNiveau/V/N2
+			: isolatie_d ==  'Ongeveer 12 cm isolatie (aantoonbare Rc-waarde 3,0)' ?  Classifications/IsolatieNiveau/V/N3
+			: (0/0)[Classifications/IsolatieNiveau];
+
+		attribute<Classifications/IsolatieNiveau> N_VL :=
+			  isolatie_v ==  'Vloer niet extra geïsoleerd' ?  Classifications/IsolatieNiveau/V/N1
+			: isolatie_v ==  'Vloer extra geïsoleerd'  ?  Classifications/IsolatieNiveau/V/N2
+			: isolatie_v ==  'Ongeveer 12 cm isolatie (aantoonbare Rc-waarde 3,0)' ?  Classifications/IsolatieNiveau/V/N3
+			: (0/0)[Classifications/IsolatieNiveau];
+
+		//verwarmingsmethode wordt in oorspronkelijke bestanden als beschrijvende string gegeven
 		//op basis van bovenstaande string wordt afgeleid welke installatie aanwezig is:
 		//warmtepomp wordt geïnterpreteerd als lucht/water warmtepomp
 		//alle varianten CV ketels, ongeacht collectief/individueel of jaar van installatie worden als hr-ketel geclassificeerd
@@ -56,8 +95,8 @@ container EigendomStaat
 				Verwarming == 'Warmtepomp' ? Classifications/Installatie/V/eWP_lw
 			:	Verwarming == 'Stadsverwarming' ? Classifications/Installatie/V/gebiedsoptie
 			:	Verwarming == 'Gaskachels' ? Classifications/Installatie/V/hr
-			:	Verwarming == 'Individuele CV-ketels geïnstalleerd in of na 1998' ? Classifications/Installatie/V/hr
-			:	Verwarming == 'Individuele CV-ketels geïnstalleerd voor 1998' ? Classifications/Installatie/V/hr
+			:	Verwarming == 'Individuele CV-ketel, geïnstalleerd in of na 1998' ? Classifications/Installatie/V/hr
+			:	Verwarming == 'Individuele CV-ketel, geïnstalleerd voor 1998' ? Classifications/Installatie/V/hr
 			:	Verwarming == 'Gemeenschappelijk CV-ketel, geïnstalleerd in of na 1998' ? Classifications/Installatie/V/hr
 			:	Verwarming == 'Gemeenschappelijke CV-ketel, geïnstalleerd voor 1998' ? Classifications/Installatie/V/hr
 			:	(0/0)[Classifications/Installatie];
@@ -66,8 +105,6 @@ container EigendomStaat
 		attribute<bool> isBlokverwarming := Verwarming == 'Gemeenschappelijk CV-ketel, geïnstalleerd in of na 1998' || Verwarming == 'Gemeenschappelijke CV-ketel, geïnstalleerd voor 1998';
 		
 		//tapwaterbereidingsmethode wordt in oorspronkelijke bestanden als beschrijvende string gegeven
-		attribute<string> Tapwater := union_data(., Corporatiebezit_data/warm_water  , Particulierehuur_data/warm_water);
-
 		//op basis van de beschrijving wordt afgeleid welke installatie aanwezig is
 		//geisers zijn geclassificeerd onder hr-ketels
 		//indien is opgegeven dat er geen apart toestel aanwezig is wordt dit gelijkgesteld aan ruimteverwarming
@@ -77,11 +114,10 @@ container EigendomStaat
 			:	Tapwater == 'Een elektrische boiler' ? Classifications/Installatie/V/eBoiler
 			:	Tapwater == 'Geen apart toestel' && RV_installatie_rel == Classifications/Installatie/V/gebiedsoptie ? Classifications/Installatie/V/gebiedsoptie
 			:	Tapwater == 'Geen apart toestel' && RV_installatie_rel == Classifications/Installatie/V/eWP_lw  ? Classifications/Installatie/V/eWP_lw
+			:	Tapwater == 'Geen apart toestel' && RV_installatie_rel == Classifications/Installatie/V/hr      ? Classifications/Installatie/V/hr
 			:	(0/0)[Classifications/Installatie];
 
-		//ventilatiemethode wordt in oorspronkelijke bestanden als beschrijvende string gegeven
-		attribute<string>                   Ventilatie   := union_data(., Corporatiebezit_data/Ventilatie  , Particulierehuur_data/Ventilatie);
-		
+		//ventilatiemethode wordt in oorspronkelijke bestanden als beschrijvende string gegeven		
 		//aanwezige installatie ventilatie wordt afgeleid van beschrijving
 		//indien onbekend: null
 		attribute<Kengetallen/OverigeInstallaties/VT/Installatietypes> VT_installatie_rel :=
@@ -90,9 +126,7 @@ container EigendomStaat
 			:	(0/0)[Kengetallen/OverigeInstallaties/VT/Installatietypes];
 
 		//binaire indicatie of zonneboiler aanwezig is en een getal voor het aantal zonnepanelen
-		attribute<string>                   Zonneboiler  := union_data(., Corporatiebezit_data/Zonneboile  , Particulierehuur_data/Zonneboile);
 		attribute<bool>                     hasZonB      := Zonneboiler == 'Ja';
-		attribute<float64>                  Zonnepanelen := union_data(., Corporatiebezit_data/Zonnepanel  , Particulierehuur_data/Zonnepanelen_flt);
 
 		//beschrijving wordt gebruikt om situatie van installaties op dak af te leiden
 		//indien geen zonnepanelen, wel zonneboiler dan V/ZonB (alleen zonneboiler)
@@ -102,12 +136,14 @@ container EigendomStaat
 		attribute<Kengetallen/OverigeInstallaties/DK/Installatietypes> DK_installatie_rel :=
 				Zonnepanelen == 0d && hasZonB ? Kengetallen/OverigeInstallaties/DK/Installatietypes/V/ZonB
 			:	Zonnepanelen >  0d && hasZonB ? Kengetallen/OverigeInstallaties/DK/Installatietypes/V/ZonB_PVkl
-			:	Zonnepanelen * 1.7d <= 0.4d * float64(Oppervlakte) && not(hasZonB) ? Kengetallen/OverigeInstallaties/DK/Installatietypes/V/ZonPV_kl
+			:	Zonnepanelen > 0d && Zonnepanelen * 1.7d <= 0.4d * float64(Oppervlakte) && not(hasZonB) ? Kengetallen/OverigeInstallaties/DK/Installatietypes/V/ZonPV_kl
 			:	Zonnepanelen * 1.7d >  0.4d * float64(Oppervlakte) && not(hasZonB) ? Kengetallen/OverigeInstallaties/DK/Installatietypes/V/ZonPV_gr
+			:	isDefined(Zonnepanelen) && not(hasZonB) ? Kengetallen/OverigeInstallaties/DK/Installatietypes/V/geen
 			:	(0/0)[Kengetallen/OverigeInstallaties/DK/Installatietypes];
 
 		//ruimtelijke matching om bijbehorend BAG pand per punt te bepalen
 		attribute<BAG/import/pand>          Pand_rel     := point_in_polygon(geometry, pand/geometry);
+		attribute<Classifications/Schillabel> Schillabel_rel := Bag/Import/Pand/Schillabel_mode[pand_rel];
 	}
 
 	//afgeleidde attributen vastgesteld per BAG pand
@@ -124,5 +160,26 @@ container EigendomStaat
 		attribute<Classifications/Installatie> Installatie_TW  := makedefined(modus(EigendomStaat_data/TW_installatie_rel, EigendomStaat_data/Pand_rel), Classifications/Installatie/V/hr);
 		attribute<Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatie_VT  := makedefined(modus(EigendomStaat_data/VT_installatie_rel, EigendomStaat_data/Pand_rel), Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Nat);
 		attribute<Kengetallen/OverigeInstallaties/DK/Installatietypes> Installatie_DK  := makedefined(modus(EigendomStaat_data/DK_installatie_rel, EigendomStaat_data/Pand_rel), Kengetallen/OverigeInstallaties/DK/Installatietypes/V/geen);
+	}
+
+	unit<uint32> EigendomStaat_data_small := subset(IsDefined(EigendomStaat_data/N_RO))
+	{
+		attribute<Classifications/Eigendom> Eige  := EigendomStaat_data/Eigendom_rel[nr_OrgEntity];
+		attribute<m2>                       Area  := EigendomStaat_data/Oppervlakte[nr_OrgEntity];
+		attribute<yr_uint16>                Jaar  := EigendomStaat_data/Bouwjaar[nr_OrgEntity];
+
+		attribute<Classifications/IsolatieNiveau> N_RO := EigendomStaat_data/N_RO[nr_OrgEntity];
+		attribute<Classifications/IsolatieNiveau> N_RB := EigendomStaat_data/N_RO[nr_OrgEntity];
+		attribute<Classifications/IsolatieNiveau> N_Mx := EigendomStaat_data/N_Mx[nr_OrgEntity];
+		attribute<Classifications/IsolatieNiveau> N_Dx := EigendomStaat_data/N_Dx[nr_OrgEntity];
+		attribute<Classifications/IsolatieNiveau> N_VL := EigendomStaat_data/N_VL[nr_OrgEntity];
+
+		attribute<Classifications/Installatie>    I_RV := EigendomStaat_data/RV_installatie_rel[nr_OrgEntity];
+		attribute<Classifications/Installatie>    I_TW := EigendomStaat_data/TW_installatie_rel[nr_OrgEntity];
+
+		attribute<Kengetallen/OverigeInstallaties/VT/Installatietypes> I_VT := makedefined(EigendomStaat_data/VT_installatie_rel[nr_OrgEntity], Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Nat);
+		attribute<Kengetallen/OverigeInstallaties/DK/Installatietypes> I_DK := EigendomStaat_data/DK_installatie_rel[nr_OrgEntity];
+
+		attribute<Classifications/Schillabel>     Elab := makedefined(EigendomStaat_data/Schillabel_rel[nr_OrgEntity], Classifications/Schillabel/V/N);
 	}
 }

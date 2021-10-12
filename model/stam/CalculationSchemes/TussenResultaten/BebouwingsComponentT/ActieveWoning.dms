@@ -1,6 +1,6 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 //                                                                                      //
-//                   (C) Hestia 2021 - Planbureau voor de Leefomgeving                  //
+//                   (C) Hestia 2021 - PBL & TNO                                        //
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -11,12 +11,13 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 
 //====== Berekeningen voor woningen die actief zijn op minimaal één functioneel product =====
-unit<uint32> ActieveWoning := subset(not(BO/Afbouw) && (BO/Activatie/ProductActief || BO/Activatie/BouwdeelActief))
+unit<uint32> ActieveWoning := select_orgrel(not(BO/Afbouw) && (BO/Activatie/ProductActief || BO/Activatie/BouwdeelActief))
 {		
-	attribute<BO> BO_rel := nr_OrgEntity;
+	attribute<BO> BO_rel := org_rel;
 	attribute<ActieveWoning> per_BO(BO) := invert(BO_rel);
 	
-	unit<uint32> xInvesteringsOptie := union_unit(ProductActieveWoning/xIsolatieAmbitie/PAW_xInvesteringsOptie, BouwdeelActieveWoning/ProductInactieveAmbitie)
+	unit<uint32> xInvesteringsOptie_org := union_unit(ProductActieveWoning/xIsolatieAmbitie/PAW_xInvesteringsOptie, BouwdeelActieveWoning/ProductInactieveAmbitie);
+	unit<uint32> xInvesteringsOptie := TiledUnit(Invoer/TechnischeInstellingen/TileSize[xInvesteringsOptie_org])
 	{
 		parameter<string> constr_expr2 := 'union_data(xInvesteringsOptie, ProductActieveWoning/xIsolatieAmbitie/PAW_xInvesteringsOptie/@A, BouwdeelActieveWoning/ProductInactieveAmbitie/@A)';
 		
@@ -40,7 +41,7 @@ unit<uint32> ActieveWoning := subset(not(BO/Afbouw) && (BO/Activatie/ProductActi
 	}
 	
 	unit<uint32> xGebouwOptie_org := union_unit(ProductActieveWoning/xIsolatieAmbitie/xGebouwOptie, BouwdeelActieveWoning/ProductInactieveAmbitie);
-	unit<uint32> xGebouwOptie := TiledUnit((256*256)[xGebouwOptie_org])
+	unit<uint32> xGebouwOptie := TiledUnit(Invoer/TechnischeInstellingen/TileSize[xGebouwOptie_org])
 	{
 			parameter<string> constr_expr2 := 'union_data(xGebouwOptie, ProductActieveWoning/xIsolatieAmbitie/xGebouwOptie/@A, BouwdeelActieveWoning/ProductInactieveAmbitie/@A)';
 			parameter<string> constr_expr1 := 'union_data(xGebouwOptie, ProductActieveWoning/xIsolatieAmbitie/xGebouwOptie/@A, const(@C, BouwdeelActieveWoning/ProductInactieveAmbitie))';
@@ -95,62 +96,86 @@ unit<uint32> ActieveWoning := subset(not(BO/Afbouw) && (BO/Activatie/ProductActi
 	// Kies GebouwOptie per xInvesteringsOptie
 	container Choice_per_xInvesteringsOptie {
 	
+		attribute<Classifications/Gebouwoptie>          GebouwOptie          (GeschikteOptie) := GeschikteOptie/GebouwOptie_rel;
+		attribute<Classifications/IsolatieAmbitie>      IsolatieAmbitie      (GeschikteOptie) := GeschikteOptie/IsolatieAmbitie_rel;
+		attribute<Classifications/GebouwOptieCategorie> GebouwOptieCategorie (GeschikteOptie) := Classifications/Gebouwoptie/Categorie_rel[Gebouwoptie];
+		attribute<Classifications/Eigendom>             Eigendom             (GeschikteOptie) := BO/Eigendom_rel[GeschikteOptie/BO_rel];
+
 		attribute<GeschikteOptie> min_GeschikteOptie_rel (xInvesteringsOptie) := min_index(GeschikteOptie/kosten_tbv_afweging, GeschikteOptie/xInvesteringsOptie_rel);	
 		
 		parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(xInvesteringsOptie/ActieveWoning_rel) )
-		parameter<uint32> Seed := 1; // TODO: Koppelen aan generieke reproduceerbare seeder
-		parameter<float64> beta := 10.0 / max(GeschikteOptie/kosten_tbv_afweging); // monetary sensitivity
-		 
-		attribute<Float64> MaxKosten     (xInvesteringsOptie)      := max(GeschikteOptie/kosten_tbv_afweging, GeschikteOptie/xInvesteringsOptie_rel);
-		attribute<Float64> Geschiktheid  (GeschikteOptie) := MaxKosten[GeschikteOptie/xInvesteringsOptie_rel] - GeschikteOptie/kosten_tbv_afweging;
-		attribute<Float64> OddsRatio     (GeschikteOptie) := IsDefined(Geschiktheid) ? exp(min_elem(Geschiktheid * beta, LOG_MAX_FLOAT64)) : 0.0;
-		attribute<Float64> TotalOddsRatio(xInvesteringsOptie)      := sum(OddsRatio, GeschikteOptie/xInvesteringsOptie_rel);
-		attribute<Float64> Probability   (GeschikteOptie) := OddsRatio / TotalOddsRatio[GeschikteOptie/xInvesteringsOptie_rel];
-		attribute<Float64> CumulProb     (GeschikteOptie) := cumulate(Probability, GeschikteOptie/xInvesteringsOptie_rel);
-		attribute<Float64> rnd           (xInvesteringsOptie)      := rnd_uniform(Seed, xInvesteringsOptie, range(float64, 0.0, 1.0));
-		attribute<bool>    isSelected    (GeschikteOptie) := CumulProb - Probability <= rnd[GeschikteOptie/xInvesteringsOptie_rel] && rnd[GeschikteOptie/xInvesteringsOptie_rel] < CumulProb;
+		parameter<uint32>  Seed            := 1; // TODO: Koppelen aan generieke reproduceerbare seeder
+		parameter<float64> beta            := 10.0 / max(GeschikteOptie/kosten_tbv_afweging); // monetary sensitivity
+
+		attribute<Float64> SpecificBeta  (GeschikteOptie)     := float64(Classifications/Scurve_gebouwoptie/beta[combine_data(Classifications/Scurve_gebouwoptie, BO/Eigendom_rel[GeschikteOptie/BO_rel], GeschikteOptie/GebouwOptie_rel)]);
+		attribute<Float64> MaxKosten     (xInvesteringsOptie) := max(GeschikteOptie/kosten_tbv_afweging, GeschikteOptie/xInvesteringsOptie_rel);
+		attribute<Float64> Geschiktheid  (GeschikteOptie)     := MaxKosten[GeschikteOptie/xInvesteringsOptie_rel] - GeschikteOptie/kosten_tbv_afweging;
+		attribute<Float64> OddsRatio     (GeschikteOptie)     := IsDefined(Geschiktheid) ? exp(min_elem(Geschiktheid * beta * SpecificBeta, LOG_MAX_FLOAT64)) : 0.0;
+		attribute<Float64> TotalOddsRatio(xInvesteringsOptie) := sum(OddsRatio, GeschikteOptie/xInvesteringsOptie_rel);
+		attribute<Float64> Probability   (GeschikteOptie)     := OddsRatio / TotalOddsRatio[GeschikteOptie/xInvesteringsOptie_rel];
+		attribute<Float64> CumulProb     (GeschikteOptie)     := cumulate(Probability, GeschikteOptie/xInvesteringsOptie_rel);
+		attribute<Float64> rnd           (xInvesteringsOptie) := rnd_uniform(Seed, xInvesteringsOptie, range(float64, 0.0, 1.0));
+		attribute<bool>    isSelected    (GeschikteOptie)     := CumulProb - Probability <= rnd[GeschikteOptie/xInvesteringsOptie_rel] && rnd[GeschikteOptie/xInvesteringsOptie_rel] < CumulProb;
 		attribute<uint32>  nrSelected    (xInvesteringsOptie) := sum_uint32(isSelected, GeschikteOptie/xInvesteringsOptie_rel); // Diagnostic IntegrityCheck = "all(nrSelected == 1)"
-		attribute<GeschikteOptie>  SCurve_GeschikteOptie_rel(xInvesteringsOptie) := max_index( isSelected, GeschikteOptie/xInvesteringsOptie_rel);
-			
-		attribute<GeschikteOptie>  GeschikteOptie_rel (xInvesteringsOptie) := SCurve_GeschikteOptie_rel;
-		
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel    (xInvesteringsOptie) := GeschikteOptie/GebouwOptie_rel[GeschikteOptie_rel];		
-		attribute<eur_yr>                      kosten_tbv_afweging(xInvesteringsOptie) := GeschikteOptie/kosten_tbv_afweging[GeschikteOptie_rel];
+
+		attribute<GeschikteOptie>              SCurve_GeschikteOptie_rel (xInvesteringsOptie) := max_index( isSelected, GeschikteOptie/xInvesteringsOptie_rel);	
+		attribute<GeschikteOptie>              GeschikteOptie_rel        (xInvesteringsOptie) := SCurve_GeschikteOptie_rel;
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel           (xInvesteringsOptie) := GeschikteOptie/GebouwOptie_rel[GeschikteOptie_rel];	
+		attribute<Float64>                     P50P                      (xInvesteringsOptie) := float64(
+			Classifications/Scurve_investering/P50P[
+				combine_data(Classifications/Scurve_investering,
+					Eigendom[Choice_per_xInvesteringsOptie/GeschikteOptie_rel],
+					combine_data(combine(Classifications/IsolatieAmbitie,Classifications/GebouwOptieCategorie),
+						IsolatieAmbitie[Choice_per_xInvesteringsOptie/GeschikteOptie_rel],
+						GebouwOptieCategorie[Choice_per_xInvesteringsOptie/GeschikteOptie_rel]))
+				]);		 	
+		attribute<eur_yr>                      kosten_tbv_afweging       (xInvesteringsOptie) := GeschikteOptie/kosten_tbv_afweging[GeschikteOptie_rel] * P50P;
 	}	
 	
 	// Kies uit results_Per_xInvesteringsOptie een InvesteringsOptie per ProductActieveWoning
 	container Choice_per_ActieveWoning
 	{
+		attribute<Classifications/Gebouwoptie>          GebouwOptie          (xInvesteringsOptie) := Choice_per_xInvesteringsOptie/GebouwOptie[Choice_per_xInvesteringsOptie/GeschikteOptie_rel];
+		attribute<Classifications/IsolatieAmbitie>      IsolatieAmbitie      (xInvesteringsOptie) := Choice_per_xInvesteringsOptie/IsolatieAmbitie[Choice_per_xInvesteringsOptie/GeschikteOptie_rel];
+		attribute<Classifications/GebouwOptieCategorie> GebouwOptieCategorie (xInvesteringsOptie) := Choice_per_xInvesteringsOptie/GebouwOptieCategorie[Choice_per_xInvesteringsOptie/GeschikteOptie_rel];
+		attribute<Classifications/Eigendom>             Eigendom             (xInvesteringsOptie) := Choice_per_xInvesteringsOptie/Eigendom[Choice_per_xInvesteringsOptie/GeschikteOptie_rel];
+
 		attribute<xInvesteringsOptie>  min_xInvesteringsOptie_rel   (ActieveWoning) := min_index( Choice_per_xInvesteringsOptie/kosten_tbv_afweging, xInvesteringsOptie/ActieveWoning_rel);
 		
 		parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(xInvesteringsOptie/ActieveWoning_rel) )
-		parameter<uint32> Seed := 1; // TODO: Koppelen aan generieke reproduceerbare seeder
-		parameter<float64> beta := 10.0 / max(choice_per_xInvesteringsOptie/kosten_tbv_afweging); // monetary sensitivity
-		 
+		parameter<uint32>  Seed            := 1; // TODO: Koppelen aan generieke reproduceerbare seeder
+		parameter<float64> beta            := 10.0 / max(choice_per_xInvesteringsOptie/kosten_tbv_afweging); // monetary sensitivity
+
+		attribute<Float64> SpecificBeta  (xInvesteringsOptie) := float64(
+			Classifications/Scurve_investering/beta[
+					combine_data(Classifications/Scurve_investering,
+						Eigendom,
+						combine_data(combine(Classifications/IsolatieAmbitie,Classifications/GebouwOptieCategorie),
+							IsolatieAmbitie,
+							GebouwOptieCategorie))
+				]);		 
 		attribute<Float64> MaxKosten     (ActieveWoning)      := max(Choice_per_xInvesteringsOptie/kosten_tbv_afweging, xInvesteringsOptie/ActieveWoning_rel);
 		attribute<Float64> Geschiktheid  (xInvesteringsOptie) := MaxKosten[xInvesteringsOptie/ActieveWoning_rel] - Choice_per_xInvesteringsOptie/kosten_tbv_afweging;
-		attribute<Float64> OddsRatio     (xInvesteringsOptie) := IsDefined(Geschiktheid) ? exp(min_elem(Geschiktheid * beta, LOG_MAX_FLOAT64)) : 0.0;
+		attribute<Float64> OddsRatio     (xInvesteringsOptie) := IsDefined(Geschiktheid) ? exp(min_elem(Geschiktheid * beta * SpecificBeta, LOG_MAX_FLOAT64)) : 0.0;
 		attribute<Float64> TotalOddsRatio(ActieveWoning)      := sum(OddsRatio, xInvesteringsOptie/ActieveWoning_rel);
 		attribute<Float64> Probability   (xInvesteringsOptie) := OddsRatio / TotalOddsRatio[xInvesteringsOptie/ActieveWoning_rel];
 		attribute<Float64> CumulProb     (xInvesteringsOptie) := cumulate(Probability, xInvesteringsOptie/ActieveWoning_rel);
 		attribute<Float64> rnd           (ActieveWoning)      := rnd_uniform(Seed, ActieveWoning, range(float64, 0.0, 1.0));
 		attribute<bool>    isSelected    (xInvesteringsOptie) := CumulProb - Probability <= rnd[xInvesteringsOptie/ActieveWoning_rel] && rnd[xInvesteringsOptie/ActieveWoning_rel] < CumulProb;
 		attribute<uint32>  nrSelected    (ActieveWoning)      := sum_uint32(isSelected, xInvesteringsOptie/ActieveWoning_rel); // Diagnostic IntegrityCheck = "all(nrSelected == 1)"
-		attribute<xInvesteringsOptie>  SCurve_xInvesteringsOptie_rel(ActieveWoning) := max_index( isSelected, xInvesteringsOptie/ActieveWoning_rel);
-		
-		attribute<xInvesteringsOptie>  xInvesteringsOptie_rel(ActieveWoning) := SCurve_xInvesteringsOptie_rel;
 
-		
-		attribute<GeschikteOptie>  GeschikteOptie_rel(ActieveWoning)     := Choice_per_xInvesteringsOptie/GeschikteOptie_rel[ xInvesteringsOptie_rel ];
+		attribute<xInvesteringsOptie>  SCurve_xInvesteringsOptie_rel (ActieveWoning) := max_index( isSelected, xInvesteringsOptie/ActieveWoning_rel);
+		attribute<xInvesteringsOptie>  xInvesteringsOptie_rel        (ActieveWoning) := SCurve_xInvesteringsOptie_rel;
+		attribute<GeschikteOptie>      GeschikteOptie_rel            (ActieveWoning) := Choice_per_xInvesteringsOptie/GeschikteOptie_rel[ xInvesteringsOptie_rel ];
 	}
-	container Choice_Per_BO {
-		attribute<xInvesteringsOptie> xInvesteringsOptie_rel(BO) := Choice_per_ActieveWoning/xInvesteringsOptie_rel[per_BO];
-		attribute<GeschikteOptie>     GeschikteOptie_rel   (BO) := Choice_per_ActieveWoning/GeschikteOptie_rel[per_BO];
+	container Choice_Per_BO
+	{
+		attribute<xInvesteringsOptie> xInvesteringsOptie_rel (BO) := Choice_per_ActieveWoning/xInvesteringsOptie_rel[per_BO];
+		attribute<GeschikteOptie>     GeschikteOptie_rel     (BO) := Choice_per_ActieveWoning/GeschikteOptie_rel[per_BO];
 	}
 	
 	unit<uint32> BebouwingsObjectMetGebouwOptie := BO
 	{
-//		attribute<eur_yr>                      kosten_tbv_afweging (BO) := Choice_per_xInvesteringsOptie/kosten_tbv_afweging[Choice_per_BO/xInvesteringsOptie_rel];
 		attribute<Classifications/GebouwOptie> GebouwOptie_rel     (BO) := makedefined(GeschikteOptie/GebouwOptie_rel [Choice_per_BO/GeschikteOptie_rel], BO/GebouwOptie_rel);
 		attribute<Classifications/Schillabel>  Schillabel_rel      (BO) := makedefined(GeschikteOptie/SchilLabel_rel  [Choice_per_BO/GeschikteOptie_rel], BO/SchilLabel_rel);
 		
