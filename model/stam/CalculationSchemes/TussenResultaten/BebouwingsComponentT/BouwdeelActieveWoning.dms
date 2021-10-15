@@ -20,12 +20,9 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(not(BO/Afbouw) && BO/Activat
 	container IsolatieNiveau_rel := for_each_nedv(classifications/bouwdeel/name, 'BO/Bouwdelen/Isolatie/'+classifications/bouwdeel/name+'[BO_rel]', ., Classifications/IsolatieNiveau);
 	
 	attribute<m2> TotalArea := ='add('+AsItemList('BO/Bouwdelen/'+Classifications/bouwdeel/name+'[BO_rel]')+')';
-	
-	parameter<uint32> RandomSeed := 0; // TODO: koppelen aan jaar en generieke SEED
 
 	unit<uint8> IV := classifications/IsolatieVerbetering;
 	
-//	unit<uint32> AmbitieBerekening_Org := combine(BouwdeelActieveWoning, IV)
 	unit<uint32> AmbitieBerekening_Org := range(uint32, 0, #BouwdeelActieveWoning * #IV);
 	unit<uint32> AmbitieBerekening := TiledUnit(Invoer/TechnischeInstellingen/TileSize[AmbitieBerekening_Org])
 	,	Descr = "iedere (relevante) isolatie ambitie voor iedere op bouwdeel geactiveerde woning"  //AKA Spookwoning
@@ -34,7 +31,6 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(not(BO/Afbouw) && BO/Activat
 		attribute<classifications/IsolatieVerbetering> IsolatieVerbetering_rel := value(ID(.) % #IV, IV); // nr_2
 		
 		attribute<BO> BO_rel  := BouwdeelActieveWoning/BO_rel[BouwdeelActieveWoning_rel];
-//		attribute<classifications/Eigendom> eigendom_rel  := BO/Eigendom_rel[BO_rel];
 
 		attribute<classifications/IsolatieAmbitie> IsolatieAmbitie_rel := IV/IsolatieAmbitie_rel[IsolatieVerbetering_rel];
 		
@@ -112,10 +108,7 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(not(BO/Afbouw) && BO/Activat
 		{
 			container Isolatie := for_each_nedv(classifications/Bouwdeel/name
 			,	replace('AmbitieBerekening/KiesBouwdelen/@BD/NewIsolatieNiveau_rel', '@BD', classifications/Bouwdeel/name)
-			,	AmbitieBerekening, Classifications/IsolatieNiveau)
-			{
-				attribute<Classifications/Schillabel> Schillabel_rel (...) := const(Classifications/Schillabel/V/B,...); //TODO: methode schillabel afleiden van isolatiegraad
-			}
+			,	AmbitieBerekening, Classifications/IsolatieNiveau);
 			container IsChangedNow := for_each_nedv(
 				classifications/Bouwdeel/name,
 				replace('Isolatie/@BD > BO/Bouwdelen/isolatie/@BD[BO_rel]'
@@ -196,9 +189,7 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(not(BO/Afbouw) && BO/Activat
 		+ MakeDefined('+ '+classifications/IsolatieDoel/name[ID(classifications/IsolatieDoel)-1b], '')
 		, AmbitieBerekening, float64
 		);
-		
-		parameter<uint32> Seed := 0; // TODO: Koppelen aan generieke reproduceerbare seeder
-		attribute<float64> rnd (BouwdeelActieveWoning) := rnd_uniform(Seed + bouwdeel_rel, BouwdeelActieveWoning, range(float64, 0.0, 1.0));
+		attribute<float64> rnd (BouwdeelActieveWoning) := rnd_uniform(JaarSeed + bouwdeel_rel, BouwdeelActieveWoning, range(float64, 0.0, 1.0));
 		
 		attribute<bool> Activatie (BouwdeelActieveWoning) := ='BO/Activatie/Bouwdelen/'+classifications/Bouwdeel/name[bouwdeel_rel]+'[BO_rel]';
 
@@ -209,8 +200,6 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(not(BO/Afbouw) && BO/Activat
 		:	CumulP/n4 >= rnd[BouwdeelActieveWoning_rel] ? classifications/IsolatieNiveau/V/n4
 		:	OrgIsolatieNiveau_rel[BouwdeelActieveWoning_rel];
 	}
-	
-	//TODO: voor woningen die alleen actief zijn op bouwdelen en niet op producten: hier afweging maken definitieve allocatie
 	attribute<bool> ProductActief := BO/Activatie/ProductActief[BouwdeelActieveWoning/BO_rel];
 	
 	unit<uint32> ProductInactieveBO := subset(not(ProductActief))
