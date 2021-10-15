@@ -358,8 +358,10 @@ template BebouwingsComponentT
 		
 		container Activatie
 		{			
-			attribute<float32> Verhuiskans   (..) := rnd_uniform(JaarSeed, .., range(float32, 0f, 1f));
+			attribute<float32> Verhuiskans   (..) := rnd_uniform(JaarSeed * 2u, .., range(float32, 0f, 1f));
 			attribute<bool>    Verhuismoment (..) := Verhuiskans > 0.95f; //TODO verhuiskans parameteriseren via invoerbestand
+			attribute<float32> KoudeKans     (..) := rnd_uniform(JaarSeed * 3u, .., range(float32, 0f, 1f));
+			attribute<bool>    Koudemoment   (..) := KoudeKans   > 0.95f; //TODO verhuiskans parameteriseren via invoerbestand
 
 			container Bouwdelen_base := for_each_nedv(
 				classifications/bouwdeel/name,
@@ -368,12 +370,18 @@ template BebouwingsComponentT
 				'>= Classifications/Bouwdeel/Levensduur[Classifications/Bouwdeel/V/'+ classifications/bouwdeel/name +']',
 				(..),
 				bool);
-			container Producten := for_each_nedv(
+			container Producten_base := for_each_nedv(
 				classifications/product/name,
 				'Verhuismoment || ProductNormering? true : Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name +
 				'>= Classifications/Installatie/Levensduur[InstallatiePerProduct/'+ classifications/product/name +']',
 				(..),
 				bool);
+
+			container Producten := Producten_base
+			{
+				attribute<bool> KDb (...) := Koudemoment;
+				attribute<bool> KDp (...) := Koudemoment;
+			}
 
 			container Bouwdelen := Bouwdelen_base
 			{
@@ -392,18 +400,10 @@ template BebouwingsComponentT
 			
 			attribute<bool> BouwdeelVervanging (..) := ='add('+AsItemList('uint8(Bouwdelen/'+Classifications/bouwdeel/name+')')+') > 0b';
 			attribute<bool> ProductVervanging  (..) := ='add('+AsItemList('uint8(Producten/'+Classifications/product/name+')')+') > 0b';
-
-			attribute<bool> BouwdeelNormering (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
-			attribute<bool> ProductNormering  (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
-
-			
-
-			attribute<bool> BouwdeelActief (..) := nrAansluitingen > 0.0[nrAsl] && BouwdeelVervanging && not(Afbouw || Aanbouw);
-			attribute<bool> ProductActief  (..) := nrAansluitingen > 0.0[nrAsl] && ProductVervanging  && not(Afbouw || Aanbouw);
-
-//			parameter<uint32> nrBouwdeelActief := sum_uint32(BouwdeelActief); //sum_xxx cast alleen tijdens accumuleren naar xxx
-//			parameter<uint32> nrProductActief  := sum_uint32(ProductActief);  // maar liever #subset(...) in overzichtstabel want dan hoeft niet eens de boolean array tot het einde bewaard te worden.
-
+			attribute<bool> BouwdeelNormering  (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
+			attribute<bool> ProductNormering   (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
+			attribute<bool> BouwdeelActief     (..) := nrAansluitingen > 0.0[nrAsl] && BouwdeelVervanging && not(Afbouw || Aanbouw);
+			attribute<bool> ProductActief      (..) := nrAansluitingen > 0.0[nrAsl] && ProductVervanging  && not(Afbouw || Aanbouw);
 
 			attribute<classifications/Uitvoering> Uitvoering (..) := switch(
 				  case(AND(Bouwdelen/RenovatieMoment, IsMeergezins, Eigendom_rel == Classifications/Eigendom/V/WoonCorp), Classifications/Uitvoering/V/Nat_Mgw_Prj)
