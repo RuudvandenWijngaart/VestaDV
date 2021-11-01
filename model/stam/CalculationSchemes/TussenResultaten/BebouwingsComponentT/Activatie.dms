@@ -13,12 +13,12 @@ container Activatie
 	attribute<bool>    KoudemomentP  (..) := KoudeKans   > 0.50f, Descr = "Jaarlijkse kans dat een gebouweigenaar besluit te starten ook de piekvraag naar koude in te vullen, indien ook al basis ingevuld" ; //TODO verhuiskans parameteriseren via invoerbestand
 
 
-	parameter<ratio> SpreidingsFactor := 0.93, Descr = "spreiding rondom nominale levensduur eengezinswoningen: 0.8 = 20procent later of eerder";
-	parameter<ratio> increment        := 1.0/(1.0-SpreidingsFactor)*0.5; //ook te gebruiken voor niet-normaal verdeelde spreiding
+	parameter<ratio> SpreidingsFactor := 0.8, Descr = "spreiding rondom nominale levensduur eengezinswoningen: 0.8 = 20procent later of eerder";
+	parameter<ratio> increment        := 1.0/(1.0-SpreidingsFactor)*0.5; //ook te gebruiken voor niet-normaal verdeelde spreiding door aanpassen 0.5 naar bijv. 0.2
 
 	container Bouwdeel_odds := for_each_nedv(
 		 classifications/bouwdeel/name
-		,'BO/Bouwdelen/Isolatie/'+ classifications/bouwdeel/name +' == Classifications/IsolatieNiveau/V/N4 ? 0.0[ratio]  : Verhuismoment || BouwdeelNormering ? 1.0[ratio] :
+		,'BO/Bouwdelen/Isolatie/'+ classifications/bouwdeel/name +' == Classifications/IsolatieNiveau/V/N4 ? 0.0[ratio] : Verhuismoment || BouwdeelNormering ? 1.0[ratio] :
 		 increment * 
 		 ((float64(Zichtjaar_jaar - BO/Bouwdelen/LastVervanging/' + classifications/bouwdeel/name + ') / float64(Classifications/Bouwdeel/Levensduur[Classifications/Bouwdeel/V/'+ classifications/bouwdeel/name +'])) - SpreidingsFactor)'
 		,(..)
@@ -26,15 +26,23 @@ container Activatie
 
 	container Bouwdelen_base := for_each_nedv(
 		classifications/bouwdeel/name,
-		'BO/Bouwdelen/Isolatie/'+ classifications/bouwdeel/name +' == Classifications/IsolatieNiveau/V/N4 ? false  : Verhuismoment || BouwdeelNormering ? true 
+		'BO/Bouwdelen/Isolatie/'+ classifications/bouwdeel/name +' == Classifications/IsolatieNiveau/V/N4 ? false : Verhuismoment || BouwdeelNormering ? true 
 		: Zichtjaar_jaar - BO/Bouwdelen/LastVervanging/' + classifications/bouwdeel/name +
 		'>= Classifications/Bouwdeel/Levensduur[Classifications/Bouwdeel/V/'+ classifications/bouwdeel/name +']',
 		(..),
 		bool);
 
+	container Product_odds := for_each_nedv(
+		 classifications/product/name
+		,'Verhuismoment || BouwdeelNormering ? 1.0[ratio] :
+		 increment * 
+		 ((float64(Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name + ') / float64(Classifications/Installatie/Levensduur[InstallatiePerProduct/'+ classifications/product/name +'])) - SpreidingsFactor)'
+		,(..)
+		,float64);
+
 	container Producten_base := for_each_nedv(
 		classifications/product/name,
-		'Verhuismoment || ProductNormering? true : Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name +
+		'Verhuismoment || ProductNormering ? true : Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name +
 		'>= Classifications/Installatie/Levensduur[InstallatiePerProduct/'+ classifications/product/name +']',
 		(..),
 		bool);
@@ -42,7 +50,7 @@ container Activatie
 	container Producten := Producten_base
 	{
 		attribute<bool> KDb (...) := InstallatiePerProduct/KDb == Classifications/Installatie/V/geen ? KoudemomentB : Producten_base/KDb;
-		attribute<bool> KDp (...) := InstallatiePerProduct/KDb == Classifications/Installatie/V/geen ? KoudemomentB && KoudemomentP : Producten_base/KDp;
+		attribute<bool> KDp (...) := InstallatiePerProduct/KDb == Classifications/Installatie/V/geen ? (KoudemomentB || InstallatiePerProduct/KDb != Classifications/Installatie/V/geen) && KoudemomentP : Producten_base/KDp;
 	}
 
 	container Bouwdelen := Bouwdelen_base
@@ -66,10 +74,10 @@ container Activatie
 	attribute<bool> ProductVervanging  (..) := ='add('+AsItemList('uint8(Producten/'+Classifications/product/name+')')+') > 0b';
 	attribute<bool> BouwdeelNormering  (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
 	attribute<bool> ProductNormering   (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
-	attribute<bool> BouwdeelActief     (..) := nrAansluitingen > 0.0[nrAsl] && BouwdeelVervanging && not(KanNietActiveren);
-	attribute<bool> ProductActief      (..) := nrAansluitingen > 0.0[nrAsl] && ProductVervanging  && not(KanNietActiveren);
 
 	attribute<bool> KanNietActiveren   (..) := (Sloopjaar - Zichtjaar_jaar) < 10[yr_uint16] || (Zichtjaar_jaar - Bouwjaar) < 10[yr_uint16] || Afbouw || Aanbouw;
+	attribute<bool> BouwdeelActief     (..) := nrAansluitingen > 0.0[nrAsl] && BouwdeelVervanging && not(KanNietActiveren);
+	attribute<bool> ProductActief      (..) := nrAansluitingen > 0.0[nrAsl] && ProductVervanging  && not(KanNietActiveren);
 
 	attribute<classifications/Uitvoering> Uitvoering (..) := switch(
 		  case(AND(Bouwdelen/RenovatieMoment, IsMeergezins, Eigendom_rel == Classifications/Eigendom/V/WoonCorp), Classifications/Uitvoering/V/Nat_Mgw_Prj)
