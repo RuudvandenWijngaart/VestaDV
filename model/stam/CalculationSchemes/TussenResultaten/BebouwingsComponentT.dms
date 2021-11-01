@@ -357,66 +357,7 @@ template BebouwingsComponentT
 		container MetervraagBerekening := CalculationSchemes/FunctioneelToMetervraag(BO, SPF); 
 		container Metervraag           := MetervraagBerekening/result;
 		
-		container Activatie
-		{			
-			attribute<float32> Verhuiskans   (..) := rnd_uniform(JaarSeed * 2u, .., range(float32, 0f, 1f));
-			attribute<bool>    Verhuismoment (..) := Verhuiskans > 0.95f; //TODO verhuiskans parameteriseren via invoerbestand
-			attribute<float32> KoudeKans     (..) := rnd_uniform(JaarSeed * 3u, .., range(float32, 0f, 1f));
-			attribute<bool>    Koudemoment   (..) := KoudeKans   > 0.95f; //TODO verhuiskans parameteriseren via invoerbestand
-
-			container Bouwdelen_base := for_each_nedv(
-				classifications/bouwdeel/name,
-				'BO/Bouwdelen/Isolatie/'+ classifications/bouwdeel/name +' == Classifications/IsolatieNiveau/V/N4 ? false  : Verhuismoment || BouwdeelNormering ? true 
-				: Zichtjaar_jaar - BO/Bouwdelen/LastVervanging/' + classifications/bouwdeel/name +
-				'>= Classifications/Bouwdeel/Levensduur[Classifications/Bouwdeel/V/'+ classifications/bouwdeel/name +']',
-				(..),
-				bool);
-			container Producten_base := for_each_nedv(
-				classifications/product/name,
-				'Verhuismoment || ProductNormering? true : Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name +
-				'>= Classifications/Installatie/Levensduur[InstallatiePerProduct/'+ classifications/product/name +']',
-				(..),
-				bool);
-
-			container Producten := Producten_base
-			{
-				attribute<bool> KDb (...) := Koudemoment;
-				attribute<bool> KDp (...) := Koudemoment;
-			}
-
-			container Bouwdelen := Bouwdelen_base
-			{
-				attribute<Bool> RenovatieMoment (...) := ='add('+AsItemList('uint8(Bouwdelen_base/'+Classifications/bouwdeel/name+')')+') > 2b && not(BouwdeelNormering)';
-				attribute<Bool> MS (...) := RenovatieMoment || Bouwdelen_base/MG ? true : Bouwdelen_base/MS;
-				attribute<Bool> PL (...) := RenovatieMoment || Bouwdelen_base/MG ? true : Bouwdelen_base/PL;
-				attribute<Bool> MG (...) := RenovatieMoment ? true : Bouwdelen_base/MG;
-				attribute<Bool> DP (...) := RenovatieMoment ? true : Bouwdelen_base/DP;
-				attribute<Bool> DS (...) := RenovatieMoment ? true : Bouwdelen_base/DS;
-				attribute<Bool> RB (...) := RenovatieMoment ? true : Bouwdelen_base/RB;
-				attribute<Bool> RO (...) := RenovatieMoment ? true : Bouwdelen_base/RO;
-				attribute<Bool> KR (...) := RenovatieMoment ? true : Bouwdelen_base/KR;
-				attribute<Bool> VL (...) := RenovatieMoment ? true : Bouwdelen_base/VL;
-				attribute<Bool> DR (...) := RenovatieMoment ? true : Bouwdelen_base/DR;
-			}
-			
-			attribute<bool> BouwdeelVervanging (..) := ='add('+AsItemList('uint8(Bouwdelen/'+Classifications/bouwdeel/name+')')+') > 0b';
-			attribute<bool> ProductVervanging  (..) := ='add('+AsItemList('uint8(Producten/'+Classifications/product/name+')')+') > 0b';
-			attribute<bool> BouwdeelNormering  (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
-			attribute<bool> ProductNormering   (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
-			attribute<bool> BouwdeelActief     (..) := nrAansluitingen > 0.0[nrAsl] && BouwdeelVervanging && not(Afbouw || Aanbouw);
-			attribute<bool> ProductActief      (..) := nrAansluitingen > 0.0[nrAsl] && ProductVervanging  && not(Afbouw || Aanbouw);
-
-			attribute<classifications/Uitvoering> Uitvoering (..) := switch(
-				  case(AND(Bouwdelen/RenovatieMoment, IsMeergezins, Eigendom_rel == Classifications/Eigendom/V/WoonCorp), Classifications/Uitvoering/V/Nat_Mgw_Prj)
-				, case(AND(Bouwdelen/RenovatieMoment, IsMeergezins                                                     ), Classifications/Uitvoering/V/Nat_Mgw_Ind)
-				, case(AND(Bouwdelen/RenovatieMoment              , Eigendom_rel == Classifications/Eigendom/V/WoonCorp), Classifications/Uitvoering/V/Nat_Egw_Prj)
-				, case(AND(Bouwdelen/RenovatieMoment                                                                   ), Classifications/Uitvoering/V/Nat_Egw_Ind)
-				, case(AND(                           IsMeergezins, Eigendom_rel == Classifications/Eigendom/V/WoonCorp), Classifications/Uitvoering/V/Zst_Mgw_Prj)
-				, case(AND(                           IsMeergezins                                                     ), Classifications/Uitvoering/V/Zst_Mgw_Ind)
-				, case(AND(                                         Eigendom_rel == Classifications/Eigendom/V/WoonCorp), Classifications/Uitvoering/V/Zst_Egw_Prj)
-				, 		                                                                                                  Classifications/Uitvoering/V/Zst_Egw_Ind);
-
-		}
+		#include <Activatie.dms>
 	}
 		
 	//============== Voorwaarden voor het wel of niet toepassen van een gebouwoptie. Welke geldt is opgegeven in de runinstellingen per Rekenstap.

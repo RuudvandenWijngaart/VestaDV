@@ -1,0 +1,82 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2021 - PBL & TNO                                        //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container Activatie
+{			
+	attribute<float32> Verhuiskans   (..) := rnd_uniform(JaarSeed * 2u, .., range(float32, 0f, 1f));
+	attribute<bool>    Verhuismoment (..) := Verhuiskans > 0.95f; //TODO verhuiskans parameteriseren via invoerbestand
+	attribute<float32> KoudeKans     (..) := rnd_uniform(JaarSeed * 3u, .., range(float32, 0f, 1f));
+	attribute<bool>    KoudemomentB  (..) := KoudeKans   > 0.90f, Descr = "Jaarlijkse kans dat een gebouweigenaar besluit te starten met de basisvraag naar koude in te vullen" ; //TODO verhuiskans parameteriseren via invoerbestand
+	attribute<bool>    KoudemomentP  (..) := KoudeKans   > 0.50f, Descr = "Jaarlijkse kans dat een gebouweigenaar besluit te starten ook de piekvraag naar koude in te vullen, indien ook al basis ingevuld" ; //TODO verhuiskans parameteriseren via invoerbestand
+
+
+	parameter<ratio> SpreidingsFactor := 0.93, Descr = "spreiding rondom nominale levensduur eengezinswoningen: 0.8 = 20procent later of eerder";
+	parameter<ratio> increment        := 1.0/(1.0-SpreidingsFactor)*0.5; //ook te gebruiken voor niet-normaal verdeelde spreiding
+
+	container Bouwdeel_odds := for_each_nedv(
+		 classifications/bouwdeel/name
+		,'BO/Bouwdelen/Isolatie/'+ classifications/bouwdeel/name +' == Classifications/IsolatieNiveau/V/N4 ? 0.0[ratio]  : Verhuismoment || BouwdeelNormering ? 1.0[ratio] :
+		 increment * 
+		 ((float64(Zichtjaar_jaar - BO/Bouwdelen/LastVervanging/' + classifications/bouwdeel/name + ') / float64(Classifications/Bouwdeel/Levensduur[Classifications/Bouwdeel/V/'+ classifications/bouwdeel/name +'])) - SpreidingsFactor)'
+		,(..)
+		,float64);
+
+	container Bouwdelen_base := for_each_nedv(
+		classifications/bouwdeel/name,
+		'BO/Bouwdelen/Isolatie/'+ classifications/bouwdeel/name +' == Classifications/IsolatieNiveau/V/N4 ? false  : Verhuismoment || BouwdeelNormering ? true 
+		: Zichtjaar_jaar - BO/Bouwdelen/LastVervanging/' + classifications/bouwdeel/name +
+		'>= Classifications/Bouwdeel/Levensduur[Classifications/Bouwdeel/V/'+ classifications/bouwdeel/name +']',
+		(..),
+		bool);
+
+	container Producten_base := for_each_nedv(
+		classifications/product/name,
+		'Verhuismoment || ProductNormering? true : Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name +
+		'>= Classifications/Installatie/Levensduur[InstallatiePerProduct/'+ classifications/product/name +']',
+		(..),
+		bool);
+
+	container Producten := Producten_base
+	{
+		attribute<bool> KDb (...) := InstallatiePerProduct/KDb == Classifications/Installatie/V/geen ? KoudemomentB : Producten_base/KDb;
+		attribute<bool> KDp (...) := InstallatiePerProduct/KDb == Classifications/Installatie/V/geen ? KoudemomentB && KoudemomentP : Producten_base/KDp;
+	}
+
+	container Bouwdelen := Bouwdelen_base
+	{
+		attribute<Bool> RenovatieMoment (...) := ='add('+AsItemList('uint8(Bouwdelen_base/'+Classifications/bouwdeel/name+')')+') > 2b && not(BouwdeelNormering)';
+		
+		attribute<Bool> MG (...) := =SpreidingsFactor > 0.99 ? 'RenovatieMoment ? true : Bouwdelen_base/MG' : 'RenovatieMoment ? true : Bouwdeel_odds/MG > rnd_uniform(JaarSeed * 8u , ..., range(float64, 0d, 1d))';
+		attribute<Bool> DP (...) := =SpreidingsFactor > 0.99 ? 'RenovatieMoment ? true : Bouwdelen_base/DP' : 'RenovatieMoment ? true : Bouwdeel_odds/DP > rnd_uniform(JaarSeed * 9u , ..., range(float64, 0d, 1d))';
+		attribute<Bool> DS (...) := =SpreidingsFactor > 0.99 ? 'RenovatieMoment ? true : Bouwdelen_base/DS' : 'RenovatieMoment ? true : Bouwdeel_odds/DS > rnd_uniform(JaarSeed * 10u, ..., range(float64, 0d, 1d))';
+		attribute<Bool> RB (...) := =SpreidingsFactor > 0.99 ? 'RenovatieMoment ? true : Bouwdelen_base/RB' : 'RenovatieMoment ? true : Bouwdeel_odds/RB > rnd_uniform(JaarSeed * 11u, ..., range(float64, 0d, 1d))';
+		attribute<Bool> RO (...) := =SpreidingsFactor > 0.99 ? 'RenovatieMoment ? true : Bouwdelen_base/RO' : 'RenovatieMoment ? true : Bouwdeel_odds/RO > rnd_uniform(JaarSeed * 12u, ..., range(float64, 0d, 1d))';
+		attribute<Bool> KR (...) := =SpreidingsFactor > 0.99 ? 'RenovatieMoment ? true : Bouwdelen_base/KR' : 'RenovatieMoment ? true : Bouwdeel_odds/KR > rnd_uniform(JaarSeed * 13u, ..., range(float64, 0d, 1d))';
+		attribute<Bool> VL (...) := =SpreidingsFactor > 0.99 ? 'RenovatieMoment ? true : Bouwdelen_base/VL' : 'RenovatieMoment ? true : Bouwdeel_odds/VL > rnd_uniform(JaarSeed * 14u, ..., range(float64, 0d, 1d))';
+		attribute<Bool> DR (...) := =SpreidingsFactor > 0.99 ? 'RenovatieMoment ? true : Bouwdelen_base/DR' : 'RenovatieMoment ? true : Bouwdeel_odds/DR > rnd_uniform(JaarSeed * 15u, ..., range(float64, 0d, 1d))';
+
+		attribute<Bool> MS (...) := =SpreidingsFactor > 0.99 ? 'RenovatieMoment || Bouwdelen_base/MG ? true : Bouwdelen_base/MS' : 'RenovatieMoment || Bouwdelen_base/MG ? true : Bouwdeel_odds/MS > rnd_uniform(JaarSeed * 16u, ..., range(float64, 0d, 1d))';
+		attribute<Bool> PL (...) := =SpreidingsFactor > 0.99 ? 'RenovatieMoment || Bouwdelen_base/MG ? true : Bouwdelen_base/PL' : 'RenovatieMoment || Bouwdelen_base/MG ? true : Bouwdeel_odds/PL > rnd_uniform(JaarSeed * 17u, ..., range(float64, 0d, 1d))';
+	}
+
+	attribute<bool> BouwdeelVervanging (..) := ='add('+AsItemList('uint8(Bouwdelen/'+Classifications/bouwdeel/name+')')+') > 0b';
+	attribute<bool> ProductVervanging  (..) := ='add('+AsItemList('uint8(Producten/'+Classifications/product/name+')')+') > 0b';
+	attribute<bool> BouwdeelNormering  (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
+	attribute<bool> ProductNormering   (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
+	attribute<bool> BouwdeelActief     (..) := nrAansluitingen > 0.0[nrAsl] && BouwdeelVervanging && not(Afbouw || Aanbouw);
+	attribute<bool> ProductActief      (..) := nrAansluitingen > 0.0[nrAsl] && ProductVervanging  && not(Afbouw || Aanbouw);
+
+	attribute<classifications/Uitvoering> Uitvoering (..) := switch(
+		  case(AND(Bouwdelen/RenovatieMoment, IsMeergezins, Eigendom_rel == Classifications/Eigendom/V/WoonCorp), Classifications/Uitvoering/V/Nat_Mgw_Prj)
+	//	, case(AND(Bouwdelen/RenovatieMoment, IsMeergezins                                                     ), Classifications/Uitvoering/V/Nat_Mgw_Ind) //Meergezinswoningen zijn altijd projectmatig (zet dit weer aan om aanname anders te maken)
+		, case(AND(Bouwdelen/RenovatieMoment              , Eigendom_rel == Classifications/Eigendom/V/WoonCorp), Classifications/Uitvoering/V/Nat_Egw_Prj)
+		, case(AND(Bouwdelen/RenovatieMoment                                                                   ), Classifications/Uitvoering/V/Nat_Egw_Ind)
+		, case(AND(                           IsMeergezins, Eigendom_rel == Classifications/Eigendom/V/WoonCorp), Classifications/Uitvoering/V/Zst_Mgw_Prj)
+	//	, case(AND(                           IsMeergezins                                                     ), Classifications/Uitvoering/V/Zst_Mgw_Ind) //Meergezinswoningen zijn altijd projectmatig (zet dit weer aan om aanname anders te maken)
+		, case(AND(                                         Eigendom_rel == Classifications/Eigendom/V/WoonCorp), Classifications/Uitvoering/V/Zst_Egw_Prj)
+		, 		                                                                                                  Classifications/Uitvoering/V/Zst_Egw_Ind);
+
+}
