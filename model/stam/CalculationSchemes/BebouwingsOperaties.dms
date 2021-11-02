@@ -58,7 +58,7 @@ container BebouwingsOperaties
 
 			attribute<Invoer/RuimtelijkeData/StudieGebied/buurt> Buurt_rel         := union_data(., Bestaand/buurt_rel        , Nieuwbouw/buurt_rel);
 			attribute<BebouwingsTypeDomein>                      BebouwingsType    := union_data(., Bestaand/BebouwingsType   , Nieuwbouw/BebouwingsType);
-			attribute<units/yr_uint16>                           Bouwjaar          := union_data(., Bestaand/Bouwjaar         , const(Zichtjaar_jaar, Nieuwbouw));
+			attribute<units/yr_uint16>                           Bouwjaar          := union_data(., Bestaand/Bouwjaar         , NieuwbouwBouwjaar);
 			attribute<units/yr_uint16>                           Sloopjaar         := =Classifications/Periode/isHistorisch[periode_rel] ? 'union_data(., Bestaand/Sloopjaar, Nieuwbouw/Sloopjaar)' : 'union_data(., Bestaand/Sloopjaar, const((0/0)[units/yr_uint16], Nieuwbouw))';
 			attribute<Classifications/Eigendom>                  Eigendom_rel      := union_data(., Bestaand/Eigendom_rel     , Nieuwbouw/Eigendom_rel);
 			attribute<Bool>                                      isNuNieuw         := union_data(., const(false, Bestaand)    , const(true, Nieuwbouw));
@@ -82,13 +82,15 @@ container BebouwingsOperaties
 					..,
 					GJ_yr);
 			}
+			attribute<yr_uint16> NieuwbouwBouwjaar (Nieuwbouw) := =Zichtjaar_jaar > 2000[yr_uint16] ?  'Zichtjaar_jaar + uint16(rnd_uniform(JaarSeed * 24u, Nieuwbouw, range(uint32, 0[uint32], 10[uint32])))[yr_uint16]' : 'const(Zichtjaar_jaar,Nieuwbouw)';
+
 			container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
 			,	replace('union_data(result, Bestaand/InstallatiePerProduct/@PN, Nieuwbouw/InstallatiePerProduct/@PN)'
 				,	'@PN', Classifications/Product/name)
 			,	result, Classifications/Installatie)
 			{
 				container LastVervanging := for_each_nedv(Classifications/Product/name
-				,	replace('union_data(result, Bestaand/InstallatiePerProduct/LastVervanging/@PN, const(Zichtjaar_jaar, Nieuwbouw))'
+				,	replace('union_data(result, Bestaand/InstallatiePerProduct/LastVervanging/@PN, NieuwbouwBouwjaar)'
 					,	'@PN', Classifications/Product/name)
 				, result, yr_uint16)
 				{
@@ -117,7 +119,7 @@ container BebouwingsOperaties
 			{
 				container LastVervanging := for_each_nedv(
 					classifications/bouwdeel/name,
-					'union_data(..., Bestaand/Bouwdelen/LastVervanging/'+classifications/bouwdeel/name+', const(Zichtjaar_jaar, Nieuwbouw))',
+					'union_data(..., Bestaand/Bouwdelen/LastVervanging/'+classifications/bouwdeel/name+', NieuwbouwBouwjaar)',
 					..,
 					yr_uint16);
 				container Isolatie := for_each_nedv(
