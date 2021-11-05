@@ -13,7 +13,8 @@ template SubsetGebouwOptieT
 	// TODO: Wegsubstitueren
 	attribute<Classifications/GebouwOptie>     GebouwOptie_rel    (ActiefObject) := ActiefObject/GebouwOptie_rel;
 	attribute<bool>                            Criterium          (ActiefObject) := ActiefObject/Criterium;
-	attribute<Classifications/IsolatieAmbitie> IsolatieAmbitie_rel(ActiefObject) := ActiefObject/IsolatieAmbitie_rel;
+	attribute<Classifications/IsolatieAmbitie> MinIsolatieAmbitie_rel(ActiefObject) := ActiefObject/MinIsolatieAmbitie_rel;
+	attribute<Classifications/IsolatieAmbitie> MaxIsolatieAmbitie_rel(ActiefObject) := ActiefObject/MaxIsolatieAmbitie_rel;
 
 	attribute<bool> KoudeGeschikt (ActiefObject) := (BO/Activatie/Producten/KDb[ActiefObject/BO_rel] && BO/Activatie/Producten/KDp[ActiefObject/BO_rel]) == Classifications/GebouwOptie/MetKoude[GebouwOptie_rel];
 	
@@ -24,19 +25,19 @@ template SubsetGebouwOptieT
 	, Descr = "Voldoet de woning aan de isolatienorm voor deze gebouwoptie en is benodigde aansluiting aanwezig?";
 	
 	//===== Selectie van woningen die voldoen aan de minimale isolatiegraad voor de gebouwoptie in kwestie =====
-	unit<uint32> GeschiktObject := subset(LabelGeschikt && KoudeGeschikt && Criterium)
+	unit<uint32> GeschiktObject := select_unit(LabelGeschikt && KoudeGeschikt && Criterium)
 	{
-		attribute<ActiefObject>                ActiefObject_rel := nr_orgentity;
-		attribute<uint32>                      BO_rel           := ActiefObject/BO_rel[ActiefObject_rel];
-		attribute<Classifications/SchilLabel>  SchilLabel_rel   := ActiefObject/SchilLabel_rel[ActiefObject_rel];
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel  := ../GebouwOptie_rel[ActiefObject_rel];
-		attribute<Classifications/IsolatieAmbitie> IsolatieAmbitie_rel := ../IsolatieAmbitie_rel[nr_OrgEntity];
+		attribute<uint32>                      BO_rel           := select_data(GeschiktObject, ActiefObject/BO_rel);
+		attribute<Classifications/SchilLabel>  SchilLabel_rel   := select_data(GeschiktObject, ActiefObject/SchilLabel_rel);
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel  := select_data(GeschiktObject, ../GebouwOptie_rel);
+		attribute<Classifications/IsolatieAmbitie> MinIsolatieAmbitie_rel := select_data(GeschiktObject, ../MinIsolatieAmbitie_rel);
+		attribute<Classifications/IsolatieAmbitie> MaxIsolatieAmbitie_rel := select_data(GeschiktObject, ../MaxIsolatieAmbitie_rel);
 		
 		container AansluitCapaciteit
 		{
-			attribute<kW> RV (GeschiktObject) := ActiefObject/AansluitCapaciteit/RV[ActiefObject_rel];
-			attribute<kW> TW (GeschiktObject) := ActiefObject/AansluitCapaciteit/TW[ActiefObject_rel];
-			attribute<kW> KD (GeschiktObject) := ActiefObject/AansluitCapaciteit/KD[ActiefObject_rel];
+			attribute<kW> RV (GeschiktObject) := select_data(GeschiktObject, ActiefObject/AansluitCapaciteit/RV);
+			attribute<kW> TW (GeschiktObject) := select_data(GeschiktObject, ActiefObject/AansluitCapaciteit/TW);
+			attribute<kW> KD (GeschiktObject) := select_data(GeschiktObject, ActiefObject/AansluitCapaciteit/KD);
 		}
 
 		container Bouwdelen := for_each_nedv(Classifications/Bouwdeel/name
@@ -45,12 +46,12 @@ template SubsetGebouwOptieT
 			)
 		{
 			container Isolatie := for_each_nedv(Classifications/Bouwdeel/name
-			,	replace('ActiefObject/Bouwdelen/Isolatie/@BN[ActiefObject_rel]', '@BN', Classifications/Bouwdeel/name)
+			,	replace('select_data(GeschiktObject, ActiefObject/Bouwdelen/Isolatie/@BN)', '@BN', Classifications/Bouwdeel/name)
 			,	GeschiktObject, Classifications/IsolatieNiveau
 			);
 		}
 		container Functioneel := for_each_nedv(Classifications/FunctioneleVraag/name
-			,	replace('ActiefObject/Functioneel/@BN[ActiefObject_rel]', '@BN', Classifications/FunctioneleVraag/name)
+			,	replace('select_data(GeschiktObject, ActiefObject/Functioneel/@BN)', '@BN', Classifications/FunctioneleVraag/name)
 			,	GeschiktObject, GJ_yr
 			);
 		
@@ -97,16 +98,13 @@ template SubsetGebouwOptieT
 				replace('Func2Meter/eEffect/CapaciteitPerInstallatie/@I * VerbruiksOpties/Installatie/K@X_cap[Classifications/Installatie/V/@I]'
 				, '@I', Classifications/Installatie/name)
 			)+
-		')'
-	, isHidden = "True";
-
+		')';
 	attribute<Eur   > Ki_cap     (GeschiktObject) := =replace(KX_cap_Expr, '@X', 'i');
 	attribute<Eur   > Ki30_cap   (GeschiktObject) := =replace(KX_cap_Expr, '@X', 'i30');
 	attribute<Eur   > Ki20_cap   (GeschiktObject) := =replace(KX_cap_Expr, '@X', 'i20');
 	attribute<Eur   > Ki15_cap   (GeschiktObject) := =replace(KX_cap_Expr, '@X', 'i15');
 	attribute<Eur_yr> Kj_OH_cap  (GeschiktObject) := =replace(KX_cap_Expr, '@X', 'j_OH');
 	attribute<Eur_yr> Kj_Adm_cap (GeschiktObject) := =replace(KX_cap_Expr, '@X', 'j_Adm');
-
 
 	attribute<Eur   > Ki_LTAS (GeschiktObject) := 
 		(GeschiktObject/InstallatiePerProduct/AS >= Classifications/AfgifteSysteem/V/LTAS) && (BO/InstallatiePerProduct/AS[GeschiktObject/BO_rel] < Classifications/AfgifteSysteem/V/LTAS)
@@ -115,7 +113,8 @@ template SubsetGebouwOptieT
 				: BO/BCkentallen/Ki_LTAS_l_asl) * BO/nrAansluitingen[GeschiktObject/BO_rel] + BO/BCkentallen/Ki_LTAS_opp * BO/Oppervlakte[GeschiktObject/BO_rel]
 			: const(0[Eur], GeschiktObject);
 			
-
+	// #TRELLO35 KiXX per product tbv per installatie varierende EIA
+	// #TRELLO35 neem alleen vervanging mee; kapitaallasten vna installaties die er al staat (mits niet toe aan vervanging) weegt niet mee in afweging voor iets nieuws
 	parameter<string> KX_expr :=
 		'add('
 			'VerbruiksOpties/GebouwOptie/K@X_asl[GeschiktObject/GebouwOptie_rel] * BO/nrAansluitingen[GeschiktObject/BO_rel],  '
@@ -136,9 +135,9 @@ template SubsetGebouwOptieT
 		attribute<Eur_yr> Kj_Vastrecht_g (GeschiktObject) := VastRechtBijdrageG; // bijdrage en heffingskortingen voor E, MT en LT zijn voor alle GebouwOpties hetzelfde, dus niet relevant voor de afweging.
 	}
 	
-	attribute<Eur>    Ki_gv       (GeschiktObject) := leerCurves/Isolatie/Curve * ActiefObject/Ki_GV[GeschiktObject/ActiefObject_rel];
-	attribute<Eur_yr> Kji_gv      (GeschiktObject) := leerCurves/Isolatie/Curve * ActiefObject/Kji_GV[GeschiktObject/ActiefObject_rel];
-	attribute<Eur_yr> Kmi_gv      (GeschiktObject) := leerCurves/Isolatie/Curve * ActiefObject/Kmi_GV[GeschiktObject/ActiefObject_rel];
+	attribute<Eur>    Ki_gv       (GeschiktObject) := leerCurves/Isolatie/Curve * select_data(GeschiktObject, ActiefObject/Ki_GV );
+	attribute<Eur_yr> Kji_gv      (GeschiktObject) := leerCurves/Isolatie/Curve * select_data(GeschiktObject, ActiefObject/Kji_GV);
+	attribute<Eur_yr> Kmi_gv      (GeschiktObject) := leerCurves/Isolatie/Curve * select_data(GeschiktObject, ActiefObject/Kmi_GV);
 
 	attribute<Eur>    Ki_totaal   (GeschiktObject) := Ki_LO   + Ki_GV + Ki_LTAS;
 	attribute<Eur>    Ki30_totaal (GeschiktObject) := Ki30_LO + Ki_GV + Ki_LTAS;
@@ -312,7 +311,7 @@ template SubsetGebouwOptieT
 	attribute<Eur_yr> Kmi15_LO (GeschiktObject) := Ki15_LO * NCW/mr15/AnnualisationFactor;
 	attribute<Eur_yr> Kmi_LO   (GeschiktObject) := Kmi30_LO + Kmi20_LO + Kmi15_LO;
 
-	attribute<Eur>    Oi30_LO  (GeschiktObject) := Ki30_LO * EIA_Opties/Rs_LokaleOpwekking;
+	attribute<Eur>    Oi30_LO  (GeschiktObject) := Ki30_LO * EIA_Opties/Rs_LokaleOpwekking; // #TRELLO35 Deze per product en Installatie specifieke percentages toepassen
 	attribute<Eur>    Oi20_LO  (GeschiktObject) := (Ki20_LO + Ki_DK) * EIA_Opties/Rs_LokaleOpwekking;
 	attribute<Eur>    Oi15_LO  (GeschiktObject) := Ki15_LO * EIA_Opties/Rs_LokaleOpwekking; 
 	attribute<Eur>    Oi_GV    (GeschiktObject) := Ki_gv   * EIA_Opties/Rs_GebouwVerbetering; 
@@ -348,7 +347,7 @@ template SubsetGebouwOptieT
 		+ Km_verbruik/totaal;
 		
 	attribute<Eur_yr> kosten (GeschiktObject) := =(LocatieSpecifiekeOpties/GebouwOpties/KiesMaatschappelijk) ? 'kosten_m' : 'kosten_j';
-	attribute<Eur_yr> kosten_or_undefined (GeschiktObject) := Criterium[GeschiktObject/ActiefObject_rel] ? kosten : (0/0)[Eur_yr];
+	attribute<Eur_yr> kosten_or_undefined (GeschiktObject) := select_data(GeschiktObject, Criterium) ? kosten : (0/0)[Eur_yr];
 
 	unit<uint32> results := GeschiktObject 
 	{
@@ -374,7 +373,5 @@ template SubsetGebouwOptieT
 				}
 				
 		container metervraag := Func2Meter/result;
-	}
-	
-	
+	}	
 }
