@@ -116,20 +116,18 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 		attribute<uint32> IsolatieCode := UInt32(IsolatieCode1)+1024*UInt32(IsolatieCode2);
 
 		attribute<UniekIsolatieCode> UniekIsolatieCode_rel := rlookup(IsolatieCode, UniekIsolatieCode/values);
-		attribute<uint32> UICxBAW_code := combine_data(UICxBAW, BouwdeelActieveWoning_rel, UniekIsolatieCode_rel )
-			, IntegrityCheck = "UInt64(#AmbitieBerekening)*UInt64(#UniekIsolatieCode) < UInt64(4000000000)";
+		attribute<UICxBAW> UICxBAW_code := point(BouwdeelActieveWoning_rel, UniekIsolatieCode_rel, UICxBAW);
 			
 		attribute<UniekAmbitie> UniekAmbitie_rel := rlookup(UICxBAW_code, UniekAmbitie/values);
-		
 	}
 	unit<uint32> UniekIsolatieCode:= unique(AmbitieBerekening/IsolatieCode);
-	unit<uint32> UICxBAW := combine_unit(BouwdeelActieveWoning, UniekIsolatieCode);
+	unit<UPoint> UICxBAW;
 	
 	unit<uint32> UniekAmbitie := unique(AmbitieBerekening/UICxBAW_code)
 	{
-		attribute<BouwdeelActieveWoning> BouwdeelActieveWoning_rel := value(values / #UniekIsolatieCode, BouwdeelActieveWoning);
+		attribute<BouwdeelActieveWoning> BouwdeelActieveWoning_rel := value(PointRow(values), BouwdeelActieveWoning);
 		attribute<BO>  BO_Rel                                      := BouwdeelActieveWoning_rel->BO_rel;
-		attribute<UniekIsolatieCode>     UniekIsolatieCode_rel     := value(values % #UniekIsolatieCode, UniekIsolatieCode);
+		attribute<UniekIsolatieCode>     UniekIsolatieCode_rel     := value(PointCol(values), UniekIsolatieCode);
 		attribute<uint32>                IsolatieCode              := UniekIsolatieCode_rel->values;
 		attribute<classifications/IsolatieAmbitie> MinIsolatieAmbitie_rel := min(AmbitieBerekening/IsolatieAmbitie_rel, AmbitieBerekening/UniekAmbitie_rel);  // take the lowest for P50P lookup
 		attribute<classifications/IsolatieAmbitie> MaxIsolatieAmbitie_rel := max(AmbitieBerekening/IsolatieAmbitie_rel, AmbitieBerekening/UniekAmbitie_rel);  // take the lowest for P50P lookup
