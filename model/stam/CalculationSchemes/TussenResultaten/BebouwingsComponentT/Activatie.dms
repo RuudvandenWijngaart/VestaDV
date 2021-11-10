@@ -7,25 +7,24 @@
 container Activatie
 {			
 	//parameters voor activatie
-	parameter<ratio> VerhuizingPerJaar := 0.05;
-	parameter<ratio> StartKoudeBasis   := 0.10;
-	parameter<ratio> StartOokKoudePiek := 0.50;
-	parameter<ratio> SpreidingsFactor  := 0.80, Descr = "spreiding rondom nominale levensduur eengezinswoningen: 0.8 = 20procent later of eerder, 1.0=geen spreiding";
-	parameter<ratio> StaartFactor      := 0.50;
+	parameter<ratio> VerhuizingPerJaar := SpecifiekeInstellingen/Probabilisering/VerhuizingPerJaar;
+	parameter<ratio> StartKoudeBasis   := SpecifiekeInstellingen/Probabilisering/StartKoudeBasis;
+	parameter<ratio> StartOokKoudePiek := SpecifiekeInstellingen/Probabilisering/StartOokKoudePiek;
+	parameter<ratio> SpreidingsFactor  := SpecifiekeInstellingen/Probabilisering/SpreidingsFactor;
+	parameter<ratio> StaartFactor      := SpecifiekeInstellingen/Probabilisering/StaartFactor;
 	//end parameters
 
 
-	attribute<float32> Verhuiskans   (..) := rnd_uniform(JaarSeed * 2u, .., range(float32, 0f, 1f));
-	attribute<bool>    Verhuismoment (..) := Verhuiskans > 0.95f; //TODO verhuiskans parameteriseren via invoerbestand
-	attribute<float32> KoudeKans     (..) := rnd_uniform(JaarSeed * 3u, .., range(float32, 0f, 1f));
-	attribute<bool>    KoudemomentB  (..) := KoudeKans   > 0.90f, Descr = "Jaarlijkse kans dat een gebouweigenaar besluit te starten met de basisvraag naar koude in te vullen" ; //TODO verhuiskans parameteriseren via invoerbestand
-	attribute<bool>    KoudemomentP  (..) := KoudeKans   > 0.50f, Descr = "Jaarlijkse kans dat een gebouweigenaar besluit te starten ook de piekvraag naar koude in te vullen, indien ook al basis ingevuld" ; //TODO verhuiskans parameteriseren via invoerbestand
+	attribute<float64> Verhuiskans   (..) := rnd_uniform(JaarSeed * 2u, .., range(float32, 0d, 1d));
+	attribute<bool>    Verhuismoment (..) := Verhuiskans > 1.0[ratio] - VerhuizingPerJaar;
+	attribute<float64> KoudeKans     (..) := rnd_uniform(JaarSeed * 3u, .., range(float32, 0d, 1d));
+	attribute<bool>    KoudemomentB  (..) := KoudeKans   > 1.0[ratio] - StartKoudeBasis, Descr = "Jaarlijkse kans dat een gebouweigenaar besluit te starten met de basisvraag naar koude in te vullen" ;
+	attribute<bool>    KoudemomentP  (..) := KoudeKans   > 1.0[ratio] - SpreidingsFactor, Descr = "Jaarlijkse kans dat een gebouweigenaar besluit te starten ook de piekvraag naar koude in te vullen, indien ook al basis ingevuld" ;
 
 	attribute<bool> BouwdeelNormering  (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
 	attribute<bool> ProductNormering   (..) := const(false, ..); //TODO: activatie door normerend beleid waaraan deze woning moet voldoen
 
-	parameter<ratio> SpreidingsFactor := 0.8, Descr = "spreiding rondom nominale levensduur eengezinswoningen: 0.8 = 20procent later of eerder";
-	parameter<ratio> increment        := 1.0/(1.0-SpreidingsFactor)*0.5; //ook te gebruiken voor niet-normaal verdeelde spreiding door aanpassen 0.5 naar bijv. 0.2
+	parameter<ratio> increment        := 1.0/(1.0-SpreidingsFactor)*StaartFactor; //ook te gebruiken voor langere spreiding door aanpassen 0.5 naar bijv. 0.2
 
 	container Bouwdeel_odds := for_each_nedv(
 		 classifications/bouwdeel/name
