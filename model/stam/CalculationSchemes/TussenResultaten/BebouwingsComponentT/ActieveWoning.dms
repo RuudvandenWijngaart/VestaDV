@@ -13,8 +13,8 @@
 //====== Berekeningen voor woningen die actief zijn op minimaal één functioneel product =====
 unit<uint32> ActieveWoning := select_orgrel(BO/Activatie/ProductActief || BO/Activatie/BouwdeelActief)
 {		
-	attribute<rdc_meter> Geometry := select_data(., BO/Geometry);
 	attribute<BO> BO_rel := org_rel;
+	attribute<rdc_meter> Geometry := select_data(ActieveWoning, BO/Geometry);
 	attribute<ActieveWoning> per_BO(BO) := invert(BO_rel);
 	
 	unit<uint32> xInvesteringsOptie_org := union_unit(ProductActieveWoning/xIsolatieAmbitie/PAW_xInvesteringsOptie, BouwdeelActieveWoning/ProductInactieveAmbitie);
@@ -54,7 +54,8 @@ unit<uint32> ActieveWoning := select_orgrel(BO/Activatie/ProductActief || BO/Act
 			// TODO: Check dat AansluitCapaciteit niet ook van categorie afhangt of gaat afhangen
 			// TODO2: AansluitCapaciteit enkel afhankelijk van xIsolatieAmbitie of xInvesteringsOptie ? Dan liever niet uit gebouwoptie ophalen
 			attribute<Classifications/GebouwOptieCategorie>  Categorie_rel := =replace(constr_expr1, '@A', 'Categorie_rel', '@C', 'Classifications/GebouwOptieCategorie/V/Hybride');
-			attribute<Classifications/IsolatieAmbitie> IsolatieAmbitie_rel := =replace(constr_expr2, '@A', 'IsolatieAmbitie_rel');
+			attribute<Classifications/IsolatieAmbitie> MinIsolatieAmbitie_rel := =replace(constr_expr2, '@A', 'MinIsolatieAmbitie_rel');
+			attribute<Classifications/IsolatieAmbitie> MaxIsolatieAmbitie_rel := =replace(constr_expr2, '@A', 'MaxIsolatieAmbitie_rel');
 			attribute<xInvesteringsOptie> xInvesteringsOptie_rel := union_data(., ProductActieveWoning/xIsolatieAmbitie/xGebouwOptie/PAW_xInvesteringsOptie_rel, ID(BouwdeelActieveWoning/ProductInactieveAmbitie)+#ProductActieveWoning/xIsolatieAmbitie/PAW_xInvesteringsOptie)[xInvesteringsOptie];
 			
 			attribute<bool> Criterium := =replace(constr_expr1, '@A', 'Criterium', '@C', 'true');
@@ -89,16 +90,16 @@ unit<uint32> ActieveWoning := select_orgrel(BO/Activatie/ProductActief || BO/Act
 			
 	unit<uint32> GeschikteOptie := GeschikteOptieBerekening/results
 	{
-		attribute<xGebouwOptie> xGebouwOptie_rel := nr_OrgEntity;
-		attribute<xInvesteringsOptie> xInvesteringsOptie_rel := xGebouwOptie/xInvesteringsOptie_rel[xGebouwOptie_rel];
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel := xGebouwOptie/GebouwOptie_rel[xGebouwOptie_rel];
+		attribute<xInvesteringsOptie>          xInvesteringsOptie_rel := select_data(GeschikteOptie, xGebouwOptie/xInvesteringsOptie_rel);
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel        := select_data(GeschikteOptie, xGebouwOptie/GebouwOptie_rel);
 	}
 	
 	// Kies GebouwOptie per xInvesteringsOptie
 	container Choice_per_xInvesteringsOptie {
 	
 		attribute<Classifications/Gebouwoptie>          GebouwOptie          (GeschikteOptie) := GeschikteOptie/GebouwOptie_rel;
-		attribute<Classifications/IsolatieAmbitie>      IsolatieAmbitie      (GeschikteOptie) := GeschikteOptie/IsolatieAmbitie_rel;
+		attribute<Classifications/IsolatieAmbitie>      MinIsolatieAmbitie   (GeschikteOptie) := GeschikteOptie/MinIsolatieAmbitie_rel;
+		attribute<Classifications/IsolatieAmbitie>      MaxIsolatieAmbitie   (GeschikteOptie) := GeschikteOptie/MaxIsolatieAmbitie_rel;
 		attribute<Classifications/GebouwOptieCategorie> GebouwOptieCategorie (GeschikteOptie) := Classifications/Gebouwoptie/Categorie_rel[Gebouwoptie];
 		attribute<Classifications/Eigendom>             Eigendom             (GeschikteOptie) := BO/Eigendom_rel[GeschikteOptie/BO_rel];
 
@@ -121,12 +122,13 @@ unit<uint32> ActieveWoning := select_orgrel(BO/Activatie/ProductActief || BO/Act
 		attribute<GeschikteOptie>              SCurve_GeschikteOptie_rel (xInvesteringsOptie) := max_index( isSelected, GeschikteOptie/xInvesteringsOptie_rel);	
 		attribute<GeschikteOptie>              GeschikteOptie_rel        (xInvesteringsOptie) := SCurve_GeschikteOptie_rel;
 		attribute<Classifications/GebouwOptie> GebouwOptie_rel           (xInvesteringsOptie) := GeschikteOptie/GebouwOptie_rel[GeschikteOptie_rel];	
+		
 		attribute<Float64>                     P50P                      (xInvesteringsOptie) := float64(
 			Classifications/Scurve_investering/P50P[
 				combine_data(Classifications/Scurve_investering,
 					Eigendom[Choice_per_xInvesteringsOptie/GeschikteOptie_rel],
 					combine_data(combine(Classifications/IsolatieAmbitie,Classifications/GebouwOptieCategorie),
-						IsolatieAmbitie[Choice_per_xInvesteringsOptie/GeschikteOptie_rel],
+						MinIsolatieAmbitie[Choice_per_xInvesteringsOptie/GeschikteOptie_rel],
 						GebouwOptieCategorie[Choice_per_xInvesteringsOptie/GeschikteOptie_rel]))
 				]);		 	
 		attribute<eur_yr>                      kosten_tbv_afweging       (xInvesteringsOptie) := GeschikteOptie/kosten_tbv_afweging[GeschikteOptie_rel] * P50P;
@@ -135,8 +137,9 @@ unit<uint32> ActieveWoning := select_orgrel(BO/Activatie/ProductActief || BO/Act
 	// Kies uit results_Per_xInvesteringsOptie een InvesteringsOptie per ProductActieveWoning
 	container Choice_per_ActieveWoning
 	{
-		attribute<Classifications/Gebouwoptie>          GebouwOptie          (xInvesteringsOptie) := Choice_per_xInvesteringsOptie/GebouwOptie[Choice_per_xInvesteringsOptie/GeschikteOptie_rel];
-		attribute<Classifications/IsolatieAmbitie>      IsolatieAmbitie      (xInvesteringsOptie) := Choice_per_xInvesteringsOptie/IsolatieAmbitie[Choice_per_xInvesteringsOptie/GeschikteOptie_rel];
+		attribute<Classifications/Gebouwoptie>          GebouwOptie          (xInvesteringsOptie) := Choice_per_xInvesteringsOptie/GebouwOptie         [Choice_per_xInvesteringsOptie/GeschikteOptie_rel];
+		attribute<Classifications/IsolatieAmbitie>      MinIsolatieAmbitie   (xInvesteringsOptie) := Choice_per_xInvesteringsOptie/MinIsolatieAmbitie  [Choice_per_xInvesteringsOptie/GeschikteOptie_rel];
+		attribute<Classifications/IsolatieAmbitie>      MaxIsolatieAmbitie   (xInvesteringsOptie) := Choice_per_xInvesteringsOptie/MaxIsolatieAmbitie  [Choice_per_xInvesteringsOptie/GeschikteOptie_rel];
 		attribute<Classifications/GebouwOptieCategorie> GebouwOptieCategorie (xInvesteringsOptie) := Choice_per_xInvesteringsOptie/GebouwOptieCategorie[Choice_per_xInvesteringsOptie/GeschikteOptie_rel];
 		attribute<Classifications/Eigendom>             Eigendom             (xInvesteringsOptie) := Choice_per_xInvesteringsOptie/Eigendom[Choice_per_xInvesteringsOptie/GeschikteOptie_rel];
 
@@ -150,7 +153,7 @@ unit<uint32> ActieveWoning := select_orgrel(BO/Activatie/ProductActief || BO/Act
 					combine_data(Classifications/Scurve_investering,
 						Eigendom,
 						combine_data(combine_unit_uint32(Classifications/IsolatieAmbitie,Classifications/GebouwOptieCategorie),
-							IsolatieAmbitie,
+							MinIsolatieAmbitie,
 							GebouwOptieCategorie))
 				]);		 
 		attribute<Float64> MaxKosten     (ActieveWoning)      := max(Choice_per_xInvesteringsOptie/kosten_tbv_afweging, xInvesteringsOptie/ActieveWoning_rel);
