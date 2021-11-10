@@ -1,8 +1,8 @@
 REM aanpassingen voor machine specifieke paden
 
-set prj_dir=C:\Vesta\Model\PD\VestaDV_SAWEC-WP5
-set log_dir=C:\Vesta\Model\LD\VestaDV_SAWEC-WP5\log
-set exe_dir=C:\Program Files\ObjectVision\GeoDms7314
+set prj_dir=C:\prj\pbl\SawecWP5
+set log_dir=C:\LD\SAWECWP5\log
+set exe_dir=C:\Program Files\ObjectVision\GeoDms7320
 
 REM einde aanpassingen voor machine specifieke paden
 
