@@ -16,7 +16,7 @@ template SubsetGebouwOptieT
 	attribute<Classifications/IsolatieAmbitie> MinIsolatieAmbitie_rel(ActiefObject) := ActiefObject/MinIsolatieAmbitie_rel;
 	attribute<Classifications/IsolatieAmbitie> MaxIsolatieAmbitie_rel(ActiefObject) := ActiefObject/MaxIsolatieAmbitie_rel;
 
-	attribute<bool> KoudeGeschikt (ActiefObject) := (BO/Activatie/Producten/KDb[ActiefObject/BO_rel] && BO/Activatie/Producten/KDp[ActiefObject/BO_rel]) == Classifications/GebouwOptie/MetKoude[GebouwOptie_rel];
+	attribute<bool> KoudeGeschikt (ActiefObject) := (BO/Activatie/Producten/KDb[ActiefObject/BO_rel] || BO/Activatie/Producten/KDp[ActiefObject/BO_rel]) == Classifications/GebouwOptie/MetKoude[GebouwOptie_rel];
 	
 	attribute<bool> LabelGeschikt (ActiefObject) := 
 	AND( ActiefObject/SchilLabel_rel <= Classifications/GebouwOptie/Min_schillabel_rel[GebouwOptie_rel]
@@ -25,9 +25,11 @@ template SubsetGebouwOptieT
 	, Descr = "Voldoet de woning aan de isolatienorm voor deze gebouwoptie en is benodigde aansluiting aanwezig?";
 	
 	// TODO: check op dat Input van Installatie wel Aangesloten kan worden; Beinvloedt dit de activatie of alleen de invulling ?
-	parameter<string> IPP_active_cond := 'AND(GeschiktObject/Installatie_rel/@PN != Classifications/Installatie/V/geen, BO/Activatie/Producten/@PN[GeschiktObject/BO_rel])'; 
-	parameter<string> IPP_active_expr := 'GeschiktObject/Installatie_rel/@PN';
+	parameter<string> IPP_active_expr  := 'Classifications/GebouwOptie/Installatie_rel/@PN[GeschiktObject/GebouwOptie_rel]';
+	parameter<string> IPP_active_cond  := IPP_active_expr+' != Classifications/Installatie/V/geen && BO/Activatie/Producten/@PN[GeschiktObject/BO_rel]'; 
 	parameter<string> IPP_default_expr := 'BO/InstallatiePerProduct/@PN[GeschiktObject/BO_rel]';
+		
+	parameter<string> IPP_invest_cond := IPP_active_cond + '&& (BO/Activatie/Producten_EOL/@PN[GeschiktObject/BO_rel] || GeschiktObject/InstallatiePerProduct/@PN != BO/InstallatiePerProduct/@PN[BO_rel])'; // EOL of Veranderd ? 
 		
 	//===== Selectie van woningen die voldoen aan de minimale isolatiegraad voor de gebouwoptie in kwestie =====
 	unit<uint32> GeschiktObject := select_unit(LabelGeschikt && KoudeGeschikt && Criterium)
@@ -61,11 +63,11 @@ template SubsetGebouwOptieT
 			);
 		
 		
-		//===== Installaties die horen bij de gebouwoptie in kwestie =====	
-		container Installatie_rel := for_each_nedv(Classifications/Product/name
-		,	replace('Classifications/GebouwOptie/Installatie_rel/@PN[GeschiktObject/GebouwOptie_rel]', '@PN', Classifications/Product/name)
-		,	GeschiktObject, Classifications/Installatie
-		);	
+		//===== Installaties die horen bij de gebouwoptie in kwestie =====	TODO, direct opzoeken in GebouwOptie
+//		container Installatie_rel := for_each_nedv(Classifications/Product/name
+//		,	replace('Classifications/GebouwOptie/Installatie_rel/@PN[GeschiktObject/GebouwOptie_rel]', '@PN', Classifications/Product/name)
+//		,	GeschiktObject, Classifications/Installatie
+//		);	
 		
 		
 		container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
@@ -93,8 +95,9 @@ template SubsetGebouwOptieT
 			attribute<Classifications/GebouwOptie>  GebouwOptie_rel := GeschiktObject_rel->GebouwOptie_rel;
 //			attribute<string>       label           := BO_rel->Label + ':'+Classifications/Product/name[Product_rel] + '.' + GebouwOptie/name[GebouwOptie_rel];
 			attribute<Classifications/Installatie>  Installatie_rel := ='union_data(., '+AsItemList('GebouwOptie_rel->PerProduct/'+Classifications/Product/name)+')';
-			attribute<bool>         IsActief        := ='union_data(.,'+AsItemList(replace(IPP_active_cond, '@PN', Classifications/Product/name))+')';
-			attribute<xInstallatie> xInstallatie_code := point(UInt32(xProduct/GeschiktObject_rel), UInt32(IsActief ? xProduct/Installatie_rel : classifications/Installatie/V/geen), xInstallatie);
+			attribute<bool>         IsActief        := ='union_data(.,'+AsItemList(replace(IPP_invest_cond, '@PN', Classifications/Product/name))+')'; 
+				
+			attribute<xInstallatie> xInstallatie_code := point(UInt32(xProduct/GeschiktObject_rel), UInt32(IsActief? xProduct/Installatie_rel : classifications/Installatie/V/geen), xInstallatie);
 			attribute<uInstallatie> uInstallatie_rel := rlookup(xInstallatie_code, uInstallatie/Values);
 			
 			attribute<.> per_uInstallatie(uInstallatie) :=  uInstallatie/First_xProduct_rel;

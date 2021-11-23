@@ -44,32 +44,36 @@ container Activatie
 
 	container Product_odds := for_each_nedv(
 		 classifications/product/name
-		,'Verhuismoment || BouwdeelNormering ? 1.0[ratio] :
-		 increment * 
-		 ((float64(Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name + ') / float64(Classifications/Installatie/Levensduur[InstallatiePerProduct/'+ classifications/product/name +'])) - SpreidingsFactor)'
+		,'increment * ('
+			'(float64(Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name + ') '
+				'/ float64(Classifications/Installatie/Levensduur[InstallatiePerProduct/'+ classifications/product/name +']))'
+			'- SpreidingsFactor) '
+			'> rnd_uniform(JaarSeed * (18u+ Classifications/Product/V/'+classifications/product/name+') , ..., range(float64, 0d, 1d))'
 		,(..)
-		,float64);
+		,bool);
 
 	container Producten_base := for_each_nedv(
 		classifications/product/name,
-		'Verhuismoment || ProductNormering ? true : Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name +
+		'Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name +
 		'>= Classifications/Installatie/Levensduur[InstallatiePerProduct/'+ classifications/product/name +']',
 		(..),
 		bool);
 
-	container Producten := Producten_base
-	{
-		attribute<bool> RVb (...) := =SpreidingsFactor > 0.99 ? 'Producten_base/RVb' : 'Product_odds/RVb > rnd_uniform(JaarSeed * 18u , ..., range(float64, 0d, 1d))';
-		attribute<bool> RVp (...) := =SpreidingsFactor > 0.99 ? 'Producten_base/RVp' : 'Product_odds/RVp > rnd_uniform(JaarSeed * 19u , ..., range(float64, 0d, 1d))';
-		attribute<bool> TWb (...) := =SpreidingsFactor > 0.99 ? 'Producten_base/TWb' : 'Product_odds/TWb > rnd_uniform(JaarSeed * 20u , ..., range(float64, 0d, 1d))';
-		attribute<bool> TWp (...) := =SpreidingsFactor > 0.99 ? 'Producten_base/TWp' : 'Product_odds/TWp > rnd_uniform(JaarSeed * 21u , ..., range(float64, 0d, 1d))';
+	container Producten_EOL := for_each_nedv(
+		classifications/product/name,
+		(SpreidingsFactor > 0.99 ? 'Producten_base/' : 'Product_odds/') + classifications/product/name, 
+		(..),
+		bool);
 
-		attribute<bool> KDb (...) := =SpreidingsFactor > 0.99 ?
-			'InstallatiePerProduct/KDb == Classifications/Installatie/V/geen ? KoudemomentB : Producten_base/KDb' :
-			'InstallatiePerProduct/KDb == Classifications/Installatie/V/geen ? KoudemomentB : Product_odds/KDb > rnd_uniform(JaarSeed * 22u , ..., range(float64, 0d, 1d))';
-		attribute<bool> KDp (...) := =SpreidingsFactor > 0.99 ?
-			'InstallatiePerProduct/KDp == Classifications/Installatie/V/geen ? (KoudemomentB || InstallatiePerProduct/KDb != Classifications/Installatie/V/geen) && KDb && KoudemomentP : Producten_base/KDp' :
-			'InstallatiePerProduct/KDp == Classifications/Installatie/V/geen ? (KoudemomentB || InstallatiePerProduct/KDb != Classifications/Installatie/V/geen) && KDb && KoudemomentP : Product_odds/KDp > rnd_uniform(JaarSeed * 23u , ..., range(float64, 0d, 1d))';
+	container Producten
+	{
+		attribute<bool> RVb (...) := Verhuismoment || ProductNormering || Producten_EOL/RVb;
+		attribute<bool> RVp (...) := Verhuismoment || ProductNormering || Producten_EOL/RVp;
+		attribute<bool> TWb (...) := Verhuismoment || ProductNormering || Producten_EOL/TWb;
+		attribute<bool> TWp (...) := Verhuismoment || ProductNormering || Producten_EOL/TWp;
+
+		attribute<bool> KDb (...) := Verhuismoment || ProductNormering || Producten_EOL/KDb || (InstallatiePerProduct/KDb == Classifications/Installatie/V/geen && KoudemomentB);
+		attribute<bool> KDp (...) := Verhuismoment || ProductNormering || Producten_EOL/KDb || (InstallatiePerProduct/KDp == Classifications/Installatie/V/geen && KoudemomentP && KDb);		
 	}
 
 	container Bouwdelen := Bouwdelen_base
