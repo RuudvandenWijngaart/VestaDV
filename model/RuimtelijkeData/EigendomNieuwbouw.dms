@@ -1,0 +1,79 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2021 - PBL & TNO                                        //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container EigendomNieuwbouw
+{
+	container Class
+	{
+		unit<uint8> muttype : nrofrows = 4
+		{
+			attribute<string> label : ['Nieuwbouw','Toevoeging','Sloop','Overheveling'], DialogType = "LabelText";
+			container V := for_each_nedv(label, string(id(.))+'[..]', void, .);
+		}
+		unit<uint32> jaren := unique(data/Jaar)
+		{
+			attribute<string> label := string(values), DialogType = "LabelText";
+			attribute<yr_uint16>   jaar := values;
+			container V := for_each_nedv('yr' + label, string(id(.))+'[..]', void, .);
+		}
+		unit<uint32> corop 
+			:   StorageName     = "%SourceDataProjDir%/RO/COROP_gebieden_2022.shp"
+			,   StorageType     = "gdal.vect"
+			,	StorageReadOnly = "True"
+		{
+			attribute<string> label := statcode, DialogType = "LabelText";
+			container V := for_each_nedv(label, string(id(.))+'[..]', void, .);
+		}
+	}
+
+	unit<uint32> src
+		:   StorageName     = "%SourceDataProjDir%/RO/PrognoseCOROP_TNO.csv"
+		,   StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True";
+
+	unit<uint32> data := src
+	{
+		attribute<yr_uint16>   Jaar      := src/Jaar[yr_uint16];
+		attribute<Class/corop> Corop_rel := rlookup(float64(src/corop), Class/corop/fid);
+
+		attribute<Class/muttype>     Muttype_rel  :=
+			src/muttype = '1' ? Class/muttype/V/Nieuwbouw :
+			src/muttype = '2' ? Class/muttype/V/Toevoeging :
+			src/muttype = '3' ? Class/muttype/V/Sloop :
+			Class/muttype/V/Overheveling;
+
+		attribute<Classifications/Eigendom> Eigendom_rel :=
+			src/eigendom = '1' ? Classifications/Eigendom/V/koop :
+			src/eigendom = '2' ? Classifications/Eigendom/V/parthuur :
+			Classifications/Eigendom/V/wooncorp;
+
+		attribute<float32>   nrAansl   := float32(src/aantal);
+	}
+
+	container years := for_each_ne('yr'+Class/jaren/label, 'process_yr(Class/jaren/V/yr'+Class/jaren/label+')');
+
+	template process_yr
+	{
+		parameter<class/jaren> jaar_rel;
+		parameter<yr_uint16> Zichtjaar := class/jaren/values[jaar_rel];
+
+		unit<uint32> JaarData := subset(data/Jaar == Zichtjaar)
+		{
+			attribute<Class/corop>              Corop_rel    := data/Corop_rel[nr_orgentity];
+			attribute<Class/muttype>            Muttype_rel  := data/muttype_rel[nr_orgentity];
+			attribute<Classifications/Eigendom> Eigendom_rel := data/Eigendom_rel[nr_orgentity];
+			attribute<float32>                  nrAansl      := data/nrAansl[nr_orgentity];
+
+			unit<uint32> NieuwbouwData := subset(JaarData/Muttype_rel == Class/muttype/V/Nieuwbouw)
+			{
+				attribute<float32> total      (class/corop) := sum(nrAansl[nr_orgentity],Corop_rel[nr_orgentity]);
+				attribute<ratio>   R_koop     (class/corop) := float64(sum(float32(Eigendom_rel[nr_orgentity] == Classifications/Eigendom/V/Koop)     * nrAansl[nr_orgentity],Corop_rel[nr_orgentity]) / total);
+				attribute<ratio>   R_wooncorp (class/corop) := float64(sum(float32(Eigendom_rel[nr_orgentity] == Classifications/Eigendom/V/wooncorp) * nrAansl[nr_orgentity],Corop_rel[nr_orgentity]) / total);
+				attribute<ratio>   R_parthuur (class/corop) := float64(sum(float32(Eigendom_rel[nr_orgentity] == Classifications/Eigendom/V/parthuur) * nrAansl[nr_orgentity],Corop_rel[nr_orgentity]) / total);
+			}
+		}
+	}
+}
