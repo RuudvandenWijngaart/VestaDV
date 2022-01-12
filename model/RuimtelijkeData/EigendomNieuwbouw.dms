@@ -24,6 +24,8 @@ container EigendomNieuwbouw
 			,   StorageType     = "gdal.vect"
 			,	StorageReadOnly = "True"
 		{
+			attribute<rdc_meter> geometry    (poly);
+			attribute<rdc_mm   > geometry_mm (poly):= geometry[rdc_mm];
 			attribute<string> label := statcode, DialogType = "LabelText";
 			container V := for_each_nedv(label, string(id(.))+'[..]', void, .);
 		}
@@ -31,6 +33,8 @@ container EigendomNieuwbouw
 
 	unit<uint32> src
 		:   StorageName     = "%SourceDataProjDir%/RO/PrognoseCOROP_TNO.csv"
+		,	DialogData      = "geometry"
+		,	DialogType      = "Map"
 		,   StorageType     = "gdal.vect"
 		,	StorageReadOnly = "True";
 
@@ -53,14 +57,15 @@ container EigendomNieuwbouw
 		attribute<float32>   nrAansl   := float32(src/aantal);
 	}
 
-	container years := for_each_ne('yr'+Class/jaren/label, 'process_yr(Class/jaren/V/yr'+Class/jaren/label+')');
+	container years := for_each_ne(Classifications/Periode/name, 'process_yr(Classifications/Periode/V/'+Classifications/Periode/name+')');
 
 	template process_yr
 	{
-		parameter<class/jaren> jaar_rel;
-		parameter<yr_uint16> Zichtjaar := class/jaren/values[jaar_rel];
+		parameter<Classifications/Periode> periode_rel;
+		parameter<yr_uint16>               beginjaar := Classifications/Periode/beginjaar[periode_rel];
+		parameter<yr_uint16>               eindjaar  := Classifications/Periode/eindjaar[periode_rel];
 
-		unit<uint32> JaarData := subset(data/Jaar == Zichtjaar)
+		unit<uint32> JaarData := subset(data/Jaar >= beginjaar && data/jaar <= eindjaar)
 		{
 			attribute<Class/corop>              Corop_rel    := data/Corop_rel[nr_orgentity];
 			attribute<Class/muttype>            Muttype_rel  := data/muttype_rel[nr_orgentity];

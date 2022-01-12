@@ -48,6 +48,75 @@ template StartingStateComponent
 			:	gasloos && not(isdefined(BestaandAflevergebied_rel)) && Defaultlabel_rel < Classifications/schillabel/V/C ? Classifications/GebouwOptie/V/LweWP_zKD
 			:	isdefined(BestaandAflevergebied_rel) && BestaandAflevergebied/Startjaar[BestaandAflevergebied_rel] <= 2000w ?  Classifications/GebouwOptie/V/Gebied_zK
 			:	ModelObject/StartOptie_rel[ModelObject_rel];
+
+
+		//====================== INITIELE BEREKENING RUIMTEVERWARMING ================
+
+		container warmteverlies_theoretisch_startjaar
+		{
+			container warmtewinst
+			{
+				//============ warmtewinst door personen wordt bepaald als constante
+				attribute<GJ_yr> warmtewinst_personen         (...) := const(2.18[GJ_yr],...);
+
+				//============ warmtewinst door apparaten wordt gelijkgesteld aan de vraag naar elektriciteit voor elektrische apparatuur
+				attribute<GJ_yr> warmtewinst_apparaten        (...) := Functioneel/BaseValues/EA;
+
+				//============ warmtewist door zoninstralen door ramen boven (RB) en onder (RO) als functie van oppervlak bouwdeel en waarde horende bij isolatiegraad
+				attribute<GJ_yr> warmtewinst_zoninstraling_RB (...) := bouwdelen/RB * merge(uint8(bouwdelen/isolatie/RB), GJ_yr_m2, 0.456988[GJ_yr_m2],0.362902[GJ_yr_m2],0.322580[GJ_yr_m2],0.215053[GJ_yr_m2]), descr = "warmtewinst ramen boven";
+				attribute<GJ_yr> warmtewinst_zoninstraling_RO (...) := bouwdelen/RO * merge(uint8(bouwdelen/isolatie/RO), GJ_yr_m2, 0.456988[GJ_yr_m2],0.362902[GJ_yr_m2],0.322580[GJ_yr_m2],0.215053[GJ_yr_m2]), descr = "warmtewinst ramen onder";
+				attribute<GJ_yr> warmtewinst_zoninstraling    (...) := warmtewinst_zoninstraling_RO + warmtewinst_zoninstraling_RB;	
+
+				//============ totaal warmtewinsten
+				attribute<GJ_yr> Totaal                       (...) := warmtewinst_personen + warmtewinst_apparaten + warmtewinst_zoninstraling;
+			}
+
+			//========= warmteverlies per bouwdeel als functie van oppervlak van bouwdeel en waarde horende bij isolatiegraad
+			attribute<GJ_yr> VL (..) := bouwdelen/VL * merge(uint8(bouwdelen/isolatie/VL), GJ_yr_m2, 0.070629[GJ_yr_m2],0.059152[GJ_yr_m2],0.024647[GJ_yr_m2],0.017723[GJ_yr_m2]), descr = "warmteverlies vloer";
+			attribute<GJ_yr> DS (..) := bouwdelen/DS * merge(uint8(bouwdelen/isolatie/DS), GJ_yr_m2, 0.166041[GJ_yr_m2],0.128767[GJ_yr_m2],0.052002[GJ_yr_m2],0.023254[GJ_yr_m2]), descr = "warmteverlies schuin dak";
+			attribute<GJ_yr> DP (..) := bouwdelen/DP * merge(uint8(bouwdelen/isolatie/DP), GJ_yr_m2, 0.166041[GJ_yr_m2],0.128767[GJ_yr_m2],0.052002[GJ_yr_m2],0.023254[GJ_yr_m2]), descr = "warmteverlies plat dak";
+			attribute<GJ_yr> MS (..) := bouwdelen/MS * merge(uint8(bouwdelen/isolatie/MS), GJ_yr_m2, 0.161784[GJ_yr_m2],0.161784[GJ_yr_m2],0.161784[GJ_yr_m2],0.096085[GJ_yr_m2]), descr = "warmteverlies spouwmuur";
+			attribute<GJ_yr> MG (..) := bouwdelen/MG * merge(uint8(bouwdelen/isolatie/MG), GJ_yr_m2, 0.161784[GJ_yr_m2],0.051577[GJ_yr_m2],0.036613[GJ_yr_m2],0.030679[GJ_yr_m2]), descr = "warmteverlies gevel";
+			attribute<GJ_yr> DR (..) := bouwdelen/DR * merge(uint8(bouwdelen/isolatie/DR), GJ_yr_m2, 0.161784[GJ_yr_m2],0.161784[GJ_yr_m2],0.161784[GJ_yr_m2],0.116844[GJ_yr_m2]), descr = "warmteverlies deuren";
+			attribute<GJ_yr> PL (..) := bouwdelen/PL * merge(uint8(bouwdelen/isolatie/PL), GJ_yr_m2, 0.161784[GJ_yr_m2],0.087229[GJ_yr_m2],0.051577[GJ_yr_m2],0.036613[GJ_yr_m2]), descr = "warmteverlies paneel";
+			attribute<GJ_yr> RO (..) := bouwdelen/RO * merge(uint8(bouwdelen/isolatie/RO), GJ_yr_m2, 1.097864[GJ_yr_m2],0.511074[GJ_yr_m2],0.227144[GJ_yr_m2],0.151429[GJ_yr_m2]), descr = "warmteverlies ramen onder";
+			attribute<GJ_yr> RB (..) := bouwdelen/RB * merge(uint8(bouwdelen/isolatie/RB), GJ_yr_m2, 1.097864[GJ_yr_m2],0.511074[GJ_yr_m2],0.227144[GJ_yr_m2],0.151429[GJ_yr_m2]), descr = "warmteverlies ramen boven";
+			attribute<GJ_yr> KR (..) := bouwdelen/KR * merge(uint8(bouwdelen/isolatie/KR), GJ_yr_m2, 0.023581[GJ_yr_m2],0.017700[GJ_yr_m2],0.011810[GJ_yr_m2],0.005910[GJ_yr_m2]), descr = "warmteverlies kieren";
+
+			//========= warmteverlies ventilatie (vast en oppervlakte-afhankelijk)
+			attribute<GJ_yr> Vrv_VT_asl (..) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[InstallatiePerProduct/VT] * nrAansluitingen_i, descr = "warmteverlies ventilatie vast per aansluiting";
+			attribute<GJ_yr> Vrv_VT_opp (..) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_opp[InstallatiePerProduct/VT] * Oppervlakte_i, descr = "warmteverlies ventilatie variabel per oppervlakte";
+			
+			//========= theoretische verlies ruimteverwarming (excl warmtewinsten)
+			attribute<GJ_yr> Theoretisch_RV (..) := VL + DP + DS + MG + MS + DR + PL + RO + RB + KR + Vrv_VT_asl + Vrv_VT_opp;
+
+			//========= gemeten vraag ruimteverwarming gecorrigeerd voor warmtewinsten
+			attribute<GJ_yr> Gemeten_RV     (..) := Functioneel/BaseValues/RV + warmtewinst/totaal;
+
+			//========= relatief verschil als fitfactor
+			attribute<ratio> Fitfactor      (..) := Gemeten_RV / Theoretisch_RV;
+
+			//========= gefit verlies bij isolatiegraad N1 als referentiepunt voor berekeningen per zichtjaar
+			container RV_N1_per_Bouwdeel
+			{
+				//========= gefit verlies per bouwdeel
+				attribute<GJ_yr> VL (...) := bouwdelen/VL * 0.070629[GJ_yr_m2] * Fitfactor, descr = "gefit warmteverlies bij isolatriegraad N1 door vloer";
+				attribute<GJ_yr> DS (...) := bouwdelen/DS * 0.166041[GJ_yr_m2] * Fitfactor, descr = "gefit warmteverlies bij isolatriegraad N1 door schuin dak";
+				attribute<GJ_yr> DP (...) := bouwdelen/DP * 0.166041[GJ_yr_m2] * Fitfactor, descr = "gefit warmteverlies bij isolatriegraad N1 door plat dak";
+				attribute<GJ_yr> MS (...) := bouwdelen/MS * 0.161784[GJ_yr_m2] * Fitfactor, descr = "gefit warmteverlies bij isolatriegraad N1 door spouwmuur";
+				attribute<GJ_yr> MG (...) := bouwdelen/MG * 0.161784[GJ_yr_m2] * Fitfactor, descr = "gefit warmteverlies bij isolatriegraad N1 door gevel";
+				attribute<GJ_yr> DR (...) := bouwdelen/DR * 0.161784[GJ_yr_m2] * Fitfactor, descr = "gefit warmteverlies bij isolatriegraad N1 door deuren";
+				attribute<GJ_yr> PL (...) := bouwdelen/PL * 0.161784[GJ_yr_m2] * Fitfactor, descr = "gefit warmteverlies bij isolatriegraad N1 door paneel";
+				attribute<GJ_yr> RO (...) := bouwdelen/RO * 1.097864[GJ_yr_m2] * Fitfactor, descr = "gefit warmteverlies bij isolatriegraad N1 door ramen onder";
+				attribute<GJ_yr> RB (...) := bouwdelen/RB * 1.097864[GJ_yr_m2] * Fitfactor, descr = "gefit warmteverlies bij isolatriegraad N1 door ramen boven";
+				attribute<GJ_yr> KR (...) := bouwdelen/KR * 0.023581[GJ_yr_m2] * Fitfactor, descr = "gefit warmteverlies bij isolatriegraad N1 door kieren";
+
+				//========= gefit verlies totaal
+				attribute<GJ_yr> Total (...) := ='add('+AsItemList(Classifications/bouwdeel/name)+')';
+			}
+		}
+
+
 		
 		container Functioneel := for_each_nedv(
 				Classifications/FunctioneleVraag/name,
@@ -55,22 +124,17 @@ template StartingStateComponent
 				.,
 				GJ_yr)
 		{
-			attribute<bool> RV_N1_check(..) := abs(RV_N1_per_Bouwdeel/Total - BaseValues/RV) < 0.001;
-			attribute<GJ_yr> RV_N1 (..) := BaseValues/RV, IntegrityCheck ="RV_N1_check";
-		
-			container RV_N1_per_Bouwdeel := for_each_nedv(
-				Classifications/bouwdeel/name,
-					'BaseValues/RV / Bouwdelen/Totaal
-				*	Bouwdelen/'+ Classifications/bouwdeel/name + '
-				*	Classifications/bouwdeel/verlies[Classifications/bouwdeel/V/'+Classifications/bouwdeel/name+'] / Bouwdelen/Norm_verliesfactor',
-				..,
-				GJ_yr)
-				{
-					attribute<GJ_yr> Total (...) := ='add('+AsItemList(Classifications/bouwdeel/name)+')';
-				}
-			
+			container RV_N1_per_Bouwdeel := warmteverlies_theoretisch_startjaar/RV_N1_per_Bouwdeel;
+
 			container BaseValues := for_each_nedv(
 				Classifications/FunctioneleVraag/name,
+
+				Classifications/FunctioneleVraag/name == 'RV' ? 
+				'nrAansluitingen_i * merge(SchilLabel_rel, GJ_yr_asl,'
+					+ AsItemList('Invoer/Kengetallen/Bebouwing/Woning/Results/Asl/RV_'+Classifications/SchilLabel/name+'[ModelObject_rel]')+')'
+					'+ Oppervlakte_i   * merge(SchilLabel_rel, GJ_yr_m2,'
+					+ AsItemList('Invoer/Kengetallen/Bebouwing/Woning/Results/Opp/RV_'+Classifications/SchilLabel/name+'[ModelObject_rel]')+')'
+					:
 				'Invoer/Kengetallen/Bebouwing/'+Classifications/BebouwingsSector/name[BebouwingsSector_rel]+'/Results/Asl/'+Classifications/FunctioneleVraag/name+'[ModelObject_rel]* nrAansluitingen_i +
 				 Invoer/Kengetallen/Bebouwing/'+Classifications/BebouwingsSector/name[BebouwingsSector_rel]+'/Results/Opp/'+Classifications/FunctioneleVraag/name+'[ModelObject_rel] * Oppervlakte_i',
 				..,
@@ -128,6 +192,12 @@ template StartingStateComponent
 			
 			
 			attribute<ratio> Norm_verliesfactor (..) := ='add('+AsItemList('BouwDeelVerliesFactor/'+Classifications/Bouwdeel/name)+') / Totaal';
+
+			container Isolatie := for_each_nedv(
+					Classifications/bouwdeel/name,
+					'makedefined(BebouwingsObjectSrc/Bouwdelen/Isolatie/'+Classifications/bouwdeel/name+', Classifications/schillabel/default_bouwdeelkwaliteit/'+Classifications/bouwdeel/name+'[Defaultlabel_rel])',
+					..,
+					Classifications/IsolatieNiveau);
 		}
 		
 		container Kapitaallasten

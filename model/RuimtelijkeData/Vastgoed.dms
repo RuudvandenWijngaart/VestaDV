@@ -51,7 +51,7 @@ container Vastgoed
 				 NieuwbouwWoningType/name
 				,Geography/rdc_grids/m100
 				,float32
-				,'%SourceDataProjDir%/RO/' + '20210906_RO_' + Scenario + '/Bouw_' + Periode/name[Periode_rel] + '/' + NieuwbouwWoningType/name + '.tif'
+				,'%HestiaDataDir%/RO/' + '20210906_RO_' + Scenario + '/Bouw_' + Periode/name[Periode_rel] + '/' + NieuwbouwWoningType/name + '.tif'
 			);
 		container NieuwbouwPerJaar
 		{
@@ -92,28 +92,54 @@ container Vastgoed
 				attribute<Classifications/WoningType> Woningtype_rel := const(Classifications/WoningType/V/twee_onder_1_kap,.);
 			}
 
-			unit<uint32> BO_perjaar := union_unit(BO_tussenwoning,BO_hoekwoning,BO_meergezinspand_laag_midden,BO_meergezinspand_hoog,BO_vrijstaand,BO_twee_onder_1_kap)
+			unit<uint32> BO_perjaar_base := union_unit(BO_tussenwoning,BO_hoekwoning,BO_meergezinspand_laag_midden,BO_meergezinspand_hoog,BO_vrijstaand,BO_twee_onder_1_kap)
 			{
-				attribute<rdc_meter>                  geometry       := union_data(.,BO_tussenwoning/geometry,BO_hoekwoning/geometry,BO_meergezinspand_laag_midden/geometry,BO_meergezinspand_hoog/geometry,BO_vrijstaand/geometry,BO_twee_onder_1_kap/geometry);
-				attribute<nrAsl>                      nr_aansl       := union_data(.,BO_tussenwoning/nr_aansl,BO_hoekwoning/nr_aansl,BO_meergezinspand_laag_midden/nr_aansl,BO_meergezinspand_hoog/nr_aansl,BO_vrijstaand/nr_aansl,BO_twee_onder_1_kap/nr_aansl);
-				attribute<Classifications/WoningType> Woningtype_rel := union_data(.,BO_tussenwoning/Woningtype_rel,BO_hoekwoning/Woningtype_rel,BO_meergezinspand_laag_midden/Woningtype_rel,BO_meergezinspand_hoog/Woningtype_rel,BO_vrijstaand/Woningtype_rel,BO_twee_onder_1_kap/Woningtype_rel);
+				attribute<rdc_meter>                     geometry       := union_data(.,BO_tussenwoning/geometry,BO_hoekwoning/geometry,BO_meergezinspand_laag_midden/geometry,BO_meergezinspand_hoog/geometry,BO_vrijstaand/geometry,BO_twee_onder_1_kap/geometry);
+				attribute<EigendomNieuwbouw/Class/corop> Corop_rel      := Point_in_polygon(Geometry, EigendomNieuwbouw/Class/corop/geometry);
+				attribute<nrAsl>                         nr_aansl       := union_data(.,BO_tussenwoning/nr_aansl,BO_hoekwoning/nr_aansl,BO_meergezinspand_laag_midden/nr_aansl,BO_meergezinspand_hoog/nr_aansl,BO_vrijstaand/nr_aansl,BO_twee_onder_1_kap/nr_aansl);
+				attribute<Classifications/WoningType>    Woningtype_rel := union_data(.,BO_tussenwoning/Woningtype_rel,BO_hoekwoning/Woningtype_rel,BO_meergezinspand_laag_midden/Woningtype_rel,BO_meergezinspand_hoog/Woningtype_rel,BO_vrijstaand/Woningtype_rel,BO_twee_onder_1_kap/Woningtype_rel);
 			}
+
+			unit<uint32> BO_perjaar_koop := BO_perjaar_base
+			{
+				attribute<Classifications/Eigendom> Eigendom_rel := const(Classifications/Eigendom/v/Koop,.);
+				attribute<nrAsl>                    nr_aansl     := ='BO_perjaar_base/nr_aansl * EigendomNieuwbouw/years/'+Periode/name[Periode_rel]+'/JaarData/NieuwbouwData/R_koop[Corop_rel]';
+			}
+			unit<uint32> BO_perjaar_wooncorp := BO_perjaar_base
+			{
+				attribute<Classifications/Eigendom> Eigendom_rel := const(Classifications/Eigendom/v/wooncorp,.);
+				attribute<nrAsl>                    nr_aansl     := ='BO_perjaar_base/nr_aansl * EigendomNieuwbouw/years/'+Periode/name[Periode_rel]+'/JaarData/NieuwbouwData/R_wooncorp[Corop_rel]';
+			}
+			unit<uint32> BO_perjaar_parthuur := BO_perjaar_base
+			{
+				attribute<Classifications/Eigendom> Eigendom_rel := const(Classifications/Eigendom/v/parthuur,.);
+				attribute<nrAsl>                    nr_aansl     := ='BO_perjaar_base/nr_aansl * EigendomNieuwbouw/years/'+Periode/name[Periode_rel]+'/JaarData/NieuwbouwData/R_parthuur[Corop_rel]';
+			}
+
+			unit<uint32> BO_perjaar := union_unit(BO_perjaar_koop,BO_perjaar_wooncorp,BO_perjaar_parthuur)
+			{
+				attribute<rdc_meter>                  geometry       := union_data(.,BO_perjaar_koop/geometry      ,BO_perjaar_wooncorp/geometry      ,BO_perjaar_parthuur/geometry      );
+				attribute<Classifications/Eigendom>   Eigendom_rel   := union_data(.,BO_perjaar_koop/Eigendom_rel  ,BO_perjaar_wooncorp/Eigendom_rel  ,BO_perjaar_parthuur/Eigendom_rel  );
+				attribute<nrAsl>                      nr_aansl       := union_data(.,BO_perjaar_koop/nr_aansl      ,BO_perjaar_wooncorp/nr_aansl      ,BO_perjaar_parthuur/nr_aansl      );
+				attribute<Classifications/WoningType> Woningtype_rel := union_data(.,BO_perjaar_koop/Woningtype_rel,BO_perjaar_wooncorp/Woningtype_rel,BO_perjaar_parthuur/Woningtype_rel);
+			}
+
 		}
 		container ResterendFactor :=
 			for_each_ndva(
 				 'Data_'+NieuwbouwWoningType/name
 				,Geography/rdc_grids/m100
 				,float32
-				,'%SourceDataProjDir%/RO/' + '20210906_RO_' + Scenario + '/Sloop_' + Periode/name[Periode_rel] + '/' + NieuwbouwWoningType/name + '.tif'
+				,'%HestiaDataDir%/RO/' + '20210906_RO_' + Scenario + '/Sloop_' + Periode/name[Periode_rel] + '/' + NieuwbouwWoningType/name + '.tif'
 			)
 		{
 			attribute<ratio> vrijstaand                 (Geography/rdc_grids/m100) := float64(Data_vrijstaand);
 			attribute<ratio> twee_onder_1_kap           (Geography/rdc_grids/m100) := float64(Data_twee_onder_1_kap);
 			attribute<ratio> geen_woonpand              (Geography/rdc_grids/m100) := const(0.0[ratio],Geography/rdc_grids/m100);
-			attribute<ratio> hoekwoning                 (Geography/rdc_grids/m100) :=  float64(Data_rijtjeswoning);
-			attribute<ratio> tussenwoning               (Geography/rdc_grids/m100) :=  float64(Data_rijtjeswoning);
-			attribute<ratio> meergezinspand_laag_midden (Geography/rdc_grids/m100) :=  float64(Data_appartement);
-			attribute<ratio> meergezinspand_hoog        (Geography/rdc_grids/m100) :=  float64(Data_appartement);				
+			attribute<ratio> hoekwoning                 (Geography/rdc_grids/m100) := float64(Data_rijtjeswoning);
+			attribute<ratio> tussenwoning               (Geography/rdc_grids/m100) := float64(Data_rijtjeswoning);
+			attribute<ratio> meergezinspand_laag_midden (Geography/rdc_grids/m100) := float64(Data_appartement);
+			attribute<ratio> meergezinspand_hoog        (Geography/rdc_grids/m100) := float64(Data_appartement);				
 		}
 	}
 
@@ -146,7 +172,7 @@ container Vastgoed
 			attribute<yr_uint16>                   Sloopjaar         := Const(2100[yr_uint16],.);
 			attribute<StudieGebied/Buurt>          Buurt_rel         := Point_in_polygon(Geometry, StudieGebied/Buurt/Geometry);
 			attribute<Geography/rdc_grids/m100>    gridm100_rel      := Geometry[Geography/rdc_grids/m100];
-			attribute<Classifications/Eigendom>    Eigendom_rel      := const(Classifications/Eigendom/V/Koop,.); //TODO: eigendomssituatie nieuwbouw opnemen
+			attribute<Classifications/Eigendom>    Eigendom_rel      := NB/Eigendom_rel;
 			attribute<Classifications/GebouwOptie> GebouwOptie_rel   := const(rlookup(DefaultInstellingen/Basis/StartGebouwOpties/NieuwbouwWoning, Classifications/GebouwOptie/name),.);
 			
 			unit<uint32> BestaandAflevergebied := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data;
@@ -220,8 +246,8 @@ container Vastgoed
 				
 				container BaseValues := for_each_nedv(
 					Classifications/FunctioneleVraag/name,
-					'Invoer/Kengetallen/Bebouwing/Woning/Results/Asl/'+Classifications/FunctioneleVraag/name+'[ModelObject_rel] * nrAansluitingen_i +
-					 Invoer/Kengetallen/Bebouwing/Woning/Results/Opp/'+Classifications/FunctioneleVraag/name+'[ModelObject_rel] * Oppervlakte_i',
+					replace('Invoer/Kengetallen/Bebouwing/Woning/Results/Asl/@N@[ModelObject_rel] * nrAansluitingen_i +
+					 Invoer/Kengetallen/Bebouwing/Woning/Results/Opp/@N@[ModelObject_rel] * Oppervlakte_i', '@N@', Classifications/FunctioneleVraag/name + (Classifications/FunctioneleVraag/name == 'RV' ? '_A' : '')),
 					..,
 					GJ_yr);
 			}
