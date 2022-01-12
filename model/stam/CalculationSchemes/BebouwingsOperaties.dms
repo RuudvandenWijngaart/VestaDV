@@ -60,7 +60,51 @@ container BebouwingsOperaties
 			attribute<BebouwingsTypeDomein>                      BebouwingsType    := union_data(., Bestaand/BebouwingsType   , Nieuwbouw/BebouwingsType);
 			attribute<units/yr_uint16>                           Bouwjaar          := union_data(., Bestaand/Bouwjaar         , NieuwbouwBouwjaar);
 			attribute<units/yr_uint16>                           Sloopjaar         := =Classifications/Periode/isHistorisch[periode_rel] ? 'union_data(., Bestaand/Sloopjaar, Nieuwbouw/Sloopjaar)' : 'union_data(., Bestaand/Sloopjaar, const((0/0)[units/yr_uint16], Nieuwbouw))';
-			attribute<Classifications/Eigendom>                  Eigendom_rel      := union_data(., Bestaand/Eigendom_rel     , Nieuwbouw/Eigendom_rel);
+			attribute<Classifications/Eigendom>                  Eigendom_rel_org  := union_data(., Bestaand/Eigendom_rel     , Nieuwbouw/Eigendom_rel);
+			
+			//=============== OMZETTING SOCIALE HUUR NAAR KOOP =========
+
+			container Overheveling
+			{
+				//====== Regioindeling COROP gebieden
+				container    src   := Invoer/RuimtelijkeData/EigendomNieuwbouw;
+				unit<uint32> Corop := src/Class/corop;
+
+				//====== Overhevelingdata ABF voor huidige jaar
+				unit<uint32> Overheveling_data := subset(src/data/Muttype_rel == src/Class/muttype/V/Overheveling && src/data/Jaar == Zichtjaar_jaar)
+				{
+					//========= invoerdata
+					attribute<corop>   Corop_rel := src/data/Corop_rel[nr_orgentity];
+					attribute<float32> nrAansl   := src/data/nrAansl[nr_orgentity];
+
+					//========= huidige overheveling per COROP regio
+					attribute<nrAsl> nrAansl_Corop (Corop) := sum(float64(nrAansl) * 1[nrAsl], Corop_rel);
+				}
+
+				//====== Potentiele kandidaten voor overheveling
+				unit<uint32> OverhevelKandidaten := subset(result/Eigendom_rel_org == Classifications/Eigendom/V/wooncorp && not(result/isNuNieuw))
+				{
+					attribute<nrAsl>   nrAansluitingen_i := result/nrAansluitingen_i[nr_orgentity];
+
+					//====== random nummer tussen 0 en 1 per kandidaat
+					attribute<float64> randomnr          := rnd_uniform(JaarSeed * 18u, ., range(float64, 0d, 1d));
+
+					//====== indelen kandidaten per corop regio
+					attribute<Corop>   Corop_rel         := point_in_polygon(result/point[nr_orgentity], corop/geometry);
+
+					//====== bepalen grenswaarde op basis van aantal over te hevelen woningen per COROP regio
+					attribute<float64> Limits (Corop) := nth_element_weighted(randomnr, Overheveling_data/nrAansl_Corop, nrAansluitingen_i , Corop_rel);
+
+					//====== selectie kandidaten met randomnr onder grenswaarde
+					attribute<bool> Overhevelen := randomnr < Limits[Corop_rel];
+				}
+				attribute<bool> overhevelen (result) := OverhevelKandidaten/Overhevelen[invert(OverhevelKandidaten/nr_orgentity)];
+			}
+
+			attribute<Classifications/Eigendom>                  Eigendom_rel      := Overheveling/Overhevelen ? Classifications/Eigendom/V/koop : Eigendom_rel_org;
+
+			//===============
+
 			attribute<Bool>                                      isNuNieuw         := union_data(., const(false, Bestaand)    , const(true, Nieuwbouw));
 			attribute<ModelObjectKeyDomein>                      ModelObjectKey    := union_data(., Bestaand/ModelObjectKey   , Nieuwbouw/ModelObjectKey);
 			attribute<nrAsl>                                     nrAansluitingen_i := union_data(., Bestaand/nrAansluitingen_i, Nieuwbouw/nrAansluitingen_i);
