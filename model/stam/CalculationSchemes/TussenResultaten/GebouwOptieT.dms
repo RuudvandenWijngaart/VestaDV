@@ -59,17 +59,11 @@ template SubsetGebouwOptieT
 			);
 		}
 		container Functioneel := for_each_nedv(Classifications/FunctioneleVraag/name
-			,	replace('select_data(GeschiktObject, ActiefObject/Functioneel/@BN)', '@BN', Classifications/FunctioneleVraag/name)
+			,	Classifications/FunctioneleVraag/name == 'VT' ? 'OverigeInstallaties/Ventilatie/Afweging/V_E' :
+				Classifications/FunctioneleVraag/name == 'RV' ? 'select_data(GeschiktObject, ActiefObject/Functioneel/RV) - BO/Functioneel/Vrv_VT[BO_rel] + OverigeInstallaties/Ventilatie/Afweging/V_RV' :
+				replace('select_data(GeschiktObject, ActiefObject/Functioneel/@BN)', '@BN', Classifications/FunctioneleVraag/name)
 			,	GeschiktObject, GJ_yr
 			);
-		
-		
-		//===== Installaties die horen bij de gebouwoptie in kwestie =====	TODO, direct opzoeken in GebouwOptie
-//		container Installatie_rel := for_each_nedv(Classifications/Product/name
-//		,	replace('Classifications/GebouwOptie/Installatie_rel/@PN[GeschiktObject/GebouwOptie_rel]', '@PN', Classifications/Product/name)
-//		,	GeschiktObject, Classifications/Installatie
-//		);	
-		
 		
 		container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
 			, replace(IPP_active_cond+'?'+IPP_active_expr+':'+IPP_default_expr, '@PN', Classifications/Product/name)
@@ -217,27 +211,95 @@ template SubsetGebouwOptieT
 	
 	container OverigeInstallaties
 	{	
+		//================ Berekeningen en afwining Ventilatie-installaties
 		container ventilatie
 		{
 			container Afweging
 			{
+				//====== Huidige ventilatiesysteem
 				attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_org (GeschiktObject) := BO/InstallatiePerProduct/VT[GeschiktObject/BO_rel];
+
+				//====== Selectie van ventilatiesystemen die in huidige zichtjaar toegepast kunnen worden
+				unit<uint32> Ventilatieopties := subset(Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/startjaar <= Zichtjaar_jaar && Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/eindjaar >= Zichtjaar_jaar)
+				{
+					attribute<string>    name       := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/name[nr_orgentity];
+					attribute<GJ_yr_asl> V_RV_asl   := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[nr_orgentity];
+					attribute<GJ_yr_m2>  V_E_opp    := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_E_opp[nr_orgentity];
+					attribute<yr_uint16> Levensduur := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Levensduur[nr_orgentity];
+					attribute<float64>   P50P       := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/P50P[nr_orgentity];
+					attribute<float64>   BETA       := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/BETA[nr_orgentity];
+
+					container Ki_asl := for_each_nedv(Classifications/Uitvoering/Name, 'leerCurves/Ventilatie/curve * Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Ki_asl/'+Classifications/Uitvoering/Name+'[nr_orgentity]',Ventilatieopties ,eur_asl);
+					container V      := for_each_nedv(name, string(id(.))+'[..]', void, .);
+				}
+
+				parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(xInvesteringsOptie/ActieveWoning_rel) )
+
+				//====== Berekeningen per ventilatiesysteem t.b.v. afweging
+				container PerOptie := for_each_ne(Ventilatieopties/Name, 'OptieBerekening(Ventilatieopties/V/'+Ventilatieopties/Name+')');
+				template OptieBerekening
+				{
+					//case parameter
+					parameter<Ventilatieopties> Ventilatieoptie_rel;
+					//end
+					parameter<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype := rlookup(Ventilatieopties/name[Ventilatieoptie_rel], Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/name);
+
+					attribute<GJ_yr>   V_RV       (GeschiktObject) :=
+						  BO/nrAansluitingen[GeschiktObject/BO_rel]
+						* Ventilatieopties/V_RV_asl[Ventilatieoptie_rel]
+						* BO/Functioneel_base/Gedragfactor/VT
+						* BO/Functioneel_base/Klimaateffect[GeschiktObject/BO_rel]
+						* BO/Functioneel_base/Fitfactor_VT[GeschiktObject/BO_rel];
+
+					attribute<GJ_yr>   V_E        (GeschiktObject) := BO/oppervlakte[GeschiktObject/BO_rel]     * Ventilatieopties/V_E_opp[Ventilatieoptie_rel]  * BO/Functioneel_base/Gedragfactor/VT;
+					attribute<Eur_yr>  Kj_energie (GeschiktObject) := first(Prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl) * V_E + first(Prijzen/AardGas/Staffel/KGJ_eindgebruik_excl) * V_RV; //TODO: koppelen aan huidige installaties
+					attribute<Eur>     Ki_VT      (GeschiktObject) := ='BO/nrAansluitingen[GeschiktObject/BO_rel] * merge(uint8(BO/Activatie/Uitvoering[GeschiktObject/BO_rel]), eur_asl, '+AsItemList('VentilatieOpties/Ki_asl/'+Classifications/Uitvoering/Name+'[Ventilatieoptie_rel]')+')';
+					attribute<Eur_yr>  Kji_VT     (GeschiktObject) := ='Ki_VT * NcwRefs/_'+string(Ventilatieopties/Levensduur[Ventilatieoptie_rel])+'/AnnualisationFactor';
+
+					attribute<Eur_yr>  kosten_tbv_afweging (GeschiktObject) := (Kj_energie * EIA_Opties/R_VerbruikSplitIncentiveFactor + Kji_VT) * BTW_Factor * Ventilatieopties/P50P[Ventilatieoptie_rel];
+
+					attribute<float64> Geschiktheid (GeschiktObject) := Choice/Kj_duursteoptie - kosten_tbv_afweging;
+					attribute<float64> Odds         (GeschiktObject) := IsDefined(Geschiktheid) ? exp(min_elem(Geschiktheid * Ventilatieopties/beta[Ventilatieoptie_rel], LOG_MAX_FLOAT64)) : 0.0;
+					attribute<float64> Probability  (GeschiktObject) := Odds / Choice/TotalOdds;
+					attribute<float64> Cumulprob    (GeschiktObject) := ='add('+AsItemList('float64(PerOptie/'+Ventilatieopties/Name+'/Ventilatieoptie_rel <= Ventilatieoptie_rel) * PerOptie/'+Ventilatieopties/Name+'/Probability')+')';
+					attribute<bool>    IsSelected   (GeschiktObject) := CumulProb - Probability <= Choice/rnd && Choice/rnd < CumulProb;
+
+					attribute<Ventilatieopties> Ventilatieoptie_choice (GeschiktObject) := IsSelected ? Ventilatieoptie_rel : (0/0)[Ventilatieopties];
+					attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Type_choice (GeschiktObject) := IsSelected ? Installatietype : (0/0)[Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes];
+				}
 				
+				//====== Afweging tussen verschillende ventilatiesystemen
+				container Choice
+				{
+					attribute<Eur_yr>  Kj_duursteoptie (GeschiktObject) := ='Max_elem('+AsItemList('PerOptie/'+Ventilatieopties/Name+'/Kosten_tbv_afweging')+')';
+					attribute<float64> TotalOdds       (GeschiktObject) := ='add('+AsItemList('PerOptie/'+Ventilatieopties/Name+'/Odds')+')';
+					attribute<float64> rnd             (GeschiktObject) := rnd_uniform(JaarSeed * 19u, GeschiktObject, range(float64, 0d, 1d));
+
+					attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_def (GeschiktObject) := ='Max_elem('+AsItemList('PerOptie/'+Ventilatieopties/Name+'/Type_choice')+')';
+					attribute<Ventilatieopties>                                           Ventilatieoptie_def (GeschiktObject) := ='Max_elem('+AsItemList('PerOptie/'+Ventilatieopties/Name+'/Ventilatieoptie_choice')+')';
+
+					//====== Definitievie waarden gekozen systeem
+					attribute<Eur>     Ki_VT           (GeschiktObject) := ='merge(uint8(Ventilatieoptie_def), Eur,'+AsItemList('PerOptie/'+Ventilatieopties/Name+'/Ki_VT')+')';
+					attribute<GJ_yr>   V_RV            (GeschiktObject) := ='merge(uint8(Ventilatieoptie_def), GJ_yr,'+AsItemList('PerOptie/'+Ventilatieopties/Name+'/V_RV')+')';
+					attribute<GJ_yr>   V_E             (GeschiktObject) := ='merge(uint8(Ventilatieoptie_def), GJ_yr,'+AsItemList('PerOptie/'+Ventilatieopties/Name+'/V_E')+')';
+				}
+
 				attribute<bool> IsAlabel (GeschiktObject) := GeschiktObject/Schillabel_rel == classifications/schillabel/V/A;  //TODO: hier afweging invoegen
 				attribute<bool> IsBlabel (GeschiktObject) := GeschiktObject/Schillabel_rel == classifications/schillabel/V/B;  //TODO: hier afweging invoegen
 				
-				attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_def (GeschiktObject) :=
-					  IsAlabel ? Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V/WTW
-					: IsBlabel ? Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Mech
-					: Installatietype_org;
+				attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_def (GeschiktObject) := Choice/Installatietype_def;
 				
-				attribute<bool> IsChangedNow (GeschiktObject) := Installatietype_org != Installatietype_def;
-				attribute<eur>  Ki_vent     (GeschiktObject) := float64(IsChangedNow) * BO/nrAansluitingen[GeschiktObject/BO_rel] * 
-					( Schuiven/KostenMin * Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Ki_asl_min[Installatietype_def]
-					+ Schuiven/KostenMax * Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Ki_asl_max[Installatietype_def]);
+				//====== waarden gekozen ventilatiesysteem
+				attribute<eur>   Ki_vent (GeschiktObject) := Choice/Ki_VT;
+				attribute<GJ_yr> V_RV    (GeschiktObject) := Choice/V_RV;
+				attribute<GJ_yr> V_E     (GeschiktObject) := Choice/V_E;
+
 			}
+			//====== Gekozen ventilatiesysteem
 			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_rel (GeschiktObject) := Afweging/Installatietype_def;
 		}
+		//================
+
 		container zonB
 		{
 			container afweging

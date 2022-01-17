@@ -10,19 +10,30 @@ Template BerekenFunctioneel
 	unit<uint32> PrevState;
 	attribute<PrevState> PrevState_rel (BOdomain);
 
-	attribute<GJ_yr> VT (BOdomain) := PrevState/Functioneel_base/VT[PrevState_rel];
+	attribute<GJ_yr> VT (BOdomain) :=
+		  Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_E_opp[PrevState/InstallatiePerProduct/VT[PrevState_rel]]
+		* PrevState/Oppervlakte_i[PrevState_rel]
+		* PrevState/Functioneel_base/Gedragfactor/VT
+		* PrevState/Functioneel_base/Fitfactor_VT[PrevState_rel];
+		
 	attribute<GJ_yr> KK (BOdomain) := PrevState/Functioneel_base/KK[PrevState_rel];
 	attribute<GJ_yr> EA (BOdomain) := PrevState/Functioneel_base/EA[PrevState_rel];
 	attribute<GJ_yr> TW (BOdomain) := PrevState/Functioneel_base/TW[PrevState_rel];
 	attribute<GJ_yr> KD (BOdomain) := PrevState/Functioneel_base/KD[PrevState_rel];
-	attribute<GJ_yr> RV (BOdomain) := RV_per_Bouwdeel_now/Totaal * Correction_RV - warmtewinst/totaal;
+	attribute<GJ_yr> RV (BOdomain) := RV_per_Bouwdeel_now/Totaal * Correction_RV - warmtewinst/totaal + Vrv_VT;
 	
+	attribute<GJ_yr> Vrv_VT (BOdomain) :=
+		  Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[PrevState/InstallatiePerProduct/VT[PrevState_rel]]
+		* PrevState/nrAansluitingen[PrevState_rel]
+		* PrevState/Functioneel_base/Klimaateffect[PrevState_rel]
+		* PrevState/Functioneel_base/Gedragfactor/VT
+		* PrevState/Functioneel_base/Fitfactor_VT[PrevState_rel];
+
 	attribute<Kwh_yr_m2>                  Kwh_m2_RV      (BOdomain) := makedefined((RV_per_Bouwdeel_now/Totaal / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / PrevState/Oppervlakte[PrevState_rel],0.0[Kwh_yr_m2]);
 	attribute<Kwh_yr_m2>                  Kwh_m2_tot     (BOdomain) := makedefined(((VT+KK+EA+TW/0.72+KD*0.0+RV/1.04) / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / PrevState/Oppervlakte[PrevState_rel],0.0[Kwh_yr_m2]), IntegrityCheck = "Kwh_m2_tot < 500[Kwh_yr_m2]";
 	attribute<Classifications/Schillabel> Schillabel_rel (BOdomain) := classify(Kwh_m2_tot, classifications/Schillabel/classbreak);
 	attribute<ratio>                      Correction_RV  (BOdomain) := 1.0[ratio] + Invoer/Kengetallen/Constanten/Rebound_A * Invoer/Kengetallen/Constanten/Rebound_B ^ Kwh_m2_RV;
 
-	// TODO: Kunnen we hier niet gewoon Bouwdelen/Isolatie nemen, ook als not(IsChanged) ?
 	container IsolatieNiveau_rel := for_each_nedv(
 		classifications/Bouwdeel/name,
 		replace(
@@ -40,14 +51,13 @@ Template BerekenFunctioneel
 		,	'@BN@', classifications/Bouwdeel/name),
 		BOdomain,
 		Classifications/BouwdeelIsolatie);
-	
-	 //TODO: R_RV afhankelijk van profiel
+
 	attribute<ratio> R_RV (Classifications/BouwdeelIsolatie):= Classifications/BouwdeelIsolatie/R_RV / 100[percent];
 	
 	container RV_per_Bouwdeel_now := for_each_nedv(
 		classifications/Bouwdeel/name,
 		replace(
-			'PrevState/Functioneel_base/RV_N1_per_Bouwdeel_now/@BN@[PrevState_rel] * makedefined(1.0[ratio] - R_RV[BouwdeelIsolatie_rel/@BN@], 0.0[ratio])'
+			'PrevState/Functioneel_base/RV_N1_per_Bouwdeel_now/@BN@[PrevState_rel] * makedefined(1.0[ratio] - R_RV[BouwdeelIsolatie_rel/@BN@], 1.0[ratio])'
 		,	'@BN@', classifications/Bouwdeel/name),
 		BOdomain,
 		GJ_yr)
