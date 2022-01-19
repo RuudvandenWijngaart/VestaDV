@@ -256,7 +256,7 @@ template SubsetGebouwOptieT
 					attribute<Eur>     Ki_VT      (GeschiktObject) := ='BO/nrAansluitingen[GeschiktObject/BO_rel] * merge(uint8(BO/Activatie/Uitvoering[GeschiktObject/BO_rel]), eur_asl, '+AsItemList('VentilatieOpties/Ki_asl/'+Classifications/Uitvoering/Name+'[Ventilatieoptie_rel]')+')';
 					attribute<Eur_yr>  Kji_VT     (GeschiktObject) := ='Ki_VT * NcwRefs/_'+string(Ventilatieopties/Levensduur[Ventilatieoptie_rel])+'/AnnualisationFactor';
 
-					attribute<Eur_yr>  kosten_tbv_afweging (GeschiktObject) := (Kj_energie * EIA_Opties/R_VerbruikSplitIncentiveFactor + Kji_VT) * BTW_Factor * Ventilatieopties/P50P[Ventilatieoptie_rel];
+					attribute<Eur_yr>  kosten_tbv_afweging    (GeschiktObject) := (Kj_energie * SplitIncentiveVerbruik + Kji_VT) * BTW_Factor * Ventilatieopties/P50P[Ventilatieoptie_rel];
 
 					attribute<float64> Geschiktheid (GeschiktObject) := Choice/Kj_duursteoptie - kosten_tbv_afweging;
 					attribute<float64> Odds         (GeschiktObject) := IsDefined(Geschiktheid) ? exp(min_elem(Geschiktheid * Ventilatieopties/beta[Ventilatieoptie_rel], LOG_MAX_FLOAT64)) : 0.0;
@@ -462,11 +462,18 @@ template SubsetGebouwOptieT
 	parameter<float64> S_gv := (1.0 - EIA_Opties/Rs_GebouwVerbetering), Descr = "eigen aandeel investering op gebouwverbetering na aftrek van subsidies";
 	parameter<float64> S_lo := (1.0 - EIA_Opties/Rs_LokaleOpwekking  ), Descr = "eigen aandeel investering op lokale opwekking na aftrek van subsidies";
 
-	
+	attribute<ratio>   SplitIncentiveVerbruik  (GeschiktObject) :=
+		  BO/Eigendom_rel[GeschiktObject/BO_rel] == Classifications/Eigendom/V/PartHuur ? EIA_Opties/SplitIncentiveVerbruik_PH
+		: BO/Eigendom_rel[GeschiktObject/BO_rel] == Classifications/Eigendom/V/WoonCorp ? EIA_Opties/SplitIncentiveVerbruik_WC
+		: 1.0[ratio];
+	attribute<ratio>   SplitIncentiveVastrecht (GeschiktObject) :=
+		  BO/Eigendom_rel[GeschiktObject/BO_rel] == Classifications/Eigendom/V/PartHuur ? EIA_Opties/SplitIncentiveVastrecht_PH
+		: BO/Eigendom_rel[GeschiktObject/BO_rel] == Classifications/Eigendom/V/WoonCorp ? EIA_Opties/SplitIncentiveVastrecht_WC
+		: 1.0[ratio];	
 	
 	attribute<Eur_yr> Kj_gv_incentive (GeschiktObject) := 
-		  Kj_verbruik/totaal       * EIA_Opties/R_VerbruikSplitIncentiveFactor
-		+ jaarlijks/Kj_vastrecht_g * EIA_Opties/R_VastrechtSplitIncentiveFactor;
+		  Kj_verbruik/totaal       * SplitIncentiveVerbruik
+		+ jaarlijks/Kj_vastrecht_g * SplitIncentiveVastrecht;
 
 	attribute<Eur_yr> kosten_j (GeschiktObject) :=
 		  Kji_GV * S_gv          * BTW_Factor_gv
