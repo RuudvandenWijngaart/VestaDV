@@ -37,7 +37,7 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 		
 		parameter<GJ_Yr>   VerbruiksIndicatie := mean(BO/Functioneel/RV)                             , descr = "indicatie verbruik per woning in GJ_Jr";
 		parameter<EUR_GJ>  EnergiePrijs       := first(prijzen/Aardgas/Staffel/KGJ_eindgebruik_excl) , descr = "kosten per GJ";
-		parameter<Yr>      Duration           := mean(Classifications/Bouwdeel/Levensduur[yr])       , descr = "afschrijftijd voor rentabiliteitsafweging";
+		parameter<Yr>      Duration           := mean(Classifications/Bouwdeel/AT[yr])       , descr = "afschrijftijd voor rentabiliteitsafweging";
 		parameter<EUR>     CombiFactor        := (VerbruiksIndicatie * EnergiePrijs * Duration);
 		
 		// hoeveel besparing in verlies
@@ -49,6 +49,14 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 		
 		unit<uint32> IMxUV := classifications/IsolatieMaatregel/xUitvoering;
 		
+		container SpecificP50P := for_each_nedv(classifications/IsolatieMaatregel/name
+		,	replace('float64(Classifications/Scurve_isolatie/p50p[@EDxIM])'
+			,	'@EDxIM', 'combine_data(Classifications/Scurve_isolatie, BO/Eigendom_rel[BO_rel], @IM)'
+			,	'@IM',    'classifications/IsolatieMaatregel/V/'+classifications/IsolatieMaatregel/name
+			)
+		,	AmbitieBerekening, float64
+		);
+
 		// IsolatieScore: xx_N1 behoeft geen afweging, geen besparing en ook 0 kosten; 
 		// huidig niveau's (indien > N1) behoeven wel afweging teneinde tegenwicht te bieden voor besparingen bij volgended IsolatieNiveau's
 		container IsolatieScore := for_each_nedv(classifications/IsolatieMaatregel/name
@@ -56,12 +64,12 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 				'iif(IsolatieNiveau_rel/@BD[BouwdeelActieveWoning_rel] <=  @IN'
 				',	BO/Bouwdelen/@BD[BO_rel]'
 					'*	( Combifactor * BesparingsFactor[@IM] * beta[IsolatieVerbetering_rel]  '
-					'/	TotalArea[BouwdeelActieveWoning_rel] - iif(IsolatieNiveau_rel/@BD[BouwdeelActieveWoning_rel] < @IN, IMxUV/kosten[@IMxUV] * @RS * @BTW * @LC, 0[EUR_m2]))'
+					'/	TotalArea[BouwdeelActieveWoning_rel] - iif(IsolatieNiveau_rel/@BD[BouwdeelActieveWoning_rel] < @IN, IMxUV/kosten[@IMxUV] * SpecificP50P/@IBD * @RS * @BTW * @LC, 0[EUR_m2]))'
 				',	(0.0 / 0.0)'
 				')'
 			,	'@BD',    classifications/IsolatieMaatregel/bouwdeel_name
 			,	'@IN',    'classifications/IsolatieNiveau/V/'+classifications/IsolatieMaatregel/IsolatieNiveau_name
-			
+			,	'@IBD',   classifications/IsolatieMaatregel/name
 			,	'@IMxUV', 'combine_data(IMxUV, @IM, BO/Activatie/Uitvoering[BO_rel])'
 			,	'@IM',    'classifications/IsolatieMaatregel/V/'+classifications/IsolatieMaatregel/name
 			,	'@RS',    '1.0 - EIA_Opties/Rs_GebouwVerbetering'
