@@ -104,11 +104,11 @@ container Payments
 		attribute<float64> fraction(PR);
 		// end case parameters
 
-		unit<float64> MQuantity := 1000000 * Quantity;
-		unit<uint32>  PR        := Invoer/SpecifiekeInstellingen/PlanRegio;
-		unit<uint32>  Actor     := Classifications/Actor;
-		unit<uint8>   BC        := Classifications/BebouwingsSector;
-		unit<uint8>   GO        := Classifications/GebouwOptie;
+		unit<float64> MQuantity := 1000000 * Quantity, IsHidden = "True";
+		unit<uint32>  PR        := Invoer/SpecifiekeInstellingen/PlanRegio, IsHidden = "True";
+		unit<uint32>  Actor     := Classifications/Actor, IsHidden = "True";
+		unit<uint8>   BC        := Classifications/BebouwingsSector, IsHidden = "True";
+		unit<uint8>   GO        := Classifications/GebouwOptie, IsHidden = "True";
 
 		container impl: IsHidden = "True"
 		{
@@ -168,19 +168,19 @@ container Payments
 			}
 		}
 
-		container Actor_mut_tables := for_each_ne(impl/active_Actor/name, 'Payments/Actor_mut_table(Actor,'+string(impl/active_Actor/nr_OrgEntity)+'[Actor], Quantity)');
+		container Actor_mut_tables := for_each_ne(impl/active_Actor/name, 'Payments/Actor_mut_table(Actor,'+string(impl/active_Actor/nr_OrgEntity)+'[Actor], Quantity)'), IsHidden = "True";
 
 		container matrix
 		{
-			unit<uint32> aggr := ='union_unit('+AsItemList('Actor_mut_tables/'+impl/active_Actor/name+'/Actor_rels')+')'
+			unit<uint32> aggr := ='union_unit('+AsItemList('Actor_mut_tables/'+impl/active_Actor/name+'/Actor_rels')+')', IsHidden = "True"
 			{
 				attribute<MQuantity> Saldo := ='union_data(.,'+AsItemList('Actor_mut_tables/'+impl/active_Actor/name+'/totals/aggr_muts')+')';
 				attribute<Actor>     to    := ='union_data(.,'+AsItemList('const(Actor_mut_tables/'+impl/active_Actor/name+'/Actor_rel, Actor_mut_tables/'+impl/active_Actor/name+'/Actor_rels)')+')';
 				attribute<Actor>     from  := ='union_data(.,'+AsItemList('Actor_mut_tables/'+impl/active_Actor/name+'/Actor_rels/values')+')';
 			}
 
-			unit<uint32> ColSet := impl/active_Actor;
-			unit<uint32> RowSet := ColSet;
+			unit<uint32> ColSet := impl/active_Actor, IsHidden = "True";
+			unit<uint32> RowSet := ColSet, IsHidden = "True";
 
 			container Table := for_each_nedv(ColSet/name,
 				'(1.0 / 1000000.0) * float64(int64(0.5 + 1000000.0*sum(aggr/Saldo * float64(aggr/from == '+string(ColSet/Actor_rel)+'), aggr/to)[RowSet/Actor_rel]))'
@@ -193,7 +193,7 @@ container Payments
 				attribute<MQuantity> Kji_Totaal (RowSet) := ='union_data(RowSet, '+AsItemList('sum(max_elem(Table/'+RowSet/name+', 0[MQuantity])[MQuantity])')+')';
 				attribute<MQuantity> Oji_Netto  (RowSet) := (1.0 / 1000000.0) * float64(int64(0.5 + 1000000.0*(Oji_Totaal - Kji_Totaal)));
 			}
-			attribute<string>        rows       (RowSet) := ='add('+AsItemList(quote(';')+'+string(Table/'+ColSet/name+')')+')';
+			attribute<string>        rows       (RowSet) := ='add('+AsItemList(quote(';')+'+string(Table/'+ColSet/name+')')+')', IsHidden = "True";
 
 			parameter<string> csv := 
 				'name;Oji_Totaal;Kji_Totaal;Oji_Netto;'+AsList(ColSet/name,';')+'\n'+
@@ -202,10 +202,10 @@ container Payments
 			,	StorageType = "str"
 			,	StorageName = "=OutputSubFolder+'/Matrix.csv'";
 		}
-		attribute<MQuantity> mut_overview   (impl/Active_Actor) := matrix/table/Oji_Netto;
+		attribute<MQuantity> mut_overview   (impl/Active_Actor) := matrix/table/Oji_Netto, IsHidden = "True";
 
-		attribute<string>    mut_herkomst   (impl/Active_Actor) := mut_overview > 0[MQuantity] ? string( mut_overview) : '';
-		attribute<string>    mut_bestemming (impl/Active_Actor) := mut_overview < 0[MQuantity] ? string(-mut_overview) : '';
+		attribute<string>    mut_herkomst   (impl/Active_Actor) := mut_overview > 0[MQuantity] ? string( mut_overview) : '', IsHidden = "True";
+		attribute<string>    mut_bestemming (impl/Active_Actor) := mut_overview < 0[MQuantity] ? string(-mut_overview) : '', IsHidden = "True";
 
 		parameter<MQuantity> MaatschappelijkEindtotaal          := sum(mut_overview * float64(impl/active_Actor/IsMaatschappelijkeKosten));
 		parameter<MQuantity> OverheidEindtotaal                 := sum(mut_overview * float64(impl/active_Actor/IsOverheid));

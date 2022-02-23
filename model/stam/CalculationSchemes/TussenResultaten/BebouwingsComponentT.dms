@@ -16,17 +16,17 @@ template BebouwingsComponentT
 	parameter<string> NcwRefBase;
 	// end of case parameters
 	
-	parameter<Classifications/BebouwingsSectorBase> BcSector :=	rlookup(BCname, Classifications/BebouwingsSectorBase/name);
+	parameter<Classifications/BebouwingsSectorBase> BcSector :=	rlookup(BCname, Classifications/BebouwingsSectorBase/name), ishidden = "True";
 	
-	unit<uint32>      PrevObject := ='PrevState/Bebouwing/'+ BCname;
+	unit<uint32>      PrevObject := ='PrevState/Bebouwing/'+ BCname, ishidden = "True";
 	unit<uint8> ModelObjectKeyDomein : ishidden = "true";
 
-	unit<uint32> BeginSituatieResults := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results'
+	unit<uint32> BeginSituatieResults := = 'BeginSituatie/StartingStateComponenten/'+ BCname +'/Results', ishidden = "True"
 	{
 		attribute<bool> actief_bouwjaar := BeginSituatieResults/bouwjaar == Zichtjaar_jaar;
 	}
 	unit<uint32>   HistorischBouw := select_unit(BeginSituatieResults/actief_bouwjaar)
-		, Descr = "bebouwing dat in het huidige historische zichtjaar is gebouwd", Source = "BAG"
+		, Descr = "bebouwing dat in het huidige historische zichtjaar is gebouwd", Source = "BAG", ishidden = "True"
 	{
 		attribute<Geography/rdc_meter>                       point             := select_data(HistorischBouw, BeginSituatieResults/point);
 		attribute<Geography/rdc_meter>                       geometry          := select_data(HistorischBouw, BeginSituatieResults/geometry);
@@ -138,9 +138,9 @@ template BebouwingsComponentT
 	unit<uint32>      NieuwbouwBron :=
 		= Classifications/Periode/isHistorisch[Periode_rel] ? 'HistorischBouw' :
 		 doNieuwbouw  ? 'Invoer/RuimtelijkeData/Vastgoed/NieuwbouwObjecten/' + Classifications/Periode/name[Periode_rel] + '/BebouwingsObject'   :
-		'HistorischBouw';
+		'HistorischBouw', ishidden = "True";
 	
-	container NcwRefs
+	container NcwRefs : ishidden = "True"
 	{
 		container _15 := ='NCW/'+NcwRefBase+'15';
 		container _30 := ='NCW/'+NcwRefBase+'30';
@@ -152,57 +152,48 @@ template BebouwingsComponentT
 	unit<uint8> PrijzenElektriciteit := Prijzen/Elektriciteit/Staffel, ishidden = "true";
 	unit<uint8> PrijzenAardgas       := Prijzen/AardGas/Staffel, ishidden = "true";
 
-	unit<uint8> BebouwingsTypeDomein := BO/BebouwingsTypeDomein;
+	unit<uint8> BebouwingsTypeDomein := BO/BebouwingsTypeDomein, ishidden = "True";
 
 	// TODO parametriseren huidig jaar en welke jaren hebben nieuwe nieuwbouwperiode
-	parameter<bool> doNieuwbouw := Zichtjaar_jaar <= 2021w || Zichtjaar_jaar == 2031w || zichtjaar_jaar == 2041w ? Invoer/DefaultInstellingen/Basis/BC_doNieuwbouw : false;
+	parameter<bool> doNieuwbouw := Zichtjaar_jaar <= 2021w || Zichtjaar_jaar == 2031w || zichtjaar_jaar == 2041w ? Invoer/DefaultInstellingen/Basis/RuimtelijkeOntwikkelingAan : false, ishidden = "True";
 	container union := = doNieuwbouw ? 'CalculationSchemes/BebouwingsOperaties/union(PrevObject, NieuwbouwBron)' : '..';
 
-	unit<uint32> BO_base := = doNieuwbouw ? 'union/result' : 'PrevObject';
+	unit<uint32> BO_base := = doNieuwbouw ? 'union/result' : 'PrevObject', ishidden = "True";
 	
 	unit<uint32> BO := BO_base
 	{
-		container BebouwingsComponent_UpRef := ..; // TODO_OV: used sporadically, try to avoid this CHECK
-		container NcwRefs                   := BebouwingsComponent_UpRef/NcwRefs;
-		container Opbrengsten               := BebouwingsComponent_UpRef/BC_kentallen/Opbrengsten;
-		container VraagKentallen            := VraagKentallenComponent;
-		container BcKentallen               := BC_kentallen;
+		container BebouwingsComponent_UpRef := .., ishidden = "True"; // TODO_OV: used sporadically, try to avoid this CHECK
+		container NcwRefs                   := BebouwingsComponent_UpRef/NcwRefs, ishidden = "True";
+		container Opbrengsten               := BebouwingsComponent_UpRef/BC_kentallen/Opbrengsten, ishidden = "True";
+		container VraagKentallen            := VraagKentallenComponent, ishidden = "True";
+		container BcKentallen               := BC_kentallen, ishidden = "True";
 
-		unit<uint32>    ModelObjectDomain := ModelObject;
-		attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel (BO) := BO/buurt_rel;
-		attribute<ModelObject>                             Model_rel     (BO) := rlookup(BO/ModelObjectKey, ModelObject/ModelObjectKey), KeepData = "True";
-		attribute<PrevObject>                              PrevObject_rel(BO) := = doNieuwbouw ? 'rlookup(BO/code, PrevObject/code)' : 'ID(PrevObject)';
+		unit<uint32>    ModelObjectDomain := ModelObject, ishidden = "True";
+		attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel (BO) := BO/buurt_rel, ishidden = "True";
+		attribute<ModelObject>                             Model_rel     (BO) := rlookup(BO/ModelObjectKey, ModelObject/ModelObjectKey), KeepData = "True", ishidden = "True";
+		attribute<PrevObject>                              PrevObject_rel(BO) := = doNieuwbouw ? 'rlookup(BO/code, PrevObject/code)' : 'ID(PrevObject)', ishidden = "True";
 
-		attribute<ratio> W_asl_p_prov (Geography/RegioIndelingen/Provincie) :=  sum(float64(Aansluitingen/Warmtenet) * nrAansluitingen, Invoer/RuimtelijkeData/StudieGebied/Buurt/Provincie_rel[Planregio_rel]) / sum(nrAansluitingen, Invoer/RuimtelijkeData/StudieGebied/Buurt/Provincie_rel[Planregio_rel]);
+//		attribute<ratio> W_asl_p_prov (Geography/RegioIndelingen/Provincie) :=  sum(float64(Aansluitingen/Warmtenet) * nrAansluitingen, Invoer/RuimtelijkeData/StudieGebied/Buurt/Provincie_rel[Planregio_rel]) / sum(nrAansluitingen, Invoer/RuimtelijkeData/StudieGebied/Buurt/Provincie_rel[Planregio_rel]);
 
-		unit<uint32>  AfnameGebied         := PrevState/AfnameGebied;
+		unit<uint32>  AfnameGebied         := PrevState/AfnameGebied, ishidden = "True";
 
-		parameter<string> BCname := ../BCname;
+		parameter<string> BCname := ../BCname, ishidden = "True";
 		attribute<Classifications/Schillabel>  Schillabel_rel   (BO) := makedefined(PrevObject/Schillabel_rel[PrevObject_rel]  , ModelObject/SchilLabel_rel[Model_rel]);
 		attribute<Classifications/Schillabel>  Energielabel_rel (BO) := makedefined(PrevObject/Energielabel_rel[PrevObject_rel], ModelObject/SchilLabel_rel[Model_rel]);
 		
-		attribute<Classifications/WarmteOptie> WarmteOptie_rel (BO) := Isdefined( Bebouwingscomponenten/woning/BO/Aflevergebied_rel ) && Bebouwingscomponenten/Woning/BO/Aansluitingen/Warmtenet ? Classifications/WarmteOptie/V/Gebied_zK : PrevObject/WarmteOptie_rel[PrevObject_rel];
+		attribute<Classifications/WarmteOptie> WarmteOptie_rel (BO) := Isdefined( Bebouwingscomponenten/woning/BO/Aflevergebied_rel ) && Bebouwingscomponenten/Woning/BO/Aansluitingen/Warmtenet ? Classifications/WarmteOptie/V/Gebied_zK : PrevObject/WarmteOptie_rel[PrevObject_rel], ishidden = "True";
 		attribute<Classifications/Schillabel>  Startlabel_rel  (BO) := PrevObject/Startlabel_rel[PrevObject_rel];
-		attribute<BO> Bo_rel (BO) := id(.);
+		attribute<BO> Bo_rel (BO) := id(.), ishidden = "True";
 		
 		container Aansluitingen
 		{
-			container BWN := Invoer/RuimtelijkeData/BestaandeWarmtenetten;
+			container BWN := Invoer/RuimtelijkeData/BestaandeWarmtenetten, ishidden = "True";
 			
-			attribute<nrAsl> PrevGNet        (BO) := PrevObject/Aansluitingen/GNet[BO/PrevObject_rel];
-			attribute<bool> GeenGasafsluiting(BO) := not(WarmteNet) && (PrevGNet > 0[nrAsl]);
-			attribute<nrAsl> GNet            (BO) := GeenGasafsluiting ? PrevObject/Aansluitingen/GNet[Bo/PrevObject_rel] : 0[nrAsl];
-			
-			attribute<bool> WarmteNet(BO) := BWN/Aflevergebied_data/Startjaar[BO/Aflevergebied_rel] <= Zichtjaar_jaar;
-			attribute<bool> KoudeNet (BO) := WarmteNet && BWN/AfleverType/HeeftKoude[ BWN/Aflevergebied_data/Type_rel[ BO/Aflevergebied_rel ] ];
-
-
-			container TijdelijkCheck
-			{
-				attribute<nrAsl> Warmtenet_PR_data (Invoer/SpecifiekeInstellingen/PlanRegio) := sum(float64(WarmteNet) * nraansluitingen, PlanRegio_rel);
-				attribute<nrAsl> Warmtenet_PR_cbs  (Invoer/SpecifiekeInstellingen/PlanRegio) := sum(nrAansluitingen * Invoer/RuimtelijkeData/StudieGebied/Buurt/R_StadV[Planregio_rel], Planregio_rel);
-				attribute<nrAsl> Overestimate      (Invoer/SpecifiekeInstellingen/PlanRegio) := Warmtenet_PR_data - Warmtenet_PR_cbs;
-			}
+			attribute<nrAsl> PrevGNet          (BO) := PrevObject/Aansluitingen/GNet[BO/PrevObject_rel], ishidden = "True";
+			attribute<bool>  GeenGasafsluiting (BO) := not(WarmteNet) && (PrevGNet > 0[nrAsl]), ishidden = "True";
+			attribute<nrAsl> GNet              (BO) := GeenGasafsluiting ? PrevObject/Aansluitingen/GNet[Bo/PrevObject_rel] : 0[nrAsl];
+			attribute<bool>  WarmteNet         (BO) := BWN/Aflevergebied_data/Startjaar[BO/Aflevergebied_rel] <= Zichtjaar_jaar;
+			attribute<bool>  KoudeNet          (BO) := WarmteNet && BWN/AfleverType/HeeftKoude[ BWN/Aflevergebied_data/Type_rel[ BO/Aflevergebied_rel ] ];
 		}
 		
 		// Vervang Installaties voor RV en TW wanneer Gas zojuist is afgesloten.
@@ -235,8 +226,8 @@ template BebouwingsComponentT
 		}
 		
 		attribute<AfnameGebied>                   AfnameGebied_rel   (BO) := PrevObject/AfnameGebied_rel[PrevObject_rel];
-		attribute<Classifications/GebouwOptie>    GebouwOptie_rel    (BO) := PrevObject/GebouwOptie_rel[PrevObject_rel]; // REMOVE, OBSOLETE, vervangen door Schillabel_rel, InstallatiePerProduct en GebiedsOptie
-		attribute<Geography/rdc_grids/m100>       gridm100_rel       (BO) := point[Geography/rdc_grids/m100];
+		attribute<Classifications/GebouwOptie>    GebouwOptie_rel    (BO) := PrevObject/GebouwOptie_rel[PrevObject_rel], ishidden = "True"; // REMOVE, OBSOLETE, vervangen door Schillabel_rel, InstallatiePerProduct en GebiedsOptie
+		attribute<Geography/rdc_grids/m100>       gridm100_rel       (BO) := point[Geography/rdc_grids/m100], ishidden = "True";
 
 		attribute<bool> IsMeergezins (.) := BebouwingsTypeDomein/IsMeergezins[BebouwingsType];
 
@@ -358,13 +349,13 @@ template BebouwingsComponentT
 		}
 		container Functioneel          := CalculationSchemes/BerekenFunctioneel(BO, BO, id(.));
 		container MetervraagBerekening := CalculationSchemes/FunctioneelToMetervraag(BO, SPF); 
-		container Metervraag           := MetervraagBerekening/result;
+		container Metervraag           := MetervraagBerekening/result, ishidden = "True";
 		
 		#include <Activatie.dms>
 	}
 		
 	//============== Voorwaarden voor het wel of niet toepassen van een gebouwoptie. Welke geldt is opgegeven in de runinstellingen per Rekenstap.
-	container Criteria := BO/Criteria
+	container Criteria := BO/Criteria, ishidden = "True"
 	{
 		//"always" : Wordt altijd toegepast indien technisch mogelijk
 		attribute<bool> always (BO) := const(true,  BO);
@@ -388,14 +379,14 @@ template BebouwingsComponentT
 		attribute<bool> isUtilKlein(BO) := not(isUtilGroot);
 	}
 
-	container EIA_Opties := ='SpecifiekeInstellingen/Beleid/EIA/E_'+NcwRefBase;
+	container EIA_Opties := ='SpecifiekeInstellingen/Beleid/EIA/E_'+NcwRefBase, ishidden = "True";
 	
 	container BC_kentallen := kengetallen/BCkentallen/BC_kentallen(
 		LeerCurves/LTAS/Curve,
 		Schuiven/KostenMin,
 		Schuiven/KostenMax,
 		BebouwingsTypeDomein,
-		BO)
+		BO), ishidden = "True"
 	{
 		container Opbrengsten
 		{
@@ -439,7 +430,7 @@ template BebouwingsComponentT
 			attribute<Eur_yr> HeffingskortingE   (BO) := BO/nrAansluitingen * SpecifiekeInstellingen/Beleid/Heffingskorting;
 		}
 	}
-	container VerbruiksOpties 
+	container VerbruiksOpties : ishidden = "True"
 	{		
 		unit<uint32> Installatie := Classifications/Installatie
 		{
@@ -459,14 +450,14 @@ template BebouwingsComponentT
 			unit<uint32> uInstallatie := Classifications/GebouwOptie/uInstallatie;
 		}
 	}
-	parameter<ratio>  BTW_Factor    := ='1.0 '+(Classifications/BebouwingsSectorBase/DraagtBTW[BcSector] ? '+ SpecifiekeInstellingen/VAT    / 100[percent]' : '');
-	parameter<ratio>  BTW_Factor_gv := ='1.0 '+(Classifications/BebouwingsSectorBase/DraagtBTW[BcSector] ? '+ SpecifiekeInstellingen/VAT_gv / 100[percent]' : '');
+	parameter<ratio>  BTW_Factor    := ='1.0 '+(Classifications/BebouwingsSectorBase/DraagtBTW[BcSector] ? '+ SpecifiekeInstellingen/Beleid/VAT    / 100[percent]' : ''), ishidden = "True";
+	parameter<ratio>  BTW_Factor_gv := ='1.0 '+(Classifications/BebouwingsSectorBase/DraagtBTW[BcSector] ? '+ SpecifiekeInstellingen/Beleid/VAT_gv / 100[percent]' : ''), ishidden = "True";
 	
 	#include <ProductActieveWoning.dms>
 	#include <BouwdeelActieveWoning.dms>
 	#include <ActieveWoning.dms>
 	
-	unit<uint32> BebouwingsObjectMetGebouwOptie := ActieveWoning/BebouwingsObjectMetGebouwOptie
+	unit<uint32> BebouwingsObjectMetGebouwOptie := ActieveWoning/BebouwingsObjectMetGebouwOptie, ishidden = "True"
 	{
 		container BC_kentallen := ../BC_kentallen;
 		
@@ -477,7 +468,7 @@ template BebouwingsComponentT
 		}		
 	}
 	
-	unit<uint32> Results := BebouwingsObjectMetGebouwOptie
+	unit<uint32> Results := BebouwingsObjectMetGebouwOptie, ishidden = "True"
 	{
 		container Opbrengsten := BC_kentallen/Opbrengsten;
 		container Functioneel := BebouwingsObjectMetGebouwOptie/Functioneel;
@@ -508,8 +499,8 @@ template BebouwingsComponentT
 				: 'PrijsFactor * PrijzenAardgas/KGJ_eindgebruik_excl[classify(0[GJ_yr], PrijzenAardgas/ClassBreak)]';
 		
 			parameter<ratio> KoudeFactor := =BcSector == Classifications/BebouwingsSector/V/Woning ?
-				'1.0[ratio] / SpecifiekeInstellingen/NMDA_Prijzen/KoudePrijs/Woningen'  :
-				'1.0[ratio] / SpecifiekeInstellingen/NMDA_Prijzen/KoudePrijs/Utiliteit' ;
+				'1.0[ratio] / SpecifiekeInstellingen/WarmtenetTarieven/KoudePrijs/Woningen'  :
+				'1.0[ratio] / SpecifiekeInstellingen/WarmtenetTarieven/KoudePrijs/Utiliteit' ;
 			parameter<Eur_GJ> KoudePrijs := KoudeFactor * PrijzenElektriciteit/KGJ_eindgebruik_excl[classify(0[GJ_yr], PrijzenElektriciteit/ClassBreak)];
 		}
 	}
