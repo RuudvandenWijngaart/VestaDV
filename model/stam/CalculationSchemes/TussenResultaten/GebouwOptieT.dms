@@ -225,12 +225,12 @@ template SubsetGebouwOptieT
 				{
 					attribute<string>    name       := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/name[nr_orgentity];
 					attribute<GJ_yr_asl> V_RV_asl   := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[nr_orgentity];
-					attribute<GJ_yr_m2>  V_E_opp    := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_E_opp[nr_orgentity];
+					attribute<GJ_yr_asl> V_E_asl    := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_E_asl[nr_orgentity];
 					attribute<yr_uint16> Levensduur := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Levensduur[nr_orgentity];
 					attribute<float64>   P50P       := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/P50P[nr_orgentity];
 					attribute<float64>   BETA       := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/BETA[nr_orgentity];
 
-					container Ki_asl := for_each_nedv(Classifications/Uitvoering/Name, 'leerCurves/Ventilatie/curve * Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Ki_asl/'+Classifications/Uitvoering/Name+'[nr_orgentity]',Ventilatieopties ,eur_asl);
+//					container Ki_asl := for_each_nedv(Classifications/Uitvoering/Name, 'leerCurves/Ventilatie/curve * Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Ki_asl/'+Classifications/Uitvoering/Name+'[nr_orgentity]',Ventilatieopties ,eur_asl);
 					container V      := for_each_nedv(name, string(id(.))+'[..]', void, .);
 				}
 
@@ -245,6 +245,16 @@ template SubsetGebouwOptieT
 					//end
 					parameter<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype := rlookup(Ventilatieopties/name[Ventilatieoptie_rel], Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/name);
 
+					unit<uint32> VentilatieMaatregel := subset(Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/InstallatieMaatregel/Installatie_na == Installatietype)
+					{
+						attribute<string> name := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/InstallatieMaatregel/name[nr_orgentity];
+						attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_voor := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/InstallatieMaatregel/Installatie_voor[nr_orgentity];
+
+						container Ki_asl := for_each_nedv(Classifications/Uitvoering/Name, 'leerCurves/Ventilatie/curve * Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/InstallatieMaatregel/Ki_asl/'+Classifications/Uitvoering/Name+'[nr_orgentity]',VentilatieMaatregel ,eur_asl);
+					}
+					attribute<VentilatieMaatregel> VentilatieMaatregel_rel (GeschiktObject) := rlookup(Installatietype_org, VentilatieMaatregel/Installatietype_voor);
+
+
 					attribute<GJ_yr>   V_RV       (GeschiktObject) :=
 						  BO/nrAansluitingen[GeschiktObject/BO_rel]
 						* Ventilatieopties/V_RV_asl[Ventilatieoptie_rel]
@@ -252,9 +262,11 @@ template SubsetGebouwOptieT
 						* BO/Functioneel_base/Klimaateffect[GeschiktObject/BO_rel]
 						* BO/Functioneel_base/Fitfactor_VT[GeschiktObject/BO_rel];
 
-					attribute<GJ_yr>   V_E        (GeschiktObject) := BO/oppervlakte[GeschiktObject/BO_rel]     * Ventilatieopties/V_E_opp[Ventilatieoptie_rel]  * BO/Functioneel_base/Gedragfactor/VT * BO/Functioneel_base/Fitfactor_VT[GeschiktObject/BO_rel];
+					attribute<GJ_yr>   V_E        (GeschiktObject) := BO/nrAansluitingen[GeschiktObject/BO_rel]     * Ventilatieopties/V_E_asl[Ventilatieoptie_rel]  * BO/Functioneel_base/Gedragfactor/VT * BO/Functioneel_base/Fitfactor_VT[GeschiktObject/BO_rel];
 					attribute<Eur_yr>  Kj_energie (GeschiktObject) := first(Prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl) * V_E + first(Prijzen/AardGas/Staffel/KGJ_eindgebruik_excl) * V_RV; //TODO: koppelen aan huidige installaties
-					attribute<Eur>     Ki_VT      (GeschiktObject) := ='BO/nrAansluitingen[GeschiktObject/BO_rel] * merge(uint8(BO/Activatie/Uitvoering[GeschiktObject/BO_rel]), eur_asl, '+AsItemList('VentilatieOpties/Ki_asl/'+Classifications/Uitvoering/Name+'[Ventilatieoptie_rel]')+')';
+
+					attribute<Eur>     Ki_VT      (GeschiktObject) := ='BO/nrAansluitingen[GeschiktObject/BO_rel] * merge(uint8(BO/Activatie/Uitvoering[GeschiktObject/BO_rel]), eur_asl, '+AsItemList('VentilatieMaatregel/Ki_asl/'+Classifications/Uitvoering/Name+'[VentilatieMaatregel_rel]')+')';
+
 					attribute<Eur_yr>  Kji_VT     (GeschiktObject) := ='Ki_VT * NcwRefs/_'+string(Ventilatieopties/Levensduur[Ventilatieoptie_rel])+'/AnnualisationFactor';
 
 					attribute<Eur_yr>  kosten_tbv_afweging    (GeschiktObject) := (Kj_energie * SplitIncentiveVerbruik + Kji_VT) * BTW_Factor * Ventilatieopties/P50P[Ventilatieoptie_rel];
