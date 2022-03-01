@@ -14,29 +14,29 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 {
 	container Studiegebied
 	{
-		container impl
+		container impl : IsHidden = "True"
 		{
 			unit<uint32> selected := range(uint32, 0, strcount(Invoer/StudieGebied, ',') + 1 )
 			{
 				attribute<string> values := ReadArray(lowercase(trim(Invoer/StudieGebied)), ., string, 0);
 			}
 		}
-		attribute<bool> selected_per_gemeente (RegioIndelingen/gemeente) := impl/selected/values[0] = 'nl'
+		attribute<bool> GeselecteerdeGemeente (RegioIndelingen/gemeente) := impl/selected/values[0] = 'nl'
 			? const(true, RegioIndelingen/gemeente)
 			: IsDefined(rlookup(lowercase(RegioIndelingen/gemeente/GM_code), impl/selected/values));
 		
-		attribute<bool> selected_per_buurt (RegioIndelingen/buurt) := impl/selected/values[0] = 'nl'
+		attribute<bool> GeselecteerdeBuurt (RegioIndelingen/buurt) := impl/selected/values[0] = 'nl'
 			? const(true, RegioIndelingen/buurt)
 			: IsDefined(rlookup(lowercase(RegioIndelingen/buurt/GM_code), impl/selected/values));
 
-		attribute<bool> selected_per_m100 (Geography/rdc_grids/m100 ) := selected_per_gemeente[Geography/RegioIndelingen/gemeente/per_m100];
+//		attribute<bool> GeselecteerdeRastercel (Geography/rdc_grids/m100 ) := GeselecteerdeGemeente[Geography/RegioIndelingen/gemeente/per_m100];
 
-		unit<uint32> Gemeente := subset(selected_per_gemeente)
+		unit<uint32> Gemeente := subset(GeselecteerdeGemeente), IsHidden = "True"
 		,	DialogType = "Map"
 		,	DialogData = "geometry"
 		{
-			attribute<string>    name                                := GM_CODE;
-			parameter<string>    RegioNaam                           := 'Gemeente';
+			attribute<string>    name                                := GM_CODE, IsHidden = "True";
+			parameter<string>    RegioNaam                           := 'Gemeente', IsHidden = "True";
 
 			attribute<rdc_meter> geometry (poly)                     := RegioIndelingen/gemeente/geometry[nr_OrgEntity];
 			attribute<string>    GM_code                             := RegioIndelingen/gemeente/GM_CODE[nr_OrgEntity];
@@ -44,14 +44,15 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			attribute<.>         per_m100 (Geography/rdc_grids/m100) := poly2grid(geometry, Geography/rdc_grids/m100);
 		}
 
-		unit<uint32> Buurt := subset(selected_per_buurt)
+		unit<uint32> Buurt := subset(GeselecteerdeBuurt)
 		,	DialogType = "Map"
 		,	DialogData = "geometry"
 		{
-			attribute<string>                                  name                := BU_code;
+			attribute<string>                                  name                := BU_code, IsHidden = "True";
+			attribute<string>								   label               := name;
 			parameter<string>                                  RegioNaam           := 'Buurt';
 
-			attribute<rdc_meter>                               geometry (poly)     := RegioIndelingen/buurt/geometry[nr_OrgEntity];
+			attribute<rdc_meter>                               geometry (poly)     := RegioIndelingen/buurt/geometry[nr_OrgEntity], IsHidden = "True";
 			attribute<string>                                  BU_code             := RegioIndelingen/buurt/BU_CODE[nr_OrgEntity];
 			attribute<string>                                  BU_NAAM             := RegioIndelingen/buurt/BU_NAAM[nr_OrgEntity];
 			attribute<string>                                  WK_CODE             := RegioIndelingen/buurt/WK_CODE[nr_OrgEntity];
@@ -61,51 +62,46 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			attribute<string>                                  ER_NAAM             := RegioIndelingen/buurt/ER_NAAM[nr_OrgEntity];
 			attribute<string>                                  PROV_NAAM           := RegioIndelingen/buurt/PROV_NAAM[nr_OrgEntity];
 
-			attribute<uint32>                                  code                := RegioIndelingen/buurt/code[nr_OrgEntity];
+			attribute<uint32>                                  code                := RegioIndelingen/buurt/code[nr_OrgEntity], IsHidden = "True";
 
-			attribute<rdc_meter>                               point               := RegioIndelingen/buurt/point[nr_OrgEntity];
-			attribute<m2>                                      area                := RegioIndelingen/buurt/area[nr_OrgEntity];
+			attribute<rdc_meter>                               point               := RegioIndelingen/buurt/point[nr_OrgEntity], IsHidden = "True";
+			attribute<m2>                                      area                := RegioIndelingen/buurt/area[nr_OrgEntity], IsHidden = "True";
 			attribute<ha>                                      AreaInHa            := RegioIndelingen/buurt/AreaInHa[nr_OrgEntity];
-			attribute<km2>                                     AreaInKm2           := RegioIndelingen/buurt/AreaInKm2[nr_OrgEntity];
-			attribute<ratio>                                   Overigen_r_land_com := RegioIndelingen/buurt/Overigen/r_land_com[nr_OrgEntity];
+			attribute<km2>                                     AreaInKm2           := RegioIndelingen/buurt/AreaInKm2[nr_OrgEntity], IsHidden = "True";
+			attribute<ratio>                                   Overigen_r_land_com := RegioIndelingen/buurt/Overigen/r_land_com[nr_OrgEntity], IsHidden = "True";
 
-			attribute<ha>                                      Area_ov_r_land_com  := AreaInHa * Overigen_r_land_com ;
+			attribute<ha>                                      AreaLandHa  := AreaInHa * Overigen_r_land_com ;
 
-			attribute<percent>                                 Overigen_p_stadsv   := RegioIndelingen/buurt/Overigen/p_stadsv[nr_OrgEntity];
-			attribute<ratio>                                   R_StadV             := makedefined(Overigen_p_stadsv / 100[percent], 0[ratio]);
+			attribute<percent>                                 Overigen_p_stadsv   := RegioIndelingen/buurt/Overigen/p_stadsv[nr_OrgEntity], IsHidden = "True";
+			attribute<ratio>                                   R_StadV             := makedefined(Overigen_p_stadsv / 100[percent], 0[ratio]), Descr = "Aandeel woningen aangesloten op stadsverwarming", ishidden = "True";
 
-			attribute<string>                                  IsWater             := RegioIndelingen/buurt/IsWater[nr_OrgEntity];
-			attribute<yr_uint16>                               BioWKK_Start        := RegioIndelingen/buurt/BioWKK_Start[nr_OrgEntity];
+			attribute<string>                                  IsWater             := RegioIndelingen/buurt/IsWater[nr_OrgEntity], IsHidden = "True";
 
-			attribute<Studiegebied/gemeente>                   gemeente_rel        := point_in_polygon(point, Studiegebied/gemeente/geometry);
-			attribute<Geography/RegioIndelingen/buurt>         Buurt_rel           := nr_OrgEntity;
+			attribute<Studiegebied/gemeente>                   gemeente_rel        := point_in_polygon(point, Studiegebied/gemeente/geometry), IsHidden = "True";
+			attribute<Geography/RegioIndelingen/buurt>         Buurt_rel           := nr_OrgEntity, IsHidden = "True";
 
-			attribute<Geography/RegioIndelingen/NL>            NL_rel              := RegioIndelingen/buurt/NL_rel[nr_OrgEntity];
-			attribute<Geography/RegioIndelingen/Provincie>     Provincie_rel       := RegioIndelingen/buurt/Provincie_rel[nr_OrgEntity];
-			attribute<Geography/RegioIndelingen/Energieregio>  Energieregio_rel    := RegioIndelingen/buurt/Energieregio_rel[nr_OrgEntity];
-			attribute<Geography/RegioIndelingen/Wijk>          Wijk_rel            := RegioIndelingen/buurt/Wijk_rel[nr_OrgEntity];
+			attribute<Geography/RegioIndelingen/NL>            NL_rel              := RegioIndelingen/buurt/NL_rel[nr_OrgEntity], IsHidden = "True";
+			attribute<Geography/RegioIndelingen/Provincie>     Provincie_rel       := RegioIndelingen/buurt/Provincie_rel[nr_OrgEntity], IsHidden = "True";
+			attribute<Geography/RegioIndelingen/Energieregio>  Energieregio_rel    := RegioIndelingen/buurt/Energieregio_rel[nr_OrgEntity], IsHidden = "True";
+			attribute<Geography/RegioIndelingen/Wijk>          Wijk_rel            := RegioIndelingen/buurt/Wijk_rel[nr_OrgEntity], IsHidden = "True";
 
-			attribute<.> per_m100 (Geography/rdc_grids/m100) := poly2grid(geometry, Geography/rdc_grids/m100);
+			attribute<.> per_m100 (Geography/rdc_grids/m100) := poly2grid(geometry, Geography/rdc_grids/m100), ishidden = "True";
 
-			container Inkomen
+			container Inkomen : IsHidden = "True"
 			{
 				attribute<percent> p_hh_li    (..) := Geography/RegioIndelingen/buurt/Inkomen/p_hh_li[nr_OrgEntity];
 				attribute<percent> p_hh_mi    (..) := Geography/RegioIndelingen/buurt/Inkomen/p_hh_mi[nr_OrgEntity];
 				attribute<percent> p_hh_hi    (..) := Geography/RegioIndelingen/buurt/Inkomen/p_hh_hi[nr_OrgEntity];
-				attribute<percent> p_checksum (..) := Geography/RegioIndelingen/buurt/Inkomen/p_checksum[nr_OrgEntity];
+				attribute<percent> p_checksum (..) := Geography/RegioIndelingen/buurt/Inkomen/p_checksum[nr_OrgEntity], IsHidden = "True";
 			}
 
-			container Eigendom
+			container Eigendom : IsHidden = "True"
 			{
 				attribute<percent> p_koopw    (..) := Geography/RegioIndelingen/buurt/Eigendom/p_koopw[nr_OrgEntity];
 				attribute<percent> p_huurw    (..) := Geography/RegioIndelingen/buurt/Eigendom/p_huurw[nr_OrgEntity];
 				attribute<percent> p_wcorpw   (..) := Geography/RegioIndelingen/buurt/Eigendom/p_wcorpw[nr_OrgEntity];
 				attribute<percent> p_ov_hw    (..) := Geography/RegioIndelingen/buurt/Eigendom/p_ov_hw[nr_OrgEntity];
-				attribute<percent> p_checksum (..) := Geography/RegioIndelingen/buurt/Eigendom/p_checksum [nr_OrgEntity];
-			}
-
-			container Overigen
-			{
+				attribute<percent> p_checksum (..) := Geography/RegioIndelingen/buurt/Eigendom/p_checksum [nr_OrgEntity], IsHidden = "True";
 			}
 		}
 	}
@@ -117,8 +113,8 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 	container EnergieLabel
 	{
 		// Voor koppeling aan de BAG
-		unit<uint32> nummeraanduiding := RuimtelijkeData/BAG/import/nummeraanduiding;
-		unit<uint32> vbo              := RuimtelijkeData/BAG/import/vbo;
+		unit<uint32> nummeraanduiding := RuimtelijkeData/BAG/import/nummeraanduiding, IsHidden = "True";
+		unit<uint32> vbo              := RuimtelijkeData/BAG/import/vbo, IsHidden = "True";
 
 		unit<uint32> src
 		:	StorageName     = "%HestiaDataDir%/vraag/wonen/20200101_inputlabels_rvo.csv"
@@ -136,9 +132,8 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 					)
 				//)
 				;
-			unit<uint32> UniqueLabel := unique(label), DisableStorage="True" { attribute<uint32> Count := pcount(rlookup(label, values)); }
-			
-			//order of replace matters!
+//			unit<uint32> UniqueLabel := unique(label), DisableStorage="True" { attribute<uint32> Count := pcount(rlookup(label, values)); }
+
 			attribute<Classifications/SchilLabel>   schillabel_rel := rlookup(replace(label, '+',''), Classifications/SchilLabel/name), IntegrityCheck = "IsDefined(this)";
 			attribute<uint32>                       datum_numeriek := uint32(replace(DATUM,'''',''));
 			
@@ -152,7 +147,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			attribute<Classifications/SchilLabel> SchilLabel_rel      := rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/schillabel_rel), FreeData = "True";
 		}
 		
-		unit<uint32> src_voorlopig
+/*		unit<uint32> src_voorlopig
 		:	StorageName     = "%HestiaDataDir%/vraag/wonen/20191201_voorlopige_labels_rvo.csv"
 		,	StorageType     = "gdal.vect"
 		,	StorageReadOnly = "True"
@@ -170,7 +165,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 				;
 			unit<uint32> UniqueLabel := unique(label), DisableStorage="True" { attribute<uint32> Count := pcount(rlookup(label, values)); }
 			
-			//order of replace matters!
+
 			attribute<Classifications/SchilLabel>   schillabel_rel := rlookup(replace(label, '+',''), Classifications/SchilLabel/name);// IntegrityCheck = "IsDefined(this)";
 			attribute<uint32>                       datum_numeriek := uint32(replace(DATUM,'''',''));
 
@@ -182,7 +177,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			attribute<string>                     vbo_id              := rjoin(nummeraanduiding_id, vbo/nummeraanduiding_id, vbo/identificatie), FreeData = "True";
 			attribute<uint32>                     datum_laatste       := max(src_voorlopig/datum_numeriek, rlookup(src_voorlopig/adres_key, values));
 			attribute<Classifications/SchilLabel> SchilLabel_rel      := rjoin(values + '_' + string(datum_laatste), src_voorlopig/adres_key + '_' + string(src_voorlopig/datum_numeriek), src_voorlopig/schillabel_rel), FreeData = "True";
-		}
+		} */
 	}
 
 	#include <PuntBronnen.dms>
@@ -237,32 +232,13 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 
 			container BC := TussenResultaten/StartJaar/BebouwingsComponenten;
 
-			attribute<nrAsl> input_aant_g_aansl            := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/aant_g_aansl)[nrAsl], Descr = "invoer aantal gasaansluitingen per buurt";
-
-			attribute<nrAsl> default_aant_g_aansl          := 
-				= AsList('sum(BC/Bestaande' + /Classifications/BebouwingsSector/name + '/BO/nrAansluitingen, BC/Bestaande' + /Classifications/BebouwingsSector/name + '/BO/PlanRegio_rel)', ' + ');
-
-			attribute<nrAsl> aant_g_aansl                  := IsDefined(input_aant_g_aansl) ? input_aant_g_aansl : default_aant_g_aansl;
-			attribute<nrAsl> verschil_g_aansl              := aant_g_aansl - default_aant_g_aansl;
-			attribute<m>     input_lengte_grogel_LD_net    := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/lengte_grogel_LD_net__meters_)[m], Descr = "invoer lengte grondroeringsgevoelige LD-gasleidingen per buurt";
-			attribute<m>     default_lengte_grogel_LD_net  := const(0[m],.), Descr = "default lengte grondroeringsgevoelige LD-gasleidingen per buurt";
-			attribute<m>     lengte_grogel_LD_net          := IsDefined(input_lengte_grogel_LD_net) ? input_lengte_grogel_LD_net : default_lengte_grogel_LD_net;
-			attribute<m>     verschil_lengte_grogel_LD_net := lengte_grogel_LD_net - default_lengte_grogel_LD_net;
-			attribute<m>     input_lengte_LD_net           := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/lengte_LD_net__meters_)[m], Descr = "invoer lengte LD-gasnet per buurt";
-			attribute<m>     default_lengte_LD_net         := TussenResultaten/StartJaar/GebiedsAllocatie/RestWarmte/KostenBaten/KostenD/L_distr_g 
-				* float64(TussenResultaten/StartJaar/StateNaAllocatie/Infra_per_buurt/aant_g_aansl > 0[nrAsl]);
-			attribute<m>     lengte_LD_net                 := IsDefined(input_lengte_LD_net) && IsDefined(input_aant_g_aansl) ? input_lengte_LD_net : default_lengte_LD_net;
-			attribute<m>     verschil_g_lengte_LD_net      := lengte_LD_net - default_lengte_LD_net;
-			attribute<ratio> input_fractie_3x25_aansl      := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/fractie_3x25_aansl_ratio), Descr = "invoer aandeel van aansluitingen per buurt dat momenteel al 3x25 of groter is";
-			attribute<ratio> default_fractie_3x25_aansl    := const(0[ratio],.), Descr = "default aandeel van aansluitingen per buurt dat momenteel al 3x25 of groter is";
-			attribute<ratio> fractie_3x25_aansl            := IsDefined(input_fractie_3x25_aansl) ? input_fractie_3x25_aansl : default_fractie_3x25_aansl;
-			attribute<ratio> verschil_fractie_3x25_aansl   := fractie_3x25_aansl - default_fractie_3x25_aansl;
-			attribute<kw>    input_capaciteit_buurt        := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/capaciteit_buurt__kva_)[kw], Descr = "invoer huidige opgestelde capaciteit aan MS-ruimtes ";
-			attribute<kw>    capaciteit_buurt              := input_capaciteit_buurt;
-			attribute<m>     input_lengte_LS_net           := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/lengte_LS_buurt__meters_)[m],     Descr = "invoer totale lengte van het LS-net per buurt";
-			attribute<m>     default_lengte_LS_net         := TussenResultaten/StartJaar/GebiedsAllocatie/RestWarmte/KostenBaten/KostenD/L_infra_e, Descr = "default totale lengte van het LS-net per buurt";
-			attribute<m>     lengte_LS_net                 := IsDefined(input_lengte_LS_net) ? input_lengte_LS_net : default_lengte_LS_net;
-			attribute<m>     verschil_lengte_LS_net        := lengte_LS_net - default_lengte_LS_net;
+			attribute<nrAsl> input_aant_g_aansl      := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/aant_g_aansl)[nrAsl]             , Descr = "invoer aantal gasaansluitingen per buurt";
+			attribute<m>     lengte_grogel_LD_net    := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/lengte_grogel_LD_net__meters_)[m], Descr = "invoer lengte grondroeringsgevoelige LD-gasleidingen per buurt";
+			attribute<m>     lengte_LD_net           := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/lengte_LD_net__meters_)[m]       , Descr = "invoer lengte LD-gasnet per buurt";
+			attribute<m>     lengte_LS_net           := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/lengte_LS_buurt__meters_)[m]     , Descr = "invoer lengte LS-Enet per buurt";
+			attribute<ratio> fractie_3x25_aansl      := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/fractie_3x25_aansl_ratio)        , Descr = "invoer aandeel van aansluitingen per buurt dat momenteel al 3x25 of groter is";
+			attribute<kw>    input_capaciteit_buurt  := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/capaciteit_buurt__kva_)[kw]      , Descr = "invoer huidige opgestelde capaciteit aan MS-ruimtes ";
+			attribute<kw>    capaciteit_buurt        := input_capaciteit_buurt;
 		}
 	}
 	
@@ -271,7 +247,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 				 Classifications/Rekenjaar/name
 				,Geography/rdc_grids/m100
 				,float32
-				,'%HestiaDataDir%/hulpbestanden/klimaat/WHexp/WH_' + string(Classifications/Rekenjaar/Values) + '.tif'
+				,'%HestiaDataDir%/hulpbestanden/klimaat/'+Invoer/DefaultInstellingen/Basis/KlimaatScenario+'exp/'+Invoer/DefaultInstellingen/Basis/KlimaatScenario+'_' + string(Classifications/Rekenjaar/Values) + '.tif'
 			)
 			, descr = "Graaddagenkaarten"
 			, source = "KNMI"
@@ -279,7 +255,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 		
 	
 	// inlezen kerncijfers wijken en buurten - meerdere jaren om missende waarden te ondervangen
-	container CBSWijkEnBuurt: url="%HestiaDataDir%/CBS/20200129_update_kerncijfers_wijken_buurten_BVB.txt"
+	container CBSWijkEnBuurt: url="%HestiaDataDir%/CBS/20200129_update_kerncijfers_wijken_buurten_BVB.txt", IsHidden = "True"
 	{
 		unit<uint32> jaar := range(uint32,2015,2022)
 		{
@@ -300,5 +276,4 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 				StorageReadOnly = "True";
 		}
 	}
-	
 }
