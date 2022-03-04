@@ -1,0 +1,132 @@
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2022 - PBL & TNO                                        //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container Beleid
+{
+	//====== Inlezen invoerbestand beleidsinstrumenten
+	unit<uint32> Invoer : StorageName = "%projDir%/runs/Beleid.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
+	{
+		//====== Vertalen attributen naar juiste value types
+		attribute<string> label := instrument;
+
+		attribute<yr_uint16> Startjaar := eerstejaar[yr_uint16], IsHidden = "True";
+		attribute<yr_uint16> Eindjaar  := makedefined(laatstejaar[yr_uint16], 9999[yr_uint16]), IsHidden = "True";
+		attribute<ratio>     Aandeel   := procent[ratio], IsHidden = "True";
+		attribute<eur_asl>   Bedrag    := vastbedrag[eur_asl], IsHidden = "True";
+
+		//====== Controle aantal criteria om te zien welke instrumenten geldige invoer hebben en meegenomen kunnen worden
+		attribute<bool> GeldigeInvoer := 
+				Isdefined(Startjaar)
+			&& 	(LowerCase(soort) == 'subsidie' || LowerCase(soort) == 'normering')
+			&&  (LowerCase(soort) == 'subsidie' ? (IsDefined(Aandeel) || IsDefined(Bedrag)) : true)
+			&&  IsDefined(geldigvoor)
+			;
+	}
+	//====== Interpretatie tekstvelden voor geldige subsidiemaatregelen
+	unit<uint32> Subsidie := subset(Invoer/GeldigeInvoer && LowerCase(Invoer/soort) == 'subsidie')
+	{
+		attribute<string>    label           := Invoer/label[nr_orgentity]     , IsHidden = "True";
+		attribute<string>    name            := Invoer/code[nr_orgentity]      , IsHidden = "True";
+		attribute<string>    doelgroep       := LowerCase(Invoer/doelgroep[nr_orgentity]) , IsHidden = "True";
+		attribute<string>    geldigvoor      := LowerCase(Invoer/geldigvoor[nr_orgentity]), IsHidden = "True";
+		attribute<string>    voorwaarde      := LowerCase(Invoer/voorwaarde[nr_orgentity]), IsHidden = "True";
+		attribute<yr_uint16> Startjaar       := Invoer/Startjaar[nr_orgentity] ;
+		attribute<yr_uint16> Eindjaar        := Invoer/Eindjaar [nr_orgentity] ;
+		attribute<ratio>     SubsidieAandeel := Invoer/Aandeel[nr_orgentity]   ;
+		attribute<eur_asl>   SubsidieBedrag  := Invoer/Bedrag[nr_orgentity]    ;
+
+		//====== Bepalen welke doelgroep er wordt aangesproken : eigendomstypes
+		container Doel_false  := for_each_nedv(Classifications/Eigendom/Label,'const(false,Subsidie',Subsidie,bool), IsHidden = "True";
+		container ParseDoelgroep := Doel_false
+		{
+			attribute<bool> Koop (Subsidie) := strcount(doelgroep, 'koopw') > 0;
+			attribute<bool> Parthuur (Subsidie) := strcount(doelgroep, 'socia') > 0;
+			attribute<bool> Wooncorp (Subsidie) := strcount(doelgroep, 'parti') > 0;
+		}
+
+		//====== Bepalen welke technische maatregelen onder het subsidieinstrument vallen
+		container ParseMaatregel
+		{
+			container Inst_false  := for_each_nedv(Classifications/Installatie/Label,'const(false,Subsidie)',Subsidie,bool), IsHidden = "True";
+			container Installatie := Inst_false
+			{
+				attribute<bool> eWP_lw     (Subsidie) := strcount(geldigvoor, 'warmtepomp') > 0;
+				attribute<bool> eWP_bw     (Subsidie) := strcount(geldigvoor, 'warmtepomp') > 0;
+				attribute<bool> eWP_ll     (Subsidie) := strcount(geldigvoor, 'warmtepomp') > 0;
+
+				attribute<bool> Pellet     (Subsidie) := strcount(geldigvoor, 'pelletkach') > 0;
+				attribute<bool> Bioketel   (Subsidie) := strcount(geldigvoor, 'biomassake') > 0;
+
+				attribute<bool> ZonB       (Subsidie) := strcount(geldigvoor, 'zonneboile') > 0;
+				attribute<bool> ZonPV      (Subsidie) := strcount(geldigvoor, 'zonnepanel') > 0;
+
+				attribute<bool> hHR        (Subsidie) := strcount(geldigvoor, '(hybride)w') > 0;
+				attribute<bool> BasisHWP_w (Subsidie) := strcount(geldigvoor, '(hybride)w') > 0;
+			}
+
+			container Isolatie := for_each_nedv(/Classifications/IsolatieMaatregel/name, 'strcount(geldigvoor, '+quote(Classifications/Isolatiemaatregel/name)+') > 0',Subsidie,bool)
+			{
+				attribute<bool> Alle       (Subsidie) := strcount(geldigvoor, 'isolatie') > 0;
+			}
+
+			container Infra
+			{
+				attribute<bool> WnetAansl  (Subsidie) := strcount(geldigvoor, 'warmteneta') > 0;
+			}
+		}
+		//====== Bepalen welke voorwaarden er aan het instrument zijn gesteld
+		container ParseVoorwaarde
+		{
+			attribute<bool>    HeeftMaxBedrag_asl  (Subsidie) := strcount(voorwaarde, 'maximum bedrag') > 0;
+			attribute<eur_asl> MaxBedrag_asl       (Subsidie) := not(HeeftMaxBedrag_asl) ? 0.0[eur_asl] : trim(replace(voorwaarde, 'maximum bedrag: ', ''))[eur_asl];
+
+			attribute<bool>    HeeftMinMaatregelen (Subsidie) := strcount(voorwaarde, 'minimaal aantal maatregelen') > 0;
+			attribute<float64> MinMaatregelen      (Subsidie) := not(HeeftMinMaatregelen) ? 0.0[float64] : trim(replace(voorwaarde, 'minimaal aantal maatregelen: ', ''))[float64];  
+		}
+	}
+
+	template PerJaar
+	{
+		//case parameters
+		parameter<yr_uint16> Zichtjaar;
+		//end case parameters
+
+		unit<uint32> Subsidie := subset(/Invoer/Beleid/subsidie/StartJaar <= Zichtjaar && /Invoer/Beleid/subsidie/EindJaar >= Zichtjaar)
+		{
+			attribute<string>  label           := /Invoer/Beleid/subsidie/label[nr_orgentity]     , IsHidden = "True";
+			attribute<string>  name            := /Invoer/Beleid/subsidie/name[nr_orgentity] ;
+			attribute<ratio>   SubsidieAandeel := /Invoer/Beleid/subsidie/SubsidieAandeel[nr_orgentity]   ;
+			attribute<eur_asl> SubsidieBedrag  := /Invoer/Beleid/subsidie/SubsidieBedrag[nr_orgentity]    ;
+
+			container Doelgroep := for_each_nedv(Classifications/Eigendom/label,'/Invoer/Beleid/subsidie/ParseDoelgroep/'+Classifications/Eigendom/label+'[nr_orgentity]',Subsidie,bool);
+
+			container Maatregel
+			{
+				container Installatie := for_each_nedv(Classifications/Installatie/Label,'/Invoer/Beleid/subsidie/ParseMaatregel/Installatie/'+Classifications/Installatie/label+'[nr_orgentity]'  ,Subsidie,bool)
+				{
+					attribute<bool> ZonB       (Subsidie) := /Invoer/Beleid/subsidie/ParseMaatregel/Installatie/ZonB[nr_orgentity];
+					attribute<bool> ZonPV      (Subsidie) := /Invoer/Beleid/subsidie/ParseMaatregel/Installatie/ZonPV[nr_orgentity];
+				}
+				container Isolatie    := for_each_nedv(Classifications/IsolatieMaatregel/name,'/Invoer/Beleid/subsidie/ParseMaatregel/Isolatie/'+Classifications/IsolatieMaatregel/name+'[nr_orgentity]',Subsidie,bool)
+				{
+					attribute<bool> Alle       (Subsidie) := /Invoer/Beleid/subsidie/ParseMaatregel/Isolatie/Alle[nr_orgentity];
+				}
+
+				container Infra
+				{
+					attribute<bool> WnetAansl  (Subsidie) := /Invoer/Beleid/subsidie/ParseMaatregel/infra/WnetAansl[nr_orgentity];
+				}
+			}
+			container Voorwaarde
+			{
+				attribute<eur_asl> MaxBedrag_asl       (Subsidie) := /Invoer/Beleid/subsidie/ParseVoorwaarde/MaxBedrag_asl[nr_orgentity];
+				attribute<float64> MinMaatregelen      (Subsidie) := /Invoer/Beleid/subsidie/ParseVoorwaarde/MinMaatregelen[nr_orgentity];
+			}
+			container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+		}
+	}
+}

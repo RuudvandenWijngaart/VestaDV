@@ -297,9 +297,6 @@ template SubsetGebouwOptieT
 					attribute<GJ_yr>   V_E             (GeschiktObject) := ='merge(uint8(Ventilatieoptie_def), GJ_yr,'+AsItemList('PerOptie/'+Ventilatieopties/Name+'/V_E')+')';
 				}
 
-				attribute<bool> IsAlabel (GeschiktObject) := GeschiktObject/Schillabel_rel == classifications/schillabel/V/A;  //TODO: hier afweging invoegen
-				attribute<bool> IsBlabel (GeschiktObject) := GeschiktObject/Schillabel_rel == classifications/schillabel/V/B;  //TODO: hier afweging invoegen
-				
 				attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_def (GeschiktObject) := VentilatieActief ? Choice/Installatietype_def : Installatietype_org;
 				
 				//====== waarden gekozen ventilatiesysteem
@@ -449,7 +446,7 @@ template SubsetGebouwOptieT
 	attribute<Eur_yr> Kji20_LO (GeschiktObject/xProduct)       := Ki20_LO * NcwRefs/_20/AnnualisationFactor;
 	attribute<Eur_yr> Kji_DK   (GeschiktObject)                := Ki_DK   * NcwRefs/_20/AnnualisationFactor;
 	attribute<Eur_yr> Kji_KK   (GeschiktObject)                := Ki_KK   * NcwRefs/_15/AnnualisationFactor;
-	attribute<Eur_yr> Kji_VT   (GeschiktObject)                := Ki_VT   * NcwRefs/_15/AnnualisationFactor; //TODO: check afschrijftermijn
+	attribute<Eur_yr> Kji_VT   (GeschiktObject)                := Ki_VT   * NcwRefs/_15/AnnualisationFactor;
 	attribute<Eur_yr> Kji15_LO (GeschiktObject/xProduct)       := Ki15_LO * NcwRefs/_15/AnnualisationFactor;
 	attribute<Eur_yr> Kji_LO   (GeschiktObject/xProduct)       := Kji30_LO + Kji20_LO + Kji15_LO;
 
@@ -458,24 +455,85 @@ template SubsetGebouwOptieT
 	attribute<Eur_yr> Kmi20_LO (GeschiktObject/xProduct)       := Ki20_LO * NCW/mr20/AnnualisationFactor;
 	attribute<Eur_yr> Kmi_DK   (GeschiktObject)                := Ki_DK   * NCW/mr20/AnnualisationFactor;
 	attribute<Eur_yr> Kmi_KK   (GeschiktObject)                := Ki_KK   * NCW/mr15/AnnualisationFactor;
-	attribute<Eur_yr> Kmi_VT   (GeschiktObject)                := Ki_VT   * NCW/mr15/AnnualisationFactor; //TODO: check afschrijftermijn
+	attribute<Eur_yr> Kmi_VT   (GeschiktObject)                := Ki_VT   * NCW/mr15/AnnualisationFactor;
 	attribute<Eur_yr> Kmi15_LO (GeschiktObject/xProduct)       := Ki15_LO * NCW/mr15/AnnualisationFactor;
 	attribute<Eur_yr> Kmi_LO   (GeschiktObject/xProduct)       := Kmi30_LO + Kmi20_LO + Kmi15_LO;
 
-	container ISDE_Opties := /Invoer/DefaultInstellingen/Basis/Beleid/EIA/ISDE;
-	
-	attribute<Eur>    Oi30_LO  (GeschiktObject/xProduct)       := Ki30_LO * ISDE_Opties/Rs_LO[GeschiktObject/xProduct/Installatie_rel];
-	attribute<Eur>    Oi20_LO  (GeschiktObject/xProduct)       := Ki20_LO * ISDE_Opties/Rs_LO[GeschiktObject/xProduct/Installatie_rel];
-	attribute<Eur>    Oi15_LO  (GeschiktObject/xProduct)       := Ki15_LO * ISDE_Opties/Rs_LO[GeschiktObject/xProduct/Installatie_rel];
-	attribute<Eur>    OiDK_LO  (GeschiktObject)                := Ki_DK   * EIA_Opties/Rs_LokaleOpwekking;
-	attribute<Eur>    Oi_GV    (GeschiktObject)                := Ki_gv   * EIA_Opties/Rs_GebouwVerbetering; 
-	
-	attribute<Eur_yr> Oji30_LO (GeschiktObject/xProduct)       := Oi30_LO * NcwRefs/_30/AnnualisationFactor;
-	attribute<Eur_yr> Oji20_LO (GeschiktObject/xProduct)       := Oi20_LO * NcwRefs/_20/AnnualisationFactor;
-	attribute<Eur_yr> Oji15_LO (GeschiktObject/xProduct)       := Oi15_LO * NcwRefs/_15/AnnualisationFactor;
+	unit<uint32> ZBS := ZichtjaarBeleid/subsidie, ishidden = "True";
+	container SubsidieBerekening := for_each_ne(ZBS/name, 'ImplSubs(ZBS/V/'+ZBS/name+')');
+	template ImplSubs : ishidden = "True"
+	{
+		//case parameters
+		parameter<ZBS> ZBS_rel;
+		//end case parameters
 
-	parameter<float64> S_gv := (1.0 - EIA_Opties/Rs_GebouwVerbetering), Descr = "eigen aandeel investering op gebouwverbetering na aftrek van subsidies";
-	parameter<float64> S_lo := (1.0 - EIA_Opties/Rs_LokaleOpwekking  ), Descr = "eigen aandeel investering op lokale opwekking na aftrek van subsidies";
+		parameter<ratio>   Aandeel        := makedefined(ZBS/Subsidieaandeel[ZBS_rel],0.0[ratio]);
+		parameter<eur_asl> Bedrag         := makedefined(ZBS/Subsidiebedrag[ZBS_rel],0.0[eur_asl]);
+		parameter<float64> MinMaatregelen := ZBS/Voorwaarde/MinMaatregelen[ZBS_rel];
+
+		attribute<bool>    InDoelgroep (GeschiktObject)          := ='merge(uint8(BO/Eigendom_rel[geschiktobject/BO_rel]), bool,'+ AsITemlist('ZBS/doelgroep/'+Classifications/Eigendom/label)+')';
+		attribute<eur>     MaxBedrag   (GeschiktObject)          := BO/nrAansluitingen[GeschiktObject/BO_rel] * ZBS/Voorwaarde/MaxBedrag_asl[ZBS_rel];
+
+		//====== Bepaling subsidiebedragen
+		attribute<ratio>   Rs          (GeschiktObject/xProduct) := ='Aandeel * float64(merge(uint8(GeschiktObject/xProduct/Installatie_rel), bool,'+ AsITemlist('ZBS/Maatregel/installatie/'+Classifications/Installatie/Label)+'))';
+		attribute<eur>     Oi          (GeschiktObject/xProduct) := ='BO/nrAansluitingen[GeschiktObject/BO_rel[GeschiktObject/xProduct/GeschiktObject_rel]] * Bedrag * float64(merge(uint8(GeschiktObject/xProduct/Installatie_rel), bool,'+ AsITemlist('ZBS/Maatregel/installatie/'+Classifications/Installatie/Label)+'))';	
+		attribute<Eur>     Oi30_LO_i   (GeschiktObject/xProduct) := Ki30_LO * Rs + (Ki30_LO == max_elem(Ki30_LO,Ki20_LO,Ki15_LO) ? Oi : 0.0[eur]);
+		attribute<Eur>     Oi20_LO_i   (GeschiktObject/xProduct) := Ki20_LO * Rs + (Ki20_LO == max_elem(Ki30_LO,Ki20_LO,Ki15_LO) ? Oi : 0.0[eur]);
+		attribute<Eur>     Oi15_LO_i   (GeschiktObject/xProduct) := Ki15_LO * Rs + (Ki15_LO == max_elem(Ki30_LO,Ki20_LO,Ki15_LO) ? Oi : 0.0[eur]);
+		attribute<Eur>     Oi_GV_i     (GeschiktObject)          := float64(ZBS/Maatregel/Isolatie/Alle[ZBS_rel])     * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + Ki_gv * Aandeel) + Oi_gv_bouwdeel/totaal;
+		attribute<Eur>     Oi_ZonPV_i  (GeschiktObject)          := float64(ZBS/Maatregel/Installatie/ZonPV[ZBS_rel]) * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + OverigeInstallaties/ZonPV/Afweging/Ki_zonPV  * Aandeel);
+		attribute<Eur>     Oi_ZonB_i   (GeschiktObject)          := float64(ZBS/Maatregel/Installatie/ZonB[ZBS_rel])  * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + OverigeInstallaties/ZonB/Afweging/Ki_zonB    * Aandeel);
+
+		container BouwdeelMaatregelen := for_each_nedv(
+  			  Classifications/Bouwdeel/name
+			, 'combine_data(GeschiktObject'
+							', Classifications/Bouwdeel/V/'+Classifications/Bouwdeel/name+''
+							', GeschiktObject/Bouwdelen/Isolatie/'+Classifications/Bouwdeel/name+''
+							')'
+			, GeschiktObject
+			, Classifications/Isolatiemaatregel
+			);
+		container Oi_gv_bouwdeel := for_each_nedv(
+				classifications/Bouwdeel/name,
+				replace(
+					'makedefined(GeschiktObject/Bouwdelen/@BD'
+					'*  Classifications/IsolatieMaatregel/xUitvoering/kosten['
+							'combine_data(Classifications/IsolatieMaatregel/xUitvoering'
+							', BouwdeelMaatregelen/@BD'
+							', BO/Activatie/Uitvoering[GeschiktObject/BO_Rel]'
+							')'
+						']'
+					', 0.0[Eur])
+					* float64(merge(uint8(BouwdeelMaatregelen/@BD),bool,'+AsItemList('ZBS/Maatregel/Isolatie/'+Classifications/Isolatiemaatregel/name)+')) * Aandeel + BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag
+					* float64(GeschiktObject/Bouwdelen/Isolatie/@BD != BO/Bouwdelen/Isolatie/@BD[GeschiktObject/BO_rel])'
+				,	'@BD', classifications/Bouwdeel/name),
+				GeschiktObject, Eur)
+		{
+			attribute<eur> Totaal (GeschiktObject) := ='add('+AsItemList(Classifications/Bouwdeel/name)+')';
+		}
+
+		//===== correctie voor maximumbedrag
+		attribute<ratio>   Korting     (GeschiktObject)          := =ZBS/Voorwaarde/MaxBedrag_asl[ZBS_rel] > 0.0[eur] ? 'max_elem((Oi_GV_i + Oi_ZonPV_i + Oi_ZonB_i + sum(Oi30_LO_i + Oi20_LO_i + Oi15_LO_i, GeschiktObject/xProduct/GeschiktObject_rel) / MaxBedrag)[ratio],1.0[ratio])' : 'const(1.0[ratio],GeschiktObject)';
+		attribute<Eur>     Oi30_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi30_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
+		attribute<Eur>     Oi20_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi20_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
+		attribute<Eur>     Oi15_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi15_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
+		attribute<Eur>     Oi_GV       (GeschiktObject)          := float64(InDoelgroep) * Oi_GV_i   / Korting;
+		attribute<Eur>     OiDK_LO     (GeschiktObject)          := float64(InDoelgroep) * (Oi_ZonB_i + Oi_ZonPV_i) / Korting;
+	}
+
+	//====== Optellen alle subsidies over alle beleidsinstrumenten
+	attribute<Eur>    Oi30_LO  (GeschiktObject/xProduct) := ='add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi30_LO')+')';
+	attribute<Eur>    Oi20_LO  (GeschiktObject/xProduct) := ='add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi20_LO')+')';
+	attribute<Eur>    Oi15_LO  (GeschiktObject/xProduct) := ='add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi15_LO')+')';
+	attribute<Eur>    OiDK_LO  (GeschiktObject)          := ='add('+AsItemList('Subsidieberekening/'+ZBS/name+'/OiDK_LO')+')';
+	attribute<Eur>    Oi_GV    (GeschiktObject)          := ='add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi_GV  ')+')';
+	
+	//====== Annualiseren subsidies tot jaarlijkse opbrengsten
+	attribute<Eur_yr> Oji30_LO (GeschiktObject/xProduct) := Oi30_LO * NcwRefs/_30/AnnualisationFactor;
+	attribute<Eur_yr> Oji20_LO (GeschiktObject/xProduct) := Oi20_LO * NcwRefs/_20/AnnualisationFactor;
+	attribute<Eur_yr> Oji15_LO (GeschiktObject/xProduct) := Oi15_LO * NcwRefs/_15/AnnualisationFactor;
+	attribute<Eur_yr> OjiDK_LO (GeschiktObject)          := OiDK_LO * NcwRefs/_20/AnnualisationFactor;
+	attribute<Eur_yr> Oji_GV   (GeschiktObject)          := Oi_GV   * NcwRefs/_30/AnnualisationFactor;
 
 	attribute<ratio>   SplitIncentiveVerbruik  (GeschiktObject) :=
 		  BO/Eigendom_rel[GeschiktObject/BO_rel] == Classifications/Eigendom/V/PartHuur ? SpecifiekeInstellingen/Beleid/SplitIncentive/SplitIncentiveVerbruik_PH
@@ -491,10 +549,10 @@ template SubsetGebouwOptieT
 		+ jaarlijks/Kj_vastrecht_g * SplitIncentiveVastrecht;
 
 	attribute<Eur_yr> kosten_j (GeschiktObject) :=
-		  Kji_GV * S_gv          * BTW_Factor_gv
+		  (Kji_GV - Oji_GV)      * BTW_Factor_gv
 		+ sum(Kji_LO - (Oji30_LO+Oji20_LO+Oji15_LO), GeschiktObject/xProduct/GeschiktObject_rel) * BTW_Factor
 		+ Kji_LTAS               * BTW_Factor
-		+ Kji_DK * S_lo          * BTW_Factor
+		+ (Kji_DK - OjiDK_LO)    * BTW_Factor
 		+ Kji_KK                 * BTW_Factor
 		+ Kji_VT                 * BTW_Factor
 		+ sum(jaarlijks/Kj_OH_LO + jaarlijks/Kj_Adm_LO, GeschiktObject/xProduct/GeschiktObject_rel) * BTW_Factor
@@ -514,8 +572,8 @@ template SubsetGebouwOptieT
 	attribute<Eur_yr> kosten (GeschiktObject) := =(LocatieSpecifiekeOpties/GebouwOpties/KiesMaatschappelijk) ? 'kosten_m' : 'kosten_j';
 	attribute<Eur_yr> kosten_or_undefined (GeschiktObject) := select_data(GeschiktObject, Criterium) ? kosten : (0/0)[Eur_yr];
 
-	attribute<Kwh_yr_m2>                  Kwh_m2           (GeschiktObject) := makedefined(Func2Meter/result/Total / 3.6[MJ / kWh] * 1000 [ MJ / GJ] / BO/Oppervlakte[GeschiktObject/BO_rel],0.0[Kwh_yr_m2]), IntegrityCheck = "Kwh_m2 < 500[Kwh_yr_m2]";
-	attribute<Classifications/Schillabel> Energielabel_rel (GeschiktObject) := classify(Kwh_m2, classifications/Schillabel/classbreak);
+	container energielabelberekening := CalculationSchemes/NTA8800(GeschiktObject);
+	attribute<Classifications/Schillabel> Energielabel_rel     (GeschiktObject) := energielabelberekening/Energielabel_rel;
 
 	unit<uint32> results := GeschiktObject 
 	{
@@ -538,6 +596,7 @@ template SubsetGebouwOptieT
 			attribute<Eur> Oi30_LO (GeschiktObject) := sum(.../Oi30_LO, xProduct/GeschiktObject_rel);
 			attribute<Eur> Oi20_LO (GeschiktObject) := sum(.../Oi20_LO, xProduct/GeschiktObject_rel);
 			attribute<Eur> Oi15_LO (GeschiktObject) := sum(.../Oi15_LO, xProduct/GeschiktObject_rel);
+			attribute<Eur> OiDK_LO (GeschiktObject) := .../OiDK_LO;
 		}
 		container jaarlijks
 		{
