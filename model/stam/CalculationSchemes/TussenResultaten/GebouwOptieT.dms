@@ -471,7 +471,7 @@ template SubsetGebouwOptieT
 		parameter<eur_asl> Bedrag         := makedefined(ZBS/Subsidiebedrag[ZBS_rel],0.0[eur_asl]);
 		parameter<float64> MinMaatregelen := ZBS/Voorwaarde/MinMaatregelen[ZBS_rel];
 
-		attribute<bool>    InDoelgroep (GeschiktObject)          := ='merge(uint8(BO/Eigendom_rel[geschiktobject/BO_rel]), bool,'+ AsITemlist('ZBS/doelgroep/'+Classifications/Eigendom/label)+')';
+		attribute<bool>    InDoelgroep (GeschiktObject)          := ='OR('+AsItemList(replace('ZBS/doelgroep/@ED[ZBS_rel] && BO/Eigendom_rel[geschiktobject/BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')';
 		attribute<eur>     MaxBedrag   (GeschiktObject)          := BO/nrAansluitingen[GeschiktObject/BO_rel] * ZBS/Voorwaarde/MaxBedrag_asl[ZBS_rel];
 
 		//====== Bepaling subsidiebedragen
@@ -486,28 +486,36 @@ template SubsetGebouwOptieT
 
 		container BouwdeelMaatregelen := for_each_nedv(
   			  Classifications/Bouwdeel/name
-			, 'combine_data(GeschiktObject'
+			, 'combine_data(Classifications/BouwdeelIsolatie'
 							', Classifications/Bouwdeel/V/'+Classifications/Bouwdeel/name+''
 							', GeschiktObject/Bouwdelen/Isolatie/'+Classifications/Bouwdeel/name+''
 							')'
 			, GeschiktObject
-			, Classifications/Isolatiemaatregel
-			);
+			, Classifications/BouwdeelIsolatie
+			), ishidden = "True";
+
+		container IsolatieMaatregel := for_each_nedv(
+			  Classifications/Bouwdeel/name
+		, 'rlookup(classifications/BouwdeelIsolatie/name[BouwdeelMaatregelen/'+Classifications/Bouwdeel/name+'] , Classifications/IsolatieMaatregel/name)'
+			, GeschiktObject
+			, Classifications/IsolatieMaatregel
+			), ishidden = "True";
+
 		container Oi_gv_bouwdeel := for_each_nedv(
 				classifications/Bouwdeel/name,
 				replace(
-					'makedefined(GeschiktObject/Bouwdelen/@BD'
+					'(makedefined(GeschiktObject/Bouwdelen/@BD'
 					'*  Classifications/IsolatieMaatregel/xUitvoering/kosten['
 							'combine_data(Classifications/IsolatieMaatregel/xUitvoering'
-							', BouwdeelMaatregelen/@BD'
+							', IsolatieMaatregel/@BD'
 							', BO/Activatie/Uitvoering[GeschiktObject/BO_Rel]'
 							')'
 						']'
-					', 0.0[Eur])
-					* float64(merge(uint8(BouwdeelMaatregelen/@BD),bool,'+AsItemList('ZBS/Maatregel/Isolatie/'+Classifications/Isolatiemaatregel/name)+')) * Aandeel + BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag
-					* float64(GeschiktObject/Bouwdelen/Isolatie/@BD != BO/Bouwdelen/Isolatie/@BD[GeschiktObject/BO_rel])'
+					', 0.0[Eur]) * Aandeel + Bedrag * BO/nrAansluitingen[GeschiktObject/BO_rel])'+
+					'* float64(OR('+AsItemList(replace('ZBS/Maatregel/Isolatie/@BM[ZBS_rel] && IsolatieMaatregel/@BD == Classifications/IsolatieMaatregel/V/@BM','@BM',Classifications/IsolatieMaatregel/name))+')) '+
+					'* float64(GeschiktObject/Bouwdelen/Isolatie/@BD != BO/Bouwdelen/Isolatie/@BD[GeschiktObject/BO_rel])'
 				,	'@BD', classifications/Bouwdeel/name),
-				GeschiktObject, Eur)
+				GeschiktObject, Eur), ishidden = "True"
 		{
 			attribute<eur> Totaal (GeschiktObject) := ='add('+AsItemList(Classifications/Bouwdeel/name)+')';
 		}
@@ -519,14 +527,17 @@ template SubsetGebouwOptieT
 		attribute<Eur>     Oi15_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi15_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
 		attribute<Eur>     Oi_GV       (GeschiktObject)          := float64(InDoelgroep) * Oi_GV_i   / Korting;
 		attribute<Eur>     OiDK_LO     (GeschiktObject)          := float64(InDoelgroep) * (Oi_ZonB_i + Oi_ZonPV_i) / Korting;
+
+		//===== check aantal maatregelen
+		attribute<float64> nrMaatregelen (GeschiktObject) := ='add('+AsItemList(replace('float64(GeschiktObject/Bouwdelen/Isolatie/@BD != BO/Bouwdelen/Isolatie/@BD[GeschiktObject/BO_rel])','@BD',Classifications/Bouwdeel/name))+')';
 	}
 
 	//====== Optellen alle subsidies over alle beleidsinstrumenten
-	attribute<Eur>    Oi30_LO  (GeschiktObject/xProduct) := ='add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi30_LO')+')';
-	attribute<Eur>    Oi20_LO  (GeschiktObject/xProduct) := ='add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi20_LO')+')';
-	attribute<Eur>    Oi15_LO  (GeschiktObject/xProduct) := ='add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi15_LO')+')';
-	attribute<Eur>    OiDK_LO  (GeschiktObject)          := ='add('+AsItemList('Subsidieberekening/'+ZBS/name+'/OiDK_LO')+')';
-	attribute<Eur>    Oi_GV    (GeschiktObject)          := ='add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi_GV  ')+')';
+	attribute<Eur>    Oi30_LO  (GeschiktObject/xProduct) := = count(ZBS/subsidiebedrag) > 0u ? 'add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi30_LO')+')' : 'const(0.0[Eur],GeschiktObject/xProduct)';
+	attribute<Eur>    Oi20_LO  (GeschiktObject/xProduct) := = count(ZBS/subsidiebedrag) > 0u ? 'add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi20_LO')+')' : 'const(0.0[Eur],GeschiktObject/xProduct)';
+	attribute<Eur>    Oi15_LO  (GeschiktObject/xProduct) := = count(ZBS/subsidiebedrag) > 0u ? 'add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi15_LO')+')' : 'const(0.0[Eur],GeschiktObject/xProduct)';
+	attribute<Eur>    OiDK_LO  (GeschiktObject)          := = count(ZBS/subsidiebedrag) > 0u ? 'add('+AsItemList('Subsidieberekening/'+ZBS/name+'/OiDK_LO')+')' : 'const(0.0[Eur],GeschiktObject)';
+	attribute<Eur>    Oi_GV    (GeschiktObject)          := = count(ZBS/subsidiebedrag) > 0u ? 'add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi_GV')+')' : 'const(0.0[Eur],GeschiktObject)';
 	
 	//====== Annualiseren subsidies tot jaarlijkse opbrengsten
 	attribute<Eur_yr> Oji30_LO (GeschiktObject/xProduct) := Oi30_LO * NcwRefs/_30/AnnualisationFactor;
