@@ -32,18 +32,19 @@ container Beleid
 		attribute<string>    label           := Invoer/label[nr_orgentity]     , IsHidden = "True";
 		attribute<string>    name            := Invoer/code[nr_orgentity]      , IsHidden = "True";
 		attribute<string>    doelgroep       := LowerCase(Invoer/doelgroep[nr_orgentity]) , IsHidden = "True";
-		attribute<string>    grondslag       := Invoer/grondslag[nr_orgentity], IsHidden = "True";
+		attribute<string>    grondslag       := Invoer/grondslag[nr_orgentity] , IsHidden = "True";
+		attribute<string>    voorwaarde      := Invoer/voorwaarde[nr_orgentity], IsHidden = "True";
 		attribute<yr_uint16> Startjaar       := Invoer/Startjaar[nr_orgentity] ;
 		attribute<yr_uint16> Eindjaar        := Invoer/Eindjaar [nr_orgentity] ;
 
 		unit<uint32> NieuwbouwNorm := subset(lowercase(doelgroep) == 'nieuwbouw')
 		{
-			attribute<string>    label           := Normering/label[nr_orgentity]     , IsHidden = "True";
-			attribute<string>    name            := Normering/name[nr_orgentity]      , IsHidden = "True";
-			attribute<string>    doelgroep       := Normering/doelgroep[nr_orgentity] , IsHidden = "True";
-			attribute<string>    grondslag       := Normering/grondslag[nr_orgentity], IsHidden = "True";
-			attribute<yr_uint16> Startjaar       := Normering/Startjaar[nr_orgentity] ;
-			attribute<yr_uint16> Eindjaar        := Normering/Eindjaar [nr_orgentity] ;
+			attribute<string>    label       := Normering/label[nr_orgentity]     , IsHidden = "True";
+			attribute<string>    name        := Normering/name[nr_orgentity]      , IsHidden = "True";
+			attribute<string>    doelgroep   := Normering/doelgroep[nr_orgentity] , IsHidden = "True";
+			attribute<string>    grondslag   := Normering/grondslag[nr_orgentity] , IsHidden = "True";
+			attribute<yr_uint16> Startjaar   := Normering/Startjaar[nr_orgentity] ;
+			attribute<yr_uint16> Eindjaar    := Normering/Eindjaar [nr_orgentity] ;
 
 			container BouwdeelNorm := for_each_nedv(
 				  Classifications/Bouwdeel/name
@@ -51,6 +52,29 @@ container Beleid
 				, NieuwbouwNorm
 				, Classifications/IsolatieNiveau
 				);
+		}
+		unit<uint32> BestaandeBouwNorm := subset(lowercase(replace(doelgroep, ' ', '')) == 'bestaandebouw')
+		{
+			attribute<string>    label       := Normering/label[nr_orgentity]     , IsHidden = "True";
+			attribute<string>    name        := Normering/name[nr_orgentity]      , IsHidden = "True";
+			attribute<string>    doelgroep   := Normering/doelgroep[nr_orgentity] , IsHidden = "True";
+			attribute<string>    grondslag   := Normering/grondslag[nr_orgentity], IsHidden = "True";
+			attribute<yr_uint16> Startjaar   := Normering/Startjaar[nr_orgentity] ;
+			attribute<yr_uint16> Eindjaar    := Normering/Eindjaar [nr_orgentity] ;
+			attribute<string>    voorwaarde  := LowerCase(Normering/voorwaarde[nr_orgentity]), IsHidden = "True";
+
+			container BouwdeelNorm := for_each_nedv(
+				  Classifications/Bouwdeel/name
+				, 'rlookup(substr(grondslag, strpos(grondslag,'+quote(Classifications/Bouwdeel/name)+')+3u, 2u), Classifications/IsolatieNiveau/name)'
+				, BestaandeBouwNorm
+				, Classifications/IsolatieNiveau
+				);
+			//====== Bepalen welke voorwaarden er aan het instrument zijn gesteld
+			container ParseVoorwaarde
+			{
+				attribute<bool>  SchilAandeelVoorwaarde (BestaandeBouwNorm) := strcount(voorwaarde, 'gerenoveerd aandeel') > 0;
+				attribute<ratio> MinSchilAandeel        (BestaandeBouwNorm) := (not(SchilAandeelVoorwaarde) ? 0.0[percent] : trim(replace(voorwaarde, 'gerenoveerd aandeel (procent): ', ''))[percent]) * 0.01[ratio / percent];  
+			}
 		}
 	}
 
@@ -60,7 +84,7 @@ container Beleid
 		attribute<string>    label           := Invoer/label[nr_orgentity]     , IsHidden = "True";
 		attribute<string>    name            := Invoer/code[nr_orgentity]      , IsHidden = "True";
 		attribute<string>    doelgroep       := LowerCase(Invoer/doelgroep[nr_orgentity]) , IsHidden = "True";
-		attribute<string>    grondslag      := LowerCase(Invoer/grondslag[nr_orgentity]), IsHidden = "True";
+		attribute<string>    grondslag       := LowerCase(Invoer/grondslag[nr_orgentity]), IsHidden = "True";
 		attribute<string>    voorwaarde      := LowerCase(Invoer/voorwaarde[nr_orgentity]), IsHidden = "True";
 		attribute<yr_uint16> Startjaar       := Invoer/Startjaar[nr_orgentity] ;
 		attribute<yr_uint16> Eindjaar        := Invoer/Eindjaar [nr_orgentity] ;
@@ -174,6 +198,24 @@ container Beleid
 				, void
 				, Classifications/IsolatieNiveau
 				);
+		}
+		unit<uint32> BestaandebouwNorm := subset(/Invoer/Beleid/Normering/BestaandebouwNorm/StartJaar <= Zichtjaar && /Invoer/Beleid/Normering/BestaandebouwNorm/EindJaar >= Zichtjaar)
+		{
+			attribute<string>  label           := /Invoer/Beleid/Normering/BestaandebouwNorm/label[nr_orgentity]     , IsHidden = "True";
+			attribute<string>  name            := /Invoer/Beleid/Normering/BestaandebouwNorm/name[nr_orgentity] ;
+
+			container Voorwaarde
+			{
+				attribute<ratio> MinSchilAandeel  (BestaandebouwNorm) := /Invoer/Beleid/Normering/BestaandeBouwNorm/ParseVoorwaarde/MinSchilAandeel[nr_orgentity];
+			}
+
+			container BouwdeelNorm := for_each_nedv(
+				  Classifications/Bouwdeel/name
+				, '/Invoer/Beleid/Normering/BestaandebouwNorm/BouwdeelNorm/'+Classifications/Bouwdeel/name+'[nr_orgentity] '
+				, BestaandebouwNorm
+				, Classifications/IsolatieNiveau
+				);
+			container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 		}
 	}
 }

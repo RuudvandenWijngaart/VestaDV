@@ -144,16 +144,45 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 		,	replace('BO/Bouwdelen/@BD[BO_rel]',	'@BD', classifications/Bouwdeel/name)
 		,	UniekAmbitie, m2)
 		{
-			container Isolatie := for_each_nedv(classifications/Bouwdeel/name
-			,	replace('value((IsolatieCode / classifications/Bouwdeel/V/@BD->IsolatieCodeFactor) % 4, Classifications/IsolatieNiveau)', '@BD', classifications/Bouwdeel/name)
+			container Isolatie_i := for_each_nedv(classifications/Bouwdeel/name
+			,	replace('value((IsolatieCode / classifications/Bouwdeel/V/@BD->IsolatieCodeFactor) % 4, Classifications/IsolatieNiveau)', '@BD', classifications/Bouwdeel/name) //TODO check: %4 -> %5 ?
 			,	UniekAmbitie, Classifications/IsolatieNiveau);
 			
-			container IsChangedNow := for_each_nedv(
+			container IsChangedNow_i := for_each_nedv(
 				classifications/Bouwdeel/name,
-				replace('Isolatie/@BD > BO/Bouwdelen/isolatie/@BD[BO_rel]'
+				replace('Isolatie_i/@BD > BO/Bouwdelen/Isolatie/@BD[BO_rel]'
 				,	'@BD', classifications/Bouwdeel/name),
 				UniekAmbitie, bool);
-				
+
+			container Normering
+			{
+				attribute<ratio> AandeelRenovatie (UniekAmbitie) := ='add('+AsItemList('Bouwdelen/'+classifications/bouwdeel/name+' * float64(IsChangedNow_i/'+classifications/bouwdeel/name+')')+') / add('+AsItemList('Bouwdelen/'+classifications/bouwdeel/name)+')';
+				unit<uint32> BBN := ZichtjaarBeleid/BestaandeBouwNorm, ishidden = "True";
+				container Normen := for_each_ne(BBN/name, 'ImplSubs(BBN/V/'+BBN/name+')');
+				template ImplSubs : ishidden = "True"
+				{
+					//case parameters
+					parameter<BBN> BBN_rel;
+					//end case parameters
+					
+					parameter<ratio> MinSchilAandeel       := BBN/voorwaarde/MinSchilAandeel[BBN_rel];
+					attribute<bool>  Geldig (UniekAmbitie) := AandeelRenovatie >= MinSchilAandeel;
+				}
+
+				attribute<Classifications/IsolatieNiveau> MinIsolatieNiveau_rel (UniekAmbitie) := =replace('max_elem('+AsItemList('Normen/'+BBN/name+'/Geldig ? BBN/BouwdeelNorm/@BD@[Normen/'+BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/@BD@)', '@BD@', 'RB');
+			}
+			container Isolatie := for_each_nedv(
+				classifications/bouwdeel/name
+				, replace('max_elem('+AsItemList('Normering/Normen/'+Normering/BBN/name+'/Geldig ? Normering/BBN/BouwdeelNorm/@BD@[Normering/Normen/'+Normering/BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/@BD@)', '@BD@', classifications/Bouwdeel/name)
+				, UniekAmbitie
+				, Classifications/IsolatieNiveau
+				);
+			container IsChangedNow := for_each_nedv(
+				classifications/Bouwdeel/name,
+				replace('Isolatie/@BD > BO/Bouwdelen/Isolatie/@BD[BO_rel]'
+				,	'@BD', classifications/Bouwdeel/name),
+				UniekAmbitie, bool);
+
 			attribute<bool> GeenAmbitie(UniekAmbitie) := ='and('+AsItemList(replace('not(IsChangedNow/@BD)','@BD', classifications/Bouwdeel/name))+')';
 				
 			container IsolatieMaatregel_rel := for_each_nedv(
