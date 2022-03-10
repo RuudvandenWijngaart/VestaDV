@@ -467,12 +467,16 @@ template SubsetGebouwOptieT
 		parameter<ZBS> ZBS_rel;
 		//end case parameters
 
-		parameter<ratio>   Aandeel        := makedefined(ZBS/Subsidieaandeel[ZBS_rel],0.0[ratio]), ishidden = "True";
+		parameter<ratio>   Aandeel        := makedefined(ZBS/Subsidieaandeel[ZBS_rel],0.0[ratio]) , ishidden = "True";
 		parameter<eur_asl> Bedrag         := makedefined(ZBS/Subsidiebedrag[ZBS_rel],0.0[eur_asl]), ishidden = "True";
+		parameter<eur_m2>  PerOpp         := makedefined(ZBS/SubsidiePerOpp[ZBS_rel],0.0[eur_m2]) , ishidden = "True";
 		parameter<float64> MinMaatregelen := ZBS/Voorwaarde/MinMaatregelen[ZBS_rel], ishidden = "True";
+		parameter<float64> nrLabelStappen := ZBS/Voorwaarde/nrLabelStappen[ZBS_rel], ishidden = "True";
 
-		attribute<bool>    InDoelgroep (GeschiktObject)          := ='OR('+AsItemList(replace('ZBS/doelgroep/@ED[ZBS_rel] && BO/Eigendom_rel[geschiktobject/BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')', ishidden = "True";
-		attribute<eur>     MaxBedrag   (GeschiktObject)          := BO/nrAansluitingen[GeschiktObject/BO_rel] * ZBS/Voorwaarde/MaxBedrag_asl[ZBS_rel], ishidden = "True";
+		attribute<bool>    InDoelgroep    (GeschiktObject) := ='OR('+AsItemList(replace('ZBS/doelgroep/@ED[ZBS_rel] && BO/Eigendom_rel[geschiktobject/BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')', ishidden = "True";
+		attribute<eur>     MaxBedrag      (GeschiktObject) := BO/nrAansluitingen[GeschiktObject/BO_rel] * ZBS/Voorwaarde/MaxBedrag_asl[ZBS_rel], ishidden = "True";
+		attribute<float64> LabelStappenNu (GeschiktObject) := float64(Bo/Energielabel_rel[GeschiktObject/BO_rel] - energielabelberekening/Energielabel_rel);
+		attribute<bool>    nrStappenOk    (GeschiktObject) := LabelStappenNu == nrLabelStappen;
 
 		//====== Bepaling subsidiebedragen
 		attribute<ratio>   Rs          (GeschiktObject/xProduct) := ='Aandeel * float64(OR('+AsItemList(replace('ZBS/Maatregel/installatie/@IN[ZBS_rel] && GeschiktObject/xProduct/Installatie_rel == Classifications/Installatie/V/@IN','@IN',Classifications/Installatie/label))+'))', ishidden = "True";
@@ -511,7 +515,7 @@ template SubsetGebouwOptieT
 							', BO/Activatie/Uitvoering[GeschiktObject/BO_Rel]'
 							')'
 						']'
-					', 0.0[Eur]) * Aandeel + Bedrag * BO/nrAansluitingen[GeschiktObject/BO_rel])'+
+					', 0.0[Eur]) * Aandeel + Bedrag * BO/nrAansluitingen[GeschiktObject/BO_rel]) + PerOpp * GeschiktObject/Bouwdelen/@BD'+
 					'* float64(OR('+AsItemList(replace('ZBS/Maatregel/Isolatie/@BM[ZBS_rel] && IsolatieMaatregel/@BD == Classifications/IsolatieMaatregel/V/@BM','@BM',Classifications/IsolatieMaatregel/name))+')) '+
 					'* float64(GeschiktObject/Bouwdelen/Isolatie/@BD != BO/Bouwdelen/Isolatie/@BD[GeschiktObject/BO_rel])'
 				,	'@BD', classifications/Bouwdeel/name),
@@ -526,11 +530,11 @@ template SubsetGebouwOptieT
 
 		//===== correctie voor maximumbedrag en indien niet genoeg maatregelen = nul
 		attribute<ratio>   Korting     (GeschiktObject)          := =ZBS/Voorwaarde/MaxBedrag_asl[ZBS_rel] > 0.0[eur_asl] ? 'max_elem(((Oi_GV_i + Oi_ZonPV_i + Oi_ZonB_i + sum(Oi30_LO_i + Oi20_LO_i + Oi15_LO_i, GeschiktObject/xProduct/GeschiktObject_rel)) / MaxBedrag)[ratio],1.0[ratio])' : 'const(1.0[ratio],GeschiktObject)', ishidden = "True";
-		attribute<Eur>     Oi30_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel] && genoegMaatregelen[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi30_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
-		attribute<Eur>     Oi20_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel] && genoegMaatregelen[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi20_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
-		attribute<Eur>     Oi15_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel] && genoegMaatregelen[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi15_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
-		attribute<Eur>     Oi_GV       (GeschiktObject)          := float64(InDoelgroep && genoegMaatregelen) * Oi_GV_i   / Korting;
-		attribute<Eur>     OiDK_LO     (GeschiktObject)          := float64(InDoelgroep && genoegMaatregelen) * (Oi_ZonB_i + Oi_ZonPV_i) / Korting;
+		attribute<Eur>     Oi30_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel] && genoegMaatregelen[GeschiktObject/xProduct/GeschiktObject_rel] && nrStappenOk[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi30_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
+		attribute<Eur>     Oi20_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel] && genoegMaatregelen[GeschiktObject/xProduct/GeschiktObject_rel] && nrStappenOk[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi20_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
+		attribute<Eur>     Oi15_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel] && genoegMaatregelen[GeschiktObject/xProduct/GeschiktObject_rel] && nrStappenOk[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi15_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
+		attribute<Eur>     Oi_GV       (GeschiktObject)          := float64(InDoelgroep && genoegMaatregelen && nrStappenOk) * Oi_GV_i   / Korting;
+		attribute<Eur>     OiDK_LO     (GeschiktObject)          := float64(InDoelgroep && genoegMaatregelen && nrStappenOk) * (Oi_ZonB_i + Oi_ZonPV_i) / Korting;
 
 		
 	}

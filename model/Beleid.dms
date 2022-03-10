@@ -14,15 +14,17 @@ container Beleid
 		attribute<string> label := instrument;
 
 		attribute<yr_uint16> Startjaar := eerstejaar[yr_uint16], IsHidden = "True";
-		attribute<yr_uint16> Eindjaar  := makedefined(laatstejaar[yr_uint16], 9999[yr_uint16]), IsHidden = "True";
-		attribute<ratio>     Aandeel   := makedefined(procent[ratio],0.0[ratio]), IsHidden = "True";
-		attribute<eur_asl>   Bedrag    := makedefined(vastbedrag[eur_asl],0.0[eur_asl]), IsHidden = "True";
+		attribute<yr_uint16> Eindjaar  := laatstejaar[yr_uint16], IsHidden = "True";
+		attribute<ratio>     Aandeel   := procent[ratio], IsHidden = "True";
+		attribute<eur_asl>   Bedrag    := vastbedrag[eur_asl], IsHidden = "True";
+		attribute<eur_m2>    Per_opp   := perm2[eur_m2],IsHidden = "True";
 
 		//====== Controle aantal criteria om te zien welke instrumenten geldige invoer hebben en meegenomen kunnen worden
 		attribute<bool> GeldigeInvoer := 
 				Isdefined(Startjaar)
-			&& 	(LowerCase(soort) == 'subsidie' || LowerCase(soort) == 'normering')
-			&&  (LowerCase(soort) == 'subsidie' ? (IsDefined(Aandeel) || IsDefined(Bedrag)) : true)
+			&&  IsDefined(Eindjaar)
+			&& 	(LowerCase(soort) == 'subsidie' || LowerCase(soort) == 'normering' || LowerCase(soort) == 'activatie')
+			&&  (LowerCase(soort) == 'subsidie' ? (IsDefined(Aandeel) && IsDefined(Bedrag)) : true)
 			&&  IsDefined(grondslag)
 			;
 	}
@@ -33,7 +35,8 @@ container Beleid
 		attribute<string>    name            := Invoer/code[nr_orgentity]      , IsHidden = "True";
 		attribute<string>    doelgroep       := LowerCase(Invoer/doelgroep[nr_orgentity]) , IsHidden = "True";
 		attribute<string>    grondslag       := Invoer/grondslag[nr_orgentity] , IsHidden = "True";
-		attribute<string>    voorwaarde      := Invoer/voorwaarde[nr_orgentity], IsHidden = "True";
+		attribute<string>    voorwaarde1     := Invoer/voorwaarde1[nr_orgentity], IsHidden = "True";
+		attribute<string>    voorwaarde2     := Invoer/voorwaarde2[nr_orgentity], IsHidden = "True";
 		attribute<yr_uint16> Startjaar       := Invoer/Startjaar[nr_orgentity] ;
 		attribute<yr_uint16> Eindjaar        := Invoer/Eindjaar [nr_orgentity] ;
 
@@ -61,7 +64,8 @@ container Beleid
 			attribute<string>    grondslag   := Normering/grondslag[nr_orgentity], IsHidden = "True";
 			attribute<yr_uint16> Startjaar   := Normering/Startjaar[nr_orgentity] ;
 			attribute<yr_uint16> Eindjaar    := Normering/Eindjaar [nr_orgentity] ;
-			attribute<string>    voorwaarde  := LowerCase(Normering/voorwaarde[nr_orgentity]), IsHidden = "True";
+			attribute<string>    voorwaarde1 := LowerCase(Normering/voorwaarde1[nr_orgentity]), IsHidden = "True";
+			attribute<string>    voorwaarde2 := LowerCase(Normering/voorwaarde2[nr_orgentity]), IsHidden = "True";
 
 			container BouwdeelNorm := for_each_nedv(
 				  Classifications/Bouwdeel/name
@@ -72,8 +76,12 @@ container Beleid
 			//====== Bepalen welke voorwaarden er aan het instrument zijn gesteld
 			container ParseVoorwaarde
 			{
-				attribute<bool>  SchilAandeelVoorwaarde (BestaandeBouwNorm) := strcount(voorwaarde, 'gerenoveerd aandeel') > 0;
-				attribute<ratio> MinSchilAandeel        (BestaandeBouwNorm) := (not(SchilAandeelVoorwaarde) ? 0.0[percent] : trim(replace(voorwaarde, 'gerenoveerd aandeel (procent): ', ''))[percent]) * 0.01[ratio / percent];  
+				attribute<bool>  SchilAandeelVoorwaarde (BestaandeBouwNorm) := strcount(voorwaarde1, 'gerenoveerd aandeel') + strcount(voorwaarde2, 'gerenoveerd aandeel') > 0;
+				attribute<ratio> MinSchilAandeel        (BestaandeBouwNorm) := not(SchilAandeelVoorwaarde) ? 0.0[ratio] :
+					makedefined(
+						trim(replace(voorwaarde1, 'gerenoveerd aandeel (procent): ', ''))[percent] * 0.01[ratio / percent],
+						trim(replace(voorwaarde2, 'gerenoveerd aandeel (procent): ', ''))[percent] * 0.01[ratio / percent]
+					);  
 			}
 		}
 	}
@@ -85,19 +93,21 @@ container Beleid
 		attribute<string>    name            := Invoer/code[nr_orgentity]      , IsHidden = "True";
 		attribute<string>    doelgroep       := LowerCase(Invoer/doelgroep[nr_orgentity]) , IsHidden = "True";
 		attribute<string>    grondslag       := LowerCase(Invoer/grondslag[nr_orgentity]), IsHidden = "True";
-		attribute<string>    voorwaarde      := LowerCase(Invoer/voorwaarde[nr_orgentity]), IsHidden = "True";
+		attribute<string>    voorwaarde1     := LowerCase(Invoer/voorwaarde1[nr_orgentity]), IsHidden = "True";
+		attribute<string>    voorwaarde2     := LowerCase(Invoer/voorwaarde2[nr_orgentity]), IsHidden = "True";
 		attribute<yr_uint16> Startjaar       := Invoer/Startjaar[nr_orgentity] ;
 		attribute<yr_uint16> Eindjaar        := Invoer/Eindjaar [nr_orgentity] ;
 		attribute<ratio>     SubsidieAandeel := Invoer/Aandeel[nr_orgentity]   ;
+		attribute<eur_m2>    SubsidiePerOpp  := Invoer/Per_opp[nr_orgentity]   ;
 		attribute<eur_asl>   SubsidieBedrag  := Invoer/Bedrag[nr_orgentity]    ;
 
 		//====== Bepalen welke doelgroep er wordt aangesproken : eigendomstypes
 		container Doel_false  := for_each_nedv(Classifications/Eigendom/Label,'const(false,Subsidie)',Subsidie,bool), IsHidden = "True";
 		container ParseDoelgroep := Doel_false
 		{
-			attribute<bool> Koop     (Subsidie) := strcount(doelgroep, 'koopw') > 0;
-			attribute<bool> Parthuur (Subsidie) := strcount(doelgroep, 'socia') > 0;
-			attribute<bool> Wooncorp (Subsidie) := strcount(doelgroep, 'parti') > 0;
+			attribute<bool> Koop     (Subsidie) := strcount(doelgroep, 'koopw') + strcount(doelgroep, 'alle') > 0;
+			attribute<bool> Parthuur (Subsidie) := strcount(doelgroep, 'socia') + strcount(doelgroep, 'alle') > 0;
+			attribute<bool> Wooncorp (Subsidie) := strcount(doelgroep, 'parti') + strcount(doelgroep, 'alle') > 0;
 		}
 
 		//====== Bepalen welke technische maatregelen onder het subsidieinstrument vallen
@@ -106,9 +116,9 @@ container Beleid
 			container Inst_false  := for_each_nedv(Classifications/Installatie/Label,'const(false,Subsidie)',Subsidie,bool), IsHidden = "True";
 			container Installatie := Inst_false
 			{
-				attribute<bool> eWP_lw     (Subsidie) := strcount(grondslag, 'warmtepomp') > 0;
-				attribute<bool> eWP_bw     (Subsidie) := strcount(grondslag, 'warmtepomp') > 0;
-				attribute<bool> eWP_ll     (Subsidie) := strcount(grondslag, 'warmtepomp') > 0;
+				attribute<bool> eWP_lw     (Subsidie) := strcount(grondslag, 'warmtepomp') > 0 && strcount(grondslag, 'hybride warmtepomp') == 0;
+				attribute<bool> eWP_bw     (Subsidie) := strcount(grondslag, 'warmtepomp') > 0 && strcount(grondslag, 'hybride warmtepomp') == 0;
+				attribute<bool> eWP_ll     (Subsidie) := strcount(grondslag, 'warmtepomp') > 0 && strcount(grondslag, 'hybride warmtepomp') == 0;
 
 				attribute<bool> Pellet     (Subsidie) := strcount(grondslag, 'pelletkach') > 0;
 				attribute<bool> Bioketel   (Subsidie) := strcount(grondslag, 'biomassake') > 0;
@@ -116,8 +126,8 @@ container Beleid
 				attribute<bool> ZonB       (Subsidie) := strcount(grondslag, 'zonneboile') > 0;
 				attribute<bool> ZonPV      (Subsidie) := strcount(grondslag, 'zonnepanel') > 0;
 
-				attribute<bool> hHR        (Subsidie) := strcount(grondslag, '(hybride)w') > 0;
-				attribute<bool> BasisHWP_w (Subsidie) := strcount(grondslag, '(hybride)w') > 0;
+				attribute<bool> hHR        (Subsidie) := strcount(grondslag, '(hybride)w') + strcount(grondslag, 'hybride warmtepomp') > 0;
+				attribute<bool> BasisHWP_w (Subsidie) := strcount(grondslag, '(hybride)w') + strcount(grondslag, 'hybride warmtepomp') > 0;
 			}
 
 			container Isolatie := for_each_nedv(/Classifications/BouwdeelIsolatie/name, 'strcount(grondslag, '+quote(lowercase(Classifications/BouwdeelIsolatie/name))+') > 0',Subsidie,bool)
@@ -133,11 +143,26 @@ container Beleid
 		//====== Bepalen welke voorwaarden er aan het instrument zijn gesteld
 		container ParseVoorwaarde
 		{
-			attribute<bool>    HeeftMaxBedrag_asl  (Subsidie) := strcount(voorwaarde, 'maximum bedrag') > 0;
-			attribute<eur_asl> MaxBedrag_asl       (Subsidie) := not(HeeftMaxBedrag_asl) ? 0.0[eur_asl] : trim(replace(voorwaarde, 'maximum bedrag: ', ''))[eur_asl];
+			attribute<bool>    HeeftMaxBedrag_asl  (Subsidie) := strcount(voorwaarde1, 'maximum bedrag') + strcount(voorwaarde2, 'maximum bedrag') > 0;
+			attribute<eur_asl> MaxBedrag_asl       (Subsidie) := not(HeeftMaxBedrag_asl) ? 0.0[eur_asl] :
+					makedefined(
+						trim(replace(voorwaarde1, 'maximum bedrag: ', ''))[eur_asl],
+						trim(replace(voorwaarde2, 'maximum bedrag: ', ''))[eur_asl]
+					);
 
-			attribute<bool>    HeeftMinMaatregelen (Subsidie) := strcount(voorwaarde, 'minimaal aantal maatregelen') > 0;
-			attribute<float64> MinMaatregelen      (Subsidie) := not(HeeftMinMaatregelen) ? 0.0[float64] : trim(replace(voorwaarde, 'minimaal aantal maatregelen: ', ''))[float64];  
+			attribute<bool>    HeeftMinMaatregelen (Subsidie) := strcount(voorwaarde1, 'minimaal aantal maatregelen') + strcount(voorwaarde2, 'minimaal aantal maatregelen') > 0;
+			attribute<float64> MinMaatregelen      (Subsidie) := not(HeeftMinMaatregelen) ? 0.0[float64] : 
+					makedefined(
+						trim(replace(voorwaarde1, 'minimaal aantal maatregelen: ', ''))[float64],
+						trim(replace(voorwaarde2, 'minimaal aantal maatregelen: ', ''))[float64]
+					);
+
+			attribute<bool>    HeeftVastLabelstap  (Subsidie) := strcount(voorwaarde1, 'aantal labelstappen') + strcount(voorwaarde2, 'aantal labelstappen') > 0;
+			attribute<float64> nrLabelStappen      (Subsidie) := not(HeeftVastLabelstap) ? 0.0[float64] :
+					makedefined(
+						trim(replace(voorwaarde1, 'aantal labelstappen: ', ''))[float64],
+						trim(replace(voorwaarde2, 'aantal labelstappen: ', ''))[float64]
+					);  
 		}
 	}
 
@@ -153,6 +178,7 @@ container Beleid
 			attribute<string>  name            := /Invoer/Beleid/subsidie/name[nr_orgentity] ;
 			attribute<ratio>   SubsidieAandeel := /Invoer/Beleid/subsidie/SubsidieAandeel[nr_orgentity]   ;
 			attribute<eur_asl> SubsidieBedrag  := /Invoer/Beleid/subsidie/SubsidieBedrag[nr_orgentity]    ;
+			attribute<eur_m2>  SubsidiePerOpp  := /Invoer/Beleid/subsidie/SubsidiePerOpp[nr_orgentity]   ;
 
 			container Doelgroep := for_each_nedv(Classifications/Eigendom/label,'/Invoer/Beleid/subsidie/ParseDoelgroep/'+Classifications/Eigendom/label+'[nr_orgentity]',Subsidie,bool);
 
@@ -177,6 +203,7 @@ container Beleid
 			{
 				attribute<eur_asl> MaxBedrag_asl  (Subsidie) := /Invoer/Beleid/subsidie/ParseVoorwaarde/MaxBedrag_asl[nr_orgentity];
 				attribute<float64> MinMaatregelen (Subsidie) := /Invoer/Beleid/subsidie/ParseVoorwaarde/MinMaatregelen[nr_orgentity];
+				attribute<float64> nrLabelStappen (Subsidie) := /Invoer/Beleid/subsidie/ParseVoorwaarde/nrLabelStappen[nr_orgentity];
 			}
 			container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 		}
