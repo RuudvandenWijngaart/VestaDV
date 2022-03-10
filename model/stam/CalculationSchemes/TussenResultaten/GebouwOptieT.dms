@@ -393,9 +393,12 @@ template SubsetGebouwOptieT
 		}
 	}
 	
-	attribute<Eur> Ki_DK (GeschiktObject) := OverigeInstallaties/ZonB/Afweging/Ki_zonB + OverigeInstallaties/ZonPV/Afweging/Ki_zonPV;
-	attribute<Eur> Ki_KK (GeschiktObject) := OverigeInstallaties/Koken/Afweging/Ki_koken;
-	attribute<Eur> Ki_VT (GeschiktObject) := OverigeInstallaties/Ventilatie/Afweging/Ki_vent;
+	attribute<Eur> Ki_DK   (GeschiktObject) := OverigeInstallaties/ZonB/Afweging/Ki_zonB + OverigeInstallaties/ZonPV/Afweging/Ki_zonPV;
+	attribute<Eur> Ki_KK   (GeschiktObject) := OverigeInstallaties/Koken/Afweging/Ki_koken;
+	attribute<Eur> Ki_VT   (GeschiktObject) := OverigeInstallaties/Ventilatie/Afweging/Ki_vent;
+	attribute<Eur> Ki_Gnet (GeschiktObject) :=  BO/nrAansluitingen[GeschiktObject/BO_rel] *
+												float64(Func2Meter/metervraag_per_input/Gas == 0.0[GJ_yr] && BO/Aansluitingen/GeenGasafsluiting[GeschiktObject/BO_rel] && Zichtjaar_jaar < 2021[yr_uint16]) *
+												(Bo/IsMeergezins[GeschiktObject/BO_rel] ? Invoer/Kengetallen/infra/Afsluitkosten_gas_mgw : Invoer/Kengetallen/infra/Afsluitkosten_gas_egw);
 	
 	container metervraag := Func2Meter/result;
 	
@@ -442,6 +445,7 @@ template SubsetGebouwOptieT
 	
 
 	attribute<Eur_yr> Kji_LTAS (GeschiktObject)                := Ki_LTAS * NcwRefs/_30/AnnualisationFactor;
+	attribute<Eur_yr> Kji_Gnet (GeschiktObject)                := Ki_gnet * NcwRefs/_30/AnnualisationFactor;
 	attribute<Eur_yr> Kji30_LO (GeschiktObject/xProduct)       := Ki30_LO * NcwRefs/_30/AnnualisationFactor;
 	attribute<Eur_yr> Kji20_LO (GeschiktObject/xProduct)       := Ki20_LO * NcwRefs/_20/AnnualisationFactor;
 	attribute<Eur_yr> Kji_DK   (GeschiktObject)                := Ki_DK   * NcwRefs/_20/AnnualisationFactor;
@@ -451,6 +455,7 @@ template SubsetGebouwOptieT
 	attribute<Eur_yr> Kji_LO   (GeschiktObject/xProduct)       := Kji30_LO + Kji20_LO + Kji15_LO;
 
 	attribute<Eur_yr> Kmi_LTAS (GeschiktObject)                := Ki_LTAS * NCW/mr30/AnnualisationFactor;
+	attribute<Eur_yr> Kmi_gnet (GeschiktObject)                := Ki_Gnet * NCW/mr50/AnnualisationFactor;
 	attribute<Eur_yr> Kmi30_LO (GeschiktObject/xProduct)       := Ki30_LO * NCW/mr30/AnnualisationFactor;
 	attribute<Eur_yr> Kmi20_LO (GeschiktObject/xProduct)       := Ki20_LO * NCW/mr20/AnnualisationFactor;
 	attribute<Eur_yr> Kmi_DK   (GeschiktObject)                := Ki_DK   * NCW/mr20/AnnualisationFactor;
@@ -484,9 +489,10 @@ template SubsetGebouwOptieT
 		attribute<Eur>     Oi30_LO_i   (GeschiktObject/xProduct) := Ki30_LO * Rs + (Ki30_LO == max_elem(Ki30_LO,Ki20_LO,Ki15_LO) ? Oi : 0.0[eur]), ishidden = "True";
 		attribute<Eur>     Oi20_LO_i   (GeschiktObject/xProduct) := Ki20_LO * Rs + (Ki20_LO == max_elem(Ki30_LO,Ki20_LO,Ki15_LO) ? Oi : 0.0[eur]), ishidden = "True";
 		attribute<Eur>     Oi15_LO_i   (GeschiktObject/xProduct) := Ki15_LO * Rs + (Ki15_LO == max_elem(Ki30_LO,Ki20_LO,Ki15_LO) ? Oi : 0.0[eur]), ishidden = "True";
-		attribute<Eur>     Oi_GV_i     (GeschiktObject)          := float64(ZBS/Maatregel/Isolatie/Alle[ZBS_rel])     * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + Ki_gv * Aandeel) + Oi_gv_bouwdeel/totaal, ishidden = "True";
-		attribute<Eur>     Oi_ZonPV_i  (GeschiktObject)          := float64(ZBS/Maatregel/Installatie/ZonPV[ZBS_rel]) * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + OverigeInstallaties/ZonPV/Afweging/Ki_zonPV  * Aandeel), ishidden = "True";
-		attribute<Eur>     Oi_ZonB_i   (GeschiktObject)          := float64(ZBS/Maatregel/Installatie/ZonB[ZBS_rel])  * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + OverigeInstallaties/ZonB/Afweging/Ki_zonB    * Aandeel), ishidden = "True";
+		attribute<Eur>     Oi_Gnet_i   (GeschiktObject)          := float64(ZBS/Maatregel/Infra/Gasafsluiting[ZBS_rel]) * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + Ki_Gnet * Aandeel), ishidden = "True";
+		attribute<Eur>     Oi_GV_i     (GeschiktObject)          := float64(ZBS/Maatregel/Isolatie/Alle[ZBS_rel])       * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + Ki_gv * Aandeel) + Oi_gv_bouwdeel/totaal, ishidden = "True";
+		attribute<Eur>     Oi_ZonPV_i  (GeschiktObject)          := float64(ZBS/Maatregel/Installatie/ZonPV[ZBS_rel])   * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + OverigeInstallaties/ZonPV/Afweging/Ki_zonPV  * Aandeel), ishidden = "True";
+		attribute<Eur>     Oi_ZonB_i   (GeschiktObject)          := float64(ZBS/Maatregel/Installatie/ZonB[ZBS_rel])    * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + OverigeInstallaties/ZonB/Afweging/Ki_zonB    * Aandeel), ishidden = "True";
 
 		container BouwdeelMaatregelen := for_each_nedv(
   			  Classifications/Bouwdeel/name
@@ -535,6 +541,7 @@ template SubsetGebouwOptieT
 		attribute<Eur>     Oi15_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel] && genoegMaatregelen[GeschiktObject/xProduct/GeschiktObject_rel] && nrStappenOk[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi15_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
 		attribute<Eur>     Oi_GV       (GeschiktObject)          := float64(InDoelgroep && genoegMaatregelen && nrStappenOk) * Oi_GV_i   / Korting;
 		attribute<Eur>     OiDK_LO     (GeschiktObject)          := float64(InDoelgroep && genoegMaatregelen && nrStappenOk) * (Oi_ZonB_i + Oi_ZonPV_i) / Korting;
+		attribute<Eur>     Oi_Gnet     (GeschiktObject)          := float64(InDoelgroep && genoegMaatregelen && nrStappenOk) * Oi_Gnet_i / Korting;
 
 		
 	}
@@ -545,6 +552,7 @@ template SubsetGebouwOptieT
 	attribute<Eur>    Oi15_LO  (GeschiktObject/xProduct) := = count(ZBS/subsidiebedrag) > 0u ? 'add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi15_LO')+')' : 'const(0.0[Eur],GeschiktObject/xProduct)';
 	attribute<Eur>    OiDK_LO  (GeschiktObject)          := = count(ZBS/subsidiebedrag) > 0u ? 'add('+AsItemList('Subsidieberekening/'+ZBS/name+'/OiDK_LO')+')' : 'const(0.0[Eur],GeschiktObject)';
 	attribute<Eur>    Oi_GV    (GeschiktObject)          := = count(ZBS/subsidiebedrag) > 0u ? 'add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi_GV')+')' : 'const(0.0[Eur],GeschiktObject)';
+	attribute<Eur>    Oi_Gnet  (GeschiktObject)          := = count(ZBS/subsidiebedrag) > 0u ? 'add('+AsItemList('Subsidieberekening/'+ZBS/name+'/Oi_Gnet')+')' : 'const(0.0[Eur],GeschiktObject)';
 	
 	//====== Annualiseren subsidies tot jaarlijkse opbrengsten
 	attribute<Eur_yr> Oji30_LO (GeschiktObject/xProduct) := Oi30_LO * NcwRefs/_30/AnnualisationFactor;
@@ -552,6 +560,7 @@ template SubsetGebouwOptieT
 	attribute<Eur_yr> Oji15_LO (GeschiktObject/xProduct) := Oi15_LO * NcwRefs/_15/AnnualisationFactor;
 	attribute<Eur_yr> OjiDK_LO (GeschiktObject)          := OiDK_LO * NcwRefs/_20/AnnualisationFactor;
 	attribute<Eur_yr> Oji_GV   (GeschiktObject)          := Oi_GV   * NcwRefs/_30/AnnualisationFactor;
+	attribute<Eur_yr> Oji_Gnet (GeschiktObject)          := Oi_Gnet * NcwRefs/_30/AnnualisationFactor;
 
 	attribute<ratio>   SplitIncentiveVerbruik  (GeschiktObject) :=
 		  BO/Eigendom_rel[GeschiktObject/BO_rel] == Classifications/Eigendom/V/PartHuur ? SpecifiekeInstellingen/Beleid/SplitIncentive/SplitIncentiveVerbruik_PH
@@ -570,6 +579,7 @@ template SubsetGebouwOptieT
 		  (Kji_GV - Oji_GV)      * BTW_Factor_gv
 		+ sum(Kji_LO - (Oji30_LO+Oji20_LO+Oji15_LO), GeschiktObject/xProduct/GeschiktObject_rel) * BTW_Factor
 		+ Kji_LTAS               * BTW_Factor
+		+ (Kji_gnet - Oji_gnet)  * BTW_Factor
 		+ (Kji_DK - OjiDK_LO)    * BTW_Factor
 		+ Kji_KK                 * BTW_Factor
 		+ Kji_VT                 * BTW_Factor
@@ -583,6 +593,7 @@ template SubsetGebouwOptieT
 		+ Kmi_DK
 		+ Kmi_KK
 		+ Kmi_VT
+		+ Kmi_Gnet
 		+ Kmi_LTAS
 		+ sum(jaarlijks/Kj_OH_LO + jaarlijks/Kj_Adm_LO, GeschiktObject/xProduct/GeschiktObject_rel)
 		+ Km_verbruik/totaal;
@@ -607,6 +618,7 @@ template SubsetGebouwOptieT
 			attribute<Eur> Ki15_LO (GeschiktObject) := sum(.../Ki15_LO, xProduct/GeschiktObject_rel);
 			attribute<Eur> Ki_gv   (GeschiktObject) := .../Ki_gv;
 			attribute<Eur> Ki_LTAS (GeschiktObject) := .../Ki_LTAS;
+			attribute<Eur> Ki_gnet (GeschiktObject) := .../Ki_Gnet;
 			attribute<Eur> Ki_DK   (GeschiktObject) := .../Ki_DK;
 			attribute<Eur> Ki_VT   (GeschiktObject) := .../Ki_VT;
 			attribute<Eur> Ki_KK   (GeschiktObject) := .../Ki_KK;
