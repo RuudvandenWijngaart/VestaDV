@@ -29,6 +29,40 @@ container Beleid
 			&&  IsDefined(grondslag)
 			;
 	}
+	unit<uint32> Activatie := subset(Invoer/GeldigeInvoer && LowerCase(Invoer/soort) == 'activatie')
+	{
+		attribute<string>    label           := Invoer/label[nr_orgentity]     , IsHidden = "True";
+		attribute<string>    name            := Invoer/code[nr_orgentity]      , IsHidden = "True";
+		attribute<string>    doelgroep       := LowerCase(Invoer/doelgroep[nr_orgentity]) , IsHidden = "True";
+		attribute<string>    grondslag       := Invoer/grondslag[nr_orgentity] , IsHidden = "True";
+		attribute<yr_uint16> Startjaar       := Invoer/Startjaar[nr_orgentity] ;
+		attribute<yr_uint16> Eindjaar        := Invoer/Eindjaar [nr_orgentity] ;
+		attribute<ratio>     Naleving        := Invoer/RNaleving[nr_orgentity];
+
+		container Doel_false  := for_each_nedv(Classifications/Eigendom/Label,'const(false,Activatie)',Activatie,bool), IsHidden = "True";
+		container ParseDoelgroep := Doel_false
+		{
+			attribute<bool> Koop     (Activatie) := strcount(doelgroep, 'koopw') + strcount(doelgroep, 'alle') > 0;
+			attribute<bool> Parthuur (Activatie) := strcount(doelgroep, 'parti') + strcount(doelgroep, 'alle') > 0;
+			attribute<bool> Wooncorp (Activatie) := strcount(doelgroep, 'socia') + strcount(doelgroep, 'alle') > 0;
+		}
+
+		container ParseGrondslag := for_each_nedv(
+			  Classifications/Bouwdeel/name
+			, '(strcount(grondslag,'+quote(Classifications/Bouwdeel/name)+') + strcount(grondslag, '+quote('bouwd')+') + strcount(grondslag, '+quote('alle')+')) > 0'
+			, Activatie
+			, bool
+			)
+		{
+			attribute<bool> RV (Activatie) := strcount(grondslag, 'RV') + strcount(grondslag, 'product') + strcount(grondslag, 'alle') > 0;
+			attribute<bool> TW (Activatie) := strcount(grondslag, 'TW') + strcount(grondslag, 'product') + strcount(grondslag, 'alle') > 0;
+			attribute<bool> KD (Activatie) := strcount(grondslag, 'KD') + strcount(grondslag, 'product') + strcount(grondslag, 'alle') > 0;
+			attribute<bool> VT (Activatie) := strcount(grondslag, 'VT') + strcount(grondslag, 'product') + strcount(grondslag, 'alle') > 0;
+		}
+	}
+
+
+
 	//====== Interpretatie tekstvelden voor geldige 
 	unit<uint32> Normering := subset(Invoer/GeldigeInvoer && LowerCase(Invoer/soort) == 'normering')
 	{
@@ -112,8 +146,8 @@ container Beleid
 		container ParseDoelgroep := Doel_false
 		{
 			attribute<bool> Koop     (Subsidie) := strcount(doelgroep, 'koopw') + strcount(doelgroep, 'alle') > 0;
-			attribute<bool> Parthuur (Subsidie) := strcount(doelgroep, 'socia') + strcount(doelgroep, 'alle') > 0;
-			attribute<bool> Wooncorp (Subsidie) := strcount(doelgroep, 'parti') + strcount(doelgroep, 'alle') > 0;
+			attribute<bool> Parthuur (Subsidie) := strcount(doelgroep, 'parti') + strcount(doelgroep, 'alle') > 0;
+			attribute<bool> Wooncorp (Subsidie) := strcount(doelgroep, 'socia') + strcount(doelgroep, 'alle') > 0;
 		}
 
 		//====== Bepalen welke technische maatregelen onder het subsidieinstrument vallen
@@ -181,6 +215,30 @@ container Beleid
 		//case parameters
 		parameter<yr_uint16> Zichtjaar;
 		//end case parameters
+
+		unit<uint32> Activatie := subset(/Invoer/Beleid/Activatie/StartJaar <= Zichtjaar && /Invoer/Beleid/Activatie/EindJaar >= Zichtjaar)
+		{
+			attribute<string>  label           := /Invoer/Beleid/Activatie/label[nr_orgentity]     , IsHidden = "True";
+			attribute<string>  name            := /Invoer/Beleid/Activatie/name[nr_orgentity] ;
+			attribute<ratio>   Naleving        := /Invoer/Beleid/Activatie/Naleving[nr_orgentity];
+
+			container Doelgroep := for_each_nedv(Classifications/Eigendom/label,'/Invoer/Beleid/Activatie/ParseDoelgroep/'+Classifications/Eigendom/label+'[nr_orgentity]',Activatie,bool);
+
+			container Grondslag := for_each_nedv(
+				  Classifications/Bouwdeel/name
+				, '/Invoer/Beleid/Activatie/ParseGrondslag/'+Classifications/Bouwdeel/name+'[nr_orgentity]'
+				, Activatie
+				, bool
+			)
+			{
+				attribute<bool> RV (Activatie) := /Invoer/Beleid/Activatie/ParseGrondslag/RV[nr_orgentity];
+				attribute<bool> TW (Activatie) := /Invoer/Beleid/Activatie/ParseGrondslag/TW[nr_orgentity];
+				attribute<bool> KD (Activatie) := /Invoer/Beleid/Activatie/ParseGrondslag/KD[nr_orgentity];
+				attribute<bool> VT (Activatie) := /Invoer/Beleid/Activatie/ParseGrondslag/VT[nr_orgentity];
+			}
+
+			container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+		}
 
 		unit<uint32> Subsidie := subset(/Invoer/Beleid/subsidie/StartJaar <= Zichtjaar && /Invoer/Beleid/subsidie/EindJaar >= Zichtjaar)
 		{
