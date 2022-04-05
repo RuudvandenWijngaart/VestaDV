@@ -532,18 +532,21 @@ template SubsetGebouwOptieT
 		}
 
 		//===== check aantal maatregelen
-		attribute<float64> nrMaatregelen     (GeschiktObject) := ='add('+AsItemList(replace('float64(GeschiktObject/Bouwdelen/Isolatie/@BD != BO/Bouwdelen/Isolatie/@BD[GeschiktObject/BO_rel])','@BD',Classifications/Bouwdeel/name))+')';
-		attribute<bool>    genoegMaatregelen (GeschiktObject) := nrMaatregelen >= MinMaatregelen;
+		attribute<float64> nrMaatregelen     (GeschiktObject)          := ='add('+AsItemList(replace('float64(GeschiktObject/Bouwdelen/Isolatie/@BD != BO/Bouwdelen/Isolatie/@BD[GeschiktObject/BO_rel])','@BD',Classifications/Bouwdeel/name))+')';
+		attribute<bool>    genoegMaatregelen (GeschiktObject)          := nrMaatregelen >= MinMaatregelen;
+		attribute<bool>    Naleving          (GeschiktObject)          := first(rnd_uniform(JaarSeed * 103u, GeschiktObject, range(float64, 0d, 1d)), Geschiktobject/BO_rel)[Geschiktobject/BO_rel] <= ZBS/Naleving[ZBS_rel];
+		attribute<bool>    Geldig            (GeschiktObject)          := InDoelgroep && genoegMaatregelen && nrStappenOk && Naleving;
+		attribute<bool>    Geldig_xPrd       (GeschiktObject/xProduct) := Geldig[GeschiktObject/xProduct/GeschiktObject_rel];
 
 		//===== correctie voor maximumbedrag en indien niet genoeg maatregelen = nul
 		attribute<ratio>   Korting     (GeschiktObject)          := =ZBS/Voorwaarde/MaxBedrag_asl[ZBS_rel] > 0.0[eur_asl] ? 'max_elem(((Oi_GV_i + Oi_ZonPV_i + Oi_ZonB_i + sum(Oi30_LO_i + Oi20_LO_i + Oi15_LO_i, GeschiktObject/xProduct/GeschiktObject_rel)) / MaxBedrag)[ratio],1.0[ratio])' : 'const(1.0[ratio],GeschiktObject)', ishidden = "True";
-		attribute<Eur>     Oi30_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel] && genoegMaatregelen[GeschiktObject/xProduct/GeschiktObject_rel] && nrStappenOk[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi30_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
-		attribute<Eur>     Oi20_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel] && genoegMaatregelen[GeschiktObject/xProduct/GeschiktObject_rel] && nrStappenOk[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi20_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
-		attribute<Eur>     Oi15_LO     (GeschiktObject/xProduct) := float64(InDoelgroep[GeschiktObject/xProduct/GeschiktObject_rel] && genoegMaatregelen[GeschiktObject/xProduct/GeschiktObject_rel] && nrStappenOk[GeschiktObject/xProduct/GeschiktObject_rel]) * Oi15_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
-		attribute<Eur>     Oi_GV       (GeschiktObject)          := float64(InDoelgroep && genoegMaatregelen && nrStappenOk) * Oi_GV_i   / Korting;
-		attribute<Eur>     OiDK_LO     (GeschiktObject)          := float64(InDoelgroep && genoegMaatregelen && nrStappenOk) * (Oi_ZonB_i + Oi_ZonPV_i) / Korting;
-		attribute<Eur>     Oi_Gnet     (GeschiktObject)          := float64(InDoelgroep && genoegMaatregelen && nrStappenOk) * Oi_Gnet_i / Korting;
-		attribute<Eur>     Oi_LTAS     (GeschiktObject)          := float64(InDoelgroep && genoegMaatregelen && nrStappenOk) * Oi_LTAS_i / Korting;
+		attribute<Eur>     Oi30_LO     (GeschiktObject/xProduct) := float64(Geldig_xPrd) * Oi30_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
+		attribute<Eur>     Oi20_LO     (GeschiktObject/xProduct) := float64(Geldig_xPrd) * Oi20_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
+		attribute<Eur>     Oi15_LO     (GeschiktObject/xProduct) := float64(Geldig_xPrd) * Oi15_LO_i / Korting[GeschiktObject/xProduct/GeschiktObject_rel];
+		attribute<Eur>     Oi_GV       (GeschiktObject)          := float64(Geldig) * Oi_GV_i   / Korting;
+		attribute<Eur>     OiDK_LO     (GeschiktObject)          := float64(Geldig) * (Oi_ZonB_i + Oi_ZonPV_i) / Korting;
+		attribute<Eur>     Oi_Gnet     (GeschiktObject)          := float64(Geldig) * Oi_Gnet_i / Korting;
+		attribute<Eur>     Oi_LTAS     (GeschiktObject)          := float64(Geldig) * Oi_LTAS_i / Korting;
 		
 	}
 
