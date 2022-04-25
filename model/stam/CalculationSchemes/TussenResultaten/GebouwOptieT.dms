@@ -78,7 +78,7 @@ template SubsetGebouwOptieT
 			
 
 			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (GeschiktObject) := OverigeInstallaties/ventilatie/Installatietype_rel;
-			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (GeschiktObject) := OverigeInstallaties/zonPV/Installatietype_rel     ;
+			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (GeschiktObject) := OverigeInstallaties/DK/Installatietype_def     ;
 			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (GeschiktObject) := OverigeInstallaties/koken/Installatietype_rel     ;
 		}	
 		
@@ -142,7 +142,7 @@ template SubsetGebouwOptieT
 	
 	//===== InstallatiePerProduct geeft per BebouwingsObject of per SchilLabel voor ieder Product de te kiezen of al aanwezige installatie =====
 	
-	container Func2Meter := CalculationSchemes/FunctioneelToMetervraag(GeschiktObject);
+	container Func2Meter := CalculationSchemes/FunctioneelToMetervraag(GeschiktObject, true);
 	
 	// cap_prod geeft per BebouwingsObject of per SchilLabel voor ieder Product de benodigde capaciteit obv het vastgestelde profiel.
 	
@@ -309,66 +309,8 @@ template SubsetGebouwOptieT
 			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_rel (GeschiktObject) := Afweging/Installatietype_def;
 		}
 		//================
-
-		container zonB
-		{
-			container afweging
-			{
-				attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> Installatietype_org (GeschiktObject) := BO/InstallatiePerProduct/DK[GeschiktObject/BO_rel];
-				
-				//TODO: hier afweging invoegen voor keuze zon
-				attribute<bool> KeuzeZonB (GeschiktObject) :=
-					(      Installatietype_org == Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/maximaal
-						|| Installatietype_org == Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/minimaal) ? false : false; 
-				
-				attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> Installatietype_def (GeschiktObject) :=
-					KeuzeZonB ? 
-						Installatietype_org == Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/optimaal ? 
-							  Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/optimaal_zonb
-							: Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/zonb
-					: Installatietype_org;
-				
-				attribute<bool> IsChangedNow (GeschiktObject) := Installatietype_org != Installatietype_def;
-				attribute<units/m2>  area           (GeschiktObject) := Func2Meter/ZonB/area;
-				attribute<eur>  Ki_zonB      (GeschiktObject) := float64(IsChangedNow) * (
-					(BO/nrAansluitingen[GeschiktObject/BO_rel] * 
-						( Schuiven/KostenMin * Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Ki_ZonB_asl[Installatietype_def])) +
-					(area * 
-						( Schuiven/KostenMin * Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Ki_ZonB_opp[Installatietype_def]))
-						);
-			}
-		}
 		
-		container zonPV
-		{
-			container Afweging
-			{
-				attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> Installatietype_org (GeschiktObject) := BO/InstallatiePerProduct/DK[GeschiktObject/BO_rel];
-				
-				attribute<bool> KeuzePVgroot (GeschiktObject) := Installatietype_org == Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/ZonB ? false : false; //TODO: hier afweging invoegen
-				attribute<bool> KeuzePVklein (GeschiktObject) := const(false,GeschiktObject); //TODO: hier afweging invoegen
-				
-				attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> Installatietype_def (GeschiktObject) :=
-					  KeuzePVgroot ? Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/maximaal
-					: KeuzePVklein ? 
-						Installatietype_org == Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/ZonB ? 
-							  Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/optimaal_zonb
-							: Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/optimaal
-					: Installatietype_org;
-				
-				attribute<bool> IsChangedNow (GeschiktObject) := Installatietype_org != Installatietype_def;
-				attribute<m2>   area         (GeschiktObject) := Func2Meter/eEffect/ZonPV/area;
-				attribute<eur>  Ki_zonPV     (GeschiktObject) := float64(IsChangedNow) * (
-					(BO/nrAansluitingen[GeschiktObject/BO_rel] * 
-						( Schuiven/KostenMin * Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Ki_PV_asl_min[Installatietype_def]
-						+ Schuiven/KostenMax * Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Ki_PV_asl_max[Installatietype_def])) +
-					(area * 
-						( Schuiven/KostenMin * Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Ki_PV_opp_min[Installatietype_def]
-						+ Schuiven/KostenMax * Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Ki_PV_opp_max[Installatietype_def]))
-						);
-			}
-			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> Installatietype_rel (GeschiktObject) := Afweging/Installatietype_def;
-		}
+		#include<Dak.dms>
 		
 		container koken
 		{
@@ -393,7 +335,7 @@ template SubsetGebouwOptieT
 		}
 	}
 	
-	attribute<Eur> Ki_DK   (GeschiktObject) := OverigeInstallaties/ZonB/Afweging/Ki_zonB + OverigeInstallaties/ZonPV/Afweging/Ki_zonPV;
+	attribute<Eur> Ki_DK   (GeschiktObject) := OverigeInstallaties/DK/result/Ki_zonB + OverigeInstallaties/DK/result/Ki_zonPV;
 	attribute<Eur> Ki_KK   (GeschiktObject) := OverigeInstallaties/Koken/Afweging/Ki_koken;
 	attribute<Eur> Ki_VT   (GeschiktObject) := OverigeInstallaties/Ventilatie/Afweging/Ki_vent;
 	attribute<Eur> Ki_Gnet (GeschiktObject) :=  BO/nrAansluitingen[GeschiktObject/BO_rel] *
@@ -448,7 +390,7 @@ template SubsetGebouwOptieT
 	attribute<Eur_yr> Kji_Gnet (GeschiktObject)                := Ki_gnet * NcwRefs/_30/AnnualisationFactor;
 	attribute<Eur_yr> Kji30_LO (GeschiktObject/xProduct)       := Ki30_LO * NcwRefs/_30/AnnualisationFactor;
 	attribute<Eur_yr> Kji20_LO (GeschiktObject/xProduct)       := Ki20_LO * NcwRefs/_20/AnnualisationFactor;
-	attribute<Eur_yr> Kji_DK   (GeschiktObject)                := Ki_DK   * NcwRefs/_20/AnnualisationFactor;
+	attribute<Eur_yr> Kji_DK   (GeschiktObject)                := OverigeInstallaties/DK/result/Kji_zonB + OverigeInstallaties/DK/result/Kji_zonPV;
 	attribute<Eur_yr> Kji_KK   (GeschiktObject)                := Ki_KK   * NcwRefs/_15/AnnualisationFactor;
 	attribute<Eur_yr> Kji_VT   (GeschiktObject)                := Ki_VT   * NcwRefs/_15/AnnualisationFactor;
 	attribute<Eur_yr> Kji15_LO (GeschiktObject/xProduct)       := Ki15_LO * NcwRefs/_15/AnnualisationFactor;
@@ -458,7 +400,7 @@ template SubsetGebouwOptieT
 	attribute<Eur_yr> Kmi_gnet (GeschiktObject)                := Ki_Gnet * NCW/mr50/AnnualisationFactor;
 	attribute<Eur_yr> Kmi30_LO (GeschiktObject/xProduct)       := Ki30_LO * NCW/mr30/AnnualisationFactor;
 	attribute<Eur_yr> Kmi20_LO (GeschiktObject/xProduct)       := Ki20_LO * NCW/mr20/AnnualisationFactor;
-	attribute<Eur_yr> Kmi_DK   (GeschiktObject)                := Ki_DK   * NCW/mr20/AnnualisationFactor;
+	attribute<Eur_yr> Kmi_DK   (GeschiktObject)                := OverigeInstallaties/DK/result/Kmi_zonB + OverigeInstallaties/DK/result/Kmi_zonPV;
 	attribute<Eur_yr> Kmi_KK   (GeschiktObject)                := Ki_KK   * NCW/mr15/AnnualisationFactor;
 	attribute<Eur_yr> Kmi_VT   (GeschiktObject)                := Ki_VT   * NCW/mr15/AnnualisationFactor;
 	attribute<Eur_yr> Kmi15_LO (GeschiktObject/xProduct)       := Ki15_LO * NCW/mr15/AnnualisationFactor;
@@ -492,8 +434,8 @@ template SubsetGebouwOptieT
 		attribute<Eur>     Oi_Gnet_i   (GeschiktObject)          := float64(ZBS/Maatregel/Infra/Gasafsluiting[ZBS_rel]) * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + Ki_Gnet * Aandeel), ishidden = "True";
 		attribute<Eur>     Oi_LTAS_i   (GeschiktObject)          := float64(ZBS/Maatregel/Installatie/LTAS[ZBS_rel])    * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + Ki_LTAS * Aandeel), ishidden = "True";
 		attribute<Eur>     Oi_GV_i     (GeschiktObject)          := float64(ZBS/Maatregel/Isolatie/Alle[ZBS_rel])       * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + Ki_gv * Aandeel) + Oi_gv_bouwdeel/totaal, ishidden = "True";
-		attribute<Eur>     Oi_ZonPV_i  (GeschiktObject)          := float64(ZBS/Maatregel/Installatie/ZonPV[ZBS_rel])   * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + OverigeInstallaties/ZonPV/Afweging/Ki_zonPV  * Aandeel), ishidden = "True";
-		attribute<Eur>     Oi_ZonB_i   (GeschiktObject)          := float64(ZBS/Maatregel/Installatie/ZonB[ZBS_rel])    * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + OverigeInstallaties/ZonB/Afweging/Ki_zonB    * Aandeel), ishidden = "True";
+		attribute<Eur>     Oi_ZonPV_i  (GeschiktObject)          := float64(ZBS/Maatregel/Installatie/ZonPV[ZBS_rel])   * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + OverigeInstallaties/DK/result/Ki_zonPV  * Aandeel), ishidden = "True";
+		attribute<Eur>     Oi_ZonB_i   (GeschiktObject)          := float64(ZBS/Maatregel/Installatie/ZonB[ZBS_rel])    * (BO/nrAansluitingen[GeschiktObject/BO_rel] * Bedrag + OverigeInstallaties/DK/result/Ki_zonB    * Aandeel), ishidden = "True";
 
 		container BouwdeelMaatregelen := for_each_nedv(
   			  Classifications/Bouwdeel/name

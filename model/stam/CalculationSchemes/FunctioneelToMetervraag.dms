@@ -7,6 +7,7 @@
 Template FunctioneelToMetervraag
 {
 	unit<uint32> VraagBO;
+	parameter<bool> terAfweging;
 	
 	container SPF := for_each_nedv(Classifications/Product/name
 			, replace('Classifications/Performance/SPF_@S[PerformancePerProduct/@P]', '@P', Classifications/Product/name, '@S', Classifications/Product/ServiceName)
@@ -48,13 +49,14 @@ Template FunctioneelToMetervraag
 	
 	container ZonB
 	{
-		attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> Installatietype_rel (VraagBO) := VraagBO/InstallatiePerProduct/DK;
+		attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> Installatietype_rel (VraagBO) := =not(terAfweging) ? 'VraagBO/InstallatiePerProduct/DK' : 'OverigeInstallaties/DK/Installatietype_def';
 			
-	//	attribute<m2>    Area      (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Dakaandeel [Installatietype_rel] * (VraagBO/Bouwdelen/DS + VraagBO/Bouwdelen/DP);
-	//	attribute<kW>    P         (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Pdak_opp   [Installatietype_rel] * Area;
-	//	attribute<GJ_yr> Oj_TW_max (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Opbr_cap_tw[Installatietype_rel] * P;
-		attribute<GJ_yr> Oj_TW     (VraagBO) := 0.5 * VraagBO/Functioneel/TW;
-		attribute<m2>    area      (VraagBO) := Oj_TW / Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Opbr_opp_tw[Installatietype_rel];
+		attribute<GJ_yr> Oj_TW     (VraagBO) := 
+		   Installatietype_rel == Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/zonb
+		|| Installatietype_rel == Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/optimaal_zonb ? 
+		   0.5 * VraagBO/Functioneel/TW : 0.0[GJ_yr];
+
+		attribute<m2>    area      (VraagBO) := makedefined(Oj_TW / Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Opbr_opp_tw[Installatietype_rel], 0.0[m2]);
 	}
 	
 	container Functioneel_per_product
