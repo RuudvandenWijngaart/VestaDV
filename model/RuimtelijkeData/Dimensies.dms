@@ -8,47 +8,60 @@
 container Dimensies
 {
 	unit<uint32> input
-	:	StorageName     = "%HestiaDataDir%/vraag/wonen/BAG_dimensies_energie_v4.csv"
+	:	StorageName     = "%HestiaDataDir%/vraag/wonen/BAG_dimensies_energie_v5.csv"
 	,	StorageType     = "gdal.vect"
 	,	StorageReadOnly = "True"
-	,	url             = "%HestiaDataDir%/vraag/wonen/Verrijken_BAG_woningvoorraad_met_fysieke_dimensies_en_energetische_kwaliteit_individuele_bouwdelen.docx";
-	
-	unit<uint32> Pand_data := BAG/import/pand
+	,	url             = "%HestiaDataDir%/vraag/wonen/Verrijken_BAG_woningvoorraad_met_fysieke_dimensies_en_energetische_kwaliteit_individuele_bouwdelen.docx"
 	{
-		attribute<rdc_meter> Geometry (poly) := BAG/import/pand/geometry;
-		attribute<input>     Data_rel        := rlookup(BAG/import/pand/identificatie, input/identificatie);
+		//TODO: remove onderstaande 3 regels na fixen leading zeroes inputbestand
+		attribute<uint32> L_ID        := strlen(vbo_id);
+		attribute<string> Zeroes      := L_ID == 13u ? '000' : L_ID == 14u ? '00' : L_ID == 15u ? '0' : '';
+		attribute<string> vbo_id_plus := Zeroes + vbo_id;
+	}
+	
+	unit<uint32> VBO := BAG/import/vbo
+	{
+		attribute<input>     Data_rel        := rlookup(BAG/import/vbo/identificatie, input/vbo_id_plus);
+		attribute<string>    VBOtype         := input/VBO_type[Data_rel];
 
-		unit<uint32> Bouwdeel := BAG/import/pand
+		container Bouwdeel := BAG/import/vbo
 		{
-			attribute<m2> RB := isdefined(input/gl_opp_beneden[Data_rel][m2]) ? max_elem(input/gl_opp_beneden[Data_rel][m2], 0[m2]) : (0/0)[m2];
-			attribute<m2> RO := isdefined(input/gl_opp_boven  [Data_rel][m2]) ? max_elem(input/gl_opp_boven  [Data_rel][m2], 0[m2]) : (0/0)[m2];
-			attribute<m2> DR := isdefined(input/de_opp        [Data_rel][m2]) ? max_elem(input/de_opp        [Data_rel][m2], 0[m2]) : (0/0)[m2];
-			attribute<m2> PL := isdefined(input/pn_opp        [Data_rel][m2]) ? max_elem(input/pn_opp        [Data_rel][m2], 0[m2]) : (0/0)[m2];
-			attribute<m2> VL := isdefined(input/vl_opp        [Data_rel][m2]) ? max_elem(input/vl_opp        [Data_rel][m2], 0[m2]) : (0/0)[m2];
-			attribute<m2> MG := isdefined(input/gv_corr_opp   [Data_rel][m2]) ? max_elem(input/gv_corr_opp   [Data_rel][m2], 0[m2]) : (0/0)[m2];
-			attribute<m2> MS := isdefined(input/sp_opp        [Data_rel][m2]) ? max_elem(input/sp_opp        [Data_rel][m2], 0[m2]) : (0/0)[m2];
-			attribute<m2> DP := isnull(input/pd_opp[Data_rel][m2]) && isdefined(input/hd_opp[Data_rel][m2]) ? 0[m2] : isdefined(input/pd_opp[Data_rel][m2]) ? max_elem(input/pd_opp[Data_rel][m2], 0[m2]) : (0/0)[m2];
-			attribute<m2> DS := isnull(input/hd_opp[Data_rel][m2]) && isdefined(input/pd_opp[Data_rel][m2]) ? 0[m2] : isdefined(input/hd_opp[Data_rel][m2]) ? max_elem(input/hd_opp[Data_rel][m2], 0[m2]) : (0/0)[m2];
-			attribute<m2> KR := isdefined(input/vl_opp        [Data_rel][m2]) ? max_elem(input/vl_opp        [Data_rel][m2], 0[m2]) : (0/0)[m2];
+			//====== direct over te nemen uit invoerbestand: raam, deur, paneel, gevel, dak
+			attribute<m2> RB (VBO) := input/gl_slaap_opp[m2][Data_rel];
+			attribute<m2> RO (VBO) := input/gl_woon_opp[m2][Data_rel];
+			attribute<m2> DR (VBO) := input/de_opp[m2][Data_rel];
+			attribute<m2> PL (VBO) := input/pn_opp[m2][Data_rel];
+			attribute<m2> MG (VBO) := input/mg_buiten_opp[m2][Data_rel];
+			attribute<m2> MS (VBO) := input/sp_buiten_opp[m2][Data_rel];
+			attribute<m2> DP (VBO) := input/pd_opp[m2][Data_rel];
+			attribute<m2> DS (VBO) := input/hd_opp[m2][Data_rel];
+
+			//====== Oppervlak Kieren wordt oppervlak vbo voor aangehouden
+			attribute<m2> KR (VBO) := VBO/oppervlakte[m2];
+
+			//===== Oppervlak vloeren afgeleid van pand-footprint. Bij EGW gelijk aan footprint, MGW vanaf eerste verdieping = 0m2, footpring MGW verdeeld over vbo's begane grond
+			attribute<m2> VL (VBO) := not(isdefined(input/VBO_type[Data_rel])) || input/VBO_type[Data_rel] == '0' ? BAG/import/pand/footprint[VBO/pand_rel]
+				: strcount(input/VBO_type[Data_rel], 'O') == 0u ? 0.0[m2] 
+				: BAG/import/pand/footprint[VBO/pand_rel] / sum(float64(strcount(input/VBO_type[Data_rel], 'O') > 0u ), VBO/pand_rel)[VBO/pand_rel] ;
 		}
 	}
 
 	//de resultaten van bovenstaande analyse wordt als snel fss bestand weggeschreven
-	unit<uint32> Bouwdeel_writer := BAG/import/pand, Storagename = "%HestiaDataDir%/vraag/Wonen/Bouwdeel.fss"
+	unit<uint32> Bouwdeel_writer := BAG/import/vbo, Storagename = "%HestiaDataDir%/vraag/Wonen/Bouwdeel.fss"
 	{
-		attribute<m2> RB := Pand_data/Bouwdeel/RB;
-		attribute<m2> RO := Pand_data/Bouwdeel/RO;
-		attribute<m2> DR := Pand_data/Bouwdeel/DR;
-		attribute<m2> PL := Pand_data/Bouwdeel/PL;
-		attribute<m2> VL := Pand_data/Bouwdeel/VL;
-		attribute<m2> MG := Pand_data/Bouwdeel/MG;
-		attribute<m2> MS := Pand_data/Bouwdeel/MS;
-		attribute<m2> DP := Pand_data/Bouwdeel/DP;
-		attribute<m2> DS := Pand_data/Bouwdeel/DS;
-		attribute<m2> KR := Pand_data/Bouwdeel/KR;
+		attribute<m2> RB := VBO/Bouwdeel/RB;
+		attribute<m2> RO := VBO/Bouwdeel/RO;
+		attribute<m2> DR := VBO/Bouwdeel/DR;
+		attribute<m2> PL := VBO/Bouwdeel/PL;
+		attribute<m2> VL := VBO/Bouwdeel/VL;
+		attribute<m2> MG := VBO/Bouwdeel/MG;
+		attribute<m2> MS := VBO/Bouwdeel/MS;
+		attribute<m2> DP := VBO/Bouwdeel/DP;
+		attribute<m2> DS := VBO/Bouwdeel/DS;
+		attribute<m2> KR := VBO/Bouwdeel/KR;
 	}
 	//de resultaten van een eerdere analyse die als fss zijn weggeschreven worden weer ingelezen
-	unit<uint32> Bouwdeel_reader := BAG/import/pand, StorageName = "%HestiaDataDir%/vraag/Wonen/Bouwdeel.fss", StorageReadOnly = "true"
+	unit<uint32> Bouwdeel_reader := BAG/import/vbo, StorageName = "%HestiaDataDir%/vraag/Wonen/Bouwdeel.fss", StorageReadOnly = "true"
 	{
 		attribute<m2> RB;
 		attribute<m2> RO;
