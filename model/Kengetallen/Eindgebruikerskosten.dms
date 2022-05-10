@@ -5,36 +5,68 @@
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
-	container Eindgebruikerskosten
+	container Eindgebruikerskosten : isHidden = "True"
 	{
+		parameter<ratio> PuntenVerhogingGebruikSchuif := 1.0[ratio];
+		parameter<ratio> HuurakVerhogingGebruikSchuif := 1.0[ratio];
+		parameter<ratio> WoonCorpPuntenGebruikSchuif  := 0.5[ratio];
+		parameter<ratio> WoonCorpHuurakGebruikSchuif  := 1.0[ratio] - WoonCorpPuntenGebruikSchuif;
+
+		unit<uint32> OK : nrofrows = 3 //oppervlakteklasse
+		{
+			attribute<string> label       : ['K','M','G'];
+			attribute<m2>     ClassBreaks : [ 0 ,70 ,90 ];
+		}
+		unit<uint32> WT : nrofrows = 2 //woningtype
+		{
+			attribute<string> label : ['EGW','MGW'];
+		}
+		unit<uint32> OKWT := combine(OK,WT) //oppervlakteklasse met woningtype
+		{
+			attribute<string> label := OK/label[nr_1] + '_' + WT/label[nr_2];
+		}
+		unit<uint32> SS := combine(Classifications/Schillabel,Classifications/Schillabel) //Schilsprongen
+		{
+			attribute<string> label := Classifications/Schillabel/name[nr_1] + '_' + Classifications/Schillabel/name[nr_2];
+		}
+		unit<uint32> SSOKWT := combine(SS, OKWT) //schilsprongen met oppervlakteklasse en woningtype
+		{
+			attribute<string> label  := SS/label[nr_1] + '_' + OKWT/label[nr_2];
+			attribute<SS>     SS_rel := nr_1;
+			attribute<OK>     OK_rel := OKWT/nr_1[nr_2];
+			attribute<WT>     WT_rel := OKWT/nr_2[nr_2];
+
+			attribute<eur_yr> Oj_hv_Punten := huurpunten_labelsprong/Oj_hv[rlookup(SS/label[SS_rel] + WT/label[WT_rel],huurpunten_labelsprong/label)];
+			attribute<eur_yr> Oj_hv_Huurak := huurakkoord_vergoeding/Oj_hv[rlookup(SS/label[SS_rel] + OK/label[OK_rel],huurakkoord_vergoeding/label)];
+
+			attribute<eur_yr> Oj_hv_WoonCo := WoonCorpPuntenGebruikSchuif * Oj_hv_Punten + WoonCorpHuurakGebruikSchuif * Oj_hv_Huurak;
+		}
+
 		unit<uint32> huurakkoord_vergoeding : StorageName = "%projDir%/Eindgebruikerskosten/huurakkoord_vergoeding.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
 		{
-			//====== primary key voor opzoeken waarden in tabel
-			attribute<string> code := huidig_label +  '_' + doel_label + '_' + oppervlak;
-
-			parameter<m2> grens_KM := 70[m2], Descr = "klassegrens kleine woning naar middelgrote woning";
-			parameter<m2> grens_MG := 90[m2], Descr = "klassegrens middelgrote woning naar grote woning";
+			attribute<string> label := huidig_label +'_'+ doel_label + oppervlak;
 
 			//====== jaarlijkse huurverhoging conform sociaal huurakkoord per sprong
-			attribute<eur_yr> Oj_hv := 12d * float64(vergoeding) * 1.0[eur_yr];
+			attribute<eur_yr> Oj_hv := 12d * float64(vergoeding) * 1.0[eur_yr] * HuurakVerhogingGebruikSchuif;
 		}
 
 		unit<uint32> huurpunten_labelsprong : StorageName = "%projDir%/Eindgebruikerskosten/huurpunten_labelsprong.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
 		{
-			//====== primary key voor opzoeken waarden in tabel
-			attribute<string> code := huidig_label +  '_' + doel_label + '_' + woningtype;
+			attribute<string> label := huidig_label + '_' + doel_label + woningtype;
 
-			//====== verhoging aantal huurpunten per sprong
-			attribute<uint32> punten := uint32(huurpunten);
+			//====== jaarlijkse huurverhoging conform huurpuntensystematiek
+			attribute<eur_yr> Oj_hv := float64(huurpunten) * huurpunten_maxhuur/Huurverhoging_perpunt * PuntenVerhogingGebruikSchuif;
 		}
 
 		unit<uint32> huurpunten_maxhuur : StorageName = "%projDir%/Eindgebruikerskosten/huurpunten_maxhuur.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
 		{
-			//====== primary key voor opzoeken waarden in tabel
-			attribute<string> code := huurpunten;
-
 			//====== jaarlijkse maximum huur conform huurpuntenstelsel
 			attribute<eur_yr> Oj_huur := 12d * float64(huur_per_maand) * 1.0[eur_yr];
+
+			//====== marginale verhoging
+			attribute<eur_yr> marginal := Oj_huur - Oj_huur[id(.)-1u];
+
+			parameter<eur_yr> Huurverhoging_perpunt := mean(marginal);
 		}
 
 		unit<uint32> rentepercentages : StorageName = "%projDir%/Eindgebruikerskosten/rentepercentages.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
