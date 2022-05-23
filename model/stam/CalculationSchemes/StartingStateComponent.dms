@@ -19,6 +19,36 @@ template StartingStateComponent
 		// =============== ongewijzigde attributen uniform voor alle BC
 		attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel   := BebouwingsObjectSrc/buurt_rel;
 		attribute<ModelObject>                             ModelObject_rel := rlookup(BebouwingsObjectSrc/ModelObjectKey, ModelObject/ModelObjectKey);
+
+		unit<uint32> Oppervlakteklasse : nrofrows = 8
+		{
+			attribute<string> label   : ['<15', '15-50', '50-75', '75-100', '100-150', '150-500', '250-500', '500+'] ;
+			attribute<m2>     median  : [8.5,32.5,62.5,87.5,125,200,375,5250];
+			attribute<m2> ClassBreaks : [0,15,50,75,100,150,250,500];
+		}
+
+		unit<uint32> TBEO := combine(ModelObject, Oppervlakteklasse)
+		{
+			attribute<string> label := ModelObject/label[nr_1] +', '+ Oppervlakteklasse/label[nr_2] + 'm2';
+		}
+
+		unit<uint32> TBEOS := combine(TBEO, Classifications/SchilLabel)
+		{
+			attribute<string> label := TBEO/label[nr_1] +', Label '+ Classifications/SchilLabel/label[nr_2] + '';
+		}
+
+		attribute<TBEO> TBEO_rel := combine_data(TBEO, ModelObject_rel, Oppervlakteklasse_rel) ;
+		attribute<TBEOS> TBEOS_rel := combine_data(TBEOS, TBEO_rel, Schillabel_rel) ;
+
+		container export
+		{
+			attribute<m2>     Mean_opp_TBEOS (TBEOS) := mean(Oppervlakte_i, TBEOS_rel);
+			attribute<string> TBEOS_rel_str  (TBEOS) := TBEOS/label;
+			attribute<uint32> Count          (TBEOS) := count(Oppervlakte_i, TBEOS_rel);
+		}
+
+		attribute<Oppervlakteklasse> Oppervlakteklasse_rel := classify(Oppervlakte_i, Oppervlakteklasse/ClassBreaks);
+
 		attribute<Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data> Aflevergebied_rel := point_in_polygon(point, Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data/geometry);
 
 		// =============== attributen die per Rekenstap kunnen wijzigen door toepassing van GebouwOpties
@@ -153,7 +183,16 @@ template StartingStateComponent
 				'Invoer/Kengetallen/Bebouwing/'+Classifications/BebouwingsSector/name[BebouwingsSector_rel]+'/Results/Asl/'+Classifications/FunctioneleVraag/name+'[ModelObject_rel]* nrAansluitingen_i +
 				 Invoer/Kengetallen/Bebouwing/'+Classifications/BebouwingsSector/name[BebouwingsSector_rel]+'/Results/Opp/'+Classifications/FunctioneleVraag/name+'[ModelObject_rel] * Oppervlakte_i',
 				..,
-				GJ_yr);
+				GJ_yr)
+			{
+				attribute<GJ_yr> RV_Klim (...) := RV * /TussenResultaten/R20_2020/KlimaatFactorMap[point[Geography/rdc_grids/m100]];
+				attribute<GJ_yr> D_RV    (...) := RV - RV_Klim;
+				attribute<GJ_yr_m2> RV_opp  (...) := RV / Oppervlakte_i;
+				attribute<GJ_yr_m2> RV_opp_BU (Invoer/ruimtelijkeData/StudieGebied/Buurt) := mean(RV_opp, Buurt_rel);
+
+				parameter<ratio> RV_boven_Klimfactor := mean(/TussenResultaten/R20_2020/KlimaatFactorMap[point[Geography/rdc_grids/m100]] > 1.00 ? /TussenResultaten/R20_2020/KlimaatFactorMap[point[Geography/rdc_grids/m100]] : (0/0)[ratio]);
+				parameter<ratio> RV_onder_Klimfactor := mean(/TussenResultaten/R20_2020/KlimaatFactorMap[point[Geography/rdc_grids/m100]] <= 1.00 ? /TussenResultaten/R20_2020/KlimaatFactorMap[point[Geography/rdc_grids/m100]] : (0/0)[ratio]);
+			}
 		}
 		
 			
