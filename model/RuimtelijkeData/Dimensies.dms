@@ -8,25 +8,20 @@
 container Dimensies
 {
 	unit<uint32> input
-	:	StorageName     = "%HestiaDataDir%/vraag/wonen/BAG_dimensies_energie_v5.csv"
+	:	StorageName     = "%HestiaDataDir%/vraag/wonen/BAG_dimensies_energie_v6.csv"
 	,	StorageType     = "gdal.vect"
 	,	StorageReadOnly = "True"
 	,	url             = "%HestiaDataDir%/vraag/wonen/Verrijken_BAG_woningvoorraad_met_fysieke_dimensies_en_energetische_kwaliteit_individuele_bouwdelen.docx"
-	{
-		//TODO: remove onderstaande 3 regels na fixen leading zeroes inputbestand
-		attribute<uint32> L_ID        := strlen(vbo_id);
-		attribute<string> Zeroes      := L_ID == 13u ? '000' : L_ID == 14u ? '00' : L_ID == 15u ? '0' : '';
-		attribute<string> vbo_id_plus := Zeroes + vbo_id;
-	}
+	;
 	
 	unit<uint32> VBO := BAG/import/vbo
 	{
-		attribute<input>     Data_rel        := rlookup(BAG/import/vbo/identificatie, input/vbo_id_plus);
+		attribute<input>     Data_rel        := rlookup(BAG/import/vbo/identificatie, input/vbo_id);
 		attribute<string>    VBOtype         := input/VBO_type[Data_rel];
 
 		container Bouwdeel := BAG/import/vbo
 		{
-			//====== direct over te nemen uit invoerbestand: raam, deur, paneel, gevel, dak
+			//====== direct over te nemen uit invoerbestand: raam, deur, paneel, gevel, dak, vloer
 			attribute<m2> RB (VBO) := input/gl_slaap_opp[m2][Data_rel];
 			attribute<m2> RO (VBO) := input/gl_woon_opp[m2][Data_rel];
 			attribute<m2> DR (VBO) := input/de_opp[m2][Data_rel];
@@ -35,14 +30,10 @@ container Dimensies
 			attribute<m2> MS (VBO) := input/sp_buiten_opp[m2][Data_rel];
 			attribute<m2> DP (VBO) := input/pd_opp[m2][Data_rel];
 			attribute<m2> DS (VBO) := input/hd_opp[m2][Data_rel];
+			attribute<m2> VL (VBO) := input/vl_opp[m2][Data_rel];
 
 			//====== Oppervlak Kieren wordt oppervlak vbo voor aangehouden
 			attribute<m2> KR (VBO) := VBO/oppervlakte[m2];
-
-			//===== Oppervlak vloeren afgeleid van pand-footprint. Bij EGW gelijk aan footprint, MGW vanaf eerste verdieping = 0m2, footpring MGW verdeeld over vbo's begane grond
-			attribute<m2> VL (VBO) := not(isdefined(input/VBO_type[Data_rel])) || input/VBO_type[Data_rel] == '0' ? BAG/import/pand/footprint[VBO/pand_rel]
-				: strcount(input/VBO_type[Data_rel], 'O') == 0u ? 0.0[m2] 
-				: BAG/import/pand/footprint[VBO/pand_rel] / sum(float64(strcount(input/VBO_type[Data_rel], 'O') > 0u ), VBO/pand_rel)[VBO/pand_rel] ;
 		}
 	}
 
