@@ -7,41 +7,54 @@
 container CPT
 {
 	parameter<bool> use := false;
+	parameter<ratio> Discontovoet := 1.06;
 
 	container Investeringsbedragen
 	{
-		attribute<Eur> Ki_LO30  (GeschiktObject) := BTW_Factor * sum(Geschikteoptieberekening/Ki30_LO, GeschiktObject/xProduct/GeschiktObject_rel); 
-		attribute<Eur> Ki_LO20  (GeschiktObject) := BTW_Factor * sum(Geschikteoptieberekening/Ki20_LO, GeschiktObject/xProduct/GeschiktObject_rel);
-		attribute<Eur> Ki_LO15  (GeschiktObject) := BTW_Factor * sum(Geschikteoptieberekening/Ki15_LO, GeschiktObject/xProduct/GeschiktObject_rel);
-		attribute<Eur> Ki_LTAS  (GeschiktObject) := BTW_Factor * Geschikteoptieberekening/Ki_LTAS;
-		attribute<Eur> Ki_Gnet  (GeschiktObject) := BTW_Factor * Geschikteoptieberekening/Ki_Gnet;
-		attribute<Eur> Ki_gv    (GeschiktObject) := BTW_Factor_gv * Geschikteoptieberekening/Ki_gv;
-		attribute<Eur> Ki_DK    (GeschiktObject) := BTW_Factor * Geschikteoptieberekening/Ki_DK;
-		attribute<Eur> Ki_KK    (GeschiktObject) := BTW_Factor * Geschikteoptieberekening/Ki_KK;
-		attribute<Eur> Ki_VT    (GeschiktObject) := BTW_Factor * Geschikteoptieberekening/Ki_VT;
+		attribute<Eur> Ki_LO30    (GeschiktObject) := sum(Geschikteoptieberekening/Ki30_LO, GeschiktObject/xProduct/GeschiktObject_rel); 
+		attribute<Eur> Ki_LO20    (GeschiktObject) := sum(Geschikteoptieberekening/Ki20_LO, GeschiktObject/xProduct/GeschiktObject_rel);
+		attribute<eur> Ki_LO20_30 (GeschiktObject) := Ki_LO120 + Ki_LO20 / Discontovoet ^ 20 - Ki_LO20 / Discontovoet ^ 30;
+		attribute<Eur> Ki_LO15    (GeschiktObject) := sum(Geschikteoptieberekening/Ki15_LO, GeschiktObject/xProduct/GeschiktObject_rel);
+		attribute<eur> Ki_LO15_30 (GeschiktObject) := Ki_LO15 + Ki_LO15 / Discontovoet ^ 15;
+		attribute<Eur> Ki_LTAS    (GeschiktObject) := Geschikteoptieberekening/Ki_LTAS;
+		attribute<Eur> Ki_Gnet    (GeschiktObject) := Geschikteoptieberekening/Ki_Gnet;
+		// Aanname:  voor bouwdeelverbetering wordt er binnen 30 jaar geen herinvestering gedaan. ( Afschrijftijd is kleiner, maar levensduur is langer). 
+		attribute<Eur> Ki_gv      (GeschiktObject) := Geschikteoptieberekening/Ki_gv;
+		// Zonneboilers zijn 20 jaar, maar afschrijving over 15 want onderscheid boiler (20jr) en pv (15jr) is lastig
+		attribute<Eur> Ki_DK      (GeschiktObject) := Geschikteoptieberekening/Ki_DK;
+		attribute<eur> Ki_DK_30   (GeschiktObject) := Ki_DK + Ki_DK / Discontovoet ^ 15;
+		attribute<Eur> Ki_KK      (GeschiktObject) := Geschikteoptieberekening/Ki_KK;
+		attribute<eur> Ki_KK_30   (GeschiktObject) := Ki_KK + Ki_KK / Discontovoet ^ 15;
+		attribute<Eur> Ki_VT      (GeschiktObject) := Geschikteoptieberekening/Ki_VT;
+		attribute<eur> Ki_VT_30   (GeschiktObject) := Ki_VT + Ki_VT / Discontovoet ^ 15;
+		attribute<eur> Ki_totaal  (GeschiktObject) := BTW_Factor * add(Ki_LO30,Ki_LO20_30, Ki_LO15_30, Ki_LTAS, Ki_Gnet, Ki_DK_30, Ki_KK_30, Ki_VT_30) + BTW_Factor_gv * Ki_gv;
 	}
 
 	container Overheadkosten
 	{
-		attribute<eur_yr> Kj_OH        (GeschiktObject) := BTW_Factor * sum(Geschikteoptieberekening/jaarlijks/KJ_OH_LO, GeschiktObject/xProduct/GeschiktObject_rel);
-		attribute<eur_yr> Kj_ADM       (GeschiktObject) := BTW_Factor * sum(Geschikteoptieberekening/jaarlijks/Kj_Adm_LO, GeschiktObject/xProduct/GeschiktObject_rel);
-		attribute<eur_yr> Kj_vastrecht (GeschiktObject) := BTW_Factor * SplitIncentiveVastrecht * Geschikteoptieberekening/jaarlijks/Kj_Vastrecht_g;
+		// Deze kosten zijn constant. Idee: voor kleinere energiedragers ook constante kosten veronderstellen; makkelijker discounten
+		attribute<eur_yr> Kj_OH            (GeschiktObject) := sum(Geschikteoptieberekening/jaarlijks/KJ_OH_LO, GeschiktObject/xProduct/GeschiktObject_rel);
+		attribute<eur_yr> Kj_ADM           (GeschiktObject) := sum(Geschikteoptieberekening/jaarlijks/Kj_Adm_LO, GeschiktObject/xProduct/GeschiktObject_rel);
+		attribute<eur_yr> Kj_vastrecht     (GeschiktObject) := SplitIncentiveVastrecht * Geschikteoptieberekening/jaarlijks/Kj_Vastrecht_g;
+		attribute<eur> Kj_OH_ADM_vastrecht (GeschiktObject) := BTW_Factor * add(Kj_OH, kJ_ADM, kj_vastrecht) * 1 [yr];
+		attribute<eur> NPV_overhead        (GeschiktObject) := ='add(' + AsItemList('Kj_OH_ADM_vastrecht / Discontovoet ^ float64(' + string(Elek_prijzen/jaar_na_zichtjaar) + ')' ) + ')';
 	}
 
 	container Subsidies
 	{
-		attribute<Eur> Oi30_LO  (GeschiktObject) := BTW_Factor * sum(Geschikteoptieberekening/Oi30_LO, GeschiktObject/xProduct/GeschiktObject_rel);
-		attribute<Eur> Oi20_LO  (GeschiktObject) := BTW_Factor * sum(Geschikteoptieberekening/Oi20_LO, GeschiktObject/xProduct/GeschiktObject_rel);
-		attribute<Eur> Oi15_LO  (GeschiktObject) := BTW_Factor * sum(Geschikteoptieberekening/Oi15_LO, GeschiktObject/xProduct/GeschiktObject_rel);
-		attribute<Eur> OiDK_LO  (GeschiktObject) := BTW_Factor * Geschikteoptieberekening/OiDK_LO;
-		attribute<Eur> Oi_GV    (GeschiktObject) := BTW_Factor_gv * Geschikteoptieberekening/Oi_GV;
-		attribute<Eur> Oi_Gnet  (GeschiktObject) := BTW_Factor * Geschikteoptieberekening/Oi_Gnet;
-		attribute<Eur> Oi_LTAS  (GeschiktObject) := BTW_Factor * Geschikteoptieberekening/Oi_LTAS;
+		attribute<Eur> Oi30_LO   (GeschiktObject) := sum(Geschikteoptieberekening/Oi30_LO, GeschiktObject/xProduct/GeschiktObject_rel);
+		attribute<Eur> Oi20_LO   (GeschiktObject) := sum(Geschikteoptieberekening/Oi20_LO, GeschiktObject/xProduct/GeschiktObject_rel);
+		attribute<Eur> Oi15_LO   (GeschiktObject) := sum(Geschikteoptieberekening/Oi15_LO, GeschiktObject/xProduct/GeschiktObject_rel);
+		attribute<Eur> OiDK_LO   (GeschiktObject) := Geschikteoptieberekening/OiDK_LO;
+		attribute<Eur> Oi_GV     (GeschiktObject) := Geschikteoptieberekening/Oi_GV;
+		attribute<Eur> Oi_Gnet   (GeschiktObject) := Geschikteoptieberekening/Oi_Gnet;
+		attribute<Eur> Oi_LTAS   (GeschiktObject) := Geschikteoptieberekening/Oi_LTAS;
+		attribute<eur> Oi_totaal (GeschiktObject) := BTW_Factor * add(Oi30_LO,Oi20_LO, Oi15_LO, OiDK_LO, Oi_Gnet, Oi_LTAS) + BTW_Factor_gv * Oi_GV;
 	}
 
 	container Energieverbruik
 	{
-		attribute<GJ_yr> Metervraag_elek     (GeschiktObject) := GeschikteOptieBerekening/Func2Meter/result/E;
+		attribute<GJ>    Metervraag_elek     (GeschiktObject) := GeschikteOptieBerekening/Func2Meter/result/E * 1[yr];
 		attribute<GJ_yr> Metervraag_gas      (GeschiktObject) := GeschikteOptieBerekening/Func2Meter/result/gas;
 		attribute<GJ_yr> Metervraag_H2       (GeschiktObject) := GeschikteOptieBerekening/Func2Meter/result/H2;
 		attribute<GJ_yr> Metervraag_Biomassa (GeschiktObject) := GeschikteOptieBerekening/Func2Meter/result/Biomassa;
@@ -49,15 +62,81 @@ container CPT
 		attribute<GJ_yr> Metervraag_Pellets  (GeschiktObject) := GeschikteOptieBerekening/Func2Meter/result/Pellets;
 	}
 
-	unit<uint32> Elek_prijzen: Storagename = "%projdir%/data/price_paths.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
+	// Opahelen prijspaden uit bestand
+	unit<uint32> Elek_prijzen_totaal: Storagename = "%projdir%/data/price_paths.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
 	{
-	attribute<string> label             := string(2000 + uint32(field_1));
-	attribute<bool>   is_relevant       := label[yr_uint16] < zichtjaar_jaar ? False : label[yr_uint16] > zichtjaar_jaar + 29[yr_uint16]  ? False : True;
-	attribute<eur_yr> kosten_prijspad_1 := not(is_relevant) ? 0[eur_yr] : Energieverbruik/Metervraag_elek * prijspad1[eur_GJ];
+		attribute<string> label              := string(2000 + uint32(field_1));
+		attribute<bool>   is_relevant        := label[yr_uint16] < zichtjaar_jaar ? False : label[yr_uint16] > zichtjaar_jaar + 29[yr_uint16]  ? False : True;
 	}
-	parameter<ratio> Discontovoet := 0.06;
 	
-	unit<uint32> Elekprijs_Geschiktobject:= combine(Elek_prijzen, GeschiktObject);
-
+	// subset van alleen relevante jaren nemen
+	unit<uint32> Elek_prijzen := subset(Elek_prijzen_totaal/is_relevant)
+	{
+		attribute<string> label              := Elek_prijzen_totaal/label[nr_orgentity];
+		attribute<float64> jaar_na_zichtjaar := float64(label[yr_uint16] - zichtjaar_jaar);
+		container prijzen := for_each_nedv(Prijspad/label, 'float64(Elek_prijzen_totaal/' + prijspad/label + '[nr_orgentity])[eur_kWh]  * 277.78[kWh / GJ]', Elek_prijzen, eur_GJ);
+	}
+	
+	// Voor de combinatie van ieder jaar, prijspad, geschiktobject gedisconteerde kosten uirekenen
+	unit<uint32> Elekprijs_Geschiktobject_Prijspad := combine(GeschiktObject_Prijspad, Elek_prijzen)
+	{
+		attribute<GeschiktObject_Prijspad> GeschiktObject_Prijspad_rel := nr_1;
+		attribute<Elek_prijzen>   Elek_prijzen_rel   := nr_2;
+	
+		attribute<GeschiktObject> GeschiktObject_rel := Geschiktobject_Prijspad/nr_1[Geschiktobject_Prijspad_rel];
+		attribute<Prijspad> Prijspad_rel := Geschiktobject_Prijspad/nr_2[Geschiktobject_Prijspad_rel];
+	
+		// Metervraag kan ook later vermenuigvuldigd worden
+		attribute<eur> kosten := ='Energieverbruik/Metervraag_elek[GeschiktObject_rel] * 
+										merge(Prijspad_rel[uint8], eur_GJ, ' + AsItemList('Elek_prijzen/prijzen/' + prijspad/label + '[Elek_prijzen_rel]')  + ')';
+		attribute<eur> discounted_kosten := kosten / Discontovoet ^ Elek_prijzen/jaar_na_zichtjaar[Elek_prijzen_rel];
+	}
+	
+	// Kosten uit alle jaren sommeren
+	unit<uint32> Geschiktobject_Prijspad := combine(GeschiktObject, Prijspad)
+	{
+		attribute<GeschiktObject> GeschiktObject_rel := nr_1;
+		attribute<Prijspad>       Prijspad_rel       := nr_2;
+		
+		attribute<eur> NPV_elek := sum(Elekprijs_Geschiktobject_Prijspad/Discounted_kosten,Elekprijs_Geschiktobject_Prijspad/GeschiktObject_Prijspad_rel);
+		attribute<eur> NPV      :=   Subsidies/Oi_totaal[GeschiktObject_rel] - Investeringsbedragen/Ki_totaal[GeschiktObject_rel] - Overheadkosten/NPV_overhead[GeschiktObject_rel] - NPV_elek;
+	}
+	
+	unit<uint32> Prijspad := range(uint32, 1, 50)
+	{
+		attribute<string> label := 'Prijspad' + string(id(.));
+	}
+	
+	// Kijk naar bouwdelen en installaties on referentiegebouwoptie te vinden
+	container bouwdelen_oorsponkelijk := BO/Bouwdelen/Isolatie;
+	container installatie_oorsponkelijk := BO/InstallatiePerProduct;
+	
+	container bouwdelen_nieuw:= GeschiktObject/Bouwdelen/Isolatie;
+	container intallatie_nieuw:= GeschiktObject/InstallatiePerProduct;
+	
+	container vergelijking_bouwdeel := For_Each_nedv(classifications/bouwdeel/name, 'bouwdelen_oorsponkelijk/' + classifications/bouwdeel/name + '[geschiktobject/BO_rel] == bouwdelen_nieuw/' + classifications/bouwdeel/name, geschiktobject, bool)
+	{
+		attribute<uint32> bouwdeel_score (GeschiktObject) := ='add(' + AsItemList('uint32(' + classifications/bouwdeel/name + ')') +')';
+	}
+	
+	container vergelijking_installatie := For_Each_nedv(classifications/product/name, 'installatie_oorsponkelijk/' + classifications/product/name + '[geschiktobject/BO_rel] == intallatie_nieuw/' + classifications/product/name, geschiktobject, bool)
+	{
+		attribute<bool> KK_score (GeschiktObject) := installatie_oorsponkelijk/KK[GeschiktObject/BO_rel] == intallatie_nieuw/KK;
+		attribute<bool> DK_score (GeschiktObject) := installatie_oorsponkelijk/DK[GeschiktObject/BO_rel] == intallatie_nieuw/DK;
+		attribute<bool> VT_score (GeschiktObject) := installatie_oorsponkelijk/VT[GeschiktObject/BO_rel] == intallatie_nieuw/VT;
+		attribute<bool> AS_score (GeschiktObject) := installatie_oorsponkelijk/AS[GeschiktObject/BO_rel] == intallatie_nieuw/AS;
+		attribute<uint32> product_score (GeschiktObject) := ='add(' + AsItemList('uint32(' + classifications/product/name + ')') +')';
+		attribute<uint32> installatie_score (GeschiktObject) := add(uint32(KK_score), uint32(DK_score), uint32(VT_score), uint32(AS_score), product_score);
+	}
+	
+	container referentie
+	{
+		attribute<uint32> totaal_score (GeschiktObject) := vergelijking_installatie/installatie_score + vergelijking_bouwdeel/bouwdeel_score;
+		attribute<GeschiktObject> referentie_geschiktobject (bebouwingscomponenten/BO) := max_index(totaal_score, GeschiktObject/BO_rel);
+	}
+	
+	
+	
+	
 	attribute<Eur_yr> CPT_score (GeschiktObject) := const(0.0[eur_yr],GeschiktObject);
 }
