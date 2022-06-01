@@ -74,58 +74,52 @@ template StateNaAllocatieComponent
 				? 0[Eur]
 				: BC_kentallen/Ki_Aansl_g_asl * nraansluitingen + BC_kentallen/Ki_Aansl_g_opp * oppervlakte;
 		}
+		container Kapitaallasten := for_each_nedv(
+			Classifications/Gebouw_Kapitaallasten/name, 
+			'BO_base/kosten/Kapitaallasten/'+ Classifications/Gebouw_Kapitaallasten/name,
+			BO,
+			Eur_yr);
+
 		container Jaarlijks := for_each_nedv(
 			Classifications/GebouwOptie_jaarlijks/name,
 			'BO_base/kosten/jaarlijks/'+ Classifications/GebouwOptie_jaarlijks/name,
 			BO,
 			Eur_yr)
 		{
-			attribute<eur_yr> kji_gv (BO) :=BO_base/kosten/jaarlijks/Kji_gv;
-			attribute<eur_yr> kmi_gv (BO) :=BO_base/kosten/jaarlijks/Kmi_gv;
+			container Eindgebruikerskosten
+			{
+				//====== Placeholder Huurverhoging
 
+				attribute<Invoer/Kengetallen/Eindgebruikerskosten/SSOKWT> HV_rel (BO) := rlookup((
+					Classifications/Schillabel/name[BO/Energielabel_rel] + '_' + Classifications/Schillabel/name[BebouwingsComponenten/Woning/BO/Energielabel_rel] //Schilsprong
+					+ '_' + Invoer/Kengetallen/Eindgebruikerskosten/OK/Label[classify(BO/oppervlakte, Invoer/Kengetallen/Eindgebruikerskosten/OK/ClassBreaks)]
+					+ '_' + (BO/isMeergezins ? 'MGW' : 'EGW')
+					),Invoer/Kengetallen/Eindgebruikerskosten/SSOKWT/Label)
+					;
+				attribute<eur_yr> Oj_hv  (BO) :=
+					  BO/Eigendom_rel == Classifications/Eigendom/V/PartHuur ? Invoer/Kengetallen/Eindgebruikerskosten/SSOKWT/Oj_hv_Punten[HV_rel]
+					: BO/Eigendom_rel == Classifications/Eigendom/V/WoonCorp ? Invoer/Kengetallen/Eindgebruikerskosten/SSOKWT/Oj_hv_WoonCo[HV_rel]
+					: 0.0[eur_yr];
 
-			attribute<Invoer/Kengetallen/Eindgebruikerskosten/SSOKWT> HV_rel (BO) := rlookup((
-				Classifications/Schillabel/name[BO/Energielabel_rel] + '_' + Classifications/Schillabel/name[BebouwingsComponenten/Woning/BO/Energielabel_rel] //Schilsprong
-				+ '_' + Invoer/Kengetallen/Eindgebruikerskosten/OK/Label[classify(BO/oppervlakte, Invoer/Kengetallen/Eindgebruikerskosten/OK/ClassBreaks)]
-				+ '_' + (BO/isMeergezins ? 'MGW' : 'EGW')
-				),Invoer/Kengetallen/Eindgebruikerskosten/SSOKWT/Label)
-				;
-			attribute<eur_yr> Oj_hv  (BO) :=
-				  BO/Eigendom_rel == Classifications/Eigendom/V/PartHuur ? Invoer/Kengetallen/Eindgebruikerskosten/SSOKWT/Oj_hv_Punten[HV_rel]
-				: BO/Eigendom_rel == Classifications/Eigendom/V/WoonCorp ? Invoer/Kengetallen/Eindgebruikerskosten/SSOKWT/Oj_hv_WoonCo[HV_rel]
-				: 0.0[eur_yr];
+				//====== Placeholder Hypotheekrenteaftrek
+
+				attribute<Eur_yr> KL_totaal (BO) := add(
+					Kapitaallasten/Kji_Asl_Enet,
+					Kapitaallasten/Kji_Asl_Gnet,
+					Kapitaallasten/Kji30_LO,
+					Kapitaallasten/Kji20_LO,
+					Kapitaallasten/Kji15_LO,
+					Kapitaallasten/Kji_gv,
+					Kapitaallasten/Kji_LTAS) - Oji_s_LO_30 - Oji_s_LO_20 - Oji_s_LO_15 - Oji_s_GV;
+
+				attribute<Eur_yr> wv_Aflossing (BO) := not(BO/Eigendom_rel == Classifications/Eigendom/V/Koop) ? 0.0[eur_yr] : KL_totaal;
+			}
 		}
-		
-		container Kapitaallasten
+		/*
+		container Kapitaallasten := for_each_nedv(Classifications/Gebouw_kapitaallasten/name, replace('PrevResults/@KL@ + jaarlijks/@KL@', '@KL@', Classifications/Gebouw_kapitaallasten/name), BO, Eur_yr )
 		{
 			container PrevResults := BO_base/OrgKapitaallasten;
-
-			//Aansluitbijdrages
-			attribute<Eur_yr> Kji_Asl_Enet (BO) := PrevResults/Kji_Asl_Enet + eenmalig/Ki_Asl_Enet * NcwRefs/AF_50;
-			attribute<Eur_yr> Kmi_Asl_Enet (BO) := PrevResults/Kmi_Asl_Enet + eenmalig/Ki_Asl_Enet * NCW/mr50/AnnualisationFactor;
-			attribute<Eur_yr> Kji_Asl_Gnet (BO) := PrevResults/Kji_Asl_Gnet + eenmalig/Ki_Asl_Gnet * NcwRefs/AF_50;
-			attribute<Eur_yr> Kmi_Asl_Gnet (BO) := PrevResults/Kmi_Asl_Gnet + eenmalig/Ki_Asl_Gnet * NCW/mr50/AnnualisationFactor;
-
-			//Investeringen
-			attribute<Eur_yr> Kji30_LO (BO) := PrevResults/Kji30_LO + eenmalig/Ki30_LO * NcwRefs/AF_30;
-			attribute<Eur_yr> Kmi30_LO (BO) := PrevResults/Kmi30_LO + eenmalig/Ki30_LO * NCW/mr30/AnnualisationFactor;
-			attribute<Eur_yr> Kji20_LO (BO) := PrevResults/Kji20_LO + eenmalig/Ki20_LO * NcwRefs/AF_20;
-			attribute<Eur_yr> Kmi20_LO (BO) := PrevResults/Kmi20_LO + eenmalig/Ki20_LO * NCW/mr20/AnnualisationFactor;
-			attribute<Eur_yr> Kji15_LO (BO) := eenmalig/Ki15_LO * NcwRefs/AF_15;
-			attribute<Eur_yr> Kmi15_LO (BO) := eenmalig/Ki15_LO * NCW/mr15/AnnualisationFactor;
-			attribute<Eur_yr> Kji_gv   (BO) := PrevResults/Kji_gv   + jaarlijks/Kji_gv;
-			attribute<Eur_yr> Kmi_gv   (BO) := PrevResults/Kmi_gv   + jaarlijks/Kmi_gv;
-			
-			attribute<Eur_yr> Kji_LTAS (BO) := PrevResults/Kji_LTAS + eenmalig/Ki_LTAS * NcwRefs/AF_30;
-			attribute<Eur_yr> Kmi_LTAS (BO) := PrevResults/Kmi_LTAS + eenmalig/Ki_LTAS * NCW/mr30/AnnualisationFactor;
-
-			//Subsidies
-			attribute<Eur_yr> Oji_s_LO_30 (BO) := PrevResults/Oji_s_LO_30 + eenmalig/Oi30_LO * NcwRefs/AF_30;
-			attribute<Eur_yr> Oji_s_LO_20 (BO) := PrevResults/Oji_s_LO_20 + eenmalig/Oi20_LO * NcwRefs/AF_20;
-			attribute<Eur_yr> Oji_s_LO_15 (BO) := PrevResults/Oji_s_LO_15 + eenmalig/Oi15_LO * NcwRefs/AF_15;
-			attribute<Eur_yr> Oji_s_gv    (BO) := PrevResults/Oji_s_gv    + eenmalig/Oi_gv   * NcwRefs/AF_30;
-			
-		}
+		}*/
 	}
 }
 
