@@ -174,14 +174,28 @@ template BebouwingsComponentT
 		attribute<ModelObject>                             Model_rel     (BO) := rlookup(BO/ModelObjectKey, ModelObject/ModelObjectKey), KeepData = "True", ishidden = "True";
 		attribute<PrevObject>                              PrevObject_rel(BO) := = doNieuwbouw ? 'rlookup(BO/code, PrevObject/code)' : 'ID(PrevObject)', ishidden = "True";
 
-//		attribute<ratio> W_asl_p_prov (Geography/RegioIndelingen/Provincie) :=  sum(float64(Aansluitingen/Warmtenet) * nrAansluitingen, Invoer/RuimtelijkeData/StudieGebied/Buurt/Provincie_rel[Planregio_rel]) / sum(nrAansluitingen, Invoer/RuimtelijkeData/StudieGebied/Buurt/Provincie_rel[Planregio_rel]);
-
 		unit<uint32>  AfnameGebied         := PrevState/AfnameGebied, ishidden = "True";
 
 		parameter<string> BCname := ../BCname, ishidden = "True";
 		attribute<Classifications/Schillabel>  Schillabel_rel   (BO) := makedefined(PrevObject/Schillabel_rel[PrevObject_rel]  , ModelObject/SchilLabel_rel[Model_rel]);
-		attribute<Classifications/Schillabel>  Energielabel_rel (BO) := makedefined(PrevObject/Energielabel_rel[PrevObject_rel], ModelObject/SchilLabel_rel[Model_rel]);
+		attribute<Classifications/Schillabel>  PrevEnergielabel_rel (BO) := makedefined(PrevObject/Energielabel_rel[PrevObject_rel], ModelObject/SchilLabel_rel[Model_rel]);
 		
+		container EnergielabelBerekening := CalculationSchemes/NTA8800(BO)
+		{
+			container OverigeInstallaties
+			{
+				container Ventilatie
+				{
+					attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> InstallatieType_rel (results) := InstallatiePerProduct/VT;
+				}
+			}
+			container Func2Meter := MetervraagBerekening;
+		}
+		attribute<Classifications/Schillabel> Energielabel_rel := EnergielabelBerekening/Energielabel_rel;
+		//	IntegrityCheck = "Energielabel_rel == PrevEnergielabel_rel || RekenstapName == 'StartJaar'";
+
+		attribute<bool> LabelGelijk := Energielabel_rel == PrevEnergielabel_rel || RekenstapName == 'StartJaar';
+
 		attribute<Classifications/WarmteOptie> WarmteOptie_rel (BO) := Isdefined( Bebouwingscomponenten/woning/BO/Aflevergebied_rel ) && Bebouwingscomponenten/Woning/BO/Aansluitingen/Warmtenet ? Classifications/WarmteOptie/V/Gebied_zK : PrevObject/WarmteOptie_rel[PrevObject_rel], ishidden = "True";
 		attribute<Classifications/Schillabel>  Startlabel_rel  (BO) := PrevObject/Startlabel_rel[PrevObject_rel];
 		attribute<BO> Bo_rel (BO) := id(.), ishidden = "True";
