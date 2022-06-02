@@ -1,8 +1,8 @@
 REM aanpassingen voor machine specifieke paden
 
-set prj_dir=C:\Vesta\Model\PD\Hestia
-set log_dir=C:\Vesta\Model\LD\Hestia\log
-set exe_dir=C:\Program Files\ObjectVision\GeoDms7321
+set prj_dir=K:\Hestia\PD
+set log_dir=K:\Hestia\LD\log
+set exe_dir=C:\Program Files\ObjectVision\GeoDms7407
 
 REM einde aanpassingen voor machine specifieke paden
 
