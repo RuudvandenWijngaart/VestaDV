@@ -147,6 +147,44 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			attribute<Classifications/SchilLabel> SchilLabel_rel      := rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/schillabel_rel), FreeData = "True";
 		}
 
+		container BouwdeelKwaliteit_2000
+		{
+			unit<uint32> Src: StorageName = "%projDir%/isolatie/niveau_combinatie_label_frequentietabel_KWR_2000_FM.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
+			{
+				container data := for_each_nedv(Classifications/Bouwdeel/name ,Classifications/Bouwdeel/name == 'KR' ? 'const((0/0)[Classifications/IsolatieNiveau],src)' : 'rlookup(src/'+Classifications/Bouwdeel/name+', Classifications/IsolatieNiveau/name)' ,src ,Classifications/IsolatieNiveau )
+				{
+					attribute<Classifications/SchilLabel> SchilLabel_rel (src) := rlookup(Src/Energielabel, Classifications/SchilLabel/name);
+					attribute<float64>                    Frequency      (src) := float64(src/freq);
+					attribute<float64>                    CumulFrequency (src) := cumulate(Frequency, SchilLabel_rel);
+					attribute<float64>                    ClassBreaks    (src) := CumulFrequency - Frequency;
+				}
+				container ClassBreak_p_Label := for_each_nt(Classifications/SchilLabel/Name, MakeBreaks);
+				template MakeBreaks
+				{
+					parameter<Classifications/SchilLabel> SchilLabel_rel_here := ='Classifications/SchilLabel/V/' + PropValue(., 'name');
+					unit<uint32> Sub := subset(Src/data/schillabel_rel == SchilLabel_rel_here)
+					{
+						attribute<float64> ClassBreaks := Src/data/ClassBreaks[nr_OrgEntity];
+						attribute<float64> Frequency   := Src/data/Frequency[nr_OrgEntity];
+					}
+				}
+			}
+			unit<uint32> vbo := BAG/vbo_woonfunctie_studiegebied
+			{
+				attribute<Classifications/Schillabel> Schillabel_rel := BeginSituatie/StartingStateComponenten/Woning/Results/DefaultLabel_rel;
+				parameter<uint32>                     seed           := 101;
+				attribute<float64>                    RndNr          := rnd_uniform(seed, vbo, range(float64, 0d, 1d));
+				attribute<Src>                        Src_rel        := ='makedefined('+AsItemList(replace('not(Schillabel_rel == Classifications/SchilLabel/V/@SL@) ? (0/0)[src] : Src/ClassBreak_p_Label/@SL@/sub/nr_OrgEntity[Classify(RndNr, Src/ClassBreak_p_Label/@SL@/sub/ClassBreaks)]','@SL@',Classifications/SchilLabel/name))+')';
+			
+				container Isolatie_vbo := for_each_nedv(
+					  Classifications/Bouwdeel/Name
+					, 'Src/Data/'+Classifications/Bouwdeel/Name+'[Src_rel]'
+						, vbo
+						, Classifications/Isolatieniveau
+					);
+			}
+		}
+
 		container BouwdeelKwaliteit
 		{
 			unit<uint32> Src: StorageName = "%projDir%/isolatie/frequentieverdeling_isolatieniveaus.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
@@ -189,19 +227,19 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
  						, vbo
  						, Classifications/Isolatieniveau
 						);
-
+				parameter<string> Isolatie_vbo_path := Invoer/StartgegevensAan ? '' : 'BouwdeelKwaliteit_2000/vbo/';
 				unit<uint32> Isolatie_writer := vbo, Storagename = "%HestiaDataDir%/vraag/Wonen/Isolatie.fss"
 				{
-					attribute<Classifications/Isolatieniveau> RB := Isolatie_vbo/RB;
-					attribute<Classifications/Isolatieniveau> RO := Isolatie_vbo/RO;
-					attribute<Classifications/Isolatieniveau> DR := Isolatie_vbo/DR;
-					attribute<Classifications/Isolatieniveau> PL := Isolatie_vbo/PL;
-					attribute<Classifications/Isolatieniveau> VL := Isolatie_vbo/VL;
-					attribute<Classifications/Isolatieniveau> MG := Isolatie_vbo/MG;
-					attribute<Classifications/Isolatieniveau> MS := Isolatie_vbo/MS;
-					attribute<Classifications/Isolatieniveau> DP := Isolatie_vbo/DP;
-					attribute<Classifications/Isolatieniveau> DS := Isolatie_vbo/DS;
-					attribute<Classifications/Isolatieniveau> KR := Isolatie_vbo/KR;
+					attribute<Classifications/Isolatieniveau> RB := =Isolatie_vbo_path + 'Isolatie_vbo/RB';
+					attribute<Classifications/Isolatieniveau> RO := =Isolatie_vbo_path + 'Isolatie_vbo/RO';
+					attribute<Classifications/Isolatieniveau> DR := =Isolatie_vbo_path + 'Isolatie_vbo/DR';
+					attribute<Classifications/Isolatieniveau> PL := =Isolatie_vbo_path + 'Isolatie_vbo/PL';
+					attribute<Classifications/Isolatieniveau> VL := =Isolatie_vbo_path + 'Isolatie_vbo/VL';
+					attribute<Classifications/Isolatieniveau> MG := =Isolatie_vbo_path + 'Isolatie_vbo/MG';
+					attribute<Classifications/Isolatieniveau> MS := =Isolatie_vbo_path + 'Isolatie_vbo/MS';
+					attribute<Classifications/Isolatieniveau> DP := =Isolatie_vbo_path + 'Isolatie_vbo/DP';
+					attribute<Classifications/Isolatieniveau> DS := =Isolatie_vbo_path + 'Isolatie_vbo/DS';
+					attribute<Classifications/Isolatieniveau> KR := =Isolatie_vbo_path + 'Isolatie_vbo/KR';
 				}
 
 				unit<uint32> Isolatie_reader := vbo, StorageName = "%HestiaDataDir%/vraag/Wonen/Isolatie.fss", StorageReadOnly = "true"
