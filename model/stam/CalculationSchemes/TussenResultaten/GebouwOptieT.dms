@@ -211,6 +211,10 @@ template SubsetGebouwOptieT
 	
 	container OverigeInstallaties
 	{	
+		parameter<bool>   Afweging_VT         := SpecifiekeInstellingen/InstallatieSet/InstallatieSetcriteria/Afweging_VT, IsHidden = "True";
+		parameter<bool>   Afweging_DK         := SpecifiekeInstellingen/InstallatieSet/InstallatieSetcriteria/Afweging_DK, IsHidden = "True";
+		parameter<bool>   Afweging_KK         := SpecifiekeInstellingen/InstallatieSet/InstallatieSetcriteria/Afweging_KK, IsHidden = "True";
+
 		//================ Berekeningen en afwining Ventilatie-installaties
 		container ventilatie
 		{
@@ -300,14 +304,14 @@ template SubsetGebouwOptieT
 					attribute<GJ_yr>   V_E             (GeschiktObject) := ='merge(uint8(Ventilatieoptie_def), GJ_yr ,'+AsItemList('PerOptie/'+Ventilatieopties/Name+'/V_E')+')';
 				}
 
-				attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_def (GeschiktObject) := VentilatieActief ? Choice/Installatietype_def : Installatietype_org;
+				attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_def (GeschiktObject) := =not(Afweging_VT) ? 'Installatietype_org' : 'VentilatieActief ? Choice/Installatietype_def : Installatietype_org';
 				
 				//====== waarden gekozen ventilatiesysteem
-				attribute<eur>    Ki_vent (GeschiktObject) := Choice/Ki_VT;
-				attribute<eur_yr> Kji_VT  (GeschiktObject) := Choice/Kji_VT;
-				attribute<eur_yr> Kmi_VT  (GeschiktObject) := Choice/Kmi_VT;
-				attribute<GJ_yr>  V_RV    (GeschiktObject) := Choice/V_RV;
-				attribute<GJ_yr>  V_E     (GeschiktObject) := Choice/V_E;
+				attribute<eur>    Ki_vent (GeschiktObject) := =not(Afweging_VT) ? '0.0[eur]' : 'not(VentilatieActief) ? 0.0[eur] : Choice/Ki_VT';
+				attribute<eur_yr> Kji_VT  (GeschiktObject) := =not(Afweging_VT) ? '0.0[eur_yr]' : 'not(VentilatieActief) ? 0.0[eur_yr] : Choice/Kji_VT';
+				attribute<eur_yr> Kmi_VT  (GeschiktObject) := =not(Afweging_VT) ? '0.0[eur_yr]' : 'not(VentilatieActief) ? 0.0[eur_yr] : Choice/Kmi_VT';
+				attribute<GJ_yr>  V_RV    (GeschiktObject) := =not(Afweging_VT) ? 'BO/Functioneel/Vrv_VT[GeschiktObject/BO_rel]' : 'not(VentilatieActief) ? BO/Functioneel/Vrv_VT[GeschiktObject/BO_rel] : Choice/V_RV';
+				attribute<GJ_yr>  V_E     (GeschiktObject) := =not(Afweging_VT) ? 'BO/MetervraagBerekening/eEffect/Ventilatie/Vj_elek[GeschiktObject/BO_rel]' : 'not(VentilatieActief) ? BO/MetervraagBerekening/eEffect/Ventilatie/Vj_elek[GeschiktObject/BO_rel] : Choice/V_E';
 
 			}
 			//====== Gekozen ventilatiesysteem
@@ -330,7 +334,7 @@ template SubsetGebouwOptieT
 				attribute<Inst>    Installatietype_org (GeschiktObject) := BO/InstallatiePerProduct/KK[GeschiktObject/BO_rel], Descr = "uitgangssituatie qua koken";
 				attribute<bool>    Gasloos             (GeschiktObject) := Func2Meter/metervraag_per_input/Gas == 0.0[GJ_yr], Descr = "Gebruikt de woning nog gas, buiten koken om?";
 				attribute<bool>    Overstap            (GeschiktObject) := not(KokenActief) ? Probability_gasloos < KookElekZelfstandig : Probability_gasloos < KookElekNatuurlijk;
-				attribute<Inst>    Installatietype_def (GeschiktObject) := gasloos || overstap ? Inst/V/Elek : Installatietype_org, Descr = "nieuwe situatie qua koken";
+				attribute<Inst>    Installatietype_def (GeschiktObject) := =not(Afweging_KK) ? 'Installatietype_org' : 'gasloos || overstap ? Inst/V/Elek : Installatietype_org', Descr = "nieuwe situatie qua koken";
 				attribute<bool>    IsChangedNow        (GeschiktObject) := Installatietype_org != Installatietype_def;
 				attribute<eur>     Ki_koken            (GeschiktObject) := float64(IsChangedNow) * BO/nrAansluitingen[GeschiktObject/BO_rel] * 
 																			( Schuiven/KostenMin * Leercurves/Koken/curve * Inst/Ki_asl_min[Installatietype_def]
