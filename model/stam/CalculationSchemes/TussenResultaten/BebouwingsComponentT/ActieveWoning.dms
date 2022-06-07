@@ -108,7 +108,7 @@ unit<uint32> ActieveWoning := select_orgrel(BO/Activatie/ProductActief || BO/Act
 		parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(xInvesteringsOptie/ActieveWoning_rel) )
 		parameter<float64> beta            := SpecifiekeInstellingen/Probabilisering/NonspecificBeta / max(GeschikteOptie/kosten_tbv_afweging); // monetary sensitivity
 
-		attribute<Float64> SpecificBeta  (GeschikteOptie)     := float64(Classifications/Scurve_gebouwoptie/beta[combine_data(Classifications/Scurve_gebouwoptie, BO/Eigendom_rel[GeschikteOptie/BO_rel], GeschikteOptie/GebouwOptie_rel)]);
+		attribute<Float64> SpecificBeta  (GeschikteOptie)     := Classifications/Scurve_gebouwoptie/beta_f[combine_data(Classifications/Scurve_gebouwoptie, BO/Eigendom_rel[GeschikteOptie/BO_rel], GeschikteOptie/GebouwOptie_rel)];
 		attribute<Float64> MaxKosten     (xInvesteringsOptie) := max(GeschikteOptie/kosten_tbv_afweging, GeschikteOptie/xInvesteringsOptie_rel);
 		attribute<Float64> Geschiktheid  (GeschikteOptie)     := MaxKosten[GeschikteOptie/xInvesteringsOptie_rel] - GeschikteOptie/kosten_tbv_afweging;
 		attribute<Float64> OddsRatio     (GeschikteOptie)     := IsDefined(Geschiktheid) ? exp(min_elem(Geschiktheid * beta * SpecificBeta, LOG_MAX_FLOAT64)) : 0.0;
@@ -123,14 +123,14 @@ unit<uint32> ActieveWoning := select_orgrel(BO/Activatie/ProductActief || BO/Act
 		attribute<GeschikteOptie>              GeschikteOptie_rel        (xInvesteringsOptie) := SCurve_GeschikteOptie_rel;
 		attribute<Classifications/GebouwOptie> GebouwOptie_rel           (xInvesteringsOptie) := GeschikteOptie/GebouwOptie_rel[GeschikteOptie_rel];	
 		
-		attribute<Float64>                     P50P                      (xInvesteringsOptie) := float64(
-			Classifications/Scurve_investering/P50P[
+		attribute<Float64>                     P50P                      (xInvesteringsOptie) := 
+			Classifications/Scurve_investering/P50P_f[
 				combine_data(Classifications/Scurve_investering,
 					Eigendom[Choice_per_xInvesteringsOptie/GeschikteOptie_rel],
 					combine_data(combine(Classifications/IsolatieAmbitie,Classifications/GebouwOptieCategorie),
 						MinIsolatieAmbitie[Choice_per_xInvesteringsOptie/GeschikteOptie_rel],
 						GebouwOptieCategorie[Choice_per_xInvesteringsOptie/GeschikteOptie_rel]))
-				]);		 	
+				];		 	
 		attribute<eur_yr>                      kosten_tbv_afweging       (xInvesteringsOptie) := GeschikteOptie/kosten_tbv_afweging[GeschikteOptie_rel] * P50P;
 	}	
 	
@@ -148,14 +148,14 @@ unit<uint32> ActieveWoning := select_orgrel(BO/Activatie/ProductActief || BO/Act
 		parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(xInvesteringsOptie/ActieveWoning_rel) )
 		parameter<float64> beta            := SpecifiekeInstellingen/Probabilisering/NonspecificBeta / max(choice_per_xInvesteringsOptie/kosten_tbv_afweging); // monetary sensitivity
 
-		attribute<Float64> SpecificBeta  (xInvesteringsOptie) := float64(
-			Classifications/Scurve_investering/beta[
+		attribute<Float64> SpecificBeta  (xInvesteringsOptie) := 
+			Classifications/Scurve_investering/beta_f[
 					combine_data(Classifications/Scurve_investering,
 						Eigendom,
 						combine_data(combine_unit_uint32(Classifications/IsolatieAmbitie,Classifications/GebouwOptieCategorie),
 							MinIsolatieAmbitie,
 							GebouwOptieCategorie))
-				]);		 
+				];		 
 		attribute<Float64> MaxKosten     (ActieveWoning)      := max(Choice_per_xInvesteringsOptie/kosten_tbv_afweging, xInvesteringsOptie/ActieveWoning_rel);
 		attribute<Float64> Geschiktheid  (xInvesteringsOptie) := MaxKosten[xInvesteringsOptie/ActieveWoning_rel] - Choice_per_xInvesteringsOptie/kosten_tbv_afweging;
 		attribute<Float64> OddsRatio     (xInvesteringsOptie) := IsDefined(Geschiktheid) ? exp(min_elem(Geschiktheid * beta * SpecificBeta, LOG_MAX_FLOAT64)) : 0.0;
@@ -204,6 +204,11 @@ unit<uint32> ActieveWoning := select_orgrel(BO/Activatie/ProductActief || BO/Act
 				
 		container kosten
 		{
+			container kapitaallasten := for_each_nedv(
+				Classifications/Gebouw_kapitaallasten/name,
+				replace('makedefined(GeschikteOptie/kapitaallasten/@GK@[Choice_per_BO/GeschikteOptie_rel], BO/kapitaallasten/@GK@)', '@GK@', Classifications/Gebouw_kapitaallasten/name ),
+				BO,
+				Eur_yr);
 			container eenmalig := for_each_nedv(
 				Classifications/GebouwOptie_eenmalig/name,
 				replace('makedefined(GeschikteOptie/eenmalig/@GE@[Choice_per_BO/GeschikteOptie_rel], 0[Eur])', '@GE@', Classifications/GebouwOptie_eenmalig/name ),
@@ -214,7 +219,7 @@ unit<uint32> ActieveWoning := select_orgrel(BO/Activatie/ProductActief || BO/Act
 			}
 			container jaarlijks := for_each_nedv(
 				Classifications/GebouwOptie_jaarlijks/name,
-				replace('makedefined(GeschikteOptie/jaarlijks/@GJ@[Choice_per_BO/GeschikteOptie_rel], 0[Eur_yr])', '@GJ@', Classifications/GebouwOptie_jaarlijks/name ),
+				replace('makedefined(GeschikteOptie/jaarlijks/@GJ@[Choice_per_BO/GeschikteOptie_rel], BO/jaarlijks/@GJ@)', '@GJ@', Classifications/GebouwOptie_jaarlijks/name ),
 				BO,
 				Eur_yr)
 			{
