@@ -26,7 +26,7 @@ for param in parameter_list:
 # Making entry names for gebouwoptie
 inputfile_name = 'Scurves_gebouwoptie.csv'
 path_in = os.path.join(scurve_path, inputfile_name)
-scurve_gebouwoptie = pd.read_csv(path_in,  sep='\t')
+scurve_gebouwoptie = pd.read_csv(path_in,  sep=',')
 
 count = 0
 for optie in scurve_gebouwoptie.T:
@@ -41,7 +41,7 @@ for optie in scurve_gebouwoptie.T:
 # Making entry names for investering
 inputfile_name = 'Scurves_investering.csv'
 path_in = os.path.join(scurve_path, inputfile_name)
-scurve_investering = pd.read_csv(path_in,  sep='\t')
+scurve_investering = pd.read_csv(path_in,  sep=',')
 
 count = 0
 for optie in scurve_investering.T:
@@ -57,7 +57,7 @@ for optie in scurve_investering.T:
 # Making entry names for isolatie
 inputfile_name = 'Scurves_isolatie.csv'
 path_in = os.path.join(scurve_path, inputfile_name)
-scurve_isolatie = pd.read_csv(path_in,  sep=';')
+scurve_isolatie = pd.read_csv(path_in,  sep=',')
 
 count = 0
 for optie in scurve_isolatie.T:
@@ -70,7 +70,7 @@ for optie in scurve_isolatie.T:
     count+=1
     
 # Create placehodler input values
-parameter_placeholder_inputs = [10, 'GM0344', 1, 0.8, 0.5, 2,
+parameter_placeholder_inputs = [21, 'GM0050', 0, 0.8, 0.5, 2,
                                 0,0,0,0,1,1,1,1.06]
 placeholder_inputs = [1] * (len(names_list) -len(parameter_placeholder_inputs))
 for input in placeholder_inputs:
