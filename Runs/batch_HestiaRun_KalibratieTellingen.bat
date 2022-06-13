@@ -9,4 +9,4 @@ Call path/set.bat
 
 START "HESTIA" /WAIT /BELOWNORMAL "%exe_path%" "/L%log_dir%\HestiaRun.txt"  "%prj_dir%\Runs\HestiaRun.dms" /Tellingen/KalibratieTellingen/export_csv/result
 
-pause Totaal klaar
+rem pause Totaal klaar
