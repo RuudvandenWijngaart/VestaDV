@@ -156,23 +156,32 @@ container Vastgoed
 		parameter<Periode> Periode_rel;
 		//end parameters
 
-		unit<uint32> BebouwingsObject := NB
+		unit<uint32> BebouwingsObject_buff := NB
+		{
+
+			attribute<StudieGebied/Buurt>          Buurt_rel         := Point_in_polygon(Geometry, StudieGebied/Buurt/Geometry);
+		}
+
+		unit<uint32> BebouwingsObject := subset(isdefined(BebouwingsObject_buff/Buurt_rel))
 		{
 
 			attribute<string>                      Code              := TypeName +string( Periode/name[Periode_rel] )+string( Geometry ) ;
 			attribute<string>                      TypeName          := Classifications/WoningType/name[Woningtype_rel];
 			attribute<string>                      label             := Code, DialogType = "LabelText";
-			attribute<rdc_meter>                   Geometry          := NB/geometry;
+			attribute<rdc_meter>                   Geometry          := NB/geometry[nr_OrgEntity];
 			attribute<rdc_meter>                   Point             := geometry;
-			attribute<nrAsl>                       nrAansluitingen_i := NB/nr_aansl;
-			attribute<Classifications/WoningType>  Woningtype_rel    := NB/Woningtype_rel;
+			attribute<nrAsl>                       nrAansluitingen_i := NB/nr_aansl[nr_OrgEntity];
+			attribute<Classifications/WoningType>  Woningtype_rel    := NB/Woningtype_rel[nr_OrgEntity];
 			attribute<Classifications/WoningType>  BebouwingsType    := Woningtype_rel;
-			attribute<m2>                          Oppervlakte_i     := Classifications/WoningType/Default_oppervlak_Nieuwbouw[Woningtype_rel] * nr_aansl;
+			attribute<m2>                          Oppervlakte_i     := Classifications/WoningType/Default_oppervlak_Nieuwbouw[Woningtype_rel] * nrAansluitingen_i;
 			attribute<units/pand_asl>              Pand_aandeel      := Classifications/WoningType/Pand_aandeel[Woningtype_rel];
 			attribute<yr_uint16>                   Sloopjaar         := Const(2100[yr_uint16],.);
 			attribute<StudieGebied/Buurt>          Buurt_rel         := Point_in_polygon(Geometry, StudieGebied/Buurt/Geometry);
+
+			attribute<bool> ischeck := isdefined(Buurt_rel);
+
 			attribute<Geography/rdc_grids/m100>    gridm100_rel      := Geometry[Geography/rdc_grids/m100];
-			attribute<Classifications/Eigendom>    Eigendom_rel      := NB/Eigendom_rel;
+			attribute<Classifications/Eigendom>    Eigendom_rel      := NB/Eigendom_rel[nr_OrgEntity];
 			attribute<Classifications/GebouwOptie> GebouwOptie_rel   := const(rlookup(DefaultInstellingen/Basis/StartGebouwOpties/NieuwbouwWoning, Classifications/GebouwOptie/name),.);
 			
 			unit<uint32> BestaandAflevergebied := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data;
@@ -211,7 +220,7 @@ container Vastgoed
 			}
 			container Gebied
 			{
-				attribute<float64> n      (..) := float64(nr_aansl);
+				attribute<float64> n      (..) := float64(nrAansluitingen_i);
 				attribute<float64> MEAN_x (..) := float64(pointCol(Geometry));
 				attribute<float64> MEAN_y (..) := float64(pointRow(Geometry));
 				attribute<float64> SSD_xx (..) := const(10000.0 / 12.0, BebouwingsObject);
