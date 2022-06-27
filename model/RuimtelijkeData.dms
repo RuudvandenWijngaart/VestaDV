@@ -147,9 +147,16 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			attribute<Classifications/SchilLabel> SchilLabel_rel      := rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/schillabel_rel), FreeData = "True";
 		}
 
-		container BouwdeelKwaliteit_2000
+		//======= Allocatie gebouwdeelkwaliteit per VBO ======
+
+		container BouwdeelKwaliteit_2000 := BouwdeelKwaliteitAllocatie('niveau_combinatie_label_frequentietabel_KWR_2000_FM.csv');
+		container BouwdeelKwaliteit_2020 := BouwdeelKwaliteitAllocatie('niveau_combinatie_label_frequentietabel_WoON_2020_FM.csv');
+
+		template BouwdeelKwaliteitAllocatie
 		{
-			unit<uint32> Src: StorageName = "%projDir%/isolatie/niveau_combinatie_label_frequentietabel_KWR_2000_FM.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
+			parameter<string> FreqTableName;
+
+			unit<uint32> Src: StorageName = "= '%projDir%/isolatie/' + FreqTableName", StorageType = "gdal2.vect", StorageReadOnly = "True"
 			{
 				container data := for_each_nedv(Classifications/Bouwdeel/name ,Classifications/Bouwdeel/name == 'KR' ? 'const((0/0)[Classifications/IsolatieNiveau],src)' : 'rlookup(src/'+Classifications/Bouwdeel/name+', Classifications/IsolatieNiveau/name)' ,src ,Classifications/IsolatieNiveau )
 				{
@@ -184,50 +191,12 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 					);
 			}
 		}
-
 		container BouwdeelKwaliteit
 		{
-			unit<uint32> Src: StorageName = "%projDir%/isolatie/frequentieverdeling_isolatieniveaus.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
-			{
-				attribute<string> name  := Schillabel + '_' + Woontype; // PrimaryKey
-				attribute<string> label := name;
-			}
 			unit<uint32> vbo := BAG/vbo_woonfunctie_studiegebied
 			{
-				attribute<bool>                       isMeerGezins   (vbo) := BAG/vbo_woonfunctie_studiegebied/pand_aandeel < 1.0[ratio];
-				attribute<Classifications/Schillabel> Schillabel_rel (vbo) := BeginSituatie/StartingStateComponenten/Woning/Results/DefaultLabel_rel;
-				attribute<Src>                        Src_rel        (vbo) := rlookup(Classifications/SchilLabel/name[Schillabel_rel] + (isMeerGezins ? '_MGW' : '_EGW'), Src/name);
+				parameter<string> Isolatie_vbo_path := Invoer/StartgegevensAan ? 'BouwdeelKwaliteit_2020/vbo/' : 'BouwdeelKwaliteit_2000/vbo/';
 
-				container IsolatieAllocatie := for_each_ne(Classifications/Bouwdeel/name, 'KiesIsolatie(Classifications/Bouwdeel/V/'+Classifications/Bouwdeel/name+')');
-				
-				template KiesIsolatie
-				{
-					//case parameters
-					parameter<Classifications/bouwdeel> Bouwdeel_rel;
-					//end parameters
-
-					attribute<ratio> P_N0 (Src) := ='(Src/'+Classifications/Bouwdeel/name[Bouwdeel_rel]+'_N0)[ratio]';
-					attribute<ratio> P_N1 (Src) := ='(Src/'+Classifications/Bouwdeel/name[Bouwdeel_rel]+'_N1)[ratio] + P_N0';
-					attribute<ratio> P_N2 (Src) := ='(Src/'+Classifications/Bouwdeel/name[Bouwdeel_rel]+'_N2)[ratio] + P_N1';
-					attribute<ratio> P_N3 (Src) := ='(Src/'+Classifications/Bouwdeel/name[Bouwdeel_rel]+'_N3)[ratio] + P_N2';
-
-					parameter<uint32>  seed        := 100 + uint32(Bouwdeel_rel);
-					attribute<float64> RndNr (vbo) := rnd_uniform(seed, vbo, range(float64, 0d, 1d));
-
-					attribute<Classifications/Isolatieniveau> Isolatieniveau_rel (vbo) :=
-						  RndNr <= P_N0[Src_rel] ? Classifications/Isolatieniveau/V/N0
-						: RndNr <= P_N1[Src_rel] ? Classifications/Isolatieniveau/V/N1
-						: RndNr <= P_N2[Src_rel] ? Classifications/Isolatieniveau/V/N2
-						: RndNr <= P_N3[Src_rel] ? Classifications/Isolatieniveau/V/N3
-						: Classifications/Isolatieniveau/V/N4;
-				}
-				container Isolatie_vbo := for_each_nedv(
-						  Classifications/Bouwdeel/Name
-						, 'IsolatieAllocatie/'+Classifications/Bouwdeel/Name+'/Isolatieniveau_rel'
- 						, vbo
- 						, Classifications/Isolatieniveau
-						);
-				parameter<string> Isolatie_vbo_path := Invoer/StartgegevensAan ? '' : 'BouwdeelKwaliteit_2000/vbo/';
 				unit<uint32> Isolatie_writer := vbo, Storagename = "%HestiaDataDir%/vraag/Wonen/Isolatie.fss"
 				{
 					attribute<Classifications/Isolatieniveau> RB := =Isolatie_vbo_path + 'Isolatie_vbo/RB';
@@ -241,7 +210,6 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 					attribute<Classifications/Isolatieniveau> DS := =Isolatie_vbo_path + 'Isolatie_vbo/DS';
 					attribute<Classifications/Isolatieniveau> KR := =Isolatie_vbo_path + 'Isolatie_vbo/KR';
 				}
-
 				unit<uint32> Isolatie_reader := vbo, StorageName = "%HestiaDataDir%/vraag/Wonen/Isolatie.fss", StorageReadOnly = "true"
 				{
 					attribute<Classifications/Isolatieniveau> RB;
@@ -255,13 +223,10 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 					attribute<Classifications/Isolatieniveau> DS;
 					attribute<Classifications/Isolatieniveau> KR;
 				}
-
 				parameter<bool> recalculate := true;
 				unit<uint32>    Isolatie    := = recalculate ?  'Isolatie_writer' : 'Isolatie_reader';
-
 			}
 		}
-		
 	}
 
 	#include <PuntBronnen.dms>
