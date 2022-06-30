@@ -101,25 +101,40 @@ template StateNaAllocatieComponent
 					: BO/Eigendom_rel == Classifications/Eigendom/V/WoonCorp ? Invoer/Kengetallen/Eindgebruikerskosten/SSOKWT/Oj_hv_WoonCo[HV_rel]
 					: 0.0[eur_yr];
 
+				container Huurcommissiemethode
+				{
+					parameter<ratio> Mr   := 0.0469 / 12.0 , Descr = "Maandrente";
+
+					parameter<_yr> r15 := 12.0[_yr] * ( Mr / (1.0-((1.0 + Mr)^-180.0)) );
+					parameter<_yr> r20 := 12.0[_yr] * ( Mr / (1.0-((1.0 + Mr)^-240.0)) );
+					parameter<_yr> r25 := 12.0[_yr] * ( Mr / (1.0-((1.0 + Mr)^-300.0)) );
+					parameter<_yr> r30 := 12.0[_yr] * ( Mr / (1.0-((1.0 + Mr)^-360.0)) );
+
+					attribute<Eur> Ki_15 (BO) := eenmalig/Ki15_LO + eenmalig/Ki_VT - eenmalig/Oi15_LO - eenmalig/Oi_VT;
+					attribute<Eur> Ki_20 (BO) := eenmalig/Ki20_LO - eenmalig/Oi20_LO;
+					attribute<Eur> Ki_25 (BO) := eenmalig/Ki_gv - eenmalig/Oi_gv;
+					attribute<Eur> Ki_30 (BO) := eenmalig/Ki30_LO + eenmalig/Ki_LTAS - eenmalig/Oi30_LO;
+
+					attribute<Eur_yr> Oj_hv_15 (BO) := r15 * Ki_15;
+					attribute<Eur_yr> Oj_hv_20 (BO) := r20 * Ki_20;
+					attribute<Eur_yr> Oj_hv_25 (BO) := r25 * Ki_25;
+					attribute<Eur_yr> Oj_hv_30 (BO) := r30 * Ki_30;
+
+					attribute<Eur_yr> Oj_hv (BO) := add(Oj_hv_15,Oj_hv_20,Oj_hv_25,Oj_hv_30);
+				}
+
 				//====== Placeholder Hypotheekrenteaftrek
+				container Hypotheekrenteaftrek
+				{
+					parameter<ratio> BelastingSchijf := 0.37[ratio]; // 0.371 of 0.495 (2022)
 
-				attribute<Eur_yr> KL_totaal (BO) := add(
-					Kapitaallasten/Kji_Asl_Enet,
-					Kapitaallasten/Kji_Asl_Gnet,
-					Kapitaallasten/Kji30_LO,
-					Kapitaallasten/Kji20_LO,
-					Kapitaallasten/Kji15_LO,
-					Kapitaallasten/Kji_gv,
-					Kapitaallasten/Kji_LTAS) - Oji_s_LO_30 - Oji_s_LO_20 - Oji_s_LO_15 - Oji_s_GV;
-
-				attribute<Eur_yr> wv_Aflossing (BO) := not(BO/Eigendom_rel == Classifications/Eigendom/V/Koop) ? 0.0[eur_yr] : KL_totaal;
+					attribute<Eur_yr> KL_totaal    (BO) := = 'add('+AsItemlist('float64('+string(Classifications/Gebouw_Kapitaallasten/isEindgebruikerskosten)+ ') * Kapitaallasten/'+ Classifications/Gebouw_Kapitaallasten/name)+')';
+					attribute<Eur_yr> wv_Aflossing (BO) := = 'add('+AsItemlist('eenmalig/'+ Classifications/Gebouwoptie_eenmalig/name + ' / float64(' + string(Classifications/GebouwOptie_eenmalig/AT) +')[yr]' ) +')' ;
+					attribute<Eur_yr> RenteBedrag  (BO) := KL_totaal - wv_Aflossing;
+					attribute<Eur_yr> Aftrek       (BO) := RenteBedrag * BelastingSchijf;
+				}
 			}
 		}
-		/*
-		container Kapitaallasten := for_each_nedv(Classifications/Gebouw_kapitaallasten/name, replace('PrevResults/@KL@ + jaarlijks/@KL@', '@KL@', Classifications/Gebouw_kapitaallasten/name), BO, Eur_yr )
-		{
-			container PrevResults := BO_base/OrgKapitaallasten;
-		}*/
 	}
 }
 

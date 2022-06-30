@@ -134,6 +134,11 @@ template BebouwingsComponentT
 			'select_data(HistorischBouw, BeginSituatieResults/Kapitaallasten/'+ Classifications/Gebouw_Kapitaallasten/name +')',
 			.,
 			Eur_yr);
+		container jaarlijks
+		{
+			attribute<eur_yr> Kj_OH_LO  (..) := const(0.0[eur_yr],..);
+			attribute<eur_yr> Kj_ADM_LO (..) := const(0.0[eur_yr],..);
+		}
 	}
 	unit<uint32>      NieuwbouwBron :=
 		= Classifications/Periode/isHistorisch[Periode_rel] ? 'HistorischBouw' :
@@ -370,8 +375,31 @@ template BebouwingsComponentT
 		container Functioneel          := CalculationSchemes/BerekenFunctioneel(BO, BO, id(.));
 		container MetervraagBerekening := CalculationSchemes/FunctioneelToMetervraag(BO, false, SPF); 
 		container Metervraag           := MetervraagBerekening/result, ishidden = "True";
-		
+
 		#include <Activatie.dms>
+
+		container jaarlijks := Union/result/jaarlijks
+		{
+			attribute<eur_yr> Kj_elek        (BO) := Metervraag/e        * Prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl [classify( metervraag/e , Prijzen/Elektriciteit/Staffel/ClassBreak )];
+			attribute<eur_yr> Kj_gas         (BO) := Metervraag/gas      * Prijzen/AardGas/Staffel/KGJ_eindgebruik_excl [classify( metervraag/gas , Prijzen/AardGas/Staffel/ClassBreak )];
+			attribute<eur_yr> Kj_biomassa    (BO) := Metervraag/biomassa * Prijzen/Overig/Pj_biomassa;
+			attribute<eur_yr> Kj_olie        (BO) := Metervraag/olie     * Prijzen/Overig/Pj_olie;
+			attribute<eur_yr> Kj_olie_eh     (BO) := Metervraag/olie     * Prijzen/Overig/Pj_olie_EH;
+			attribute<eur_yr> Kj_pellets     (BO) := Metervraag/pellets  * Prijzen/Overig/Pj_pellets;
+			attribute<eur_yr> Kj_H2          (BO) := Metervraag/H2       * Prijzen/Overig/Pj_H2;
+
+			attribute<eur_yr> Kj_vastrecht_G (BO) := Aansluitingen/GNet > 0.0[nrAsl] ? BC_kentallen/Opbrengsten/VastRechtBijdrageG : 0.0[eur_yr];
+			attribute<eur_yr> Kj_vastrecht_E (BO) := BC_kentallen/Opbrengsten/VastrechtBijdrageE;
+			attribute<eur_yr> Kj_vastrecht_W (BO) := Aansluitingen/Warmtenet ? BC_kentallen/Opbrengsten/VastrechtMT_T : 0.0[eur_yr];
+			attribute<eur_yr> Kj_vastrecht_K (BO) := Aansluitingen/Koudenet  ? BC_kentallen/Opbrengsten/VastrechtK_T  : 0.0[eur_yr];
+
+			attribute<eur_yr> Km_elek        (BO) := Metervraag/e   * Prijzen/Elektriciteit/Staffel/KGJ_Maatschappelijk [classify( metervraag/e , Prijzen/Elektriciteit/Staffel/ClassBreak )];
+			attribute<eur_yr> Km_gas         (BO) := Metervraag/gas * Prijzen/AardGas/Staffel/KGJ_Maatschappelijk [classify( metervraag/gas , Prijzen/AardGas/Staffel/ClassBreak )];
+			attribute<eur_yr> Km_biomassa    (BO) := Kj_biomassa;
+			attribute<eur_yr> Km_olie        (BO) := Kj_olie;
+			attribute<eur_yr> Km_pellets     (BO) := Kj_pellets;
+			attribute<eur_yr> Km_H2          (BO) := Kj_H2;
+		}
 	}
 		
 	//============== Voorwaarden voor het wel of niet toepassen van een gebouwoptie. Welke geldt is opgegeven in de runinstellingen per Rekenstap.
