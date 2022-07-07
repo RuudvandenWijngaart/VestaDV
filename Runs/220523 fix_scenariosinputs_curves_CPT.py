@@ -19,7 +19,7 @@ scurve_path     = os.path.join(PD_path, 'scurve')
 # Create naming list
 names_list = []
 parameter_list = ['nrYears', 'StudieGebied', 'StartgegevensAAN', 'Spreiding', 'Staart', 'RenovatieGrens',
-      'CPT', 'LossAversion', 'DiminishingSensitivity', 'ProbabilityWeighting', 'lambda', 'alpha', 'beta', 'discontovoet']
+      'CPT', 'LossAversion', 'DiminishingSensitivity', 'lambda', 'alpha', 'beta']
 for param in parameter_list:
     names_list.append(param)  
 
@@ -71,7 +71,7 @@ for optie in scurve_isolatie.T:
     
 # Create placehodler input values
 parameter_placeholder_inputs = [21, 'GM0050', 0, 0.8, 0.5, 2,
-                                0,0,0,0,1,1,1,1.06]
+                                0,0,0,1,1,1]
 placeholder_inputs = [1] * (len(names_list) -len(parameter_placeholder_inputs))
 for input in placeholder_inputs:
     parameter_placeholder_inputs.append(input)

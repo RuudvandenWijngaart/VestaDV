@@ -21,7 +21,7 @@ from datetime import datetime # To time how long the runs take
 
 # Setting paths
 hestia_path     = r'K:\Hestia' # Set this to your Hestia folder
-geodms_version  = '7.407'      # Set this to your GeoDMS version
+geodms_version  = '7.412'      # Set this to your GeoDMS version
 batchfile_name  = 'batch_HestiaRun_KalibratieTellingen.bat'
 PD_path         = os.path.join(hestia_path, 'PD')
 SD_path         = os.path.join(hestia_path, 'SD')
@@ -138,7 +138,7 @@ def main():
         inputfile_name = 'KalibratieInput.csv'
         path_in = os.path.join(runs_path, inputfile_name)
         run_inputdata = scenario_inputdata.iloc[scenario_num]
-        parameter_inputs = run_inputdata[:14]
+        parameter_inputs = run_inputdata[:12]
         parameter_inputs =  pd.DataFrame(parameter_inputs).T
         parameter_inputs.to_csv(path_in, index = False)
         number_of_years = int(parameter_inputs['nrYears'].loc[parameter_inputs.index[0]])
