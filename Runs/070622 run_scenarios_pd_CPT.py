@@ -31,7 +31,7 @@ batchfile_path  = os.path.join(runs_path, batchfile_name)
 scurve_path     = os.path.join(PD_path, 'scurve')
 results_path    = os.path.join(LD_path, 'PD', 'Results', 'Kalibratie')
 calccache_path  = os.path.join(LD_path,'PD','CalcCachex64.v%s'%(geodms_version))
-tellingen_name  = 'KalibratieTellingen.csv'
+tellingen_name  = 'KalibratieTellingen.csv' 
 tellingen_path  = os.path.join(results_path, tellingen_name)
 
 def format_timedelta(timedelta):

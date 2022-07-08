@@ -19,15 +19,11 @@ import numpy as np
 # Parameters
 save_image = 1
 provinces = 0
-final = 1
   
 # Setting paths
 hestia_path     = r'K:\Hestia' # Set this to your Hestia folder
-results_path    = os.path.join(hestia_path, 'LD', 'PD', 'Results', 'Kalibratie')
-results_folder = '2022_07_06-14_51_08'
-if final ==1:
-    results_path    = os.path.join(hestia_path, 'LD', 'PD', 'Results', 'Thesis')
-    results_folder = 'Final results'
+results_path    = os.path.join(hestia_path, 'LD', 'PD', 'Results', 'Thesis', 'Zeewolde')
+results_folder = 'LA zeewolde brede sweep'
 path = os.path.join(results_path, results_folder)
 
 # Load contants of all csv's into one DataFrame
@@ -42,14 +38,12 @@ for file in all_files:
 # Define DataFrame and list
 data_frame = pd.DataFrame()
 data = []
-
 for filename in files:
     df = pd.read_csv(filename, index_col=None)
     data.append(df)
 
 # Convert list to DataFrame
 data_frame = pd.concat(data)
-
 max_year = len(df)-1
 
 if provinces == 1:
@@ -57,13 +51,15 @@ if provinces == 1:
     provinces_num = 12
     scenario_num = 0
     while scenario_num < len(files):
-        data_frame = data_frame[(data_frame['Scenario_ID'] > scenario_num) & (data_frame['Scenario_ID'] <= scenario_num + provinces_num)].groupby('Tellingen_rel').sum().loc[:,'Scenario_ID':'nrYears']
-        data_frame = data_frame.assign(Scenario_ID=scenario_num+1)
-        data_frame.to_csv(os.path.join(path,f'nationaal_sc{int(scenario_num/12 +1)}.csv'))
+        df_export = data_frame[(data_frame['Scenario_ID'] > scenario_num) & (data_frame['Scenario_ID'] <= scenario_num + provinces_num)].groupby('Tellingen_rel').sum().loc[:,'Scenario_ID':'nrYears']
+        df_export = df_export.assign(Scenario_ID=scenario_num+1)
+        df_export.to_csv(os.path.join(path,f'nationaal_sc{int(scenario_num/12 +1)}.csv'))
         scenario_num+=provinces_num
 
 # Define colors, linetyle and legend for plotting
 colors = plt.cm.rainbow(np.linspace(0, 1, len(files)))
+thickness = 1.5
+transparency = 0.8
 
 linestyle_tuple = [
      ('loosely dotted',        (0, (1, 10))),
@@ -91,7 +87,6 @@ variable_dict = {
     'savepath' : ('labels_aantal.svg', 'labels_aandeel.svg', 'RV_aantal.svg', 'RV_aandeel.svg')
     }
 
-
 # Data analysis
 for index, var in enumerate(variable_dict['ylabel']):
     # Create canvas
@@ -115,7 +110,6 @@ for index, var in enumerate(variable_dict['ylabel']):
             label_E         = data_frame[data_frame['Scenario_ID'] == scenario_id+1]['E [Aansluiting]']
             label_F         = data_frame[data_frame['Scenario_ID'] == scenario_id+1]['f [Aansluiting]']
             label_G         = data_frame[data_frame['Scenario_ID'] == scenario_id+1]['g [Aansluiting]']
-            label_overig    = aantal_woningen-label_A-label_B-label_C-label_D-label_E-label_F-label_G
             
             if variable_dict['ylabel'][index] == 'Share of dwellings':
                 ax.set_ylim(0, 1)
@@ -127,7 +121,6 @@ for index, var in enumerate(variable_dict['ylabel']):
                 aandeel_label_E      = label_E.div(aantal_woningen)
                 aandeel_label_F      = label_F.div(aantal_woningen)
                 aandeel_label_G      = label_G.div(aantal_woningen)
-                aandeel_label_overig = label_overig.div(aantal_woningen)
                 
                 #Plot data
                 ax.plot(aandeel_label_A, color = scenario_color, label = f'Scenario {scenario_id+1}')
@@ -137,7 +130,6 @@ for index, var in enumerate(variable_dict['ylabel']):
                 ax.plot(aandeel_label_E, color = scenario_color, label = str())
                 ax.plot(aandeel_label_F, color = scenario_color, label = str())
                 ax.plot(aandeel_label_G, color = scenario_color, label = str())
-                ax.plot(aandeel_label_overig, color = scenario_color, label = str())
                 
             else:
                 # Plot data
@@ -148,7 +140,6 @@ for index, var in enumerate(variable_dict['ylabel']):
                 ax.plot(label_E, color = scenario_color, label = str())
                 ax.plot(label_F, color = scenario_color, label = str())
                 ax.plot(label_G, color = scenario_color, label = str())
-                ax.plot(label_overig, color = scenario_color, label = str())
                 
         else:
             # Read data per scenario
@@ -156,6 +147,7 @@ for index, var in enumerate(variable_dict['ylabel']):
             RV_gas          = data_frame[data_frame['Scenario_ID'] == scenario_id+1]['RV_gas [Aansluiting]']
             RV_gebiedsoptie = data_frame[data_frame['Scenario_ID'] == scenario_id+1]['RV_gebiedsoptie [Aansluiting]']
             RV_overig       = aantal_woningen-RV_gas-RV_gebiedsoptie
+            
             
             if variable_dict['ylabel'][index] == 'Share of dwellings':
                 ax.set_ylim(0, 1)
@@ -165,9 +157,9 @@ for index, var in enumerate(variable_dict['ylabel']):
                 aandeel_RV_overig       = RV_overig.div(aantal_woningen)
                 
                 # Plot data
-                ax.plot(aandeel_RV_gas, color = scenario_color, label = f'Scenario {scenario_id+1}')
-                ax.plot(aandeel_RV_gebiedsoptie, color = scenario_color, label = str())
-                ax.plot(aandeel_RV_overig,       color = scenario_color, label = str())
+                ax.plot(aandeel_RV_gas,          color = scenario_color, linewidth = thickness, alpha = transparency, label = f'Scenario {scenario_id+1}')
+                ax.plot(aandeel_RV_gebiedsoptie, color = scenario_color, linewidth = thickness, alpha = transparency,label = str())
+                ax.plot(aandeel_RV_overig,       color = scenario_color, linewidth = thickness, alpha = transparency,label = str())
             
             else:
                  # Plot data
