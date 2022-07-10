@@ -19,7 +19,7 @@ import numpy as np
 # Parameters
 save_image = 1
 provinces = 0
-  
+
 # Setting paths
 hestia_path     = r'C:\Users\wesse\Documents\aaa Uni\Stage\GeoDMS\Hestia' # Set this to your Hestia folder
 results_path    = os.path.join(hestia_path, 'LD', 'PD', 'Results', 'Kalibratie')
@@ -45,7 +45,6 @@ for filename in files:
 
 # Convert list to DataFrame
 data_frame = pd.concat(data)
-print(data_frame)
 max_year = len(df)-1
 
 if provinces == 1:
@@ -83,7 +82,7 @@ linestyle_tuple = [
 legend = []
 
 variable_dict = {
-    
+
     'ylabel' : ('Number of dwellings', 'Share of dwellings', 'Number of dwellings', 'Share of dwellings'),
     'title' : ('Energy labels', 'Energy labels', 'Heating installations', 'Heating installations'),
     'savepath' : ('labels_aantal.svg', 'labels_aandeel.svg', 'RV_aantal.svg', 'RV_aandeel.svg')
@@ -112,7 +111,7 @@ for index, var in enumerate(variable_dict['ylabel']):
             label_E         = data_frame[data_frame['Scenario_ID'] == scenario_id+1]['E [Aansluiting]']
             label_F         = data_frame[data_frame['Scenario_ID'] == scenario_id+1]['f [Aansluiting]']
             label_G         = data_frame[data_frame['Scenario_ID'] == scenario_id+1]['g [Aansluiting]']
-            
+
             if variable_dict['ylabel'][index] == 'Share of dwellings':
                 ax.set_ylim(0, 1)
                 # Calculate relative shares
@@ -123,7 +122,7 @@ for index, var in enumerate(variable_dict['ylabel']):
                 aandeel_label_E      = label_E.div(aantal_woningen)
                 aandeel_label_F      = label_F.div(aantal_woningen)
                 aandeel_label_G      = label_G.div(aantal_woningen)
-                
+
                 #Plot data
                 ax.plot(aandeel_label_A, color = scenario_color, label = f'Scenario {scenario_id+1}')
                 ax.plot(aandeel_label_B, color = scenario_color, label = str())
@@ -132,7 +131,7 @@ for index, var in enumerate(variable_dict['ylabel']):
                 ax.plot(aandeel_label_E, color = scenario_color, label = str())
                 ax.plot(aandeel_label_F, color = scenario_color, label = str())
                 ax.plot(aandeel_label_G, color = scenario_color, label = str())
-                
+
             else:
                 # Plot data
                 ax.plot(label_A, color = scenario_color, label = f'Scenario {scenario_id+1}')
@@ -142,33 +141,33 @@ for index, var in enumerate(variable_dict['ylabel']):
                 ax.plot(label_E, color = scenario_color, label = str())
                 ax.plot(label_F, color = scenario_color, label = str())
                 ax.plot(label_G, color = scenario_color, label = str())
-                
+
         else:
             # Read data per scenario
             aantal_woningen = data_frame[data_frame['Scenario_ID'] == scenario_id+1]['Asl [Aansluiting]']
             RV_gas          = data_frame[data_frame['Scenario_ID'] == scenario_id+1]['RV_gas [Aansluiting]']
             RV_gebiedsoptie = data_frame[data_frame['Scenario_ID'] == scenario_id+1]['RV_gebiedsoptie [Aansluiting]']
             RV_overig       = aantal_woningen-RV_gas-RV_gebiedsoptie
-            
-            
+
+
             if variable_dict['ylabel'][index] == 'Share of dwellings':
                 ax.set_ylim(0, 1)
                 # Calculate relative shares
                 aandeel_RV_gas          = RV_gas.div(aantal_woningen)
                 aandeel_RV_gebiedsoptie = RV_gebiedsoptie.div(aantal_woningen)
                 aandeel_RV_overig       = RV_overig.div(aantal_woningen)
-                
+
                 # Plot data
                 ax.plot(aandeel_RV_gas,          color = scenario_color, linewidth = thickness, alpha = transparency, label = f'Scenario {scenario_id+1}')
                 ax.plot(aandeel_RV_gebiedsoptie, color = scenario_color, linewidth = thickness, alpha = transparency,label = str())
                 ax.plot(aandeel_RV_overig,       color = scenario_color, linewidth = thickness, alpha = transparency,label = str())
-            
+
             else:
                  # Plot data
                  ax.plot(RV_gas, color = scenario_color, label = f'Scenario {scenario_id+1}')
                  ax.plot(RV_gebiedsoptie, color = scenario_color, label = str())
                  ax.plot(RV_overig,       color = scenario_color, label = str())
-            
+
         scenario_id+=1
 
     # Save plot
