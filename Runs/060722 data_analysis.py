@@ -27,6 +27,24 @@ results_folder = 'LA_sweep_nauw'
 
 path = os.path.join(results_path, results_folder)
 
+# Valdiation data
+validation_years = [0,6,12,18]
+
+validation_gas   = [0.79, 0.91, 0.84, 0.87]
+validation_DH    = [0.10, 0.04, 0.12, 0.12]
+validation_other = [0.11, 0.05, 0.05, 0.02]
+
+validation_A = [0.00, 0.01, 0.05, 0.17]
+validation_B = [0.03, 0.06, 0.14, 0.16]
+validation_C = [0.10, 0.16, 0.24, 0.29]
+validation_D = [0.17, 0.47, 0.21, 0.16]
+validation_E = [0.18, 0.06, 0.12, 0.06]
+validation_F = [0.25, 0.13, 0.12, 0.06]
+validation_G = [0.27, 0.11, 0.08, 0.05]
+
+
+
+
 # Load contants of all csv's into one DataFrame
 # https://www.geeksforgeeks.org/getting-all-csv-files-from-a-directory-using-python/
 # Find file locations
@@ -45,6 +63,7 @@ for filename in files:
 
 # Convert list to DataFrame
 data_frame = pd.concat(data)
+data_frame.sort_values(by=['Scenario_ID'], inplace=True)
 max_year = len(df)-1
 
 if provinces == 1:
@@ -97,6 +116,23 @@ for index, var in enumerate(variable_dict['ylabel']):
     ax.set_ylabel(variable_dict['ylabel'][index])
     ax.set_title(variable_dict['title'][index])
     ax.set_xlim(0, max_year)
+    
+    # Plot validation data
+    if 'Share' in variable_dict['ylabel'][index]:
+        if 'Heating' in variable_dict['title'][index]:
+            ax.scatter(validation_years, validation_gas,   label = 'Validation gas')
+            ax.scatter(validation_years, validation_DH,    label = 'Validation collective')
+            ax.scatter(validation_years, validation_other, label = 'Validation other')
+        else:
+            ax.scatter(validation_years, validation_A,   label = 'Validation label A')
+            ax.scatter(validation_years, validation_B,   label = 'Validation label B')
+            ax.scatter(validation_years, validation_C,   label = 'Validation label C')
+            ax.scatter(validation_years, validation_D,   label = 'Validation label D')
+            ax.scatter(validation_years, validation_E,   label = 'Validation label E')
+            ax.scatter(validation_years, validation_F,   label = 'Validation label F')
+            ax.scatter(validation_years, validation_G,   label = 'Validation label G')
+
+    
 
     for scenario_id, filename in enumerate(files):
         scenario_color = colors[scenario_id]
@@ -161,6 +197,8 @@ for index, var in enumerate(variable_dict['ylabel']):
                 ax.plot(aandeel_RV_gas,          color = scenario_color, linewidth = thickness, alpha = transparency, label = f'Scenario {scenario_id+1}')
                 ax.plot(aandeel_RV_gebiedsoptie, color = scenario_color, linewidth = thickness, alpha = transparency,label = str())
                 ax.plot(aandeel_RV_overig,       color = scenario_color, linewidth = thickness, alpha = transparency,label = str())
+                
+                
 
             else:
                  # Plot data
@@ -171,7 +209,7 @@ for index, var in enumerate(variable_dict['ylabel']):
         scenario_id+=1
 
     # Save plot
-    ax.legend(loc='upper right', prop={'size': 7})
+    ax.legend( prop={'size': 7})
     if save_image == True:
         savepath = os.path.join(path, variable_dict['savepath'][index])
         fig.savefig(savepath, bbox_inches='tight')
