@@ -20,24 +20,14 @@
 			], Source = "NTA8800 2020+A1 5.5.5 Tabel 5.2";
 		parameter<ratio> Emissiefactor_warmte : [0.9];
 
-
 		//========= warmteverlies per bouwdeel als functie van oppervlak van bouwdeel en waarde horende bij isolatiegraad
-
-		container warmteverlies
+		container warmteverlies := for_each_nedv(
+			classifications/Bouwdeel/name,
+			replace('ObjectDomain/bouwdelen/@BD@ * merge(uint8(ObjectDomain/bouwdelen/isolatie/@BD@), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/@BD@]')+')', '@BD@', classifications/Bouwdeel/name),
+			ObjectDomain,
+			GJ_yr)
 		{
-			attribute<GJ_yr> VL (ObjectDomain) := ='ObjectDomain/bouwdelen/VL * merge(uint8(ObjectDomain/bouwdelen/isolatie/VL), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/VL]')+')';
-			attribute<GJ_yr> DS (ObjectDomain) := ='ObjectDomain/bouwdelen/DS * merge(uint8(ObjectDomain/bouwdelen/isolatie/DS), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/DS]')+')';
-			attribute<GJ_yr> DP (ObjectDomain) := ='ObjectDomain/bouwdelen/DP * merge(uint8(ObjectDomain/bouwdelen/isolatie/DP), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/DP]')+')';
-			attribute<GJ_yr> MS (ObjectDomain) := ='ObjectDomain/bouwdelen/MS * merge(uint8(ObjectDomain/bouwdelen/isolatie/MS), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/MS]')+')';
-			attribute<GJ_yr> MG (ObjectDomain) := ='ObjectDomain/bouwdelen/MG * merge(uint8(ObjectDomain/bouwdelen/isolatie/MG), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/MG]')+')';
-			attribute<GJ_yr> DR (ObjectDomain) := ='ObjectDomain/bouwdelen/DR * merge(uint8(ObjectDomain/bouwdelen/isolatie/DR), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/DR]')+')';
-			attribute<GJ_yr> PL (ObjectDomain) := ='ObjectDomain/bouwdelen/PL * merge(uint8(ObjectDomain/bouwdelen/isolatie/PL), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/PL]')+')';
-			attribute<GJ_yr> RO (ObjectDomain) := ='ObjectDomain/bouwdelen/RO * merge(uint8(ObjectDomain/bouwdelen/isolatie/RO), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/RO]')+')';
-			attribute<GJ_yr> RB (ObjectDomain) := ='ObjectDomain/bouwdelen/RB * merge(uint8(ObjectDomain/bouwdelen/isolatie/RB), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/RB]')+')';
-			attribute<GJ_yr> KR (ObjectDomain) := ='ObjectDomain/bouwdelen/KR * merge(uint8(ObjectDomain/bouwdelen/isolatie/KR), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/KR]')+')';
-
 			attribute<GJ_yr> Vrv_VT (ObjectDomain) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[OverigeInstallaties/Ventilatie/Installatietype_rel] * BO/nrAansluitingen[ObjectDomain/BO_rel];
-
 			attribute<GJ_yr> Totaal (ObjectDomain) := ='add('+AsItemList(Classifications/Bouwdeel/name)+') + Vrv_VT';
 		}
 
@@ -57,9 +47,7 @@
 			//============ totaal warmtewinsten
 			attribute<GJ_yr> Totaal                       (ObjectDomain) := min_elem(warmtewinst_personen + warmtewinst_apparaten + warmtewinst_zoninstraling, Invoer/Kengetallen/WarmteVraag/Max_warmtewinst * warmteverlies/totaal);
 		}
-
 		
-
 		unit<uint32> Obs := ObjectDomain
 		{
 			container Functioneel := ObjectDomain/Functioneel
@@ -83,6 +71,5 @@
 			attribute<kWh_yr>    Total  (ObjectDomain) := ='add('+AsItemList(Classifications/BemeterdeGebouwInput/name)+') - ((Func2meter_NTA/Koken/Vj_gas + Func2meter_NTA/Koken/Vj_elek) * 277.78 [kWh / GJ]) + (float64(BO/Aansluitingen/Warmtenet[ObjectDomain/BO_rel]) * Emissiefactor_warmte * Obs/Functioneel/RV * 277.78 [kWh / GJ])';
 			attribute<kwh_yr_m2> Kwh_m2 (ObjectDomain) := BO/Oppervlakte[ObjectDomain/BO_rel] == 0[m2] ? 0.0[kwh_yr_m2] : Total / BO/Oppervlakte[ObjectDomain/BO_rel];
 		}
-
 		attribute<Classifications/Schillabel> Energielabel_rel (ObjectDomain) := Primair_kWh/Kwh_m2 <= 0.0[kwh_yr_m2] ? Classifications/Schillabel/V/A : classify(Primair_kWh/Kwh_m2, classifications/Schillabel/classbreak);
 	}
