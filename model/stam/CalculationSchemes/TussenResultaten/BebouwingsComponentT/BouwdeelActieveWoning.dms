@@ -155,7 +155,11 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 
 			container Normering
 			{
-				attribute<ratio> AandeelRenovatie (UniekAmbitie) := ='add('+AsItemList('Bouwdelen/'+classifications/bouwdeel/name+' * float64(IsChangedNow_i/'+classifications/bouwdeel/name+')')+') / add('+AsItemList('Bouwdelen/'+classifications/bouwdeel/name)+')';
+				attribute<m2>        TotaalSchil (UniekAmbitie) := ='add('+AsItemList('Bouwdelen/'+classifications/bouwdeel/name)+') - KR';
+				attribute<ratio>     Schilfactor (UniekAmbitie) := Totaalschil / BO/oppervlakte[BO_rel];
+				attribute<yr_uint16> Bouwjaar    (UniekAmbitie) := BO/bouwjaar[BO_rel];
+
+				attribute<ratio> AandeelRenovatie (UniekAmbitie) := ='add('+AsItemList('Bouwdelen/'+classifications/bouwdeel/name+' * float64(IsChangedNow_i/'+classifications/bouwdeel/name+')')+') / TotaalSchil';
 				unit<uint32> BBN := ZichtjaarBeleid/BestaandeBouwNorm, ishidden = "True";
 				container Normen := for_each_ne(BBN/name, 'ImplSubs(BBN/V/'+BBN/name+')');
 				template ImplSubs : ishidden = "True"
@@ -165,26 +169,32 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 					//end case parameters
 
 					attribute<bool>  Naleving (UniekAmbitie) := first(rnd_uniform(JaarSeed * 106u, UniekAmbitie, range(float64, 0d, 1d)), BO_rel)[BO_rel] <= BBN/Naleving[BBN_rel];
-					parameter<ratio> MinSchilAandeel         := BBN/voorwaarde/MinSchilAandeel[BBN_rel];
-					attribute<bool>  Geldig   (UniekAmbitie) := AandeelRenovatie >= MinSchilAandeel && Naleving;
+					
+
+					container voorwaarden
+					{
+						parameter<ratio>     MinSchilAandeel := BBN/voorwaarde/MinSchilAandeel[BBN_rel];
+						parameter<ratio>     MinSchilfactor  := BBN/voorwaarde/MinSchilfactor[BBN_rel];
+						parameter<ratio>     MaxSchilfactor  := BBN/voorwaarde/MaxSchilfactor[BBN_rel];
+						parameter<yr_uint16> MinBouwjaar     := BBN/voorwaarde/MinBouwjaar[BBN_rel];
+						parameter<yr_uint16> MaxBouwjaar     := BBN/voorwaarde/MaxBouwjaar[BBN_rel];
+
+						attribute<bool> SchilAandeelVoldaan (UniekAmbitie) := IsNull(MinSchilAandeel) || AandeelRenovatie >= MinSchilAandeel;
+						attribute<bool> SchilfactorVoldaan  (UniekAmbitie) := IsNull(MinSchilfactor)  || Schilfactor >= MinSchilfactor && Schilfactor < MaxSchilfactor;
+						attribute<bool> BouwjaarVoldaan     (UniekAmbitie) := IsNull(MinBouwjaar)     || Bouwjaar >= MinBouwjaar && Bouwjaar < MaxBouwjaar;
+
+						attribute<bool> VoorwaardenVoldaan  (UniekAmbitie) := AND(SchilAandeelVoldaan,SchilfactorVoldaan,BouwjaarVoldaan);
+					}
+
+					attribute<bool>  Geldig   (UniekAmbitie) := voorwaarden/VoorwaardenVoldaan && Naleving;
 				}
-
-				attribute<Classifications/IsolatieNiveau> MinIsolatieNiveau_rel (UniekAmbitie) := =replace('max_elem('+AsItemList('Normen/'+BBN/name+'/Geldig ? BBN/BouwdeelNorm/@BD@[Normen/'+BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/@BD@)', '@BD@', 'RB');
 			}
 
-			container Isolatie
-			{
-				attribute<Classifications/IsolatieNiveau> RB (UniekAmbitie) := ='max_elem('+AsItemList('Normering/Normen/'+Normering/BBN/name+'/Geldig ? Normering/BBN/BouwdeelNorm/RB[Normering/Normen/'+Normering/BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/RB)';
-				attribute<Classifications/IsolatieNiveau> RO (UniekAmbitie) := ='max_elem('+AsItemList('Normering/Normen/'+Normering/BBN/name+'/Geldig ? Normering/BBN/BouwdeelNorm/RO[Normering/Normen/'+Normering/BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/RO)';
-				attribute<Classifications/IsolatieNiveau> VL (UniekAmbitie) := ='max_elem('+AsItemList('Normering/Normen/'+Normering/BBN/name+'/Geldig ? Normering/BBN/BouwdeelNorm/VL[Normering/Normen/'+Normering/BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/VL)';
-				attribute<Classifications/IsolatieNiveau> PL (UniekAmbitie) := ='max_elem('+AsItemList('Normering/Normen/'+Normering/BBN/name+'/Geldig ? Normering/BBN/BouwdeelNorm/PL[Normering/Normen/'+Normering/BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/PL)';
-				attribute<Classifications/IsolatieNiveau> DP (UniekAmbitie) := ='max_elem('+AsItemList('Normering/Normen/'+Normering/BBN/name+'/Geldig ? Normering/BBN/BouwdeelNorm/DP[Normering/Normen/'+Normering/BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/DP)';
-				attribute<Classifications/IsolatieNiveau> DS (UniekAmbitie) := ='max_elem('+AsItemList('Normering/Normen/'+Normering/BBN/name+'/Geldig ? Normering/BBN/BouwdeelNorm/DS[Normering/Normen/'+Normering/BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/DS)';
-				attribute<Classifications/IsolatieNiveau> MG (UniekAmbitie) := ='max_elem('+AsItemList('Normering/Normen/'+Normering/BBN/name+'/Geldig ? Normering/BBN/BouwdeelNorm/MG[Normering/Normen/'+Normering/BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/MG)';
-				attribute<Classifications/IsolatieNiveau> MS (UniekAmbitie) := ='max_elem('+AsItemList('Normering/Normen/'+Normering/BBN/name+'/Geldig ? Normering/BBN/BouwdeelNorm/MS[Normering/Normen/'+Normering/BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/MS)';
-				attribute<Classifications/IsolatieNiveau> KR (UniekAmbitie) := ='max_elem('+AsItemList('Normering/Normen/'+Normering/BBN/name+'/Geldig ? Normering/BBN/BouwdeelNorm/KR[Normering/Normen/'+Normering/BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/KR)';
-				attribute<Classifications/IsolatieNiveau> DR (UniekAmbitie) := ='max_elem('+AsItemList('Normering/Normen/'+Normering/BBN/name+'/Geldig ? Normering/BBN/BouwdeelNorm/DR[Normering/Normen/'+Normering/BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/DR)';
-			}
+			container Isolatie := for_each_nedv(
+				classifications/Bouwdeel/name,
+				replace('max_elem('+AsItemList('Normering/Normen/'+Normering/BBN/name+'/Geldig ? Normering/BBN/BouwdeelNorm/@BD@[Normering/Normen/'+Normering/BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/@BD@)', '@BD@', Classifications/Bouwdeel/name),
+				UniekAmbitie,
+				classifications/IsolatieNiveau);
 
 			container IsChangedNow := for_each_nedv(
 				classifications/Bouwdeel/name,
