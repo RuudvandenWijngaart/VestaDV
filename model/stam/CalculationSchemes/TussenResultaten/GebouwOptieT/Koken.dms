@@ -1,0 +1,27 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2022 - PBL & TNO                                        //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container koken
+{
+	unit<uint32> Inst := Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes;
+	container Afweging
+	{
+		parameter<ratio> KookElekNatuurlijk  := SpecifiekeInstellingen/Probabilisering/KookElekNatuurlijk;
+		parameter<ratio> KookElekZelfstandig := SpecifiekeInstellingen/Probabilisering/KookElekZelfstandig;
+
+		attribute<bool>    KokenActief         (GeschiktObject) := Zichtjaar_jaar - BO/InstallatiePerProduct/LastVervanging/KK[GeschiktObject/BO_rel] >= Inst/Levensduur[Installatietype_org];
+		attribute<float64> Probability_gasloos (GeschiktObject) := rnd_uniform(JaarSeed * 4u, GeschiktObject, range(float64, 0d, 1d));
+		attribute<Inst>    Installatietype_org (GeschiktObject) := BO/InstallatiePerProduct/KK[GeschiktObject/BO_rel], Descr = "uitgangssituatie qua koken";
+		attribute<bool>    Gasloos             (GeschiktObject) := Func2Meter/metervraag_per_input/Gas == 0.0[GJ_yr], Descr = "Gebruikt de woning nog gas, buiten koken om?";
+		attribute<bool>    Overstap            (GeschiktObject) := not(KokenActief) ? Probability_gasloos < KookElekZelfstandig : Probability_gasloos < KookElekNatuurlijk;
+		attribute<Inst>    Installatietype_def (GeschiktObject) := =not(Afweging_KK) ? 'Installatietype_org' : 'gasloos || overstap ? Inst/V/Elek : Installatietype_org', Descr = "nieuwe situatie qua koken";
+		attribute<bool>    IsChangedNow        (GeschiktObject) := Installatietype_org != Installatietype_def;
+		attribute<eur>     Ki_koken            (GeschiktObject) := float64(IsChangedNow) * BO/nrAansluitingen[GeschiktObject/BO_rel] * 
+																	( Schuiven/KostenMin * Leercurves/Koken/curve * Inst/Ki_asl_min[Installatietype_def]
+																	+ Schuiven/KostenMax * Leercurves/Koken/curve * Inst/Ki_asl_max[Installatietype_def]), Descr = "investeringskosten eventuele overstap";
+	}
+	attribute<Inst> Installatietype_rel (GeschiktObject) := Afweging/Installatietype_def;
+}
