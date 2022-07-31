@@ -73,6 +73,23 @@ template ModelObjectKentallenImport
  		, StorageType     = "gdal.vect"
 		, StorageReadOnly = "True"
 	{
-		attribute<Geography/RegioIndelingen/Wijk>    WK_rel := rlookup(wijk2020,Geography/Regioindelingen/Wijk/name);
+		attribute<Geography/RegioIndelingen/Wijk>  WK_rel         := rlookup(wijk2020,Geography/Regioindelingen/Wijk/name);
+		attribute<classifications/woningtype>      Woningtype_rel := W[classifications/woningtype];
+		attribute<classifications/eigendom>        Eigendom_rel   := E[classifications/eigendom];
+
+		unit<uint32> W_E := combine(classifications/woningtype, classifications/eigendom)
+		{
+			attribute<string> label := Classifications/woningtype/label[nr_1] + ', ' + Classifications/eigendom/label[nr_2];
+		}
+		unit<uint32> WK_W_E := combine(Geography/RegioIndelingen/Wijk, W_E)
+		{
+			attribute<string> label := Geography/RegioIndelingen/Wijk/label[nr_1] + ', ' + W_E/label[nr_2];
+			attribute<ratio>  verschilfactor_i := float64(Verschilfactordata/Verschilfactor_totaal[rlookup(id(.),Verschilfactordata/WK_W_E_rel)])[ratio];
+			attribute<ratio>  verschilfactor   := makedefined(verschilfactor_i,1.0[ratio]);
+		}
+
+		attribute<W_E> W_E_rel := combine_data(W_E,Woningtype_rel,Eigendom_rel);
+		attribute<WK_W_E> WK_W_E_rel := combine_data(WK_W_E,WK_rel,W_E_rel);
+		
  	}
 }
