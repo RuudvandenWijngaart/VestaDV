@@ -281,9 +281,22 @@ container TVW
 
 		unit<uint32> infrastructuur := unique(plan/plantabel_input/infrastructuur__tekst_)
 		{
-			attribute<bool> LT_warmtenet := true;
-			attribute<bool> MT_warmtenet := true;
-			attribute<bool> bronnet      := true;		
+			attribute<string> str     := replace(lowercase(values),'0',' ');
+			attribute<bool> elek	  := strcount(str,'ele') > 0;
+			attribute<bool> gas       := strcount(replace(str,'waterstof','gas'),'gas') > 0;
+			attribute<bool> warmte_LT := strcount(replace(str,'collectief','warm'),'warm') > 0 || strcount(replace(replace(str,'wko','bronnet'),'bronnet','LT'),'LT') > 0;
+			attribute<bool> warmte_MT := strcount(replace(str,'collectief','warm'),'warm') > 0 || strcount(replace(str,'HT','MT'),'MT') >0;
+			attribute<bool> onbekend  := not(or(gas,warmte_MT,warmte_LT));
+
+			attribute<string> infra_str := onbekend ? 'onbekend' : substr((elek ? '_E' : '') + (gas ? '_G' : '') + (warmte_MT ? '_MT' : '') + (warmte_LT ? '_LT' : ''),1);
+
+			attribute<infrastructuurkeuze> infrastructuurkeuze_rel := rlookup(infra_str,infrastructuurkeuze/name);
+
+			unit<uint32> infrastructuurkeuze := unique(infra_str)
+			{
+				attribute<string> label := values;
+				attribute<string> name  := values;
+			}
 		}
 	}
 }
