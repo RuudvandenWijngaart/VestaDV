@@ -65,7 +65,12 @@ template StartingStateComponent
 
 		//====================== INITIELE BEREKENING RUIMTEVERWARMING ================
 
-		container warmteverlies_theoretisch_startjaar
+ 		//=====warmteverlies per bouwdeel als functie van oppervlak van bouwdeel en waarde horende bij isolatiegraad
+		container warmteverlies_theoretisch_startjaar := for_each_nedv(
+			Classifications/Bouwdeel/name
+			,replace('bouwdelen/@BD@ * merge(uint8(bouwdelen/isolatie/@BD@), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/@BD@]')+')','@BD@',Classifications/Bouwdeel/name)
+			,.
+			,GJ_yr)
 		{
 			container warmtewinst
 			{
@@ -84,8 +89,17 @@ template StartingStateComponent
 				attribute<GJ_yr> Totaal                       (...) := min_elem(warmtewinst_personen + warmtewinst_apparaten + warmtewinst_zoninstraling, Invoer/Kengetallen/WarmteVraag/Max_warmtewinst * Theoretisch_RV);
 			}
 
+			container gemeten_correctie
+			{
+				attribute<Geography/RegioIndelingen/Wijk> WK_rel         (...) := Invoer/RuimtelijkeData/StudieGebied/Buurt/Wijk_rel[Planregio_rel];
+				attribute<Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/W_E>         W_E_rel        (...) := combine_data(Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/W_E, BebouwingsType, Eigendom_rel);
+				attribute<Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/WK_W_E>      WK_W_E_rel     (...) := combine_data(Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/WK_W_E, WK_rel, W_E_rel);
+				attribute<ratio>                          Verschilfactor (...) := Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/WK_W_E/Verschilfactor[WK_W_E_rel];
+			}
+
+
 			//========= warmteverlies per bouwdeel als functie van oppervlak van bouwdeel en waarde horende bij isolatiegraad
-			attribute<GJ_yr> VL (..) := ='bouwdelen/VL * merge(uint8(bouwdelen/isolatie/VL), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/VL]')+')';
+			/*attribute<GJ_yr> VL (..) := =replace('gemeten_correctie/verschilfactor * bouwdelen/VL * merge(uint8(bouwdelen/isolatie/@BD@), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/@BD@]')+')','@BD@','VL');
 			attribute<GJ_yr> DS (..) := ='bouwdelen/DS * merge(uint8(bouwdelen/isolatie/DS), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/DS]')+')';
 			attribute<GJ_yr> DP (..) := ='bouwdelen/DP * merge(uint8(bouwdelen/isolatie/DP), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/DP]')+')';
 			attribute<GJ_yr> MS (..) := ='bouwdelen/MS * merge(uint8(bouwdelen/isolatie/MS), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/MS]')+')';
@@ -95,7 +109,7 @@ template StartingStateComponent
 			attribute<GJ_yr> RO (..) := ='bouwdelen/RO * merge(uint8(bouwdelen/isolatie/RO), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/RO]')+')';
 			attribute<GJ_yr> RB (..) := ='bouwdelen/RB * merge(uint8(bouwdelen/isolatie/RB), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/RB]')+')';
 			attribute<GJ_yr> KR (..) := ='bouwdelen/KR * merge(uint8(bouwdelen/isolatie/KR), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/KR]')+')';
-
+*/
 			//========= warmteverlies ventilatie
 			attribute<GJ_yr> Vrv_VT_asl     (..) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[InstallatiePerProduct/VT] * nrAansluitingen_i, descr = "warmteverlies ventilatie vast per aansluiting";
 			
@@ -103,7 +117,8 @@ template StartingStateComponent
 			attribute<GJ_yr> Theoretisch_RV (..) := VL + DP + DS + MG + MS + DR + PL + RO + RB + KR + Vrv_VT_asl;
 
 			//========= gemeten vraag ruimteverwarming gecorrigeerd voor warmtewinsten
-			attribute<GJ_yr> Gemeten_RV     (..) := Functioneel/BaseValues/RV + warmtewinst/totaal;
+			attribute<GJ_yr> Gemeten_RV_i   (..) := gemeten_correctie/verschilfactor * Functioneel/BaseValues/RV;
+			attribute<GJ_yr> Gemeten_RV     (..) := Gemeten_RV_i + warmtewinst/totaal;
 
 			//========= relatief verschil als fitfactor
 			attribute<ratio> Fitfactor      (..) := Gemeten_RV / Theoretisch_RV;
