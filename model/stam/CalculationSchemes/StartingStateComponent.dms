@@ -262,39 +262,61 @@ template StartingStateComponent
 		unit<uint32> AfnameGebied := ..../AfnameGebied;
 		attribute<AfnameGebied> AfnameGebied_rel := const((0 / 0)[AfnameGebied], results);
 
-		unit<uint32> VIVETexports := /Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied
+		container GemeenteBestandenVIVET := for_each_nt(/Invoer/RuimtelijkeData/StudieGebied/Gemeente/name, GemeenteExportVIVET)
 		{
-			attribute<string> BAG_id := Results/identificatie;
+			parameter<string> ExplicitSupplierList := AsList(/Invoer/RuimtelijkeData/StudieGebied/Gemeente/name+'/export_csv/result', ';');
 
-			attribute<string> BU_code := Results/Buurtcode;
-
-			attribute<string> adres := Results/Label;
-
-			attribute<m2> oppervlak := Results/Oppervlakte_i;
-
-			attribute<ModelObject> TBE := Results/ModelObject_rel;
-
-			attribute<Classifications/Schillabel>  SchilLabel := Results/Schillabel_rel;
-
-			attribute<Classifications/Installatie> Inst_RVb := Results/InstallatiePerProduct/RVb;
-			attribute<Classifications/Installatie> Inst_RVp := Results/InstallatiePerProduct/RVp;
-			attribute<Classifications/Installatie> Inst_TWb := Results/InstallatiePerProduct/TWb;
-			attribute<Classifications/Installatie> Inst_TWp := Results/InstallatiePerProduct/TWp;
-
-			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> Koken := Results/InstallatiePerProduct/KK;
-
-			attribute<GJ_yr> V_RV := Results/Functioneel/BaseValues/RV;
-			attribute<GJ_yr> V_TW := Results/Functioneel/BaseValues/TW;
-			attribute<GJ_yr> V_KK := Results/Functioneel/BaseValues/KK;
-
-			attribute<GJ_yr> V_elek_kk   := Results/Func2Meter/koken/Vj_elek;
-			attribute<GJ_yr> V_elek_twrv := Results/Func2Meter/metervraag_per_input/E;
-			attribute<GJ_yr> V_elek_pomp := Results/Func2Meter/eEffect/Vj_elek;
-			attribute<GJ_yr> V_gas       := Results/Func2Meter/result/gas;
-
-			attribute<ratio> klimaatfactor := /TussenResultaten/StartJaar/KlimaatFactorMap[point [ Geography/rdc_grids/m100 ] ];
-
+			parameter<string> AllExports := 'Ready', ExplicitSuppliers = "= ExplicitSupplierList";
 		}
+
+		template GemeenteExportVIVET
+		{
+			parameter<string>   GemeenteNAME := PropValue(., 'name');
+			parameter</Invoer/RuimtelijkeData/StudieGebied/Gemeente> Gemeente_here := rlookup(GemeenteNAME, /Invoer/RuimtelijkeData/StudieGebied/Gemeente/name);
+
+			unit<uint32> Table := subset(Results/Gemeente_rel == Gemeente_here)
+			{
+				attribute<string> BAG_id := Results/identificatie[nr_orgentity];
+
+				attribute<string> BU_code := /Invoer/RuimtelijkeData/StudieGebied/Buurt/BU_CODE[Planregio_rel][nr_orgentity];
+
+				attribute<string> adres := Results/Label[nr_orgentity];
+
+				attribute<m2> oppervlak := Results/Oppervlakte_i[nr_orgentity];
+
+				attribute<ModelObject> TBE := Results/ModelObject_rel[nr_orgentity];
+
+				attribute<Classifications/Schillabel>  SchilLabel := Results/Schillabel_rel[nr_orgentity];
+
+				attribute<Classifications/Installatie> Inst_RVb := Results/InstallatiePerProduct/RVb[nr_orgentity];
+				attribute<Classifications/Installatie> Inst_RVp := Results/InstallatiePerProduct/RVp[nr_orgentity];
+				attribute<Classifications/Installatie> Inst_TWb := Results/InstallatiePerProduct/TWb[nr_orgentity];
+				attribute<Classifications/Installatie> Inst_TWp := Results/InstallatiePerProduct/TWp[nr_orgentity];
+
+				attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> Koken := Results/InstallatiePerProduct/KK[nr_orgentity];
+
+				attribute<GJ_yr> V_RV := Results/Functioneel/BaseValues/RV[nr_orgentity];
+				attribute<GJ_yr> V_TW := Results/Functioneel/BaseValues/TW[nr_orgentity];
+				attribute<GJ_yr> V_KK := Results/Functioneel/BaseValues/KK[nr_orgentity];
+
+				attribute<GJ_yr> V_elek_kk   := Results/Func2Meter/koken/Vj_elek[nr_orgentity];
+				attribute<GJ_yr> V_elek_twrv := Results/Func2Meter/metervraag_per_input/E[nr_orgentity];
+				attribute<GJ_yr> V_elek_pomp := Results/Func2Meter/eEffect/Vj_elek[nr_orgentity];
+				attribute<GJ_yr> V_gas       := Results/Func2Meter/result/gas[nr_orgentity];
+
+				attribute<ratio> klimaatfactor := /TussenResultaten/StartJaar/KlimaatFactorMap[point[nr_orgentity] [ Geography/rdc_grids/m100 ] ];
+				attribute<ratio> verschilfactor := Results/warmteverlies_theoretisch_startjaar/gemeten_correctie/verschilfactor[nr_orgentity];
+
+			}
+
+			parameter<string> OutputFolder := '%localDataProjDir%/Results/VIVETexports/';
+			unit<uint32> variable := SubItem_PropValues(table,'name');
+			container export_csv := Model/CalculationSchemes/Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), OutputFolder+GemeenteNAME+'.csv');
+		}
+
+
+
+		
 	}
 	unit<uint16> ModelObjectKeyDomein;
 	unit<uint32>   PreStartJaar := subset(Results/bouwjaar < Startjaar_jaar)

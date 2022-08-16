@@ -63,7 +63,7 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 		,	replace(
 				'iif(IsolatieNiveau_rel/@BD[BouwdeelActieveWoning_rel] <=  @IN'
 				',	BO/Bouwdelen/@BD[BO_rel]'
-					'*	( Combifactor * BesparingsFactor[@IM] * beta[IsolatieVerbetering_rel] * SpecificP50P/@IBD '
+					'*	( ( Combifactor * BesparingsFactor[@IM] * beta[IsolatieVerbetering_rel] * SpecificP50P/@IBD )'
 					'/	TotalArea[BouwdeelActieveWoning_rel] - iif(IsolatieNiveau_rel/@BD[BouwdeelActieveWoning_rel] < @IN, IMxUV/kosten[@IMxUV] * @LC * @BTW , 0[EUR_m2]))'
 				',	(0.0 / 0.0)'
 				')'
@@ -72,7 +72,7 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 			,	'@IBD',   classifications/IsolatieMaatregel/name
 			,	'@IMxUV', 'combine_data(IMxUV, @IM, BO/Activatie/Uitvoering[BO_rel])'
 			,	'@IM',    'classifications/IsolatieMaatregel/V/'+classifications/IsolatieMaatregel/name
-			,	'@BTW',   'Invoer/Kengetallen/BTW/BTW_gv[Zichtjaar_rel] / 100[percent]'
+			,	'@BTW',   '(1.0[ratio] + Invoer/Kengetallen/BTW/BTW_gv[Zichtjaar_rel] / 100[percent])'
 			,	'@LC',    'leerCurves/Isolatie/Curve'
 			)
 		, 	AmbitieBerekening, float64
@@ -168,6 +168,8 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 				attribute<ratio>     Schilfactor (UniekAmbitie) := Totaalschil / BO/oppervlakte[BO_rel];
 				attribute<yr_uint16> Bouwjaar    (UniekAmbitie) := BO/bouwjaar[BO_rel];
 
+				parameter<bool> GeenNormen := sum(BBN/naleving) <= 0.0[ratio];
+
 				attribute<ratio> AandeelRenovatie (UniekAmbitie) := ='(add('+AsItemList('Bouwdelen/'+classifications/bouwdeel/name+' * float64(IsChangedNow_i/'+classifications/bouwdeel/name+')')+') - (float64(IsChangedNow_i/KR) * Bouwdelen/KR) ) / TotaalSchil';
 				unit<uint32> BBN := ZichtjaarBeleid/BestaandeBouwNorm, ishidden = "True";
 				container Normen := for_each_ne(BBN/name, 'ImplSubs(BBN/V/'+BBN/name+')');
@@ -201,6 +203,10 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 
 			container Isolatie := for_each_nedv(
 				classifications/Bouwdeel/name,
+
+				normering/GeenNormen ?  
+				replace(' (MinIsolatieAmbitie_rel == classifications/IsolatieAmbitie/V/geen || MaxIsolatieAmbitie_rel == classifications/IsolatieAmbitie/V/geen) ? BO/Bouwdelen/Isolatie/@BD@[BO_rel] : Isolatie_i/@BD@', '@BD@', Classifications/Bouwdeel/name) :
+
 				replace(' (MinIsolatieAmbitie_rel == classifications/IsolatieAmbitie/V/geen || MaxIsolatieAmbitie_rel == classifications/IsolatieAmbitie/V/geen) ? BO/Bouwdelen/Isolatie/@BD@[BO_rel] : 
 					max_elem('+AsItemList('Normering/Normen/'+Normering/BBN/name+'/Geldig ? Normering/BBN/BouwdeelNorm/@BD@[Normering/Normen/'+Normering/BBN/name+'/BBN_rel] : (0/0)[Classifications/IsolatieNiveau]')+', Isolatie_i/@BD@)', '@BD@', Classifications/Bouwdeel/name),
 				UniekAmbitie,

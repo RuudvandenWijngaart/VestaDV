@@ -17,9 +17,11 @@ container TVW
 				attribute<string> label :=  uppercase(id__gem_code_);
 			}
 
-		unit<uint32> GM := Geography/RegioIndelingen/Gemeente
+		unit<uint32> GM := RuimtelijkeData/StudieGebied/Gemeente
 		{
 			attribute<gemeente_input> input_rel := rlookup(GM_code, uppercase(gemeente_input/label));
+			attribute<bool>           has_TVW   := isDefined(input_rel);
+			attribute<nrAsl>          nr_Asl    := sum(TussenResultaten/StartJaar/BebouwingsComponenten/Woning/BO/nrAansluitingen, Invoer/RuimtelijkeData/StudieGebied/Buurt/Gemeente_rel[TussenResultaten/StartJaar/BebouwingsComponenten/Woning/BO/PlanRegio_rel]);
 		}
 	}
 
@@ -108,7 +110,29 @@ container TVW
 			attribute<bool> Installatie_warmtenet := Parser/installatie/warmtenet[rlookup(installatie__tekst_, parser/installatie/values)];
 
 			attribute<parser/installatie/installatiekeuze> Installatiekeuze_rel := Parser/installatie/installatiekeuze_rel[rlookup(installatie__tekst_, parser/installatie/values)];
+		}
 
+		unit<uint32> VBO := /Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied
+		{
+			attribute<nrAsl> nr_Asl := const(1.0[nrAsl],.);
+
+			container Matching
+			{
+				unit<uint32> p := VBO
+				{
+					attribute<geography/rdc_meter> xy (p) := VBO/geometry;
+				}
+				//attribute<geography/rdc_meter> geom_plan (poly, PL) := PL/geometry;
+				attribute<geography/rdc_meter> driehoek  (p, poly)  :=
+					points2sequence(
+						union_data(union_unit(p,p,p,p), p/xy, p/xy+point(0.1,0.0), p/xy+point(0.1,0.1), p/xy),
+						union_data(union_unit(p,p,p,p), id(p), id(p), id(p), id(p)),
+						union_data(union_unit(p,p,p,p), const(0,p), const(1,p), const(2,p), const(3,p))
+									);
+				unit<uint32> kruistabel := overlay_polygon(driehoek[geography/rdc_mm], PL/geometry[geography/rdc_mm]);
+
+				attribute<bool> any_warmtenet (p) := any(PL/Installatie_warmtenet[kruistabel/second_rel], kruistabel/first_rel);
+			}
 		}
 	}
 
