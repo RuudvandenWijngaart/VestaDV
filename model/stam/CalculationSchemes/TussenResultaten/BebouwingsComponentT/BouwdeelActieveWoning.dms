@@ -164,13 +164,12 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 
 			container Normering
 			{
-				attribute<m2>        TotaalSchil (UniekAmbitie) := ='add('+AsItemList('Bouwdelen/'+classifications/bouwdeel/name)+') - KR';
-				attribute<ratio>     Schilfactor (UniekAmbitie) := Totaalschil / BO/oppervlakte[BO_rel];
-				attribute<yr_uint16> Bouwjaar    (UniekAmbitie) := BO/bouwjaar[BO_rel];
+				attribute<m2>        TotaalSchil (BO) := ='add('+AsItemList('BO/Bouwdelen/'+classifications/bouwdeel/name)+') - BO/Bouwdelen/KR';
+				attribute<ratio>     Schilfactor (BO) := Totaalschil / BO/oppervlakte;
 
 				parameter<bool> GeenNormen := sum(BBN/naleving) <= 0.0[ratio];
 
-				attribute<ratio> AandeelRenovatie (UniekAmbitie) := ='(add('+AsItemList('Bouwdelen/'+classifications/bouwdeel/name+' * float64(IsChangedNow_i/'+classifications/bouwdeel/name+')')+') - (float64(IsChangedNow_i/KR) * Bouwdelen/KR) ) / TotaalSchil';
+				attribute<ratio> AandeelRenovatie (UniekAmbitie) := ='(add('+AsItemList('Bouwdelen/'+classifications/bouwdeel/name+' * float64(IsChangedNow_i/'+classifications/bouwdeel/name+')')+') - (float64(IsChangedNow_i/KR) * Bouwdelen/KR) ) / TotaalSchil[BO_rel]';
 				unit<uint32> BBN := ZichtjaarBeleid/BestaandeBouwNorm, ishidden = "True";
 				container Normen := for_each_ne(BBN/name, 'ImplSubs(BBN/V/'+BBN/name+')');
 				template ImplSubs : ishidden = "True"
@@ -179,7 +178,7 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 					parameter<BBN> BBN_rel;
 					//end case parameters
 
-					attribute<bool>  Naleving (UniekAmbitie) := first(rnd_uniform(JaarSeed * 106u, UniekAmbitie, range(float64, 0d, 1d)), BO_rel)[BO_rel] <= BBN/Naleving[BBN_rel];
+					attribute<bool>  Naleving (BO) := rnd_uniform(JaarSeed * 106u, BO, range(float64, 0d, 1d)) <= BBN/Naleving[BBN_rel];
 					
 
 					container voorwaarden
@@ -191,13 +190,13 @@ unit<uint32> BouwdeelActieveWoning := select_orgrel(BO/Activatie/BouwdeelActief)
 						parameter<yr_uint16> MaxBouwjaar     := BBN/voorwaarde/MaxBouwjaar[BBN_rel];
 
 						attribute<bool> SchilAandeelVoldaan (UniekAmbitie) := IsNull(MinSchilAandeel) || AandeelRenovatie >= MinSchilAandeel;
-						attribute<bool> SchilfactorVoldaan  (UniekAmbitie) := IsNull(MinSchilfactor)  || Schilfactor >= MinSchilfactor && Schilfactor < MaxSchilfactor;
-						attribute<bool> BouwjaarVoldaan     (UniekAmbitie) := IsNull(MinBouwjaar)     || Bouwjaar >= MinBouwjaar && Bouwjaar < MaxBouwjaar;
+						attribute<bool> SchilfactorVoldaan  (BO) := IsNull(MinSchilfactor)  || Schilfactor >= MinSchilfactor && Schilfactor < MaxSchilfactor;
+						attribute<bool> BouwjaarVoldaan     (BO) := IsNull(MinBouwjaar)     || BO/bouwjaar >= MinBouwjaar && BO/bouwjaar < MaxBouwjaar;
 
-						attribute<bool> VoorwaardenVoldaan  (UniekAmbitie) := AND(SchilAandeelVoldaan,SchilfactorVoldaan,BouwjaarVoldaan);
+						attribute<bool> VoorwaardenVoldaan  (UniekAmbitie) := AND(SchilAandeelVoldaan,SchilfactorVoldaan[BO_rel],BouwjaarVoldaan[BO_rel]);
 					}
 
-					attribute<bool>  Geldig   (UniekAmbitie) := voorwaarden/VoorwaardenVoldaan && Naleving;
+					attribute<bool>  Geldig   (UniekAmbitie) := voorwaarden/VoorwaardenVoldaan && Naleving[BO_rel];
 				}
 			}
 
