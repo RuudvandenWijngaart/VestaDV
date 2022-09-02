@@ -16,9 +16,7 @@
 
 container BAG: url="%HestiaDataDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 {
-	parameter<string>          SnapShotDate := '20210101';
-	parameter<units/yr_uint16> SnapShotYear := left(SnapShotDate,4)[units/yr_uint16], IsHidden = "True";
-	parameter<string>          SourceDir    := '%HestiaDataDir%/BAG/' + SnapShotDate, IsHidden = "True";
+	parameter<string>          SourceDir    := '%HestiaDataDir%/BAG/20210101', IsHidden = "True";
 
 	container typeringen : IsHidden = "True"
 	{
@@ -110,18 +108,12 @@ container BAG: url="%HestiaDataDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 			attribute<string>  pand_id                := pand_id_geom;
 			attribute<pand>    pand_rel               := rlookup(pand_id, pand/identificatie);
 			attribute<float32> pand_bouwlagen_fictief := pand/bouwlagen_fictief[pand_rel];
+
+			attribute<Classifications/SchilLabel> Default_Energielabel_Bouwjaar := pand/Default_Energielabel_Bouwjaar[pand_rel];
 			
 			// relatie naar buurt voor o.a. ruimtelijke selectie
 			attribute<RegioIndelingen/buurt>    buurt_rel    := point_in_polygon(geometry, RegioIndelingen/buurt/geometry);
 			attribute<RegioIndelingen/gemeente> gemeente_rel := RegioIndelingen/buurt/gemeente_rel[buurt_rel];
-		}
-		
-		unit<uint32> Pand2019 := subset(Pand/bouwjaar_gecorrigeerd[vbo/pand_rel] <= 2019[Units/yr_uint16] && (not(isdefined(Pand/sloopjaar_gecorrigeerd[vbo/pand_rel]) && Pand/sloopjaar_gecorrigeerd[vbo/pand_rel] > 2020[Units/yr_uint16]                )))
-		{
-			unit<uint32> BestaandAflevergebied := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data;
-			unit<uint32> BestaandWarmtenet     := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data/Warmtenetten;
-			attribute<BestaandAflevergebied> BestaandAflevergebied_rel := point_in_polygon(vbo/geometry[nr_orgentity] , BestaandAflevergebied/Geometry_RD);
-			attribute<BestaandWarmtenet>     BestaandWarmtenet_rel     := BestaandAflevergebied/Warmtenet_rel[BestaandAflevergebied_rel];
 		}
 
 		unit<uint32> pand
@@ -145,17 +137,13 @@ container BAG: url="%HestiaDataDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 
 			attribute<string>   status;
 			attribute<uint16>   sloopjaar;
-			attribute<units/yr_uint16> sloopjaar_gecorrigeerd :=
-					(sloopjaar <= 1000w || sloopjaar[units/yr_uint16] > SnapShotYear)
-					? (0 / 0)[Units/yr_uint16]
-					: sloopjaar[Units/yr_uint16];
+			attribute<units/yr_uint16> sloopjaar_gecorrigeerd := sloopjaar <= 1000w ? (0 / 0)[Units/yr_uint16] : sloopjaar[Units/yr_uint16];
 			attribute<uint16>   bouwjaar;
-			attribute<units/yr_uint16> bouwjaar_gecorrigeerd :=
-				(bouwjaar <= 1000w || bouwjaar[units/yr_uint16] > SnapShotYear)
-					? (0 / 0)[Units/yr_uint16]
-					: bouwjaar[Units/yr_uint16]
+			attribute<units/yr_uint16> bouwjaar_gecorrigeerd  := bouwjaar  <= 1000w ? (0 / 0)[Units/yr_uint16] : bouwjaar[Units/yr_uint16]
 			,	Descr = "Correctie van bouwjaren op basis van document"
 			,	url   = "http://www.cbs.nl/nl-NL/menu/themas/bouwen-wonen/methoden/dataverzameling/korte-onderzoeksbeschrijvingen/2015-kenmerken-woningen-kob.htm";
+
+			attribute<Classifications/SchilLabel> Default_Energielabel_Bouwjaar := Classifications/BouwjaarWoning/Default_label[Classify(bouwjaar, Classifications/BouwjaarWoning/ClassBreak)];
 
 			attribute<uint16> levensloop := isdefined(sloopjaar) && sloopjaar < 2100[uint16] && bouwjaar > 1800[uint16] && sloopjaar > bouwjaar ? sloopjaar - bouwjaar : (0/0)[uint16];
 
