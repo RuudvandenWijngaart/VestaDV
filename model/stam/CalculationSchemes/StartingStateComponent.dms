@@ -20,33 +20,16 @@ template StartingStateComponent
 		attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel   := BebouwingsObjectSrc/buurt_rel;
 		attribute<ModelObject>                             ModelObject_rel := rlookup(BebouwingsObjectSrc/ModelObjectKey, ModelObject/ModelObjectKey);
 
-		attribute<Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data> Aflevergebied_rel := point_in_polygon(point, Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data/geometry);
-
 		// =============== attributen die per Rekenstap kunnen wijzigen door toepassing van GebouwOpties
 		attribute<Classifications/SchilLabel>  SchilLabel_rel := =(BebouwingsSector_rel == Classifications/BebouwingsSector/V/Woning) 
 			? 'MakeDefined(BebouwingsObjectSrc/SchilLabel_rel, Classifications/schillabel/V/N)'
-			: 'MakeDefined(BebouwingsObjectSrc/SchilLabel_rel, ModelObject/SchilLabel_rel[ ModelObject_rel]';
+			: 'MakeDefined(BebouwingsObjectSrc/SchilLabel_rel, Default_Energielabel_rel';
 
+		attribute<Classifications/SchilLabel>  DefaultLabel_rel := MakeDefined(BebouwingsObjectSrc/SchilLabel_rel, Default_Energielabel_rel);
 
-	/* 	== ALLEEN VOOR HERBEPALEN DEFAULT SCHILLABELS ==
-			unit<uint32> labeled := subset(schillabel_rel != classifications/SchilLabel/V/N && not(isdefined(Sloopjaar)))
-			{
-				attribute<Classifications/SchilLabel> SchilLabel_nu := SchilLabel_rel[nr_orgentity];
-				attribute<ModelObject> ModelObject_nu := ModelObject_rel[nr_orgentity];
-				attribute<Classifications/SchilLabel> def_check_modus (ModelObject) := modus(SchilLabel_nu,ModelObject_nu);
-				attribute<Classifications/SchilLabel> def_check_mean (ModelObject) := mean(SchilLabel_nu,ModelObject_nu);
-			}
-	*/
-
-		attribute<Classifications/SchilLabel>  DefaultLabel_rel := MakeDefined(BebouwingsObjectSrc/SchilLabel_rel, ModelObject/SchilLabel_rel[ ModelObject_rel]);
-			
-		attribute<Classifications/Schillabel>  StartLabel_rel := SchilLabel_rel;
-		attribute<units/yr_uint16> Bouwjaar  := =BebouwingsSector_rel == Classifications/BebouwingsSector/V/Woning ?
-			'Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/bouwjaar' : 'Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/bouwjaar';
-		attribute<units/yr_uint16> Sloopjaar := =BebouwingsSector_rel == Classifications/BebouwingsSector/V/Woning ?
-			'Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/sloopjaar' : 'Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/sloopjaar';
-		attribute<Classifications/Eigendom> Eigendom_rel  := =BebouwingsSector_rel == Classifications/BebouwingsSector/V/Woning ?
-			'Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Eigendom_rel' : 'Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/Eigendom_rel';
+		attribute<units/yr_uint16>             Bouwjaar       := BebouwingsObjectSrc/bouwjaar;
+		attribute<units/yr_uint16>             Sloopjaar      := BebouwingsObjectSrc/sloopjaar;
+		attribute<Classifications/Eigendom>    Eigendom_rel   := BebouwingsObjectSrc/Eigendom_rel;
 	
 		unit<uint32> BestaandAflevergebied := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data;
 		unit<uint32> BestaandWarmtenet     := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Warmtenetten;
@@ -257,66 +240,7 @@ template StartingStateComponent
 		container Jaarlijks      := for_each_nedv(Classifications/GebouwOptie_jaarlijks/name , 'const(0[Eur_yr], results)', results, Eur_yr), IsHidden = "True";
 
 		// =============== attributen die ook per GebiedOptie kunnen wijzigen
-		attribute<Classifications/WarmteOptie> WarmteOptie_rel := Classifications/GebouwOptie/WarmteOptie_rel [ GebouwOptie_rel ];
-
-		unit<uint32> AfnameGebied := ..../AfnameGebied;
-		attribute<AfnameGebied> AfnameGebied_rel := const((0 / 0)[AfnameGebied], results);
-
-		container GemeenteBestandenVIVET := for_each_nt(/Invoer/RuimtelijkeData/StudieGebied/Gemeente/name, GemeenteExportVIVET)
-		{
-			parameter<string> ExplicitSupplierList := AsList(/Invoer/RuimtelijkeData/StudieGebied/Gemeente/name+'/export_csv/result', ';');
-
-			parameter<string> AllExports := 'Ready', ExplicitSuppliers = "= ExplicitSupplierList";
-		}
-
-		template GemeenteExportVIVET
-		{
-			parameter<string>   GemeenteNAME := PropValue(., 'name');
-			parameter</Invoer/RuimtelijkeData/StudieGebied/Gemeente> Gemeente_here := rlookup(GemeenteNAME, /Invoer/RuimtelijkeData/StudieGebied/Gemeente/name);
-
-			unit<uint32> Table := subset(Results/Gemeente_rel == Gemeente_here)
-			{
-				attribute<string> BAG_id := Results/identificatie[nr_orgentity];
-
-				attribute<string> BU_code := /Invoer/RuimtelijkeData/StudieGebied/Buurt/BU_CODE[Planregio_rel][nr_orgentity];
-
-				attribute<string> adres := Results/Label[nr_orgentity];
-
-				attribute<m2> oppervlak := Results/Oppervlakte_i[nr_orgentity];
-
-				attribute<ModelObject> TBE := Results/ModelObject_rel[nr_orgentity];
-
-				attribute<Classifications/Schillabel>  SchilLabel := Results/Schillabel_rel[nr_orgentity];
-
-				attribute<Classifications/Installatie> Inst_RVb := Results/InstallatiePerProduct/RVb[nr_orgentity];
-				attribute<Classifications/Installatie> Inst_RVp := Results/InstallatiePerProduct/RVp[nr_orgentity];
-				attribute<Classifications/Installatie> Inst_TWb := Results/InstallatiePerProduct/TWb[nr_orgentity];
-				attribute<Classifications/Installatie> Inst_TWp := Results/InstallatiePerProduct/TWp[nr_orgentity];
-
-				attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> Koken := Results/InstallatiePerProduct/KK[nr_orgentity];
-
-				attribute<GJ_yr> V_RV := Results/Functioneel/BaseValues/RV[nr_orgentity];
-				attribute<GJ_yr> V_TW := Results/Functioneel/BaseValues/TW[nr_orgentity];
-				attribute<GJ_yr> V_KK := Results/Functioneel/BaseValues/KK[nr_orgentity];
-
-				attribute<GJ_yr> V_elek_kk   := Results/Func2Meter/koken/Vj_elek[nr_orgentity];
-				attribute<GJ_yr> V_elek_twrv := Results/Func2Meter/metervraag_per_input/E[nr_orgentity];
-				attribute<GJ_yr> V_elek_pomp := Results/Func2Meter/eEffect/Vj_elek[nr_orgentity];
-				attribute<GJ_yr> V_gas       := Results/Func2Meter/result/gas[nr_orgentity];
-
-				attribute<ratio> klimaatfactor := /TussenResultaten/StartJaar/KlimaatFactorMap[point[nr_orgentity] [ Geography/rdc_grids/m100 ] ];
-				attribute<ratio> verschilfactor := Results/warmteverlies_theoretisch_startjaar/gemeten_correctie/verschilfactor[nr_orgentity];
-
-			}
-
-			parameter<string> OutputFolder := '%localDataProjDir%/Results/VIVETexports/';
-			unit<uint32> variable := SubItem_PropValues(table,'name');
-			container export_csv := Model/CalculationSchemes/Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), OutputFolder+GemeenteNAME+'.csv');
-		}
-
-
-
-		
+		attribute<Classifications/WarmteOptie> WarmteOptie_rel := Classifications/GebouwOptie/WarmteOptie_rel [ GebouwOptie_rel ];		
 	}
 	unit<uint16> ModelObjectKeyDomein;
 	unit<uint32>   PreStartJaar := subset(Results/bouwjaar < Startjaar_jaar)
@@ -343,7 +267,6 @@ template StartingStateComponent
 		attribute<Classifications/Schillabel>  Energielabel_rel  := SchilLabel_rel;
 		attribute<Classifications/Schillabel>  Defaultlabel_rel  := Results/Defaultlabel_rel[nr_orgentity];
 		attribute<Classifications/WarmteOptie> WarmteOptie_rel   := Results/WarmteOptie_rel[nr_orgentity];
-		attribute<Classifications/Schillabel>  Startlabel_rel    := Results/Startlabel_rel[nr_orgentity];
 		attribute<bool>                        Gasloos           := Results/gasloos[nr_orgentity];
 		
 		unit<uint8>  BebouwingsTypeDomein := Results/BebouwingsTypeDomein;
