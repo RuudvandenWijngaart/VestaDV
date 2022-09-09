@@ -949,83 +949,38 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		
 	}
 
-	unit<uint8> GebiedsOptie : nrofrows = 15 // volgorde niet hier instellen maar in SpecifiekeInstellingen/VoorkEuren/BaseLine/WarmteOpties
+	unit<uint8> GebiedsOptie : nrofrows = 6
 	{
-		attribute<string> name:
-		[
-			 'RestWarmte'
-			,'GeoThermie'
-			,'WijkWKK'
-			,'BioWKK'
-			,'WKO'
-			,'Lt15_30'
-			,'Lt15_50'
-			,'Lt15_70'
-			,'Lt30_30' // Geen collectieve WP.
-			,'Lt30_50'
-			,'Lt30_70'
-			,'TEO'
-			,'WaterstofHR'
-			,'WaterstofWP'
-			,'BuurtWKO'
-		];
-		attribute<WarmteOptie> WarmteOptie_rel := rlookup(name, WarmteOptie/name); // WarmteOptie is een zelfstandige gebouw-optie of een gebiedsoptie.
-		attribute<GebouwOptie> GebouwOptie_rel := ='
-			id(.) == V/WKO ? GebouwOptie/V/Gebied_gk :
-			id(.) == V/WaterstofWP ? GebouwOptie/V/' + /Invoer/DefaultInstellingen/Basis/StartGebouwOpties/GebiedoptieGebouwopties/Optie_H2WP_w + ':
-			id(.) == V/WaterstofHR ? GebouwOptie/V/' + /Invoer/DefaultInstellingen/Basis/StartGebouwOpties/GebiedoptieGebouwopties/Optie_H2HR_w + ':
-			GebouwOptie/V/Gebied_zk';
-		attribute<GebouwOptie> GebouwOptie_rel_u := ='
-			id(.) == V/WKO ? GebouwOptie/V/Gebied_gk :
-			id(.) == V/WaterstofWP ? GebouwOptie/V/' + /Invoer/DefaultInstellingen/Basis/StartGebouwOpties/GebiedoptieGebouwopties/Optie_H2WP_u + ':
-			id(.) == V/WaterstofHR ? GebouwOptie/V/' + /Invoer/DefaultInstellingen/Basis/StartGebouwOpties/GebiedoptieGebouwopties/Optie_H2HR_u + ':
-			GebouwOptie/V/Gebied_zk';
+		attribute<string>      name            : ['W70', 'W50', 'W30', 'WK70', 'WK50', 'WK30'];
+		attribute<string>      label           : ['W-net aflever 70C', 'W-net aflever 50C', 'W-net aflever 30C', 'W&K-net aflever 70C', 'W&K-net aflever 50C', 'W&K-net aflever 30C'];
+		attribute<WarmteOptie> WarmteOptie_rel := rlookup(name, WarmteOptie/name)  , Descr = "WarmteOptie is een zelfstandige gebouw-optie of een gebiedsoptie.";
+		attribute<bool>        KoudeLevering   : [false,false,false,true,true,true], Descr = "levert dit type gebiedsoptie ook koude of niet";
+		attribute<Celsius>     T_sec           : [70, 50, 30, 70, 50, 30]          , Descr = "aflevertemperatuur aan de afnemers vanuit het secundair net";
+		attribute<bool>        IsLT            : [false,true,true,false,true,true] , Descr = "wordt er afgeleverd op middentemperatuurniveau of niet";
+		attribute<bool>        IsMT            := not(isLT)                        , Descr = "wordt er afgeleverd op lagetemperatuurniveau of niet";
+		attribute<GebouwOptie> GebouwOptie_rel := ='KoudeLevering ? GebouwOptie/V/Gebied_gk : GebouwOptie/V/Gebied_zk';
+		attribute<string>      code            := string(id(.));
 
-		attribute<string> code             := string(id(.));
-		attribute<bool>   IsPlanRegioOptie : [ true, true, true, true, false, false, false, false, false, false, false, false, true, true, true]; //, false ];
-		attribute<bool>   IsMT : [ true, true, true, true, false, 
-			false, false, false, false, false, false, 
-			false, false, false, false]; //, false ];
-		attribute<bool>   IsH2  := id(.) == V/WaterstofHR || id(.) == V/WaterstofWP;
-		attribute<bool>   IsLT  := not(IsMT) && not(IsH2);
-		attribute<bool>   KoudeActief := id(.) == V/WKO;
-
-		attribute<string> label := name, DialogType = "LabelText";
-		attribute<uint32> Color : DialogType = "BrushColor",
-		[
-			 rgb(150,  0,  0)
-			,rgb(  0,  0,150)
-			,rgb(128,128,  0)
-			,rgb(  0,255,128)
-			,rgb(  0,150,  0)
-			,rgb(255,130,  0) // oranje
-			,rgb(255,155,  0) // geel
-			,rgb(255,180,  0) // geel
-			,rgb(255,205,  0) // geel
-			,rgb(255,230,  0) // geel
-			,rgb(255,255,  0) // geel
-			,rgb(255,130,  0) // oranje
-			,rgb(100,000,100) // paars
-			,rgb(100,040,100) // paars
-			,rgb(255,100,  0) // oranje
-		];
-		attribute<uint32> SymbolColor := Color, DialogType = "SymbolColor";
-		attribute<uint32> PenColor    := Color, DialogType = "PenColor";
+		//====== kleuren voor display in GUI
+		attribute<uint32>      Color           : DialogType = "BrushColor",	[rgb(150,0,0), rgb(0,0,150), rgb(128,128,0), rgb(0,255,128), rgb(0,150,0), rgb(255,130,0)];
+		attribute<uint32>      SymbolColor     := Color, DialogType = "SymbolColor";
+		attribute<uint32>      PenColor        := Color, DialogType = "PenColor";
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
 	unit<uint8> WarmteOptie := union_unit_uint8(GebouwOptie, GebiedsOptie)
 	{
 		attribute<string> name            := union_data(., GebouwOptie/name, GebiedsOptie/name);
+		attribute<string> Label           := union_data(., GebouwOptie/name, GebiedsOptie/label);
 		attribute<bool>   isGebiedsOptie  := union_data(., const(false, GebouwOptie), const(true, GebiedsOptie));
 		attribute<bool>   kanGebiedsOptie := union_data(., GebouwOptie/kanGebiedsOptie, const(false, GebiedsOptie));
 		attribute<bool>   IsMT            := union_data(., const(false, GebouwOptie), GebiedsOptie/IsMT);
 		attribute<bool>   IsLT            := union_data(., const(false, GebouwOptie), GebiedsOptie/IsLT);
-		attribute<bool>   IsWarmteNet     := IsMT || IsLT, IntegrityCheck = "(this == (isGebiedsOptie && not(IsH2))) && not(IsMT && IsLT)";
-		attribute<bool>   IsH2            := union_data(., const(false, GebouwOptie), GebiedsOptie/IsH2);
-		attribute<bool>   KoudeActief     := union_data(., const(false, GebouwOptie), GebiedsOptie/KoudeActief);
+		attribute<bool>   IsWarmteNet     := IsMT || IsLT;
+
+		attribute<bool>   KoudeActief     := union_data(., const(false, GebouwOptie), GebiedsOptie/KoudeLevering);
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
-		attribute<string> LabelText := name;
+		
 	}
 
 // =========  Classificaties voor montaire /actor units
