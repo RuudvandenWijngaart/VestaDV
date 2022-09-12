@@ -1,6 +1,6 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 //                                                                                      //
-//                   (C) Hestia 2021 - PBL & TNO                                        //
+//                   (C) Hestia 2022 - PBL & TNO                                        //
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -14,269 +14,66 @@ container WarmteBronnen
 {
 	container prijzen := EnergiePrijzen
 	{
-		unit<uint32> aardgas_tabel := AardGas/Table;
-
-		attribute<aardgas_tabel> aardgas_tabel_rel(classifications/RekenJaar) := rlookup(classifications/RekenJaar/values, UInt16(aardgas_tabel/jaar));
-		attribute<Eur_GJ>        K_Gas_GJ         (classifications/RekenJaar) := AardGas/results/GrootGebruik/eindgebruik_excl[aardgas_tabel_rel];
-		attribute<Eur_GJ>        Km_Gas_GJ        (classifications/RekenJaar) := AardGas/results/GrootGebruik/Maatschappelijk [aardgas_tabel_rel];
-
-		unit<uint32> groengas_tabel := groengas/Table;
-		attribute<groengas_tabel> groengas_tabel_rel (classifications/RekenJaar) := rlookup(classifications/RekenJaar/values, UInt16(groengas_tabel/jaar));
-		attribute<Eur_GJ>         K_GrGas_GJ         (classifications/RekenJaar) := groengas/results/GrootGebruik/eindgebruik_excl[groengas_tabel_rel];
-		attribute<Eur_GJ>         Km_GrGas_GJ        (classifications/RekenJaar) := groengas/results/GrootGebruik/Maatschappelijk [groengas_tabel_rel];
-
-		unit<uint32> elek_tabel := Elektriciteit/Table;
-
-		attribute<elek_tabel>    elek_tabel_rel   (classifications/RekenJaar) := rlookup(classifications/RekenJaar/values, UInt16(elek_tabel/jaar));
-		attribute<Eur_GJ>        ElekEnGros_GJ    (classifications/RekenJaar) := prijzen/Elektriciteit/results/GrootGebruik/CommodityPrice        [elek_tabel_rel];
-		attribute<Eur_GJ>        ElekKMG_GJ       (classifications/RekenJaar) := prijzen/Elektriciteit/results/KleinMiddelGebruik/eindgebruik_excl[elek_tabel_rel];
-		attribute<Eur_GJ>        Km_Elek_GJ       (classifications/RekenJaar) := prijzen/Elektriciteit/results/GrootGebruik/Maatschappelijk       [elek_tabel_rel];
-
-		unit<uint32> overig_tabel   := Overig/Table;
-		container    overig_results := Overig/Results;
-
-		attribute<overig_tabel>  overig_tabel_rel  (classifications/RekenJaar) := rlookup(classifications/RekenJaar/values, overig_results/jaar);
-		attribute<Eur_GJ>        BioMassa_GJ       (classifications/RekenJaar) := overig_results/BioBron   [overig_tabel_rel];
-		attribute<Eur_GJ>        Kolen_GJ          (classifications/RekenJaar) := overig_results/Kolen_excl[overig_tabel_rel];
-		attribute<Eur_GJ>        KolenCO2_GJ       (classifications/RekenJaar) := overig_results/Kolen_CO2 [overig_tabel_rel];
-		
-		attribute<Eur_GJ>        Waterstof_GJ      (classifications/RekenJaar) := overig_results/Waterstof[overig_tabel_rel];
+		attribute<AardGas/Table>       aardgas_tabel_rel (classifications/RekenJaar) := rlookup(classifications/RekenJaar/values, UInt16(AardGas/Table/jaar));
+		attribute<Eur_GJ>              K_Gas             (classifications/RekenJaar) := AardGas/results/GrootGebruik/eindgebruik_excl[aardgas_tabel_rel];
+		attribute<Eur_GJ>              Km_Gas            (classifications/RekenJaar) := AardGas/results/GrootGebruik/Maatschappelijk [aardgas_tabel_rel];
+		attribute<Elektriciteit/Table> elek_tabel_rel    (classifications/RekenJaar) := rlookup(classifications/RekenJaar/values, UInt16(Elektriciteit/Table/jaar));
+		attribute<Eur_GJ>              K_e               (classifications/RekenJaar) := prijzen/Elektriciteit/results/GrootGebruik/CommodityPrice [elek_tabel_rel];
+		attribute<Eur_GJ>              Km_e              (classifications/RekenJaar) := prijzen/Elektriciteit/results/GrootGebruik/Maatschappelijk[elek_tabel_rel];
+		attribute<Overig/Table>        overig_tabel_rel  (classifications/RekenJaar) := rlookup(classifications/RekenJaar/values, UInt16(Overig/Table/jaar));
+		attribute<Eur_GJ>              K_biomassa        (classifications/RekenJaar) := Overig/Results/BioBron[overig_tabel_rel];
+		attribute<Eur_GJ>              Km_biomassa       (classifications/RekenJaar) := K_biomassa;
+		attribute<Eur_GJ>              K_kolen           (classifications/RekenJaar) := Overig/Results/Kolen_excl[overig_tabel_rel] + Overig/Results/Kolen_CO2 [overig_tabel_rel];
+		attribute<Eur_GJ>              Km_kolen          (classifications/RekenJaar) := K_kolen;
 	}
 
 	container MetaData: IsHidden = "True"
 	{
-		unit<uint32> RekenType: nrofrows = 9
-		{
-			attribute<string> Naam: [ 'STEG', 'Kolen', 'Gasmotor', 'Industrie', 'AVI', 'BMC', 'BioWKK', 'GeoThermie', 'HulpKetel' ];
-			attribute<string> label := Naam, DialogType = "labelText";
-		}
-
-		unit<uint32> TypeInfo
+		unit<uint32> Src
 		:	StorageName     = "%EnergieDataProjDir%/TypeInfo.csv" 
 		,	StorageType     = "gdal.vect"
 		,	StorageReadOnly = "True"
-		,	SyncMode        = "None"
 		{
-			attribute<string>  Type;
-			attribute<string>  label := Type, DialogType = "labelText";
-			attribute<string>  K_kW_min;   // [Eur_kW]
-			attribute<string>  K_kW_max;   // [Eur_kW]
-			attribute<string>  MWth_min;   // [MWth]
-			attribute<MW>      MWth_default : [ 10, 20,   0.5,  6,  6,  3,  3,  6,  3,  3, 20,   0.5,  3,   0.5];
-			attribute<Celsius> Temp_default : [ 70, 70,  70  , 70, 70, 70, 70, 70, 70, 70, 70,  70  , 70,  70, 70];
-			attribute<ratio>   Pcap_default := const(0.3[ratio] , TypeInfo);
-			attribute<ratio>   Pvol_default := const(0.8[ratio] , TypeInfo);
-			attribute<string>  JaarKosten; // [_yr]
+			attribute<string>  label      := src/Type, DialogType = "LabelText";
+		}
 
-			attribute<TypeInfoList> TypeInfoList_rel := rlookup(Type, TypeInfoList/Naam);
-			attribute<RekenType>    RekenType_rel    := TypeInfoList/RekenType_rel[TypeInfoList_rel];
-			
-			attribute<Eur_kW> Ki_kW_min := K_kW_min[Eur_kW];
-			attribute<Eur_kW> Ki_kW_max := K_kW_max[Eur_kW];
+		unit<uint32> BronType := Src
+		{
+			attribute<string>  label      := src/Type, DialogType = "LabelText";
+			attribute<Eur_kW>  Ki_cap_min := src/Ki_cap_min[Eur_kW];
+			attribute<Eur_kW>  Ki_cap_max := src/Ki_cap_max[Eur_kW];
+			attribute<_yr>     R_oh       := src/R_oh[_yr];
+			attribute<_yr>     R_adm      := src/R_adm[_yr];
+			attribute<Celsius> T_bron     := src/T_bron[Celsius];
+			attribute<MW>      MWth_max   := src/MWth_max[MW];
+			attribute<ratio>   P_vol      := src/P_vol[ratio];
+			attribute<ratio>   P_cap      := src/P_cap[ratio];
+			attribute<string>  input      := src/input;
+			attribute<ratio>   Rendement  := 1[ratio] / src/SPF[ratio];
+			attribute<bool>    Koude      := src/koude[bool];
 
-			container K_GJ := for_each_nedv(classifications/Zichtjaar/name
-				, replace('union_data(RekenType, '+AsItemList('RekenTypes/'+RekenType/Naam+'/K_GJ [classifications/Zichtjaar/V/@X]')+')[RekenType_rel]', '@X', classifications/Zichtjaar/name)
+			container K_GJ := for_each_nedv(classifications/RekenJaar/name
+				, '(input =='+quote('e')+'        ? Prijzen/K_e       [rlookup('+quote(classifications/RekenJaar/name)+', classifications/RekenJaar/name)] 
+				  : input =='+quote('gas')+'      ? Prijzen/K_gas     [rlookup('+quote(classifications/RekenJaar/name)+', classifications/RekenJaar/name)]
+				  : input =='+quote('biomassa')+' ? Prijzen/K_biomassa[rlookup('+quote(classifications/RekenJaar/name)+', classifications/RekenJaar/name)]
+				  : input =='+quote('kolen')+'    ? Prijzen/K_kolen   [rlookup('+quote(classifications/RekenJaar/name)+', classifications/RekenJaar/name)]
+				  : 0.0[Eur_GJ]) * Rendement'
 				, .
 				, Eur_GJ
 			);
-			container Km_GJ := for_each_nedv(classifications/Zichtjaar/name
-				, replace('union_data(RekenType, '+AsItemList('RekenTypes/'+RekenType/Naam+'/Km_GJ [classifications/Zichtjaar/V/@X]')+')[RekenType_rel]', '@X', classifications/Zichtjaar/name)
+
+			container Km_GJ := for_each_nedv(classifications/RekenJaar/name
+				, '(input =='+quote('e')+'        ? Prijzen/Km_e       [rlookup('+quote(classifications/RekenJaar/name)+', classifications/RekenJaar/name)] 
+				  : input =='+quote('gas')+'      ? Prijzen/Km_gas     [rlookup('+quote(classifications/RekenJaar/name)+', classifications/RekenJaar/name)]
+				  : input =='+quote('biomassa')+' ? Prijzen/Km_biomassa[rlookup('+quote(classifications/RekenJaar/name)+', classifications/RekenJaar/name)]
+				  : input =='+quote('kolen')+'    ? Prijzen/Km_kolen   [rlookup('+quote(classifications/RekenJaar/name)+', classifications/RekenJaar/name)]
+				  : 0.0[Eur_GJ]) * Rendement'
 				, .
 				, Eur_GJ
 			);
-			attribute<string> CO2_2000;
-			attribute<string> CO2_2010;
-			attribute<string> CO2_2020;
-			attribute<string> CO2_2030;
-			attribute<string> CO2_2040;
-			attribute<string> CO2_2050;
-			
-			attribute<string> NOx_2000;
-			attribute<string> NOx_2010;
-			attribute<string> NOx_2020;
-			attribute<string> NOx_2030;
-			attribute<string> NOx_2040;
-			attribute<string> NOx_2050;
-			
-			attribute<string> SO2_2000;
-			attribute<string> SO2_2010;
-			attribute<string> SO2_2020;
-			attribute<string> SO2_2030;
-			attribute<string> SO2_2040;
-			attribute<string> SO2_2050;
-			
-			attribute<string> VOS_2000;
-			attribute<string> VOS_2010;
-			attribute<string> VOS_2020;
-			attribute<string> VOS_2030;
-			attribute<string> VOS_2040;
-			attribute<string> VOS_2050;
-			
-			attribute<string> TS_2000;
-			attribute<string> TS_2010;
-			attribute<string> TS_2020;
-			attribute<string> TS_2030;
-			attribute<string> TS_2040;
-			attribute<string> TS_2050;
+
+
+		container V := for_each_nedv(Type, 'value('+string(id(.))+', ..)', void, .);
 		}
-		unit<uint32> TypeInfoList: nrofrows = 16
-		{
-			attribute<string> Naam: 
-			[
-				"STEG", "Gasturbine", "Conventioneel",
-				"Kolen", "KVSTEG",
-				"Gasmotor", "WijkWKK",
-				"Industrie", "Raffinaderij", "Kern", "Geothermie",
-				"AVI", "BMC", "BioWKK", "HulpKetel", "Onbekend"
-			];
-			attribute<string> label := Naam, DialogType = "labelText";
-
-			attribute<RekenType> RekenType_rel:
-			[
-				0, 0, 0,
-				1, 1, 
-				2, 2,
-				3, 3, 3, 7,
-				4, 5, 6, 2, null
-			];
-			container V := for_each_nedv(Naam, 'value('+string(id(.))+', ..)', void, .);
-		}
-		container RekenTypes
-		{
-			attribute<Float64> GroenGasFactor (classifications/Zichtjaar) := ='union_data(classifications/Zichtjaar, '+AsItemList('SpecifiekeInstellingen/RekenStappen/'+classifications/Zichtjaar/name+'/Voorkeuren/GroenGasFactor')+')';
-			attribute<Float64> H2Factor       (classifications/Zichtjaar) := ='union_data(classifications/Zichtjaar, '+AsItemList('SpecifiekeInstellingen/RekenStappen/'+classifications/Zichtjaar/name+'/Voorkeuren/H2Factor')+')';
-			attribute<Float64> GrijsGasFactor (classifications/Zichtjaar) := 1.0 - GroenGasFactor;
-			
-			container STEG
-			{
-				attribute<Eur_GJ> Km_GJ_H2  (classifications/Zichtjaar) := (0.2 / 0.3) * prijzen/Waterstof_GJ[classifications/Zichtjaar/RekenJaar_rel];
-				attribute<Eur_GJ> K_GJ_Gas  (classifications/Zichtjaar) := (0.2 / 0.3) * prijzen/K_Gas_GJ    [classifications/Zichtjaar/RekenJaar_rel];
-				attribute<Eur_GJ> Km_GJ_Gas (classifications/Zichtjaar) := (0.2 / 0.3) * prijzen/Km_Gas_GJ   [classifications/Zichtjaar/RekenJaar_rel];
-				attribute<Eur_GJ> Km_GJ     (classifications/Zichtjaar) := H2Factor *  Km_GJ_H2 + (1.0 - H2Factor) * Km_GJ_Gas;
-				attribute<Eur_GJ> K_GJ      (classifications/Zichtjaar) := H2Factor *  Km_GJ_H2 + (1.0 - H2Factor) * K_GJ_Gas;
-			}
-
-			container Kolen
-			{
-				// obv (0.20/0.30) * P10[Eur/GJ]
-				// obv P10 = O10+0,105[ton/GJ]*B10 
-				// obv O10= Kolenprijs = 2.20 [Eur/GJ] CONSTANT!
-				// en B10[Eur/ton]=CO2-prijs die varieert met de tijd, 
-				attribute<Eur_GJ> P    (classifications/Zichtjaar) := (prijzen/Kolen_GJ + prijzen/KolenCO2_GJ)[classifications/Zichtjaar/RekenJaar_rel];
-				attribute<Eur_GJ> K_GJ (classifications/Zichtjaar) := (0.20/0.30) * P;
-				attribute<Eur_GJ> Km_GJ(classifications/Zichtjaar) := K_GJ;
-			}
-
-			container Gasmotor
-			{
-				parameter<float64> WarmteAandeel        := 0.9;
-				parameter<float64> Rendement            := 1.07, Source = "www.pbl.nl/sites/default/files/cms/publicaties/pbl-2018-eindadvies-basisbedragen-SDE-plus-2019_3342.pdf";
-				parameter<float64> ElektriciteitAandeel := 1.0 - WarmteAandeel;
-				container Factoren
-				{
-					parameter<float64> Aardgas       := 1.0 / (Rendement * WarmteAandeel);
-					parameter<float64> Elektriciteit := - ElektriciteitAandeel / WarmteAandeel;
-					parameter<float64> Biogas        := 0.0;
-					parameter<float64> Biovast       := 0.0;
-					parameter<float64> Ondergrond    := 0.0;
-					parameter<float64> Opwekking     := 0.0;
-				}
-				
-				attribute<Eur_GJ> K_Gas  (classifications/Zichtjaar) := prijzen/K_GrGas_GJ [classifications/Zichtjaar/RekenJaar_rel] * GroenGasFactor + prijzen/K_Gas_GJ [classifications/Zichtjaar/RekenJaar_rel] * GrijsGasFactor;
-				attribute<Eur_GJ> Km_Gas (classifications/Zichtjaar) := prijzen/Km_GrGas_GJ[classifications/Zichtjaar/RekenJaar_rel] * GroenGasFactor + prijzen/Km_Gas_GJ[classifications/Zichtjaar/RekenJaar_rel] * GrijsGasFactor;
-
-				attribute<Eur_GJ>  K_GJ  (classifications/Zichtjaar) :=
-					Factoren/Aardgas * K_Gas  + (Factoren/Elektriciteit * prijzen/ElekEnGros_GJ)[classifications/Zichtjaar/RekenJaar_rel]; // en gros prijs als opbrengst, dit is excl distributiekosten
-				attribute<Eur_GJ>  Km_GJ (classifications/Zichtjaar) :=
-					Factoren/Aardgas * Km_Gas + (Factoren/Elektriciteit * prijzen/Km_Elek_GJ   )[classifications/Zichtjaar/RekenJaar_rel];
-			}
-
-			container HulpKetel := Gasmotor;
-
-			container Industrie
-			{
-				// obv 0.0000025 [GJ/GJ] * R10[Eur/GJ]
-				// obv R10 = S10[Eur/kWh] * 1000000[kJ/GJ] / 3600[sec/h]
-				attribute<Eur_GJ> K_GJ  (classifications/Zichtjaar) := 0.0000025 [GJ / GJ] * prijzen/ElekKMG_GJ[classifications/Zichtjaar/RekenJaar_rel];
-				attribute<Eur_GJ> Km_GJ (classifications/Zichtjaar) := 0.0000025 [GJ / GJ] * prijzen/Km_Elek_GJ[classifications/Zichtjaar/RekenJaar_rel];
-			}
-			container GeoThermie
-			{
-				parameter<ratio>  Elektriciteit_Factor := (1GJ / 23.04GJ), Descr = "GJ elektrisch per GJ thermisch", Source = "Diepe Geothermie met Basislast 6000 vollasturen in PBL (2020), Eindadvies Basisbedragen SDE++ 2020 geothermie";
-				attribute<Eur_GJ> K_GJ   (classifications/Zichtjaar) := Elektriciteit_Factor * prijzen/ElekKMG_GJ[classifications/Zichtjaar/RekenJaar_rel];
-				attribute<Eur_GJ> Km_GJ  (classifications/Zichtjaar) := Elektriciteit_Factor * prijzen/Km_Elek_GJ[classifications/Zichtjaar/RekenJaar_rel];
-			}
-			container AVI
-			{
-				// 0.18 * Q10[Eur/GJ] 
-				// obv Q10 = 0.058[Eur/kWh] * 1000/3.6 [kWh/GJ] die varieert met de tijd.
-				attribute<Eur_GJ> K_GJ  (classifications/Zichtjaar) := 0.18 * prijzen/ElekEnGros_GJ[classifications/Zichtjaar/RekenJaar_rel]; // en gros prijs als kosten, is deze prijs nu excl of incl distributiekosten en heffingen?
-				attribute<Eur_GJ> Km_GJ (classifications/Zichtjaar) := 0.18 * prijzen/Km_Elek_GJ   [classifications/Zichtjaar/RekenJaar_rel];
-			}
-			container BMC
-			{
-				// obv (0.20 / 0.30) * N10[Eur/GJ] obv N10 = 122.4 / 16 CONSTANT ! 
-				attribute<Eur_GJ> K_GJ  (classifications/Zichtjaar) := (0.20 / 0.30) * prijzen/BioMassa_GJ[classifications/Zichtjaar/RekenJaar_rel];
-				attribute<Eur_GJ> Km_GJ (classifications/Zichtjaar) := K_GJ;
-			}
-			container BioWKK
-			{
-				parameter<float64> WarmteAandeel        := 0.9;
-				parameter<float64> Rendement            := 0.8;
-				parameter<float64> ElektriciteitAandeel := 1.0 - WarmteAandeel;
-				container Factoren
-				{
-					parameter<float64> Warmte        := 1.0 / (Rendement * WarmteAandeel);
-					parameter<float64> Elektriciteit := - ElektriciteitAandeel / WarmteAandeel;
-					parameter<float64> Aardgas       := 0.0;
-					parameter<float64> Biogas        := 0.0;
-					parameter<float64> Biovast       := Warmte;
-					parameter<float64> Ondergrond    := 0.0;
-					parameter<float64> Opwekking     := 0.0;
-				}
-				attribute<Eur_GJ> K_Biomassa   (classifications/Zichtjaar) := prijzen/BioMassa_GJ [classifications/Zichtjaar/RekenJaar_rel];
-				attribute<Eur_GJ> Km_Biomassa  (classifications/Zichtjaar) := prijzen/BioMassa_GJ [classifications/Zichtjaar/RekenJaar_rel];
-				
-				attribute<Eur_GJ> K_GJ  (classifications/Zichtjaar) := 
-					Factoren/Biovast * K_Biomassa  + (Factoren/Elektriciteit * prijzen/ElekEnGros_GJ)[classifications/Zichtjaar/RekenJaar_rel]; // en gros prijs als opbrengst, dit is excl distributiekosten
-				attribute<Eur_GJ> Km_GJ (classifications/Zichtjaar) := 
-					Factoren/Biovast * Km_Biomassa + (Factoren/Elektriciteit * prijzen/Km_Elek_GJ   )[classifications/Zichtjaar/RekenJaar_rel]; 
-			}
-		}
-	}
-	
-	template TypeInfoTempl: IsHidden = "True"
-	{
-		// begin case parameters
-		parameter<string> InstallatieTypeName;
-		// end case parameters
-
-		parameter<MetaData/TypeInfo>     TypeInfo_rel     := rlookup(InstallatieTypeName, MetaData/TypeInfo/Type);
-		parameter<MetaData/TypeInfoList> TypeInfoList_rel :=       MetaData/TypeInfo/TypeInfoList_rel[TypeInfo_rel];
-		parameter<MetaData/RekenType>    RekenType_rel    :=       MetaData/TypeInfo/RekenType_rel[TypeInfo_rel];
-		parameter<MW>                    MWth_min         := value(MetaData/TypeInfo/MWth_min[TypeInfo_rel], MW);
-		parameter<Eur_kW>                Ki_kW_min        :=       MetaData/TypeInfo/Ki_kW_min[TypeInfo_rel];
-		parameter<Eur_kW>                Ki_kW_max        :=       MetaData/TypeInfo/Ki_kW_max[TypeInfo_rel];
-		parameter<ratio>                 P_vol            :=       MetaData/TypeInfo/Pvol_default[TypeInfo_rel];
-		parameter<ratio>                 P_cap            :=       MetaData/TypeInfo/Pcap_default[TypeInfo_rel];
-		parameter<_yr>                   Rj_Onderhoud     := value(MetaData/TypeInfo/JaarKosten[TypeInfo_rel], _yr);
-
-		container K_GJ  := for_each_nedv(classifications/Zichtjaar/name, 'MetaData/TypeInfo/K_GJ/' +classifications/Zichtjaar/name+'[TypeInfo_rel]', void, Eur_GJ);
-		container Km_GJ := for_each_nedv(classifications/Zichtjaar/name, 'MetaData/TypeInfo/Km_GJ/'+classifications/Zichtjaar/name+'[TypeInfo_rel]', void, Eur_GJ);
-
-		container RekenType := ='MetaData/RekenTypes/'+ MetaData/RekenType/Naam[RekenType_rel];
-	}
-
-	container GeoThermie: Descr = "zie FO $3.4"
-	{
-		container TypeInfo := TypeInfoTempl('Geothermie');
-	}
-	container WijkWKK: Descr = "zie FO $3.4"
-	{
-		container TypeInfo := TypeInfoTempl('WijkWKK');
-	}
-	container BioWKK: Descr = "zie FO $3.4"
-	{
-		container TypeInfo := TypeInfoTempl('BioWKK');
 	}
 }

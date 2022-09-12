@@ -36,25 +36,15 @@ template AllocatieResultatenComponent
 			
 		container BemeterdeGebouwInput_rel :=  BO_base/BemeterdeGebouwInput_rel, IsHidden = "True";
 			
-/*		container SPF := for_each_nedv(Classifications/Product/name
-			, replace('merge(GebouwOptie_rel, float64, '+AsItemList('GebouwOpties/'+BcGebouwOptie/name+'/SPF/@P')+')', '@P', Classifications/Product/name)
-			, BO
-			, float64
-		);*/
 		container Aansluitingen := BO_Base/Aansluitingen
 		{		
 			
-			attribute<bool> IsHybride      (BO) :=
-				(  BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e
-				&& BemeterdeGebouwInput_rel/RVp != Classifications/BemeterdeGebouwInput/V/e)
-				|| aandelen/WaterstofWP;
+			attribute<bool> IsHybride      (BO) := BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e	&& BemeterdeGebouwInput_rel/RVp != Classifications/BemeterdeGebouwInput/V/e;
 
 			attribute<bool> IsAllElectric  (BO) :=
-				(( BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e
-				&& BemeterdeGebouwInput_rel/RVp == Classifications/BemeterdeGebouwInput/V/e
-				&& BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/e
-				&& BemeterdeGebouwInput_rel/TWp == Classifications/BemeterdeGebouwInput/V/e)
-				|| aandelen/Lt15_30 || aandelen/Lt15_50 || aandelen/Lt30_30 || aandelen/Lt30_50 || aandelen/WKO)
+				(( BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e	&& BemeterdeGebouwInput_rel/RVp == Classifications/BemeterdeGebouwInput/V/e
+				&& BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/e	&& BemeterdeGebouwInput_rel/TWp == Classifications/BemeterdeGebouwInput/V/e)
+				|| aandelen/W50 || aandelen/W30 || aandelen/WK50 || aandelen/WK30)
 				&& not(IsHybride);
 
 			attribute<nrAsl> Enet_app      (BO) := float64((Enet_hwp + Enet_ewp) == 0[nrAsl]) * nrAansluitingen; // alleen apparatuur
@@ -131,20 +121,17 @@ template AllocatieResultatenComponent
 			attribute<Eur_yr> Kj_e           (BO) := Metervraag/e * Prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl[e_gebruiksgrootteklasse_rel];
 			attribute<Eur_yr> Km_e           (BO) := Metervraag/e * Prijzen/Elektriciteit/Staffel/KGJ_Maatschappelijk [e_gebruiksgrootteklasse_rel];
 			attribute<Eur_yr> Kj_e_EH        (BO) := Metervraag/e * Prijzen/Elektriciteit/Staffel/KGJ_EnergieHeffing[e_gebruiksgrootteklasse_rel];
-			attribute<Eur_yr> Kj_e_CO2       (BO) := Metervraag/e * Prijzen/Elektriciteit/Staffel/KGJ_CO2Heffing[e_gebruiksgrootteklasse_rel];
 
 			//Gas
 			attribute<classifications/gebruiksgrootteklasse> g_gebruiksgrootteklasse_rel (BO) := classify(Metervraag/gas, Prijzen/Aardgas/Staffel/ClassBreak);
 			attribute<Eur_yr> Kj_gas         (BO) := Metervraag/gas * Prijzen/Aardgas/Staffel/KGJ_eindgebruik_excl[g_gebruiksgrootteklasse_rel];
 			attribute<Eur_yr> Km_gas         (BO) := Metervraag/gas * Prijzen/Aardgas/Staffel/KGJ_Maatschappelijk [g_gebruiksgrootteklasse_rel];
 			attribute<Eur_yr> Kj_gas_EH      (BO) := Metervraag/gas * Prijzen/Aardgas/Staffel/KGJ_EnergieHeffing[g_gebruiksgrootteklasse_rel];
-			attribute<Eur_yr> Kj_gas_CO2     (BO) := Metervraag/gas * Prijzen/Aardgas/Staffel/KGJ_CO2Heffing[g_gebruiksgrootteklasse_rel];
 
 			//Waterstof
 			attribute<Eur_yr> Kj_H2          (BO) := Metervraag/H2 * prijzen/overig/Pj_H2;
 			attribute<Eur_yr> Km_H2          (BO) := Metervraag/H2 * prijzen/overig/Pm_H2;
 			attribute<Eur_yr> Kj_H2_EH       (BO) := const(0.0[eur_yr],BO);
-			attribute<Eur_yr> Kj_H2_CO2      (BO) := const(0.0[eur_yr],BO);
 		}
 	}
 
@@ -156,7 +143,6 @@ template AllocatieResultatenComponent
 	container Aansluitingen
 	{
 		attribute<nrAsl> gas      (PlanRegio) := sum(BO/Aansluitingen/Gnet,     BO/Planregio_rel);
-		attribute<nrAsl> H2net    (PlanRegio) := sum(BO/Aansluitingen/H2net,    BO/Planregio_rel);
 		attribute<nrAsl> Enet_ewp (PlanRegio) := sum(BO/Aansluitingen/Enet_ewp * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie])), BO/Planregio_rel);
 		attribute<nrAsl> Enet_hwp (PlanRegio) := sum(BO/Aansluitingen/Enet_hwp, BO/Planregio_rel);
 		attribute<nrAsl> LT_wp    (PlanRegio) := sum(BO/Aansluitingen/Enet_ewp * float64(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie])     , BO/Planregio_rel);
@@ -175,7 +161,7 @@ template AllocatieResultatenComponent
 		attribute<GJ_yr> Pellets       (BO) := BO/Metervraag/pellets;
 		attribute<GJ_yr> Biomassa      (BO) := BO/Metervraag/biomassa;
 		attribute<GJ_yr> Olie          (BO) := BO/Metervraag/olie;
-		attribute<GJ_yr> Koude         (BO) := BO/Functioneel/V_KD * float64(Aandelen/WKO);
+		attribute<GJ_yr> Koude         (BO) := BO/Functioneel/V_KD * float64(Classifications/WarmteOptie/KoudeActief[WarmteAllocatie]);
 		attribute<GJ_yr> Warmte_LT     (BO) := BO/Functioneel/V_Warmte * float64(Classifications/WarmteOptie/IsLT[BO/WarmteOptie_rel]);
 		attribute<GJ_yr> Warmte_MT     (BO) := BO/Functioneel/V_Warmte * float64(Classifications/WarmteOptie/IsMT[BO/WarmteOptie_rel]);
 		attribute<GJ_yr> GebiedsOptie  (BO) := ='add('+AsItemList(Classifications/GebiedsOptie/name)+')';
@@ -195,21 +181,20 @@ template AllocatieResultatenComponent
 		attribute<Eur_yr> Maatschappelijk  (BO) := MeterVraag/AardGas * ggk/KGJ_Maatschappelijk [ggk_rel];
 		attribute<Eur_yr> netwerk          (BO) := MeterVraag/AardGas * ggk/KGJ_netwerk         [ggk_rel];
 		attribute<Eur_yr> EnergieHeffing   (BO) := MeterVraag/AardGas * ggk/KGJ_EnergieHeffing  [ggk_rel];
-		attribute<Eur_yr> CO2Heffing       (BO) := MeterVraag/AardGas * ggk/KGJ_CO2Heffing      [ggk_rel];
 	}
 
 	container Vastrecht
 	{
-		attribute<Eur_yr> Kj_Vastrecht_MT  (BO) := float64(Classifications/WarmteOptie/IsMT[BO/WarmteOptie_rel]) * BO/Opbrengsten/VastRechtMT_T;
-		attribute<Eur_yr> Kj_Vastrecht_LT  (BO) := float64(Classifications/WarmteOptie/IsLT[BO/WarmteOptie_rel]) * BO/Opbrengsten/VastRechtLT_T;
-		attribute<Eur_yr> Kj_Vastrecht_K   (BO) := float64(WarmteAllocatie == Classifications/WarmteOptie/V/WKO) * BO/Opbrengsten/VastRechtK_T;
+		attribute<Eur_yr> Kj_Vastrecht_MT  (BO) := float64(Classifications/WarmteOptie/IsMT[BO/WarmteOptie_rel])     * BO/Opbrengsten/VastRechtMT_T;
+		attribute<Eur_yr> Kj_Vastrecht_LT  (BO) := float64(Classifications/WarmteOptie/IsLT[BO/WarmteOptie_rel])     * BO/Opbrengsten/VastRechtLT_T;
+		attribute<Eur_yr> Kj_Vastrecht_K   (BO) := float64(Classifications/WarmteOptie/KoudeActief[WarmteAllocatie]) * BO/Opbrengsten/VastRechtK_T;
 
 		attribute<Eur_yr> Kj_Vastrecht     (BO) := Kj_Vastrecht_MT + Kj_Vastrecht_LT + Kj_Vastrecht_K;
 	}
 
-	attribute<nrAsl> aant_g_aansl_per_planregio       (PlanRegio) := sum((BO/Aansluitingen/Gnet + BO/Aansluitingen/H2net)                            , BO/PlanRegio_rel), IsHidden = "True";
-	attribute<nrAsl> aant_g_aansl_hoogb_per_planregio (PlanRegio) := sum((BO/Aansluitingen/Gnet + BO/Aansluitingen/H2net) * float64( BO/IsMeergezins), BO/PlanRegio_rel), IsHidden = "True";
-	attribute<nrAsl> aant_g_aansl_laagb_per_planregio (PlanRegio) := sum((BO/Aansluitingen/Gnet + BO/Aansluitingen/H2net) * float64(!BO/IsMeergezins), BO/PlanRegio_rel), IsHidden = "True";
+	attribute<nrAsl> aant_g_aansl_per_planregio       (PlanRegio) := sum((BO/Aansluitingen/Gnet)                            , BO/PlanRegio_rel), IsHidden = "True";
+	attribute<nrAsl> aant_g_aansl_hoogb_per_planregio (PlanRegio) := sum((BO/Aansluitingen/Gnet) * float64( BO/IsMeergezins), BO/PlanRegio_rel), IsHidden = "True";
+	attribute<nrAsl> aant_g_aansl_laagb_per_planregio (PlanRegio) := sum((BO/Aansluitingen/Gnet) * float64(!BO/IsMeergezins), BO/PlanRegio_rel), IsHidden = "True";
 
 	container Elektriciteit
 	{
@@ -224,7 +209,6 @@ template AllocatieResultatenComponent
 		attribute<Eur_yr> Maatschappelijk  (BO) := MeterVraag/Elektriciteit * ggk/KGJ_Maatschappelijk [ggk_rel];
 		attribute<Eur_yr> netwerk          (BO) := MeterVraag/Elektriciteit * ggk/KGJ_netwerk         [ggk_rel];
 		attribute<Eur_yr> EnergieHeffing   (BO) := MeterVraag/Elektriciteit * ggk/KGJ_EnergieHeffing  [ggk_rel] - Heffingskorting;
-		attribute<Eur_yr> CO2Heffing       (BO) := MeterVraag/Elektriciteit * ggk/KGJ_CO2Heffing      [ggk_rel];
 		attribute<Eur_yr> Om_Comfort       (BO) := BO/Functioneel/V_KD * ggk/KGJ_Maatschappelijk[ggk_rel];
 	}
 	container CO2
