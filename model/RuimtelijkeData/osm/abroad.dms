@@ -1,0 +1,224 @@
+container Abroad
+{
+	container NO_WE  := RegioTemplate('nordrhein-westfalen');
+	container NI_SA  := RegioTemplate('niedersachsen');
+	container BELG   := RegioTemplate('belgium');
+
+	unit<uint32> Main_RegionsCombined := Union_Unit(NO_WE/main_verbonden, NI_SA/main_verbonden, BELG/main_verbonden)
+	,	DialogType = "Map"
+	,	DialogData = "line"
+	{
+		attribute<geometries/rdc>         line(arc)                   := Union_Data(Main_RegionsCombined, NO_WE/main_verbonden/line,      NI_SA/main_verbonden/line,      BELG/main_verbonden/line);
+		attribute<string>                 OSM_id                      := Union_Data(Main_RegionsCombined, NO_WE/main_verbonden/OSM_id,    NI_SA/main_verbonden/OSM_id,    BELG/main_verbonden/OSM_id);
+		attribute<string>                 type_org                    := Union_Data(Main_RegionsCombined, NO_WE/main_verbonden/type,      NI_SA/main_verbonden/type,      BELG/main_verbonden/type);
+		attribute<string>                 type                        := type_org = 'motorway' ? 'motorway_abroad' : type_org; 
+		attribute<int32>                  maxspeed_src                := Union_Data(Main_RegionsCombined, NO_WE/main_verbonden/maxspeed,  NI_SA/main_verbonden/maxspeed,  BELG/main_verbonden/maxspeed);
+		attribute<int32>                  maxspeed                    := maxspeed_src > 130i ? (0/0)[int32] : maxspeed_src;
+		attribute<OSM/wegtype> wegtype                     := rlookup(type, OSM/wegtype/name);
+		attribute<bool>                   IsPartOfCarNetwork          := Union_Data(Main_RegionsCombined, NO_WE/main_verbonden/IsPartOfCarNetwork,         NI_SA/main_verbonden/IsPartOfCarNetwork,         BELG/main_verbonden/IsPartOfCarNetwork);
+		attribute<bool>                   IsPartOfBikeNetwork         := Union_Data(Main_RegionsCombined, NO_WE/main_verbonden/IsPartOfBikeNetwork,        NI_SA/main_verbonden/IsPartOfBikeNetwork,        BELG/main_verbonden/IsPartOfBikeNetwork);
+		attribute<bool>                   IsPartOfPedestrianNetwork   := Union_Data(Main_RegionsCombined, NO_WE/main_verbonden/IsPartOfPedestrianNetwork,  NI_SA/main_verbonden/IsPartOfPedestrianNetwork,  BELG/main_verbonden/IsPartOfPedestrianNetwork);
+		
+		unit<uint32> Car := Subset(IsPartOfCarNetwork)
+		, DialogType = "map"
+		, DialogData = "line"
+		{
+			attribute<geometries/rdc>         line(arc)     := Main_RegionsCombined/line[nr_OrgEntity];
+			attribute<string>                 OSM_id        := Main_RegionsCombined/OSM_id[nr_OrgEntity];
+			attribute<OSM/wegtype> wegtype       := Main_RegionsCombined/wegtype[nr_OrgEntity];
+			attribute<int32>                  maxspeed      := Main_RegionsCombined/maxspeed[nr_OrgEntity];
+		}
+		unit<uint32> Bike := Subset(IsPartOfBikeNetwork)
+		, DialogType = "map"
+		, DialogData = "line"
+		{
+			attribute<geometries/rdc>         line(arc)     := Main_RegionsCombined/line[nr_OrgEntity];
+			attribute<string>                 OSM_id        := Main_RegionsCombined/OSM_id[nr_OrgEntity];
+			attribute<OSM/wegtype> wegtype       := Main_RegionsCombined/wegtype[nr_OrgEntity];
+			attribute<int32>                  maxspeed      := Main_RegionsCombined/maxspeed[nr_OrgEntity];
+		}
+		
+		unit<uint32> Pedestrian := Subset(IsPartOfPedestrianNetwork)
+		, DialogType = "map"
+		, DialogData = "line"
+		{
+			attribute<geometries/rdc>         line(arc) := Main_RegionsCombined/line[nr_OrgEntity];
+			attribute<string>                 OSM_id        := Main_RegionsCombined/OSM_id[nr_OrgEntity];
+			attribute<OSM/wegtype> wegtype       := Main_RegionsCombined/wegtype[nr_OrgEntity];
+			attribute<int32>                  maxspeed      := Main_RegionsCombined/maxspeed[nr_OrgEntity];
+		}
+	}
+
+	template RegioTemplate
+	{
+		parameter <string> Region;
+		
+		unit<uint32> src
+		// :	StorageName     = "= dir + '/' + Region +'-'+substr(date,2,6)+'-free.shp/gis_osm_roads_free_1.shp'"
+		:	StorageName     = "= dir + '/' + Region +'-'+date+'-free.shp/gis_osm_roads_free_1.shp'"
+		,	StorageType     = "gdal.vect"
+		,	SyncMode        = "none"
+		,	StorageReadOnly = "True"
+		,	DialogType      = "Map"
+		,	DialogData      = "line_rd"
+		{
+			attribute<fpoint>          line_ll(arc);
+			attribute<geometries/rdc>  line_rd(arc)              := LatLongWGS842RD(line_ll, geometries/rdc);
+			attribute<string>          OSM_id;
+			attribute<string>          fclass;
+			attribute<int32>           maxspeed;
+			
+			attribute<OSM/wegtype>  wegtype           := rlookup(fclass, OSM/wegtype/name);   
+			attribute<bool>            isMain                    := OSM/wegtype/IsMain[wegtype];
+			attribute<bool>            isPartOfCarNetwork        := OSM/wegtype/IsPartOfCarNetwork[wegtype];
+			attribute<bool>            isPartOfBikeNetwork       := OSM/wegtype/IsPartOfBikeNetwork[wegtype];
+			attribute<bool>            isPartOfPedestrianNetwork := OSM/wegtype/IsPartOfPedestrianNetwork[wegtype];
+			
+		}
+		
+		unit<uint32> main_with_subnetworks := Subset(src/isMain)
+		,	DialogType = "Map"
+		,	DialogData = "line_rd"
+		{
+			attribute<geometries/rdc> line_rd (arc) := src/line_rd[nr_OrgEntity];
+			attribute<string>         OSM_id        := src/OSM_id[nr_OrgEntity];
+			attribute<string>         fclass        := src/fclass[nr_OrgEntity];
+			attribute<int32>          maxspeed      := src/maxspeed[nr_OrgEntity];
+			
+			attribute<bool>            isMain                    := src/isMain[nr_OrgEntity];
+			attribute<bool>            isPartOfCarNetwork        := src/isPartOfCarNetwork[nr_OrgEntity];
+			attribute<bool>            isPartOfBikeNetwork       := src/isPartOfBikeNetwork[nr_OrgEntity];
+			attribute<bool>            isPartOfPedestrianNetwork := src/isPartOfPedestrianNetwork[nr_OrgEntity];
+
+			attribute<geometries/rdc> point         := first_point(line_rd);
+			attribute<geometries/rdc> nextpoint     := last_point(line_rd);
+
+			unit<uint32> pointset : = union_unit(., .)
+			{
+				attribute<geometries/rdc> point       := union_data(., ../point, ../nextpoint);
+				attribute<bool>           isVerbonden := isNull(rlookup(point, NodesNotConnected/point));
+				attribute<..>        ArcNr       := value(ID(.) % #(..), ..);
+				attribute<uint32>         VolgNr      := ID(.) / #(..);
+			}
+
+			attribute<bool> isVerbonden := all(pointset/isVerbonden, pointset/ArcNr);
+
+			unit<uint32> NodeSet := unique(pointset/point)
+			,	DialogData = "Values"
+			,	DialogType = "Map"
+			{
+				attribute<geometries/rdc> values;
+				attribute<..>        LinkSetnr       := rlookup(values, ../point);
+				attribute<uint32>         NrConnectedLinks:= pcount(F1) + pcount(F2);
+			}
+
+			attribute<NodeSet> F1 := rlookup(point,     NodeSet/Values);
+			attribute<NodeSet> F2 := rlookup(nextpoint, NodeSet/Values);
+		
+			unit<uint32> networks:= connected_parts(F1, F2) // Verzameling van alle netwerken, inclusief de subnetwerken.
+			{
+				attribute<uint32>   nr_nodes   := sum(const(1, NodeSet, uint32), partnr);
+				parameter<uint32>   MaxNrNodes := max(networks/nr_nodes);
+				parameter<networks> main       := rlookup(MaxNrNodes, nr_nodes); // uitgangspunt: het netwerk met de meeste nodes is het relevante netwerk
+			}
+
+			unit<uint32> NodesNotConnected := Subset(networks/partnr <> networks/main)
+			{
+				attribute<geometries/rdc> point := NodeSet/Values[Nr_OrgEntity];
+			}
+		}
+		
+		unit<uint32> complete_with_subnetworks := Subset(IsDefined(src/wegtype))
+		,	DialogType = "Map"
+		,	DialogData = "line_rd"
+		{
+			attribute<geometries/rdc> line_rd (arc) := src/line_rd[nr_OrgEntity];
+			attribute<string>         OSM_id        := src/OSM_id[nr_OrgEntity];
+			attribute<string>         fclass        := src/fclass[nr_OrgEntity];
+			attribute<int32>          maxspeed      := src/maxspeed[nr_OrgEntity];
+			
+			attribute<bool>            isMain                    := src/isMain[nr_OrgEntity];
+			attribute<bool>            isPartOfCarNetwork        := src/isPartOfCarNetwork[nr_OrgEntity];
+			attribute<bool>            isPartOfBikeNetwork       := src/isPartOfBikeNetwork[nr_OrgEntity];
+			attribute<bool>            isPartOfPedestrianNetwork := src/isPartOfPedestrianNetwork[nr_OrgEntity];
+
+			attribute<geometries/rdc> point         := first_point(line_rd);
+			attribute<geometries/rdc> nextpoint     := last_point(line_rd);
+
+			unit<uint32> pointset : = union_unit(., .)
+			{
+				attribute<geometries/rdc> point       := union_data(., ../point, ../nextpoint);
+				attribute<bool>           isVerbonden := isNull(rlookup(point, NodesNotConnected/point));
+				attribute<..>             ArcNr       := value(ID(.) % #(..), ..);
+				attribute<uint32>         VolgNr      := ID(.) / #(..);
+			}
+
+			attribute<bool> isVerbonden := all(pointset/isVerbonden, pointset/ArcNr);
+
+			unit<uint32> NodeSet := unique(pointset/point)
+			,	DialogData = "Values"
+			,	DialogType = "Map"
+			{
+				attribute<geometries/rdc> values;
+				attribute<..>             LinkSetnr       := rlookup(values, ../point);
+				attribute<uint32>         NrConnectedLinks:= pcount(F1) + pcount(F2);
+			}
+
+			attribute<NodeSet> F1 := rlookup(point,     NodeSet/Values);
+			attribute<NodeSet> F2 := rlookup(nextpoint, NodeSet/Values);
+		
+			unit<uint32> networks:= connected_parts(F1, F2) // Verzameling van alle netwerken, inclusief de subnetwerken.
+			{
+				attribute<uint32>   nr_nodes   := sum(const(1, NodeSet, uint32), partnr);
+				parameter<uint32>   MaxNrNodes := max(networks/nr_nodes);
+				parameter<networks> main       := rlookup(MaxNrNodes, nr_nodes); // uitgangspunt: het netwerk met de meeste nodes is het relevante netwerk
+			}
+
+			unit<uint32> NodesNotConnected := Subset(networks/partnr <> networks/main)
+			{
+				attribute<geometries/rdc> point := NodeSet/Values[Nr_OrgEntity];
+			}
+			
+			attribute<bool>  IsNabijNL   := rjoin(id(.), points/SequenceNr, points/IsNabijNL);
+			
+			unit <uint32> points := sequence2points(line_rd)
+			,	DialogData  = "point"
+			,	DialogType  = "Map"
+			{
+				attribute<Bool> IsNabijNL := isDefined(Point_in_Polygon(Point, RegioIndelingen/NL/Nederland_10kbuffer));
+			}
+		}
+		
+		unit<uint32> main_verbonden := Subset(main_with_subnetworks/isVerbonden) // het resulterende verbonden wegennetwerk
+		,	DialogType = "Map"
+		,	DialogData = "line"
+		{
+			attribute<geometries/rdc>  line (arc)                := main_with_subnetworks/line_rd[nr_OrgEntity];
+			attribute<string>          OSM_id                    := main_with_subnetworks/OSM_id[nr_OrgEntity];
+			attribute<string>          type                      := main_with_subnetworks/fclass[nr_OrgEntity];
+			attribute<int32>           maxspeed                  := main_with_subnetworks/maxspeed[nr_OrgEntity];
+			
+			attribute<bool>            isMain                    := main_with_subnetworks/isMain[nr_OrgEntity];
+			attribute<bool>            isPartOfCarNetwork        := main_with_subnetworks/isPartOfCarNetwork[nr_OrgEntity];
+			attribute<bool>            isPartOfBikeNetwork       := main_with_subnetworks/isPartOfBikeNetwork[nr_OrgEntity];
+			attribute<bool>            isPartOfPedestrianNetwork := main_with_subnetworks/isPartOfPedestrianNetwork[nr_OrgEntity];
+			
+		}
+		
+		unit<uint32> complete_verbonden := Subset(complete_with_subnetworks/isVerbonden && complete_with_subnetworks/isNabijNL) // het resulterende verbonden wegennetwerk
+		,	DialogType = "Map"
+		,	DialogData = "line"
+		{
+			attribute<geometries/rdc>  line (arc)                := complete_with_subnetworks/line_rd[nr_OrgEntity];
+			attribute<string>          OSM_id                    := complete_with_subnetworks/OSM_id[nr_OrgEntity];
+			attribute<string>          type                      := complete_with_subnetworks/fclass[nr_OrgEntity];
+			attribute<int32>           maxspeed                  := complete_with_subnetworks/maxspeed[nr_OrgEntity];
+			
+			attribute<bool>            isMain                    := complete_with_subnetworks/isMain[nr_OrgEntity];
+			attribute<bool>            isPartOfCarNetwork        := complete_with_subnetworks/isPartOfCarNetwork[nr_OrgEntity];
+			attribute<bool>            isPartOfBikeNetwork       := complete_with_subnetworks/isPartOfBikeNetwork[nr_OrgEntity];
+			attribute<bool>            isPartOfPedestrianNetwork := complete_with_subnetworks/isPartOfPedestrianNetwork[nr_OrgEntity];
+			
+		}
+	}
+}
