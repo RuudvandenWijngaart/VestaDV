@@ -105,33 +105,85 @@ template WarmtenetTempl
 		attribute<bool> IsCandidate := BO/Metervraag/gas > 0.0[GJ_yr];
 		// TODO: Partiele contributie-marge
 	}
-	unit<uint32> Candidate := subset(BO/IsCandidate)
+	unit<uint32> AllCandidate := subset(BO/IsCandidate)
 	{
 		attribute<rdc_meter> Geometry      := BO/geometry[BO_rel];
 		attribute<BO>        BO_rel        := nr_orgentity;	
 		attribute<PlanRegio> PlanRegio_rel := BO/PlanRegio_rel[BO_rel];
-		unit<uint32> network := /Invoer/RuimtelijkeData/OSM/Network_Car;
-		container    connect_info := connect_info(network/geometry, Geometry);
-		unit<uint32> connect      := connect(network/Geometry, Geometry); // diagnostic network representation
+		unit<uint32>         network       := /Invoer/RuimtelijkeData/OSM/Network_Car;
+		container            connect_info  := connect_info(network/geometry, Geometry);
+		unit<uint32>         connect       := connect(network/Geometry, Geometry); // diagnostic network representation
+
+		container PartialContributie
+		{
+			//====== kengetallen efficiency en aandeel eigen opwekking individuele opwaardering ruimteverwarming
+			attribute<float64> SPF_ind_RV_30 (Classifications/Schillabel) : [8.00, 4.20, 3.20, 3.20, 3.20, 1.00, 1.00, 1.00], Descr = "efficientie van de individuele warmtepomp voor ruimteverwarming, aflevertemperatuur 30C";
+			attribute<float64> SPF_ind_RV_50 (Classifications/Schillabel) : [8.00, 8.00, 4.20, 4.20, 4.20, 1.00, 1.00, 1.00], Descr = "efficientie van de individuele warmtepomp voor ruimteverwarming, aflevertemperatuur 50C";
+			attribute<float64> AEO_ind_RV_30 (Classifications/Schillabel) : [0.60, 0.90, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00], Descr = "aandeel eigen opwekking individuele warmtepomp voor ruimteverwarming, aflevertemperatuur 30C";
+			attribute<float64> AEO_ind_RV_50 (Classifications/Schillabel) : [0.30, 0.60, 0.90, 1.00, 1.00, 1.00, 1.00, 1.00], Descr = "aandeel eigen opwekking individuele warmtepomp voor ruimteverwarming, aflevertemperatuur 50C";
+
+			//====== aandeel eigen opwekking en efficiency specifiek per kandidaat in context huidig temperatuurregime
+			attribute<float64> AEO_ind_rv    (AllCandidate) := = T_sec <= 35[Celsius] ? 'AEO_ind_RV_30[BO/Schillabel_rel[BO_rel]]' : T_sec <= 55[Celsius] ? 'AEO_ind_RV_50[BO/Schillabel_rel[BO_rel]]' : 'const(0.0[float64],AllCandidate)';
+			attribute<float64> SPF_ind_rv    (AllCandidate) := = T_sec <= 35[Celsius] ? 'SPF_ind_RV_30[BO/Schillabel_rel[BO_rel]]' : 'SPF_ind_RV_50[BO/Schillabel_rel[BO_rel]]';
+
+			//====== kengetallen efficiency en aandeel eigen opwekking individuele opwaardering warm tapwater
+			parameter<float64> AEO_ind_tw                   := T_sec <= 35[Celsius] ? 0.60[float64] : T_sec <= 55[Celsius] ? 0.30[float64] : 0.00[float64];
+			parameter<float64> SPF_ind_tw_WP                := T_sec <= 35[Celsius] ? 2.75[float64] : T_sec <= 55[Celsius] ? 2.75[float64] : 1.00[float64];
+			parameter<float64> SPF_ind_tw_Booster           := T_sec <= 35[Celsius] ? 4.40[float64] : T_sec <= 55[Celsius] ? 4.40[float64] : 1.00[float64];
+
+			//====== indiciatie of een combi-WP of lokale tapwaterbooster nodig is in context huidig temperatuurregime
+			attribute<bool>    WP            (AllCandidate) := AEO_ind_rv > 0.0[GJ_yr];
+			attribute<bool>    Booster       (AllCandidate) := not(WP) && AEO_ind_tw > 0.0[GJ_yr];
+
+			//====== volume vraag elektriciteit inpandig en vraag warmte en koude aan wijkdistributienet
+			attribute<Gj_yr>   V_id_elek     (AllCandidate) := (BO/Functioneel/RV[BO_rel] * AEO_ind_rv) / SPF_ind_rv + (BO/Functioneel/TW[BO_rel] * AEO_ind_tw) / ( WP ? SPF_ind_tw_WP : SPF_ind_tw_Booster); // <- resultaat
+			attribute<Gj_yr>   V_warmte      (AllCandidate) := BO/Functioneel/TW[BO_rel] * (1.0 - AEO_ind_rv) + BO/Functioneel/TW[BO_rel] * (1.0 - AEO_ind_tw); // <- resultaat
+			attribute<Gj_yr>   V_koude       (AllCandidate) := not(KoudeLevering) ? const(0.0[GJ_yr],AllCandidate) : BO/Functioneel/KD[BO_rel]; // <- resultaat
+
+			//====== vermogensvraag inpandig niveau (tot en met aansluitleiding)
+			attribute<kW>      P_id_RV       (AllCandidate) := = T_sec <= 55[Celsius] ? 'BO/AansluitCapaciteit/ASW_RVlt[BO_rel]' : 'BO/AansluitCapaciteit/ASW_RVmt[BO_rel]'; 
+			attribute<kW>      P_id_TW       (AllCandidate) := = T_sec <= 55[Celsius] ? 'BO/AansluitCapaciteit/ASW_TWlt[BO_rel]' : 'BO/AansluitCapaciteit/ASW_TWmt[BO_rel]';
+			attribute<kW>      P_id_KD       (AllCandidate) := = not(KoudeLevering) ? 'const(0.0[kW],AllCandidate)' : 'BO/AansluitCapaciteit/ASW_K';
+			attribute<kw>      P_id          (AllCandidate) := max_elem(P_id_KD,P_id_RV+P_id_TW);
+
+			//====== vermogensvraag aan het wijkdistributienet (na aansluitleiding, tot en met WOS/hulpinstallatie)
+			parameter<ratio>   Vermogensverlies             := Schuiven/EfficiencySchuif * 0.1[ratio] + (1.0 - Schuiven/EfficiencySchuif) * 0.0[ratio];
+			attribute<kW>      P_wd_RV       (AllCandidate) := = T_sec <= 55[Celsius] ? 'P_id_RV * BO/AansluitCapaciteit/GTF_RVlt' : 'P_id_RV * BO/AansluitCapaciteit/GTF_RVmt'; 
+			attribute<kW>      P_wd_TW       (AllCandidate) := P_id_TW * BO/AansluitCapaciteit/GTF_TW;
+			attribute<kW>      P_wd_KD       (AllCandidate) := = not(KoudeLevering) ? 'const(0.0[kW],AllCandidate)' : 'P_id_KD * BO/AansluitCapaciteit/GTF_K';
+			attribute<kw>      P_wd          (AllCandidate) := max_elem(P_wd_KD,P_wd_RV+P_wd_TW)  / (1.0 - Vermogensverlies);
+
+			//====== extra vraag in het wijkdistributienet door leidingverlies en bepaling van verschil tussen aanlever- en retourtemperatuur
+			attribute<Celsius> DeltaT_wd     (AllCandidate) := T_sec <= 35[Celsius] && Booster ? 10[Celsius] : T_sec <= 35[Celsius] && WP ? 20[Celsius] : 30[Celsius];
+			parameter<GJ_yr_asl> Volumeverlies              := T_sec <= 35[Celsius] ? ( DeltaT_wd <= 10 ? 3.2[GJ_yr_asl] : DeltaT_wd <= 15 ? 2.6[GJ_yr_asl] : 1.9[GJ_yr_asl] ) : 10.5[GJ_yr_asl];
+			attribute<GJ_yr>   V_wd_verlies  (AllCandidate) := BO/nrAansluitingen[BO_rel] * Volumeverlies;
+
+			
+			//====== partiele berekening van contributiemarge t.b.v. filtering en koppeling kandidaten<->bronnen
+			attribute<Eur_yr>  Contributie   (AllCandidate) := const(0.0[Eur_yr], AllCandidate); //TODO: koppelen aan berekening
+		}
+	}
+	unit<uint32> Candidate := subset(AllCandidate/PartialContributie/Contributie > 0.0[Eur_yr])
+	{
+		attribute<BO> BO_rel := AllCandidate/BO_rel[nr_orgentity];
 	}
 	
 	//====== berekening van jaarlijke vraag en verlies energiedragers
 	unit<uint32> VerbruikBerekening := Candidate
 	{
-		attribute<Gj_yr> V_id_gas     := const(0[Gj_yr], .), Descr = "gasverbruik in inpandige systemen als onderdeel van het warmtenet";
 		attribute<Gj_yr> V_wd_gas     := const(0[Gj_yr], .), Descr = "gasverbruik in systemen die onderdeel zijn van het distributienet";
 		attribute<Gj_yr> V_ow_gas     := const(0[Gj_yr], .), Descr = "gasverbruik bij de primaire bron van het warmtenet";
 
-		attribute<Gj_yr> V_id_elek    := const(0[Gj_yr], .), Descr = "elektriciteitsverbruik in inpandige systemen als onderdeel van het warmtenet";
 		attribute<Gj_yr> V_wd_elek    := const(0[Gj_yr], .), Descr = "elektriciteitsverbruik in systemen die onderdeel zijn van het distributienet";
 		attribute<Gj_yr> V_ow_elek    := const(0[Gj_yr], .), Descr = "elektriciteitsverbruik bij de primaire bron van het warmtenet";
 
-		attribute<Gj_yr> V_id_verlies := const(0[Gj_yr], .), Descr = "warmteverlies in inpandige leidingen als onderdeel van het warmtenet";
 		attribute<Gj_yr> V_wd_verlies := const(0[Gj_yr], .), Descr = "warmteverlies in leidingen die onderdeel zijn van het distributienet";
 		attribute<Gj_yr> V_pt_verlies := const(0[Gj_yr], .), Descr = "warmteverlies in leidingen die onderdeel zijn van het transportnet";
 
-		attribute<Gj_yr> V_warmte     := const(0[Gj_yr], .), Descr = "warmtevraag van gebouwen aan het warmtenet";
-		attribute<Gj_yr> V_koude      := const(0[Gj_yr], .), Descr = "koudevraag van gebouwen aan het koudenet";
+		//====== resultaten van berekening, gereed voor rapportage in resultaten
+		attribute<Gj_yr> V_warmte     := AllCandidate/PartialContributie/V_warmte[nr_orgentity] , Descr = "warmtevraag van gebouwen aan het warmtenet";
+		attribute<Gj_yr> V_koude      := AllCandidate/PartialContributie/V_koude[nr_orgentity]  , Descr = "koudevraag van gebouwen aan het koudenet";
+		attribute<Gj_yr> V_id_elek    := AllCandidate/PartialContributie/V_id_elek[nr_orgentity], Descr = "elektriciteitsverbruik in inpandige systemen als onderdeel van het warmtenet";
 	}
 
 	//====== berekening van kosten van aanleg en operatie
@@ -305,13 +357,13 @@ template WarmtenetTempl
 			container Verbruik
 			{
 				//====== jarlijks verbruik en verlies energiedragers
-				attribute<Gj_yr> V_id_gas     (PlanRegio) := sum(float64(connect) * VerbruikBerekening/V_id_gas    , Candidate/PlanRegio_rel), Descr = "gasverbruik in inpandige systemen als onderdeel van het warmtenet";
+				attribute<Gj_yr> V_id_gas     (PlanRegio) := const(0.0[GJ_yr], PlanRegio); //TODO:remove
 				attribute<Gj_yr> V_wd_gas     (PlanRegio) := sum(float64(connect) * VerbruikBerekening/V_wd_gas    , Candidate/PlanRegio_rel), Descr = "gasverbruik in systemen die onderdeel zijn van het distributienet";
 				attribute<Gj_yr> V_ow_gas     (PlanRegio) := sum(float64(connect) * VerbruikBerekening/V_ow_gas    , Candidate/PlanRegio_rel), Descr = "gasverbruik bij de primaire bron van het warmtenet";
 				attribute<Gj_yr> V_id_elek    (PlanRegio) := sum(float64(connect) * VerbruikBerekening/V_id_elek   , Candidate/PlanRegio_rel), Descr = "elektriciteitsverbruik in inpandige systemen als onderdeel van het warmtenet";
 				attribute<Gj_yr> V_wd_elek    (PlanRegio) := sum(float64(connect) * VerbruikBerekening/V_wd_elek   , Candidate/PlanRegio_rel), Descr = "elektriciteitsverbruik in systemen die onderdeel zijn van het distributienet";
 				attribute<Gj_yr> V_ow_elek    (PlanRegio) := sum(float64(connect) * VerbruikBerekening/V_ow_elek   , Candidate/PlanRegio_rel), Descr = "elektriciteitsverbruik bij de primaire bron van het warmtenet";
-				attribute<Gj_yr> V_id_verlies (PlanRegio) := sum(float64(connect) * VerbruikBerekening/V_id_verlies, Candidate/PlanRegio_rel), Descr = "warmteverlies in inpandige leidingen als onderdeel van het warmtenet";
+				attribute<Gj_yr> V_id_verlies (PlanRegio) := const(0.0[GJ_yr], PlanRegio); //TODO:remove
 				attribute<Gj_yr> V_wd_verlies (PlanRegio) := sum(float64(connect) * VerbruikBerekening/V_wd_verlies, Candidate/PlanRegio_rel), Descr = "warmteverlies in leidingen die onderdeel zijn van het distributienet";
 				attribute<Gj_yr> V_pt_verlies (PlanRegio) := sum(float64(connect) * VerbruikBerekening/V_pt_verlies, Candidate/PlanRegio_rel), Descr = "warmteverlies in leidingen die onderdeel zijn van het transportnet";
 				attribute<Gj_yr> V_warmte     (PlanRegio) := sum(float64(connect) * VerbruikBerekening/V_warmte    , Candidate/PlanRegio_rel), Descr = "warmtevraag van gebouwen aan het warmtenet";
