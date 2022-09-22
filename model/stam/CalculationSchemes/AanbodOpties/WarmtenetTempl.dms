@@ -163,13 +163,65 @@ template WarmtenetTempl
 			attribute<kw>      P_wd          (AllCandidate) := max_elem(P_wd_KD,P_wd_RV+P_wd_TW)  / (1.0 - Vermogensverlies);
 
 			//====== extra vraag in het wijkdistributienet door leidingverlies en bepaling van verschil tussen aanlever- en retourtemperatuur
-			attribute<Celsius> DeltaT_wd     (AllCandidate) := T_sec <= 35[Celsius] && Booster ? 10[Celsius] : T_sec <= 35[Celsius] && WP ? 20[Celsius] : 30[Celsius];
-			parameter<GJ_yr_asl> Volumeverlies              := T_sec <= 35[Celsius] ? ( DeltaT_wd <= 10 ? 3.2[GJ_yr_asl] : DeltaT_wd <= 15 ? 2.6[GJ_yr_asl] : 1.9[GJ_yr_asl] ) : 10.5[GJ_yr_asl];
-			attribute<GJ_yr>   V_wd_verlies  (AllCandidate) := BO/nrAansluitingen[BO_rel] * Volumeverlies; // <- resultaat
-
+			attribute<Celsius>   DeltaT_wd     (AllCandidate) := T_sec <= 35[Celsius] && Booster ? 10[Celsius] : T_sec <= 35[Celsius] && WP ? 20[Celsius] : 30[Celsius];
+			attribute<GJ_yr_asl> Volumeverlies (AllCandidate) := T_sec <= 35[Celsius] ? ( DeltaT_wd <= 10[Celsius] ? 3.2[GJ_yr_asl] : DeltaT_wd <= 15[Celsius] ? 2.6[GJ_yr_asl] : 1.9[GJ_yr_asl] ) : 10.5[GJ_yr_asl];
+			attribute<GJ_yr>     V_wd_verlies  (AllCandidate) := BO/nrAansluitingen[BO_rel] * Volumeverlies; // <- resultaat
 			
 			//====== partiele berekening van contributiemarge t.b.v. filtering en koppeling kandidaten<->bronnen
 			attribute<Eur_yr>  Contributie   (AllCandidate) := const(0.0[Eur_yr], AllCandidate); //TODO: koppelen aan berekening
+
+			//====== berekening kosten aansluitleiding (van gevel tot straat)
+			attribute<kW>      P_id_pand     (StudieGebiedPand) := sum(P_id, StudieGebiedPand_rel);
+			attribute<m>       L_asl_pand    (StudieGebiedPand) := connect_info/dist[m];
+			attribute<Celsius> DeltaT_pand   (StudieGebiedPand) := mean(DeltaT_wd, StudieGebiedPand_rel);
+			attribute<eur>     Ki_asl_pand   (StudieGebiedPand) := LeidingKosten_asl/Ki * L_asl_pand;
+			attribute<eur>     Ki_wd_asl         (AllCandidate) := BO/pand_aandeel[BO_rel] * Ki_asl_pand;
+
+			container LeidingKosten_asl := LeidingKosten_T(StudieGebiedPand, P_id_pand, DeltaT_pand);
+
+			/*
+
+			attribute<eur> Ki_id_leiding    (AllCandidate) := 
+			attribute<eur> Ki_id_aflever    (AllCandidate) := 
+			attribute<eur> Ki_id_LO         (AllCandidate) := 
+			attribute<eur> Ki_id_LTAS       (AllCandidate) := 
+			attribute<eur> Ki_id_vergoeding (AllCandidate) := 
+			attribute<eur> Ki_id            (AllCandidate) := add(Ki_id_leiding, Ki_id_aflever, Ki_id_LO, Ki_id_LTAS, Ki_id_vergoeding);
+
+			attribute<eur> Ki_ge_ov
+			attribute<eur> Ki_ge_pm
+
+			*/
+
+			attribute<classifications/gebruiksgrootteklasse> ind_gebruiksgrootteklasse_rel (AllCandidate) := classify((V_id_Elek + BO/metervraag/eEffect/Totaal[BO_rel]), Prijzen_elec/ClassBreak);
+			parameter<classifications/gebruiksgrootteklasse> col_gebruiksgrootteklasse_rel                := last(id(Prijzen_elec));
+
+			//====== Template voor bepalen van kosten warmteleidingen, parameters: domein, vermogensvraag per object, delta-T per object
+			template LeidingKosten_T
+			{
+				//case parameters
+				unit<uint32> ObjectDomain;
+				attribute<kw> P (ObjectDomain);
+				attribute<Celsius> DT (ObjectDomain);
+				//end parameters
+
+				//====== berekening ondergrens en bovengrens investeringskosten o.b.v. formule per niveau van delta-T
+				attribute<eur_m> Ki_max_DT10 (ObjectDomain) := (1585.4 * P ^ 0.36)[eur_m], Descr = "bovengrens leidingkosten delta-T 10C", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.34 formule 1 ";
+				attribute<eur_m> Ki_min_DT10 (ObjectDomain) := (1069.2 * P ^ 0.41)[eur_m], Descr = "ondergrens leidingkosten delta-T 10C", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.34 formule 2 ";
+				attribute<eur_m> Ki_max_DT20 (ObjectDomain) := (1114.4 * P ^ 0.38)[eur_m], Descr = "bovengrens leidingkosten delta-T 20C", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.34 formule 3 ";
+				attribute<eur_m> Ki_min_DT20 (ObjectDomain) := ( 776.1 * P ^ 0.42)[eur_m], Descr = "ondergrens leidingkosten delta-T 20C", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.34 formule 4 ";
+				attribute<eur_m> Ki_max_DT30 (ObjectDomain) := (1075.5 * P ^ 0.35)[eur_m], Descr = "bovengrens leidingkosten delta-T 30C", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.34 formule 5 ";
+				attribute<eur_m> Ki_min_DT30 (ObjectDomain) := ( 680.3 * P ^ 0.41)[eur_m], Descr = "ondergrens leidingkosten delta-T 30C", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.34 formule 6 ";
+				attribute<eur_m> Ki_max_DT50 (ObjectDomain) := ( 890.4 * P ^ 0.36)[eur_m], Descr = "bovengrens leidingkosten delta-T 50C", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.34 formule 7 ";
+				attribute<eur_m> Ki_min_DT50 (ObjectDomain) := ( 407.8 * P ^ 0.48)[eur_m], Descr = "ondergrens leidingkosten delta-T 50C", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.34 formule 8 ";
+				attribute<eur_m> Ki_max_DT70 (ObjectDomain) := ( 320.5 * P ^ 0.50)[eur_m], Descr = "bovengrens leidingkosten delta-T 70C", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.34 formule 9 ";
+				attribute<eur_m> Ki_min_DT70 (ObjectDomain) := ( 871.4 * P ^ 0.33)[eur_m], Descr = "ondergrens leidingkosten delta-T 70C", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.34 formule 10";
+
+				//====== bepaling welke delta-T van toepassing is per object en waarde binnen bandbreedte bepalen o.b.v. invoerschuif
+				attribute<eur_m> Ki_max      (ObjectDomain) := DT <= 10[Celsius] ? Ki_max_DT10 : DT <= 20[Celsius] ? Ki_max_DT20 : DT <= 30[Celsius] ? Ki_max_DT30 : DT <= 50[Celsius] ? Ki_max_DT50 : Ki_max_DT70;
+				attribute<eur_m> Ki_min      (ObjectDomain) := DT <= 10[Celsius] ? Ki_min_DT10 : DT <= 20[Celsius] ? Ki_min_DT20 : DT <= 30[Celsius] ? Ki_min_DT30 : DT <= 50[Celsius] ? Ki_min_DT50 : Ki_min_DT70;
+				attribute<eur_m> Ki          (ObjectDomain) := Schuiven/KostenMin * Ki_min + Schuiven/KostenMax * Ki_max;
+			}
 		}
 	}
 	unit<uint32> Candidate := subset(AllCandidate/PartialContributie/Contributie > 0.0[Eur_yr])
