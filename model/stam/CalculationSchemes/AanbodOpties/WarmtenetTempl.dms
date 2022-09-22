@@ -103,16 +103,25 @@ template WarmtenetTempl
 	unit<uint32> BO := BebouwingsComponenten/Woning/BebouwingsObjectMetGebouwOptie
 	{
 		attribute<bool> IsCandidate := BO/Metervraag/gas > 0.0[GJ_yr];
-		// TODO: Partiele contributie-marge
 	}
 	unit<uint32> AllCandidate := subset(BO/IsCandidate)
 	{
+		unit<uint32>    pand     := Invoer/RuimtelijkeData/BAG/import/pand;
+		attribute<pand> pand_rel := BO/pand_rel[BO_rel];
+
+		unit<uint32> StudieGebiedPand := subset(Invoer/RuimtelijkeData/BAG/import/pand/vbo_count_studiegebied > 0.0[uint32])
+		{
+			attribute<geography/rdc_meter> geometry (poly) := Invoer/RuimtelijkeData/BAG/import/pand/geometry[nr_orgentity];
+			attribute<geography/rdc_meter> point           := Centroid_or_mid(geometry);
+		}
+		attribute<StudieGebiedPand> StudieGebiedPand_rel := rlookup(pand_rel, StudieGebiedPand/nr_orgentity);
+
 		attribute<rdc_meter> Geometry      := BO/geometry[BO_rel];
 		attribute<BO>        BO_rel        := nr_orgentity;	
 		attribute<PlanRegio> PlanRegio_rel := BO/PlanRegio_rel[BO_rel];
 		unit<uint32>         network       := /Invoer/RuimtelijkeData/OSM/Read_Final_Network;
-		container            connect_info  := connect_info(network/geometry, Geometry);
-		unit<uint32>         connect       := connect(network/Geometry, Geometry); // diagnostic network representation
+		container            connect_info  := connect_info(network/geometry, StudieGebiedPand/point);
+		unit<uint32>         connect       := connect(network/Geometry, StudieGebiedPand/point); // diagnostic network representation
 
 		container PartialContributie
 		{
