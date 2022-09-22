@@ -122,11 +122,6 @@ template WarmtenetTempl
 		attribute<rdc_meter> Geometry      := BO/geometry[BO_rel];
 		attribute<BO>        BO_rel        := nr_orgentity;	
 		attribute<PlanRegio> PlanRegio_rel := BO/PlanRegio_rel[BO_rel];
-		unit<uint32>         network       := /Invoer/RuimtelijkeData/OSM/Read_Final_Network;
-		
-		container            connect_info  := connect_info(network/geometry, StudieGebiedPand/point);
-		unit<uint32>         connect       := connect(network/Geometry, StudieGebiedPand/point); // diagnostic network representation
-		
 
 		container PartialContributie
 		{
@@ -177,6 +172,33 @@ template WarmtenetTempl
 			attribute<Eur_yr>  Contributie   (AllCandidate) := const(0.0[Eur_yr], AllCandidate); //TODO: koppelen aan berekening
 		}
 	}
+	container BronAllocatie
+	{
+		// TODO: vlakbronnen in hieropvolgende allocatie alsnog toevoegen voor potentiele afnemers die 
+		unit<uint32> Aansluitingen := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aanlsluitpunten, AllCandidate/StudieGebiedPand)
+		{
+			attribute<rdc_meter> Point := union_data(., WarmteBronnen/Puntbronnen/Geometry, WarmteBronnen/Lijnbron_aanlsluitpunten/Point, AllCandidate/StudieGebiedPand/Point);
+		}
+		
+		unit<uint32>         network       := /Invoer/RuimtelijkeData/OSM/Read_Final_Network;
+		
+		container            connect_info  := connect_info(network/geometry, Aansluitingen/point);
+		unit<uint32>         connect       := connect(network/Geometry, Aansluitingen/point); // diagnostic network representation
+		unit<uint32>   Edge   := arc2segm(connect/UnionData);
+		unit<uint32>  PointSet:= union_unit(Edge, Edge) { attribute<rdc_meter> Point := union_data(., Edge/Point, Edge/NextPoint); }
+		unit<uint32>  Vertex := unique(PointSet/Point);
+		
+		// TODO LijnBronnen en VlakBronnen
+		attribute<Vertex> PuntBron_Vertex_rel  (WarmteBronnen/Puntbronnen)     := rlookup(WarmteBronnen/Puntbronnen/Geometry, Vertex/Values);
+		attribute<Vertex> LijnBron_Vertex_rel  (WarmteBronnen/Lijnbron_aanlsluitpunten)     := rlookup(WarmteBronnen/Lijnbron_aanlsluitpunten/Point, Vertex/Values);
+		attribute<Vertex> StudiePand_Vertex_rel(AllCandidate/StudieGebiedPand) := rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values);
+		
+		// TODO startpoints maken met alle aansluitpunten van alle bronnen (ook vlakbronnen ? )
+		// TODO endpoints maken van alle studiepanden
+		// TODO afstandentabel via dijkstra
+		// TODO allocatie onder restricties van aangeboden/gevraagde capaciteit
+	}
+	
 	unit<uint32> Candidate := subset(AllCandidate/PartialContributie/Contributie > 0.0[Eur_yr])
 	{
 		attribute<BO> BO_rel := AllCandidate/BO_rel[nr_orgentity];
