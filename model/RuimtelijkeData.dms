@@ -146,9 +146,103 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 
 		//======= Allocatie gebouwdeelkwaliteit per VBO ======
 
-		container BouwdeelKwaliteit_2000 := BouwdeelKwaliteitAllocatie('niveau_combinatie_label_frequentietabel_KWR_2000_FM.csv');
-		container BouwdeelKwaliteit_2020 := BouwdeelKwaliteitAllocatie('niveau_combinatie_label_frequentietabel_WoON_2020_FM.csv');
+		container BouwdeelKwaliteit_2000 := BouwdeelKwaliteitAllocatieT('niveau_combinatie_label_frequentietabel_KWR_2000_FM.csv');
+		container BouwdeelKwaliteit_2020 := BouwdeelKwaliteitAllocatieT('niveau_combinatie_label_frequentietabel_WoON_2020_FM.csv');
 
+		template BouwdeelKwaliteitAllocatieT
+		{
+			parameter<string> FreqTableName;
+
+			unit<uint32> BouwdeelSrc: StorageName = "= '%projDir%/isolatie/' + FreqTableName", StorageType = "gdal2.vect", StorageReadOnly = "True";
+			
+				container Bouwdeeldata := for_each_nedv(Classifications/Bouwdeel/name ,Classifications/Bouwdeel/name == 'KR' ? 'const((0/0)[Classifications/IsolatieNiveau],BouwdeelSrc)' : 'rlookup(BouwdeelSrc/'+Classifications/Bouwdeel/name+', Classifications/IsolatieNiveau/name)' ,BouwdeelSrc ,Classifications/IsolatieNiveau )
+				{
+					attribute<Classifications/SchilLabel> SchilLabel_rel (BouwdeelSrc) := rlookup(BouwdeelSrc/Energielabel, Classifications/SchilLabel/name);
+					attribute<float64>                    Frequency      (BouwdeelSrc) := float64(BouwdeelSrc/freq);
+					attribute<float64>                    CumulFrequency (BouwdeelSrc) := cumulate(Frequency, SchilLabel_rel);
+					attribute<float64>                    ClassBreaks    (BouwdeelSrc) := CumulFrequency - Frequency;
+					attribute<float64>                    nr_observaties (BouwdeelSrc) := float64(BouwdeelSrc/Count);
+
+					attribute<string> combi (BouwdeelSrc) := add( 
+						isdefined(RB) ? 'RB' : 'xx', 
+						isdefined(RO) ? 'RO' : 'xx', 
+						isdefined(DR) ? 'DR' : 'xx', 
+						isdefined(PL) ? 'PL' : 'xx', 
+						isdefined(VL) ? 'VL' : 'xx', 
+						isdefined(MG) ? 'MG' : 'xx', 
+						isdefined(MS) ? 'MS' : 'xx', 
+						isdefined(DP) ? 'DP' : 'xx', 
+						isdefined(DS) ? 'DS' : 'xx', 
+						'KR' 
+						);
+
+					attribute<VBO/Bouwdelen/unique_combi>       unique_combi_rel       (BouwdeelSrc) := rlookup(combi, VBO/Bouwdelen/unique_combi/values);
+					attribute<VBO/Bouwdelen/unique_combi_label> unique_combi_label_rel (BouwdeelSrc) := combine_data(VBO/Bouwdelen/unique_combi_label, unique_combi_rel, SchilLabel_rel);
+				}
+				container ClassBreak_p_Label := for_each_nt(VBO/Bouwdelen/unique_combi_label/Label, MakeBreaks);
+				template MakeBreaks
+				{
+					parameter<VBO/Bouwdelen/unique_combi_label> unique_combi_label_rel_here := ='VBO/Bouwdelen/unique_combi_label/V/' + PropValue(., 'name');
+					unit<uint32> Sub := subset(Bouwdeeldata/unique_combi_label_rel == unique_combi_label_rel_here)
+					{
+						attribute<string>  Name        := 'Profile_' + string(id(.));
+						attribute<string>  Label       := name;
+						attribute<float64> ClassBreaks := Bouwdeeldata/ClassBreaks[nr_OrgEntity];
+						attribute<float64> Frequency   := Bouwdeeldata/Frequency[nr_OrgEntity];
+					}
+				}
+			
+			unit<uint32> vbo := BAG/import/VBO
+			{
+				container Bouwdelen := for_each_nedv(
+					  Classifications/Bouwdeel/name
+					, replace('isnull(RuimtelijkeData/Dimensies/Bouwdelen/@BD@) || RuimtelijkeData/Dimensies/Bouwdelen/@BD@ > 0.0[m2]', '@BD@', Classifications/Bouwdeel/name)
+					, vbo
+					, bool
+					)
+				{
+					attribute<string> combi (vbo) := add( 
+						RB ? 'RB' : 'xx', 
+						RO ? 'RO' : 'xx', 
+						DR ? 'DR' : 'xx', 
+						PL ? 'PL' : 'xx', 
+						VL ? 'VL' : 'xx', 
+						MG ? 'MG' : 'xx', 
+						MS ? 'MS' : 'xx', 
+						DP ? 'DP' : 'xx', 
+						DS ? 'DS' : 'xx', 
+						KR ? 'KR' : 'xx' 
+						);
+
+					unit<uint32> unique_combi       := unique(combi)
+					{
+						attribute<string> Label := Values;
+					}
+					unit<uint32> unique_combi_label := combine(unique_combi, Classifications/SchilLabel)
+					{
+						attribute<string> Label := unique_combi/label[nr_1] + '_' + Classifications/SchilLabel/name[nr_2];
+						container V := for_each_nedv(Label, 'value('+string(id(.))+', ..)', void, .);
+					}
+
+					attribute<unique_combi>       unique_combi_rel       (vbo) := rlookup(combi, unique_combi/values);
+					attribute<unique_combi_label> unique_combi_label_rel (vbo) := combine_data(unique_combi_label, unique_combi_rel, SchilLabel_rel);
+				}
+
+				attribute<Classifications/Schillabel> Schillabel_rel  := makedefined(Energielabel/data/SchilLabel_rel[rlookup(BAG/import/VBO/identificatie, Energielabel/data/vbo_id)], BAG/import/VBO/Default_Energielabel_Bouwjaar);
+				parameter<uint32>                     seed            := 101;
+				attribute<float64>                    RndNr           := rnd_uniform(seed, vbo, range(float64, 0d, 1d));
+				attribute<BouwdeelSrc>                BouwdeelSrc_rel := ='makedefined('+AsItemList(replace('not(bouwdelen/unique_combi_label_rel == bouwdelen/unique_combi_label/V/@SL@) ? (0/0)[src] : ClassBreak_p_Label/@SL@/sub/nr_OrgEntity[Classify(RndNr, ClassBreak_p_Label/@SL@/sub/ClassBreaks)]','@SL@',bouwdelen/unique_combi_label/label))+')';
+			
+				container Isolatie_vbo := for_each_nedv(
+					  Classifications/Bouwdeel/Name
+					, 'makedefined(BouwdeelData/'+Classifications/Bouwdeel/Name+'[BouwdeelSrc_rel], Classifications/IsolatieNiveau/V/N0)'
+						, vbo
+						, Classifications/Isolatieniveau
+					);
+			}
+		}
+
+/*
 		template BouwdeelKwaliteitAllocatie
 		{
 			parameter<string> FreqTableName;
@@ -188,7 +282,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 						, Classifications/Isolatieniveau
 					);
 			}
-		}
+		}*/
 		container BouwdeelKwaliteit
 		{
 			unit<uint32> vbo := BAG/import/VBO
