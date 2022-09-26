@@ -106,20 +106,21 @@ template WarmtenetTempl
 		}
 		
 		unit<uint32> Lijnbronsegmenten := arc2segm(lijnbronnen/Geometry);
-		unit<uint32> Lijnbron_aanlsluitpunten_BASE := dyna_point_with_ends(Lijnbronsegmenten/point, Lijnbronsegmenten/nextpoint, 100[m])
+		unit<uint32> Lijnbron_aansluitpunten_BASE := dyna_point_with_ends(Lijnbronsegmenten/point, Lijnbronsegmenten/nextpoint, 100[m])
 		{
 			attribute<lijnbronnen> Lijnbron_rel := SequenceNr->SequenceNr;
 			attribute<bron> bron_rel := Lijnbron_rel->bron_rel;
 		}
-		unit<uint32> Lijnbron_aanlsluitpunten := IsDefined(Lijnbron_aanlsluitpunten_BASE/Point)
+		unit<uint32> Lijnbron_aansluitpunten := SubSet(IsDefined(Lijnbron_aansluitpunten_BASE/Point) && IsDefined(Lijnbron_aansluitpunten_BASE/Lijnbron_rel))
 		{
 			attribute<lijnbronnen> Lijnbron_rel := nr_OrgEntity->Lijnbron_rel;
 			attribute<bron> bron_rel := nr_OrgEntity->bron_rel;
+			attribute<rdc_meter> point := nr_OrgEntity->point;
 		}
 		
 		unit<uint32> Bron := union_unit(Puntbronnen, VlakBronnen, Lijnbronnen)
 		{
-			
+			attribute<MW> MWth_max := union_data(., Puntbronnen/MWth_max, VlakBronnen/MWth_max, Lijnbronnen/MWth_max);
 		}
 	}
 
@@ -339,9 +340,9 @@ template WarmtenetTempl
 		parameter<EUR_m> Ki_Buis := 100[EUR / m ];
 		
 		// TODO: vlakbronnen in hieropvolgende allocatie alsnog toevoegen voor potentiele afnemers die 
-		unit<uint32> Aansluitingen := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aanlsluitpunten, AllCandidate/StudieGebiedPand)
+		unit<uint32> Aansluitingen := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten, AllCandidate/StudieGebiedPand)
 		{
-			attribute<rdc_meter> Point := union_data(., WarmteBronnen/Puntbronnen/Geometry, WarmteBronnen/Lijnbron_aanlsluitpunten/Point, AllCandidate/StudieGebiedPand/Point);
+			attribute<rdc_meter> Point := union_data(., WarmteBronnen/Puntbronnen/Geometry, WarmteBronnen/Lijnbron_aansluitpunten/Point, AllCandidate/StudieGebiedPand/Point);
 		}
 		
 		unit<uint32>  network       := /Invoer/RuimtelijkeData/OSM/Read_Final_Network;
@@ -360,14 +361,14 @@ template WarmtenetTempl
 		
 		// TODO VlakBronnen
 		attribute<Vertex> PuntBron_Vertex_rel  (WarmteBronnen/Puntbronnen)     := rlookup(WarmteBronnen/Puntbronnen/Geometry, Vertex/Values);
-		attribute<Vertex> LijnBron_Vertex_rel  (WarmteBronnen/Lijnbron_aanlsluitpunten)     := rlookup(WarmteBronnen/Lijnbron_aanlsluitpunten/Point, Vertex/Values);
+		attribute<Vertex> LijnBron_Vertex_rel  (WarmteBronnen/Lijnbron_aansluitpunten)     := rlookup(WarmteBronnen/Lijnbron_aansluitpunten/Point, Vertex/Values);
 		attribute<Vertex> StudiePand_Vertex_rel(AllCandidate/StudieGebiedPand) := rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values);
 		
 		// startpoints maken met alle aansluitpunten van alle bronnen (ook vlakbronnen ? )
-		unit<uint32> startPoint := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aanlsluitpunten)
+		unit<uint32> startPoint := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten)
 		{
 			attribute<Vertex> Vertex_rel := union_data(., PuntBron_Vertex_rel, LijnBron_Vertex_rel);
-			attribute<WarmteBronnen/bron> bron_rel := union_data(.,	WarmteBronnen/Puntbronnen/bron_rel,	WarmteBronnen/Lijnbron_aanlsluitpunten/bron_rel);
+			attribute<WarmteBronnen/bron> bron_rel := union_data(.,	WarmteBronnen/Puntbronnen/bron_rel,	WarmteBronnen/Lijnbron_aansluitpunten/bron_rel);
 		}
 		
 		unit<uint32> od_pair := dijkstra_m('bidirectional;startPoint(Node_rel,OrgZone_rel);endPoint(Node_rel);cut(OrgZone_max_imp);od:impedance,OrgZone_rel,DstZone_rel'
