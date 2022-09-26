@@ -49,6 +49,8 @@ template WarmtenetTempl
 			attribute<MW>        MWth_max        := Puntbronnen_all/MWth_max[nr_orgentity];
 			attribute<Eur_GJ>    K_GJ            := Puntbronnen_all/K_GJ[nr_orgentity];
 			attribute<Eur_GJ>    Km_GJ           := Puntbronnen_all/Km_GJ[nr_orgentity];
+			
+			attribute<Bron>      Bron_rel        := convert(ID(.), bron);
 		}
 
 		unit<uint32> VlakBronnen_zichtjaar := = 'Invoer/RuimtelijkeData/WarmteBronnen/Contourbronnen/BronSelecties/'+Classifications/Rekenjaar/name[Classifications/ZichtJaar/RekenJaar_rel[Zichtjaar_rel]]+'/BronElementen';
@@ -73,6 +75,8 @@ template WarmtenetTempl
 			attribute<MW>        MWth_max        := VlakBronnen_all/MWth_max[nr_orgentity];
 			attribute<Eur_GJ>    K_GJ            := VlakBronnen_all/K_GJ[nr_orgentity];
 			attribute<Eur_GJ>    Km_GJ           := VlakBronnen_all/Km_GJ[nr_orgentity];
+			
+			attribute<Bron>      Bron_rel        := convert(ID(.)+#Puntbronnen, bron);
 		}
 
 		unit<uint32> Lijnbronnen_zichtjaar := = 'Invoer/RuimtelijkeData/WarmteBronnen/Lijnbronnen/BronSelecties/'+Classifications/Rekenjaar/name[Classifications/ZichtJaar/RekenJaar_rel[Zichtjaar_rel]]+'/BronElementen';
@@ -97,10 +101,26 @@ template WarmtenetTempl
 			attribute<MW>        MWth_max        := Lijnbronnen_all/MWth_max[nr_orgentity];
 			attribute<Eur_GJ>    K_GJ            := Lijnbronnen_all/K_GJ[nr_orgentity];
 			attribute<Eur_GJ>    Km_GJ           := Lijnbronnen_all/Km_GJ[nr_orgentity];
+			
+			attribute<Bron>      Bron_rel        := convert(ID(.)+#Puntbronnen+#Lijnbronnen, bron);
 		}
 		
 		unit<uint32> Lijnbronsegmenten := arc2segm(lijnbronnen/Geometry);
-		unit<uint32> Lijnbron_aanlsluitpunten := dyna_point_with_ends(Lijnbronsegmenten/point, Lijnbronsegmenten/nextpoint, 100[m]);
+		unit<uint32> Lijnbron_aanlsluitpunten_BASE := dyna_point_with_ends(Lijnbronsegmenten/point, Lijnbronsegmenten/nextpoint, 100[m])
+		{
+			attribute<lijnbronnen> Lijnbron_rel := SequenceNr->SequenceNr;
+			attribute<bron> bron_rel := Lijnbron_rel->bron_rel;
+		}
+		unit<uint32> Lijnbron_aanlsluitpunten := IsDefined(Lijnbron_aanlsluitpunten_BASE/Point)
+		{
+			attribute<lijnbronnen> Lijnbron_rel := nr_OrgEntity->Lijnbron_rel;
+			attribute<bron> bron_rel := nr_OrgEntity->bron_rel;
+		}
+		
+		unit<uint32> Bron := union_unit(Puntbronnen, VlakBronnen, Lijnbronnen)
+		{
+			
+		}
 	}
 
 	unit<uint32> BO := BebouwingsComponenten/Woning/BebouwingsObjectMetGebouwOptie
@@ -128,11 +148,6 @@ template WarmtenetTempl
 		attribute<rdc_meter> Geometry      := BO/geometry[BO_rel];
 		attribute<BO>        BO_rel        := nr_orgentity;	
 		attribute<PlanRegio> PlanRegio_rel := BO/PlanRegio_rel[BO_rel];
-		unit<uint32>         network       := /Invoer/RuimtelijkeData/OSM/Read_Final_Network;
-		
-		container            connect_info  := connect_info(network/geometry, StudieGebiedPand/point);
-		unit<uint32>         connect       := connect(network/Geometry, StudieGebiedPand/point); // diagnostic network representation
-		
 
 		container PartialContributie
 		{
@@ -321,6 +336,8 @@ template WarmtenetTempl
 	}
 	container BronAllocatie
 	{
+		parameter<EUR_m> Ki_Buis := 100[EUR / m ];
+		
 		// TODO: vlakbronnen in hieropvolgende allocatie alsnog toevoegen voor potentiele afnemers die 
 		unit<uint32> Aansluitingen := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aanlsluitpunten, AllCandidate/StudieGebiedPand)
 		{
@@ -328,18 +345,38 @@ template WarmtenetTempl
 		}
 		
 		unit<uint32>  network       := /Invoer/RuimtelijkeData/OSM/Read_Final_Network;
-		container     connect_info  := connect_info(network/geometry, Aansluitingen/point);
-		unit<uint32>  connect       := connect(network/Geometry, Aansluitingen/point); // diagnostic network representation
-		unit<uint32>  Edge          := arc2segm(connect/UnionData);
-		unit<uint32>  PointSet      := union_unit(Edge, Edge) { attribute<rdc_meter> Point := union_data(., Edge/Point, Edge/NextPoint); }
-		unit<uint32>  Vertex        := unique(PointSet/Point);
 		
-		// TODO LijnBronnen en VlakBronnen
+		container            connect_info  := connect_info(network/geometry, Aansluitingen/point);
+		unit<uint32>         connect       := connect(network/Geometry, Aansluitingen/point); // diagnostic network representation
+		unit<uint32>   Edge   := arc2segm(connect/UnionData)
+		{
+			attribute<Vertex> from := rlookup(Edge/Point,     Vertex/Values);
+			attribute<Vertex> to   := rlookup(Edge/NextPoint, Vertex/Values);
+			attribute<m>      length := dist(Edge/Point, Edge/NextPoint)[m];
+			attribute<EUR>    cost   := length * Ki_Buis;
+		}
+		unit<uint32>  PointSet:= union_unit(Edge, Edge) { attribute<rdc_meter> Point := union_data(., Edge/Point, Edge/NextPoint); }
+		unit<uint32>  Vertex := unique(PointSet/Point);
+		
+		// TODO VlakBronnen
 		attribute<Vertex> PuntBron_Vertex_rel  (WarmteBronnen/Puntbronnen)     := rlookup(WarmteBronnen/Puntbronnen/Geometry, Vertex/Values);
 		attribute<Vertex> LijnBron_Vertex_rel  (WarmteBronnen/Lijnbron_aanlsluitpunten)     := rlookup(WarmteBronnen/Lijnbron_aanlsluitpunten/Point, Vertex/Values);
 		attribute<Vertex> StudiePand_Vertex_rel(AllCandidate/StudieGebiedPand) := rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values);
 		
-		// TODO startpoints maken met alle aansluitpunten van alle bronnen (ook vlakbronnen ? )
+		// startpoints maken met alle aansluitpunten van alle bronnen (ook vlakbronnen ? )
+		unit<uint32> startPoint := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aanlsluitpunten)
+		{
+			attribute<Vertex> Vertex_rel := union_data(., PuntBron_Vertex_rel, LijnBron_Vertex_rel);
+			attribute<WarmteBronnen/bron> bron_rel := union_data(.,	WarmteBronnen/Puntbronnen/bron_rel,	WarmteBronnen/Lijnbron_aanlsluitpunten/bron_rel);
+		}
+		
+		unit<uint32> od_pair := dijkstra_m('bidirectional;startPoint(Node_rel,OrgZone_rel);endPoint(Node_rel);cut(OrgZone_max_imp);od:impedance,OrgZone_rel,DstZone_rel'
+			,	Edge/Cost, Edge/from, Edge/to
+			,	startPoint/Vertex_rel, startPoint/bron_rel
+			,	rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values)
+			,	5000[EUR]
+			);
+		
 		// TODO endpoints maken van alle studiepanden
 		// TODO afstandentabel via dijkstra
 		// TODO allocatie onder restricties van aangeboden/gevraagde capaciteit
