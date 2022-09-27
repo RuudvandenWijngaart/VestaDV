@@ -131,6 +131,7 @@ template WarmtenetTempl
 		attribute<bool> gebouwOptieOK := Classifications/gebouwoptie/kanGebiedsOptie[BO/gebouwoptie_rel];
 		attribute<bool> labelOK       := = T_sec < 65[Celsius] ? 'BO/Schillabel_rel <= Classifications/Schillabel/V/E' : 'const(true,BO)';
 		attribute<bool> IsCandidate   := heeftGasOK && gebouwOptieOK && labelOK;
+		attribute<kW>   P_Aansl       := (Aansluitcapaciteit/RV + Aansluitcapaciteit/TW)[BO_Rel]; // TODO: Aansluitcapaciteit/KD
 	}
 	unit<uint32> AllCandidate := subset(BO/IsCandidate)
 	{
@@ -139,10 +140,12 @@ template WarmtenetTempl
 		attribute<bool> isUtil   := const(false,.); //TODO: later hier opnemen of vbo utiliteit is of niet
 		attribute<bool> vraagtKD := not(isdefined(BO/BemeterdeGebouwInput_rel/KDb[BO_rel])) && not(isdefined(BO/BemeterdeGebouwInput_rel/KDb[BO_rel]));
 
-		unit<uint32> StudieGebiedPand := subset(Invoer/RuimtelijkeData/BAG/import/pand/vbo_count_studiegebied > 0.0[uint32])
+		unit<uint32> StudieGebiedPand := subset(pand/vbo_count_studiegebied > 0.0[uint32])
 		{
-			attribute<geography/rdc_meter> geometry (poly) := Invoer/RuimtelijkeData/BAG/import/pand/geometry[nr_orgentity];
+			attribute<geography/rdc_meter> geometry (poly) := pand/geometry[nr_orgentity];
 			attribute<geography/rdc_meter> point           := Centroid_or_mid(geometry);
+			attribute<pand>                pand_rel        := nr_orgentity;
+			attribute<kW>                  P_Aansl         := sum(BO_rel->P_Aansl, rlookup(AllCandidate/pand_rel, pand_rel)); 
 		}
 		attribute<StudieGebiedPand> StudieGebiedPand_rel := rlookup(pand_rel, StudieGebiedPand/nr_orgentity);
 
@@ -196,7 +199,8 @@ template WarmtenetTempl
 			
 						//====== berekening kosten aansluitleiding (van gevel tot straat)
 			attribute<kW>      P_id_pand     (StudieGebiedPand) := sum(P_id, StudieGebiedPand_rel);
-			attribute<m>       L_asl_pand    (StudieGebiedPand) := connect_info/dist[m];
+			attribute<BronAllocatie/Edge>  Edge_rel(StudieGebiedPand) := rlookup(rlookup( AllCandidate/StudieGebiedPand/Point , BronAllocatie/Vertex/Values ), BronAllocatie/Edge/to);
+			attribute<m>       L_asl_pand    (StudieGebiedPand) := Edge_rel->dist;
 			attribute<Celsius> DeltaT_pand   (StudieGebiedPand) := mean(DeltaT_wd, StudieGebiedPand_rel);
 			attribute<eur>     Ki_asl_pand   (StudieGebiedPand) := LeidingKosten_asl/Ki * L_asl_pand;
 			attribute<ratio>   pand_aandeel      (AllCandidate) := BO/pand_aandeel[BO_rel] / 1.0[pand_asl];
@@ -356,7 +360,8 @@ template WarmtenetTempl
 			attribute<Vertex> from := rlookup(Point,     Vertex/Values);
 			attribute<Vertex> to   := rlookup(NextPoint, Vertex/Values);
 			
-			attribute<EUR>    cost   := arc_length(UnionData, m) * Ki_Buis;
+			attribute<m>      dist := arc_length(UnionData, m);
+			attribute<EUR>    cost := dist * Ki_Buis;
 		}
 		unit<uint32>  PointSet:= union_unit(Edge, Edge) { attribute<rdc_meter> Point := union_data(., Edge/Point, Edge/NextPoint); }
 		unit<uint32>  Vertex := unique(PointSet/Point);
