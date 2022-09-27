@@ -131,7 +131,6 @@ template WarmtenetTempl
 		attribute<bool> gebouwOptieOK := Classifications/gebouwoptie/kanGebiedsOptie[BO/gebouwoptie_rel];
 		attribute<bool> labelOK       := = T_sec < 65[Celsius] ? 'BO/Schillabel_rel <= Classifications/Schillabel/V/E' : 'const(true,BO)';
 		attribute<bool> IsCandidate   := heeftGasOK && gebouwOptieOK && labelOK;
-		attribute<kW>   P_Aansl       := (Aansluitcapaciteit/RV + Aansluitcapaciteit/TW)[BO_Rel]; // TODO: Aansluitcapaciteit/KD
 	}
 	unit<uint32> AllCandidate := subset(BO/IsCandidate)
 	{
@@ -145,7 +144,7 @@ template WarmtenetTempl
 			attribute<geography/rdc_meter> geometry (poly) := pand/geometry[nr_orgentity];
 			attribute<geography/rdc_meter> point           := Centroid_or_mid(geometry);
 			attribute<pand>                pand_rel        := nr_orgentity;
-			attribute<kW>                  P_Aansl         := sum(BO_rel->P_Aansl, rlookup(AllCandidate/pand_rel, pand_rel)); 
+			attribute<kW>                  P_wd            := sum(PartialContributie/P_wd, rlookup(AllCandidate/pand_rel, pand_rel)); 
 		}
 		attribute<StudieGebiedPand> StudieGebiedPand_rel := rlookup(pand_rel, StudieGebiedPand/nr_orgentity);
 
@@ -183,14 +182,14 @@ template WarmtenetTempl
 			attribute<kW>      P_id_RV       (AllCandidate) := BO/AansluitCapaciteit/RV[BO_rel]; 
 			attribute<kW>      P_id_TW       (AllCandidate) := BO/AansluitCapaciteit/TW[BO_rel];
 			attribute<kW>      P_id_KD       (AllCandidate) := = not(KoudeLevering) ? 'const(0.0[kW],AllCandidate)' : 'float64(vraagtKD) * BO/AansluitCapaciteit/KD[BO_rel]';
-			attribute<kw>      P_id          (AllCandidate) := max_elem(P_id_KD,P_id_RV+P_id_TW);
+			attribute<kW>      P_id          (AllCandidate) := max_elem(P_id_KD,P_id_RV+P_id_TW);
 
 			//====== vermogensvraag aan het wijkdistributienet (na aansluitleiding, tot en met WOS/hulpinstallatie)
 			parameter<ratio>   Vermogensverlies             := Schuiven/EfficiencySchuif * 0.1[ratio] + (1.0 - Schuiven/EfficiencySchuif) * 0.0[ratio];
 			attribute<kW>      P_wd_RV       (AllCandidate) := = T_sec <= 55[Celsius] ? 'P_id_RV * BO/AansluitCapaciteit/GTF_RVlt' : 'P_id_RV * BO/AansluitCapaciteit/GTF_RVmt'; 
 			attribute<kW>      P_wd_TW       (AllCandidate) := P_id_TW * BO/AansluitCapaciteit/GTF_TW;
 			attribute<kW>      P_wd_KD       (AllCandidate) := = not(KoudeLevering) ? 'const(0.0[kW],AllCandidate)' : 'float64(vraagtKD) * P_id_KD * BO/AansluitCapaciteit/GTF_K';
-			attribute<kw>      P_wd          (AllCandidate) := max_elem(P_wd_KD,P_wd_RV+P_wd_TW)  / (1.0 - Vermogensverlies);
+			attribute<kW>      P_wd          (AllCandidate) := max_elem(P_wd_KD,P_wd_RV+P_wd_TW)  / (1.0 - Vermogensverlies);
 
 			//====== extra vraag in het wijkdistributienet door leidingverlies en bepaling van verschil tussen aanlever- en retourtemperatuur
 			attribute<Celsius>   DeltaT_wd     (AllCandidate) := T_sec <= 35[Celsius] && Booster ? 10[Celsius] : T_sec <= 35[Celsius] && WP ? 20[Celsius] : 30[Celsius];
@@ -383,7 +382,14 @@ template WarmtenetTempl
 			,	startPoint/Vertex_rel, startPoint/bron_rel
 			,	rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values)
 			,	5000[EUR]
-			);
+			)
+		{
+			attribute<.> nearest_od_rel(AllCandidate/StudieGebiedPand) := min_index(od_pair/impedance, od_pair/DstZone_rel);
+		}
+
+		attribute<Warmtebronnen/bron> nearest_bron_rel(AllCandidate/StudieGebiedPand) := od_pair/nearest_od_rel->OrgZone_rel;
+		attribute<kW> nearest_bron_P_wd(Warmtebronnen/bron) := sum(AllCandidate/StudieGebiedPand/P_wd, nearest_bron_rel);
+		attribute<ratio> nearest_bron_cap_ratio(Warmtebronnen/bron) := nearest_bron_P_wd / (Warmtebronnen/bron/MWth_max * (1000KW / 1MW) );
 		
 		// TODO endpoints maken van alle studiepanden
 		// TODO afstandentabel via dijkstra
