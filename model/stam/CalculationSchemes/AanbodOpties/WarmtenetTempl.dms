@@ -255,8 +255,37 @@ template WarmtenetTempl
 
 			//====== subsidies
 			attribute<eur> Oi_ge_EIA     (AllCandidate) := Ki_ge_ov  * SpecifiekeInstellingen/Beleid/EIA/E_w/Rs_OngeriefsVergoeding + Ki_ge_pm * SpecifiekeInstellingen/Beleid/EIA/E_w/Rs_ProjectManagement;
-			attribute<eur> Oi_id_EIA     (AllCandidate) := Ki_id     * SpecifiekeInstellingen/Beleid/EIA/id;
+			attribute<eur> Oi_id_EIA     (AllCandidate) := Ki_id     * SpecifiekeInstellingen/Beleid/EIA/id + Subsidie/Oi_subsidie;
 			attribute<eur> Oi_wd_asl_EIA (AllCandidate) := Ki_wd_asl * SpecifiekeInstellingen/Beleid/EIA/wd;
+
+			container subsidie
+			{
+				unit<uint32> ZBS   := ZichtjaarBeleid/Subsidie;
+				unit<uint32> ZBS_w := subset(ZBS/Maatregel/Infra/WnetAansl)
+				{
+					attribute<string> name := ZBS/name[nr_orgentity];
+				}
+
+				container SubsidieBerekening := for_each_ne(ZBS_w/name, 'ImplSubs(ZBS/V/'+ZBS_w/name+')');
+
+				template ImplSubs : ishidden = "True"
+				{
+					//case parameters
+					parameter<ZBS> ZBS_rel;
+					//end case parameters
+
+					parameter<ratio>   Aandeel  := makedefined(ZBS/Subsidieaandeel[ZBS_rel],0.0[ratio]), ishidden = "True";
+					parameter<eur_asl> Bedrag   := makedefined(ZBS/Subsidiebedrag[ZBS_rel],0.0[eur_asl]), ishidden = "True";
+
+					attribute<bool>    InDoelgroep (AllCandidate) := ='OR('+AsItemList(replace('ZBS/doelgroep/@ED[ZBS_rel] && BO/Eigendom_rel[BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')', ishidden = "True";
+					attribute<bool>    Naleving    (AllCandidate) := rnd_uniform(JaarSeed * 403u, AllCandidate, range(float64, 0d, 1d)) <= ZBS/Naleving[ZBS_rel];
+					attribute<bool>    Geldig      (AllCandidate) := InDoelgroep && Naleving;
+
+					attribute<eur>     Oi_subsidie (AllCandidate) := BO/nrAansluitingen[BO_rel] * Bedrag + Ki_id * Aandeel;
+				}
+
+				attribute<Eur>    Oi_subsidie    (AllCandidate) := = count(id(ZBS_w)) > 0u ? 'add('+AsItemList('Subsidieberekening/'+ZBS_w/name+'/Oi_subsidie')+')'   : 'const(0.0[Eur],AllCandidate)';
+			}
 			
 			container jaarlijks
 			{
