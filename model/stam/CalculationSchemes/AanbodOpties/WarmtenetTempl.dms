@@ -120,7 +120,10 @@ template WarmtenetTempl
 		
 		unit<uint32> Bron := union_unit(Puntbronnen, VlakBronnen, Lijnbronnen)
 		{
+			attribute<rdc_meter> Geometry := union_data(., Puntbronnen/Geometry, centroid_or_mid(Vlakbronnen/Geometry), first_point(Lijnbronnen/Geometry)); // for display only
+			
 			attribute<MW> MWth_max := union_data(., Puntbronnen/MWth_max, VlakBronnen/MWth_max, Lijnbronnen/MWth_max);
+			attribute<kW> kWth_max := MWth_max * (1000KW / 1MW);
 		}
 	}
 
@@ -376,25 +379,102 @@ template WarmtenetTempl
 			attribute<Vertex> Vertex_rel := union_data(., PuntBron_Vertex_rel, LijnBron_Vertex_rel);
 			attribute<WarmteBronnen/bron> bron_rel := union_data(.,	WarmteBronnen/Puntbronnen/bron_rel,	WarmteBronnen/Lijnbron_aansluitpunten/bron_rel);
 		}
+		// endpoints zijn alle AllCandidate/StudieGebiedPand(en)
 		
+		// afstandentabel via dijkstra
 		unit<uint32> od_pair := dijkstra_m('bidirectional;startPoint(Node_rel,OrgZone_rel);endPoint(Node_rel);cut(OrgZone_max_imp);od:impedance,OrgZone_rel,DstZone_rel'
 			,	Edge/Cost, Edge/from, Edge/to
 			,	startPoint/Vertex_rel, startPoint/bron_rel
 			,	rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values)
 			,	5000[EUR]
 			)
-		{
-			attribute<.> nearest_od_rel(AllCandidate/StudieGebiedPand) := min_index(od_pair/impedance, od_pair/DstZone_rel);
-		}
-
-		attribute<Warmtebronnen/bron> nearest_bron_rel(AllCandidate/StudieGebiedPand) := od_pair/nearest_od_rel->OrgZone_rel;
-		attribute<kW> nearest_bron_P_wd(Warmtebronnen/bron) := sum(AllCandidate/StudieGebiedPand/P_wd, nearest_bron_rel);
-		attribute<ratio> nearest_bron_cap_ratio(Warmtebronnen/bron) := nearest_bron_P_wd / (Warmtebronnen/bron/MWth_max * (1000KW / 1MW) );
+		,	KeepData = "True"; // facilitate debugging this; remove when done.
 		
-		// TODO endpoints maken van alle studiepanden
-		// TODO afstandentabel via dijkstra
-		// TODO allocatie onder restricties van aangeboden/gevraagde capaciteit
-	}
+	/*	bron Allocatie m.b.v. discrete_alloc en vaste aansluit-eenheden.
+		parameter<kW> P_AansluitEenheid := 3[kW]; // reken-kental
+		
+		attribute<uint32> nrAfnameEenheden(AllCandidate/StudieGebiedPand) := uint32(roundup(AllCandidate/StudieGebiedPand/P_wd / P_AansluitEenheid));
+		unit<uint32> AfnameEenheid := range(uint32, 0, sum(nrAfnameEenheden))
+		{
+			attribute<AllCandidate/StudieGebiedPand> SGP_rel := classify(ID(.), cumulate(nrAfnameEenheden));
+			attribute<rdc_meter> geometry(poly) := SGP_rel->Geometry;
+		}
+		
+		unit<uint16> Bron16 := range(uint16, 0w, uint16(#WarmteBronnen/bron))
+		{
+			attribute<string> name := 'B'+string(id(.));
+			attribute<WarmteBronnen/bron> bron_rel := convert(ID(.), WarmteBronnen/bron);
+		}
+		
+		unit<int32> EUR32 := int32(EUR);
+		// suitability
+		container impedancePerBron := for_each_nedv(bron16/name
+			,	'rjoin(point(const('+string(id(bron16))+', AfnameEenheid), AfnameEenheid/SGP_rel), point(od_pair/OrgZone_rel, od_pair/DstZone_rel), od_pair/Impedance)[EUR32]'
+			,	AfnameEenheid, EUR32
+			);
+		
+		container impl {
+			unit<uint32> atomic_regions := range(uint8,0,1) 
+			{ 
+				attribute<.> P1 := ID(.); 
+				attribute<.> AtomicRegionMap(AfnameEenheid) := const(0[.], AfnameEenheid); 
+			}
+			container claim_min := for_each_nedv(bron16/name
+			,	'const(0[AfnameEenheid], atomic_regions)'
+			,	atomic_regions, AfnameEenheid
+			);
+			container claim_max := for_each_nedv(bron16/name
+			,	'value(WarmteBronnen/bron/kWth_max[const('+string(id(bron16))+'[WarmteBronnen/bron], atomic_regions)] / P_AansluitEenheid, AfnameEenheid)'
+			,	atomic_regions, AfnameEenheid
+			);
+		}
+		
+		// allocatie onder restricties van aangeboden/gevraagde capaciteit
+		container best_bron_container := discrete_alloc_16(bron16/name
+			,	AllCandidate/StudieGebiedPand
+			,	impedancePerBron
+			,	const(0[impl/atomic_regions], WarmteBronnen/bron), const('P1', impl/atomic_regions)
+			,	impl/atomic_regions, impl/atomic_regions/AtomicRegionMap
+			,	impl/claim_max, impl/claim_min
+			,	-100[EUR]
+			,	impl
+			);
+			
+		attribute<Warmtebronnen/bron> best_bron_rel(AllCandidate/StudieGebiedPand) := union_data(AllCandidate/StudieGebiedPand, modal(best_bron_container/landuse, AfnameEenheid/SGP_rel));		
+	*/	
+	
+		unit<uint32> allocIter := range(uint32, 0, 10)
+		{
+			attribute<string> name := 'I'+string(id(.));
+			attribute<string> prevName := MakeDefined(name[ID(.)-1]+'/nextAugmentation', 'initialAugmentation');
+		}
+		attribute<EUR> initialAugmentation(WarmteBronnen/bron) := const(0[EUR], WarmteBronnen/bron); // TODO: hier (met schaalfactor?) verwijzen naar Ki_cap.
+		
+		// round 1
+		template allocIterT {
+			attribute<EUR> currAugmentation(WarmteBronnen/bron);
+			
+			attribute<EUR> augmentedImpedance(od_pair) := od_pair/impedance + currAugmentation[od_pair/OrgZone_rel];
+			attribute<od_pair> nearest_od_rel(AllCandidate/StudieGebiedPand) := min_index(augmentedImpedance, od_pair/DstZone_rel);
+			attribute<EUR>     nearest_impedance(AllCandidate/StudieGebiedPand) := augmentedImpedance[nearest_od_rel];
+			attribute<Warmtebronnen/bron> nearest_bron_rel(AllCandidate/StudieGebiedPand) := nearest_od_rel->OrgZone_rel;
+			attribute<kW> nearest_bron_P_wd(Warmtebronnen/bron) := sum(AllCandidate/StudieGebiedPand/P_wd, nearest_bron_rel);
+			attribute<ratio> nearest_bron_cap_ratio(Warmtebronnen/bron) := nearest_bron_P_wd / Warmtebronnen/bron/kWth_max;
+			
+			// zaag bij overvolle bronnen afnemers weg die redelijke alternatieven hebben
+			attribute<EUR> zaaglijn(Warmtebronnen/bron) := nth_element_weighted(
+					augmentedImpedance - nearest_impedance[od_pair/DstZone_rel] * Float64(nearest_bron_cap_ratio[od_pair/OrgZone_rel] < 1.0) // 0 als deze al nearest is, tenzij deze overboekt is; margin indien 0 niet overboekt is
+				,	Warmtebronnen/bron/kWth_max
+				,	AllCandidate/StudieGebiedPand/P_wd[od_pair/DstZone_rel]
+				,	od_pair/OrgZone_rel
+			);
+			attribute<EUR> nextAugmentation(Warmtebronnen/bron) := currAugmentation + MakeDefined(zaaglijn, 0[EUR]);
+			
+		}
+		container Iterations := for_each_ne(allocIter/name, 'allocIterT('+allocIter/prevName+')');
+		
+		attribute<Warmtebronnen/bron> best_bron_rel(AllCandidate/StudieGebiedPand) := ='Iterations/'+last(allocIter/name)+'/nearest_bron_rel';
+}
 	
 	unit<uint32> Candidate := subset(AllCandidate/PartialContributie/Contributie > 0.0[Eur_yr])
 	{
@@ -449,8 +529,6 @@ template WarmtenetTempl
 		attribute<Eur_yr> Oj_lv_vastrecht := const(0[Eur_yr], .), Descr = "jaarlijkse opbrensten voor leverancier: component vastrecht";
 		attribute<Eur_yr> Oj_lv_SDE       := const(0[Eur_yr], .), Descr = "jaarlijkse opbrensten voor leverancier: component productiesubsidie";
 	}
-
-
 
 
 	//====== indicatie per kandidaat of deze nu is aangesloten op een nieuw warmtenet
