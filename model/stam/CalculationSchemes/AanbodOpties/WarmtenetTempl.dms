@@ -37,8 +37,9 @@ template WarmtenetTempl
 		}
 		unit<uint32> Puntbronnen := subset(Puntbronnen_all/Geschikt)
 		{
-			attribute<rdc_meter> Geometry        := Puntbronnen_all/geometry[nr_orgentity];
-			attribute<Brontype>  Brontype_rel    := Puntbronnen_all/Brontype_rel[nr_orgentity];
+			attribute<rdc_meter> Geometry        := nr_orgEntity->geometry;
+			attribute<Brontype>  Brontype_rel    := nr_orgEntity->Brontype_rel;
+			attribute<string>    Label           := nr_orgEntity->Label;
 			attribute<celsius>   T_bron          := Puntbronnen_all/T_bron[nr_orgentity];
 			attribute<ratio>     P_vol           := Puntbronnen_all/P_vol[nr_orgentity];
 			attribute<ratio>     P_cap           := Puntbronnen_all/P_cap[nr_orgentity];
@@ -65,6 +66,7 @@ template WarmtenetTempl
 		{
 			attribute<rdc_meter> Geometry (poly) := VlakBronnen_all/geometry[nr_orgentity];
 			attribute<Brontype>  Brontype_rel    := VlakBronnen_all/Brontype_rel[nr_orgentity];
+			attribute<string>    Label           := nr_orgEntity->Label;
 			attribute<celsius>   T_bron          := VlakBronnen_all/T_bron[nr_orgentity];
 			attribute<ratio>     P_vol           := VlakBronnen_all/P_vol[nr_orgentity];
 			attribute<ratio>     P_cap           := VlakBronnen_all/P_cap[nr_orgentity];
@@ -90,6 +92,7 @@ template WarmtenetTempl
 		unit<uint32> Lijnbronnen := subset(Lijnbronnen_all/Geschikt)
 		{
 			attribute<rdc_meter> Geometry (arc)  := Lijnbronnen_all/geometry[nr_orgentity];
+			attribute<string>    Label           := nr_orgEntity->Label;
 			attribute<Brontype>  Brontype_rel    := Lijnbronnen_all/Brontype_rel[nr_orgentity];
 			attribute<celsius>   T_bron          := Lijnbronnen_all/T_bron[nr_orgentity];
 			attribute<ratio>     P_vol           := Lijnbronnen_all/P_vol[nr_orgentity];
@@ -122,6 +125,8 @@ template WarmtenetTempl
 			,	KeepData = "True" // facilitate debugging; REMOVE when done		
 		{
 			attribute<rdc_meter> Geometry := union_data(., Point(0.0,0.0), Puntbronnen/Geometry, centroid_or_mid(Vlakbronnen/Geometry), first_point(Lijnbronnen/Geometry)); // for display only
+			
+			attribute<string> label := union_data(., 'GeenBron', Puntbronnen/Label, VlakBronnen/Label, Lijnbronnen/Label);
 			
 			attribute<EUR_kW> Ki_cap_min := union_data(., Ki_distr_max, Puntbronnen/Ki_cap_min, VlakBronnen/Ki_cap_min, Lijnbronnen/Ki_cap_min);
 			attribute<EUR_kW> Ki_cap_max := union_data(., Ki_distr_max, Puntbronnen/Ki_cap_max, VlakBronnen/Ki_cap_max, Lijnbronnen/Ki_cap_max);
@@ -487,7 +492,21 @@ template WarmtenetTempl
 		}
 		container Iterations := for_each_ne(allocIter/name, 'allocIterT('+allocIter/prevName+')');
 		
+		attribute<EUR_kW>             best_augmentation(WarmteBronnen/bron)        := ='Iterations/'+last(allocIter/name)+'/currAugmentation';
 		attribute<Warmtebronnen/bron> best_bron_rel(AllCandidate/StudieGebiedPand) := ='Iterations/'+last(allocIter/name)+'/favourite_bron_rel';
+		
+		attribute<EUR_kw> reroute(AllCandidate/StudieGebiedPand):= dijkstra_s('bidirectional;startPoint(Node_rel,impedance);endPoint(Node_rel);cut(OrgZone_max_imp);node:TraceBack'
+			,	Edge/Cost, Edge/from, Edge/to
+			,	startPoint/Vertex_rel, best_augmentation[startPoint/bron_rel]
+			,	rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values)
+			,	Ki_distr_max)
+		{
+				attribute<Vertex> TraceBack(Vertex);
+		}
+		attribute<kW> NodeDemand(Vertex) := MakeDefined(AllCandidate/StudieGebiedPand/P_wd[invert(rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values))], 0[kW]);
+		attribute<Vertex> TraceBack(Vertex) := reroute/TraceBack;
+		
+		attribute<kw> flow(Edge) := trace_back(Edge/From, Edge/To, TraceBack, NodeDemand);
 }
 	
 	unit<uint32> Candidate := subset(AllCandidate/PartialContributie/Contributie > 0.0[Eur_yr])
