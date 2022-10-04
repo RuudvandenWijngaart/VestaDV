@@ -382,15 +382,14 @@ template WarmtenetTempl
 	{
 		parameter<Float64> Ki_Buis_kW := 10[EUR / m / kW];
 		
-		// TODO: vlakbronnen in hieropvolgende allocatie alsnog toevoegen voor potentiele afnemers die 
-		unit<uint32> Aansluitingen := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten, AllCandidate/StudieGebiedPand)
+		unit<uint32> AansluitPunten := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten, AllCandidate/StudieGebiedPand)
 		{
 			attribute<rdc_meter> Point := union_data(., WarmteBronnen/Puntbronnen/Geometry, WarmteBronnen/Lijnbron_aansluitpunten/Point, AllCandidate/StudieGebiedPand/Point);
 		}
 		
 		unit<uint32>  network       := /Invoer/RuimtelijkeData/OSM/Read_Final_Network;
 		
-		unit<uint32> Edge := connect(network/Geometry, Aansluitingen/point)
+		unit<uint32> Edge := connect(network/Geometry, AansluitPunten/point)
 			,	DialogType = "Map"
 			,	DialogData = "UnionData"
 				{
@@ -405,16 +404,17 @@ template WarmtenetTempl
 		unit<uint32>  PointSet:= union_unit(Edge, Edge) { attribute<rdc_meter> Point := union_data(., Edge/Point, Edge/NextPoint); }
 		unit<uint32>  Vertex := unique(PointSet/Point);
 		
-		// TODO VlakBronnen
 		attribute<Vertex> PuntBron_Vertex_rel  (WarmteBronnen/Puntbronnen)     := rlookup(WarmteBronnen/Puntbronnen/Geometry, Vertex/Values);
 		attribute<Vertex> LijnBron_Vertex_rel  (WarmteBronnen/Lijnbron_aansluitpunten)     := rlookup(WarmteBronnen/Lijnbron_aansluitpunten/Point, Vertex/Values);
 		attribute<Vertex> StudiePand_Vertex_rel(AllCandidate/StudieGebiedPand) := rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values);
 		
+		unit<uint32> Vlakbron_Vertex_xrel := point_in_all_polygons(Vertex/Values, WarmteBronnen/VlakBronnen/geometry);
+		
 		// startpoints maken met alle aansluitpunten van alle bronnen (ook vlakbronnen ? )
-		unit<uint32> startPoint := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten)
+		unit<uint32> startPoint := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten, Vlakbron_Vertex_xrel)
 		{
-			attribute<Vertex> Vertex_rel := union_data(., PuntBron_Vertex_rel, LijnBron_Vertex_rel);
-			attribute<WarmteBronnen/bron> bron_rel := union_data(.,	WarmteBronnen/Puntbronnen/bron_rel,	WarmteBronnen/Lijnbron_aansluitpunten/bron_rel);
+			attribute<Vertex> Vertex_rel := union_data(., PuntBron_Vertex_rel, LijnBron_Vertex_rel, Vlakbron_Vertex_xrel/first_rel);
+			attribute<WarmteBronnen/bron> bron_rel := union_data(.,	WarmteBronnen/Puntbronnen/bron_rel,	WarmteBronnen/Lijnbron_aansluitpunten/bron_rel, Vlakbron_Vertex_xrel/second_rel->bron_rel);
 		}
 		// endpoints zijn alle AllCandidate/StudieGebiedPand(en)
 		
@@ -434,7 +434,7 @@ template WarmtenetTempl
 				+	rnd_uniform(0, ., range(EUR_kW, 0.0, 1.0));
 		}
 
-		parameter<uint32> nrBronAllocatieIteraties := 20; // TODO: reconsider and move to kentallen
+		parameter<uint32> nrBronAllocatieIteraties := 60; // TODO: reconsider and move to kentallen
 		unit<uint32> allocIter := range(uint32, 0, nrBronAllocatieIteraties)
 		{
 			attribute<string> name := 'I'+string(id(.));
@@ -469,8 +469,8 @@ template WarmtenetTempl
 			
 			attribute<EUR_kw> schuif_prijs    (od_pair) := 
 				(bron_cap_od     < 1.0) // niet perse favourite
-			&&  (bron_cap_favour >= 1.0)
-			? augmentedImpedance - favourite_imp_od
+			&&  (bron_cap_favour > 1.0)
+			? 0.1[EUR_kW] + augmentedImpedance - favourite_imp_od
 			: (0[EUR_kW] / 0.0);
 			
 			attribute<EUR_kW> best_schuif(AllCandidate/StudieGebiedPand) := min(schuif_prijs, od_pair/DstZone_rel);
