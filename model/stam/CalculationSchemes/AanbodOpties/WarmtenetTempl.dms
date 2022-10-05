@@ -382,7 +382,7 @@ template WarmtenetTempl
 		}
 	}
 
-	parameter<EUR_kW> Ki_distr_max := 5000[EUR_kW]; // TODO: reconsider and move naar kentallen
+	parameter<EUR_kW> Ki_distr_max := 200000[EUR_kW]; // TODO: reconsider and move naar kentallen
 	container BronAllocatie: KeepData = "True" // facilitate debugging this; REMOVE when done.
 	{
 		parameter<Float64> Ki_Buis_kW := 10[EUR / m / kW];
@@ -501,13 +501,22 @@ template WarmtenetTempl
 			,	rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values)
 			,	Ki_distr_max)
 		{
-				attribute<Vertex> TraceBack(Vertex);
+				attribute<Edge> TraceBack(Vertex);
 		}
 		attribute<kW> NodeDemand(Vertex) := MakeDefined(AllCandidate/StudieGebiedPand/P_wd[invert(rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values))], 0[kW]);
-		attribute<Vertex> TraceBack(Vertex) := reroute/TraceBack;
+	
+		attribute<kW> edge_flow(Edge) := trace_back(Edge/From, Edge/To, reroute/TraceBack, NodeDemand);
 		
-		attribute<kw> flow(Edge) := trace_back(Edge/From, Edge/To, TraceBack, NodeDemand);
-}
+		attribute<Vertex> Vertex_bron_Vertex_rel(Vertex) := service_area(Edge/From, Edge/To, reroute/TraceBack); 
+		attribute<WarmteBronnen/bron> Vertex_bron_rel(Vertex) := startPoint/bron_rel[invert(startPoint/Vertex_rel)][Vertex_bron_Vertex_rel]; 
+		
+		attribute<EUR_m> edge_cost_m(Edge) := edge_flow * Ki_Buis_kW; // TODO: hier flow
+		attribute<EUR> edge_cost  (Edge) := edge_cost_m * Edge/dist;
+		attribute<EUR> bron_Ki_buis(WarmteBronnen/bron) := sum(edge_cost, Vertex_bron_rel[Edge/From]);
+		
+		// TODO: vlakbronnen per raster
+		// TODO: Rotterdam case
+}	
 	
 	unit<uint32> Candidate := subset(AllCandidate/PartialContributie/Contributie > 0.0[Eur_yr])
 	{
