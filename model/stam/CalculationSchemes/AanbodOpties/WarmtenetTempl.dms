@@ -108,7 +108,7 @@ template WarmtenetTempl
 			attribute<Eur_GJ>    Km_GJ           := Lijnbronnen_all/Km_GJ[nr_orgentity];
 			
 			attribute<Bron>      Bron_rel        := convert(ID(.)+1+#Puntbronnen+#Lijnbronnen, bron);
-			attribute<m>         max_dist        := max_elem(20[km] * 1000[m / km]  * sqrt(MWth_max / 1[MW]) - arc_length(Geometry, m), 1000[m]);
+			attribute<m>         max_dist        := max_elem(20[km] * 1000[m / km] * sqrt(min_elem(MWth_max, 25[MW]) / 1[MW]) - arc_length(Geometry, m), 1000[m]);
 		}
 		
 		unit<uint32> Lijnbronsegmenten := arc2segm(lijnbronnen/Geometry);
@@ -137,7 +137,7 @@ template WarmtenetTempl
 			
 			attribute<MW> MWth_max := union_data(., 1e+10[MW], Puntbronnen/MWth_max, VlakBronnen/MWth_max, Lijnbronnen/MWth_max);
 			attribute<kW> kWth_max := MWth_max * (1000KW / 1MW);
-			attribute<m>  max_dist := union_data(., 0[m], Puntbronnen/max_dist, VlakBronnen/max_dist, lijnbronnen/max_dist);
+			attribute<m>  max_dist := union_data(., 100000[m], Puntbronnen/max_dist, VlakBronnen/max_dist, lijnbronnen/max_dist);
 		}
 	}
 
@@ -450,7 +450,7 @@ template WarmtenetTempl
 			attribute<string> prevName := MakeDefined(name[ID(.)-1]+'/nextAugmentation', 'initialAugmentation');
 		}
 		
-		attribute<m> initialAugmentation(WarmteBronnen/bron) := WarmteBronnen/bron/Ki_cap / max(WarmteBronnen/bron/Ki_cap) * WarmteBronnen/bron/max_dist;
+		attribute<m> initialAugmentation(WarmteBronnen/bron) := (WarmteBronnen/bron/Ki_cap / max(WarmteBronnen/bron/Ki_cap)) * WarmteBronnen/bron/max_dist;
 
 		// round 1
 		template allocIterT {
@@ -514,8 +514,9 @@ template WarmtenetTempl
 		attribute<Vertex> Vertex_bron_Vertex_rel(Vertex) := service_area(Edge/From, Edge/To, reroute/TraceBack); 
 		attribute<WarmteBronnen/bron> Vertex_bron_rel(Vertex) := startPoint/bron_rel[invert(startPoint/Vertex_rel)][Vertex_bron_Vertex_rel]; 
 		
-		attribute<EUR_m> edge_cost_m(Edge) := edge_flow * Ki_Buis_kW; // TODO: hier flow
-		attribute<EUR> edge_cost  (Edge) := edge_cost_m * Edge/dist;
+		container edge_cost_calc := AllCandidate/PartialContributie/LeidingKosten_T(Edge, edge_flow, const(0[celsius], Edge)); // TODO: DT beter invullen.
+		
+		attribute<EUR> edge_cost  (Edge) := edge_cost_calc/Ki * Edge/dist;
 		attribute<EUR> bron_Ki_buis(WarmteBronnen/bron) := sum(edge_cost, Vertex_bron_rel[Edge/From]);
 		
 		// TODO: vlakbronnen per raster
