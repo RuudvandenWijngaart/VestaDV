@@ -114,6 +114,15 @@ container BAG: url="%HestiaDataDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 			// relatie naar buurt voor o.a. ruimtelijke selectie
 			attribute<RegioIndelingen/buurt>    buurt_rel    := point_in_polygon(geometry, RegioIndelingen/buurt/geometry);
 			attribute<RegioIndelingen/gemeente> gemeente_rel := RegioIndelingen/buurt/gemeente_rel[buurt_rel];
+
+			attribute<Classifications/BouwjaarWoning>  BouwjaarWoning_rel := isNull(pand_rel -> bouwjaar_gecorrigeerd ) ? Classifications/BouwjaarWoning/onbekend : classify(pand_rel -> bouwjaar_gecorrigeerd ,Classifications/BouwjaarWoning/ClassBreak);
+			attribute<Classifications/Eigendom>        Eigendom_rel       := EigendomStaat/pand/Eigendom_rel[pand_rel];
+			attribute<classifications/WoningType>             Woningtype_rel     :=
+			(( pand_rel -> woonpand_type ) == typeringen/WoningtypeSnapshot/V/meergezinspand && (pand_rel->nr_verdiepingen) > 4b)
+				? classifications/WoningType/V/meergezinspand_hoog
+				: ( pand_rel -> woonpand_type )[classifications/WoningType];
+
+			attribute<Classifications/combines/WBE>    ModelObjectKey     := combine_data( Classifications/combines/WBE , Woningtype_rel , combine_data( Classifications/combines/BE , BouwjaarWoning_rel , Eigendom_rel ));
 		}
 
 		unit<uint32> pand
@@ -215,20 +224,16 @@ container BAG: url="%HestiaDataDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 
 		attribute<Units/yr_uint16>                        bouwjaar                   := pand_rel->bouwjaar_gecorrigeerd;
 		attribute<Units/yr_uint16>                        sloopjaar                  := pand_rel->sloopjaar_gecorrigeerd;
-		attribute<Classifications/BouwjaarWoning>         BouwjaarWoning_rel         := isNull(bouwjaar) ? Classifications/BouwjaarWoning/onbekend : classify(bouwjaar,Classifications/BouwjaarWoning/ClassBreak);
-		attribute<Classifications/Eigendom>               Eigendom_rel               := EigendomStaat/pand/Eigendom_rel[pand_rel];
+		attribute<Classifications/BouwjaarWoning>         BouwjaarWoning_rel         := select_data(., import/vbo/BouwjaarWoning_rel);
+		attribute<Classifications/Eigendom>               Eigendom_rel               := select_data(., import/vbo/Eigendom_rel);
 		attribute<bool>                                   Gasloos                    := Gasnetten/Gasloos[pand_rel];
 		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := pand_rel->woonpand_type;
 		attribute<Classifications/SchilLabel>             Default_Energielabel_rel   := pand_rel->Default_Energielabel_Bouwjaar;
 
-		attribute<classifications/WoningType>             Woningtype_rel     :=
-			(WoningtypeSnapshot_rel == typeringen/WoningtypeSnapshot/V/meergezinspand && nr_verdiepingen > 4b)
-				? classifications/WoningType/V/meergezinspand_hoog
-				: WoningtypeSnapshot_rel[classifications/WoningType]
-		;
-		attribute<uint8>                                  nr_verdiepingen             := pand_rel->nr_verdiepingen;
+		attribute<classifications/WoningType>             Woningtype_rel             := select_data(., import/vbo/Woningtype_rel);
+		attribute<uint8>                                  nr_verdiepingen            := pand_rel->nr_verdiepingen;
 		
-		attribute<typeringen/gebruiksdoel>                gebruiksdoel                := const(Invoer/RuimtelijkeData/BAG/typeringen/gebruiksdoel/V/woon,.);
+		attribute<typeringen/gebruiksdoel>                gebruiksdoel               := const(Invoer/RuimtelijkeData/BAG/typeringen/gebruiksdoel/V/woon,.);
 		
 		attribute<units/m2> Gem_opp (classifications/WoningType) := mean(oppervlakte, Woningtype_rel);
 

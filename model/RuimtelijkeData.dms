@@ -231,8 +231,43 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 					attribute<unique_combi_label> unique_combi_label_rel (vbo) := combine_data(unique_combi_label, unique_combi_rel, SchilLabel_rel);
 				}
 
-				attribute<Classifications/Schillabel> Schillabel_rel  := makedefined(Energielabel/data/SchilLabel_rel[rlookup(BAG/import/VBO/identificatie, Energielabel/data/vbo_id)], BAG/import/VBO/Default_Energielabel_Bouwjaar);
-				parameter<uint32>                     seed            := 101;
+				container Default_Energielabel
+				{
+					unit<uint32>                          ModelObject           := Invoer/Kengetallen/Bebouwing/Woning/Results;
+					attribute<ModelObject>                ModelObject_rel (VBO) := rlookup( VBO/ModelObjectKey , ModelObject/ModelObjectKey );
+					parameter<uint32>                     seed                  := Invoer/TechnischeInstellingen/RandomSeed + 199;
+					attribute<float32>                    RndNr           (VBO) := rnd_uniform(seed, vbo, range(float32, 0f, 1f));
+
+					container Probability := for_each_nedv(
+						  Classifications/SchilLabel/Name
+						, 'ModelObject/LabelFrequentie/'+Classifications/SchilLabel/Name+'[ModelObject_rel]'
+						, VBO
+						, float32);
+					container CumulProb
+					{
+						attribute<float32> A (VBO) := Probability/A;
+						attribute<float32> B (VBO) := Probability/B + A;
+						attribute<float32> C (VBO) := Probability/C + B;
+						attribute<float32> D (VBO) := Probability/D + C;
+						attribute<float32> E (VBO) := Probability/E + D;
+						attribute<float32> F (VBO) := Probability/F + E;
+						attribute<float32> G (VBO) := Probability/G + F;
+					}
+
+					attribute<Classifications/Schillabel> Schillabel_rel  (VBO) :=
+						  RndNr < CumulProb/A ? Classifications/SchilLabel/V/A
+						: RndNr < CumulProb/B ? Classifications/SchilLabel/V/B
+						: RndNr < CumulProb/C ? Classifications/SchilLabel/V/C
+						: RndNr < CumulProb/D ? Classifications/SchilLabel/V/D
+						: RndNr < CumulProb/E ? Classifications/SchilLabel/V/E
+						: RndNr < CumulProb/F ? Classifications/SchilLabel/V/F
+						: Classifications/SchilLabel/V/G;
+				}
+
+				attribute<Classifications/Schillabel> Schillabel_rel  := makedefined(Energielabel/data/SchilLabel_rel[rlookup(BAG/import/VBO/identificatie, Energielabel/data/vbo_id)], Default_Energielabel/Schillabel_rel);
+				
+
+				parameter<uint32>                     seed            := Invoer/TechnischeInstellingen/RandomSeed + 101;
 				attribute<float64>                    RndNr           := rnd_uniform(seed, vbo, range(float64, 0d, 1d));
 				attribute<BouwdeelSrc>                BouwdeelSrc_rel := ='makedefined('+AsItemList(replace('not(bouwdelen/unique_combi_label_rel == bouwdelen/unique_combi_label/V/@SL@) ? (0/0)[src] : ClassBreak_p_Label/@SL@/sub/nr_OrgEntity[Classify(RndNr, ClassBreak_p_Label/@SL@/sub/ClassBreaks)]','@SL@',bouwdelen/unique_combi_label/label))+')';
 			
@@ -319,7 +354,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 					attribute<Classifications/Isolatieniveau> DS;
 					attribute<Classifications/Isolatieniveau> KR;
 				}
-				parameter<bool> recalculate := false;
+				parameter<bool> recalculate := true;
 				unit<uint32>    Isolatie_src    := = recalculate ?  'Isolatie_writer' : 'Isolatie_reader';
 
 				container Isolatie := for_each_nedv(Classifications/Bouwdeel/name, 'Isolatie_src/' + Classifications/Bouwdeel/name + '[BAG/vbo_woonfunctie_studiegebied/org_rel]',BAG/vbo_woonfunctie_studiegebied , Classifications/Isolatieniveau);
