@@ -23,6 +23,8 @@ template WarmtenetTempl
 	// stap 7
 	parameter<Float64> MinimaleRentabiliteitLeverancier := 1.1, Descr = "minimale ratio tussen CW van de verwachtte opbrengsten per hoeveelheid investeringen.";
 	
+	parameter<EUR_kW> Ki_distr_max := 200000[EUR_kW]; // TODO: reconsider and move naar kentallen
+
 	container WarmteBronnen
 	{
 		unit<uint32> Brontype := Kengetallen/WarmteBronnen/MetaData/Brontype, IsHidden = "True";
@@ -156,13 +158,18 @@ template WarmtenetTempl
 		attribute<bool> isUtil   := const(false,.); //TODO: later hier opnemen of vbo utiliteit is of niet
 		attribute<bool> vraagtKD := not(isdefined(BO/BemeterdeGebouwInput_rel/KDb[BO_rel])) && not(isdefined(BO/BemeterdeGebouwInput_rel/KDb[BO_rel]));
 
-		unit<uint32> StudieGebiedPand := subset(pand/vbo_count_studiegebied > 0.0[uint32])
-		,	KeepData = "True" // facilitate debugging; REMOVE when done		
+		unit<uint32> StudieGebiedPand_candidate := subset(pand/vbo_count_studiegebied > 0.0[uint32])
 		{
-			attribute<geography/rdc_meter> geometry (poly) := pand/geometry[nr_orgentity];
-			attribute<geography/rdc_meter> point           := Centroid_or_mid(geometry);
 			attribute<pand>                pand_rel        := nr_orgentity;
 			attribute<kW>                  P_wd            := sum(PartialContributie/P_wd, rlookup(AllCandidate/pand_rel, pand_rel)); 
+		}
+		unit<uint32> StudieGebiedPand := subset(StudieGebiedPand_candidate/P_wd > 0[kW])
+		,	KeepData = "True" // facilitate debugging; REMOVE when done		
+		{
+			attribute<pand>                pand_rel        := nr_orgentity->pand_rel;
+			attribute<geography/rdc_meter> geometry (poly) := pand_rel->geometry;
+			attribute<geography/rdc_meter> point           := Centroid_or_mid(geometry);
+			attribute<kW>                  P_wd            := nr_orgentity->P_wd; 
 		}
 		attribute<StudieGebiedPand> StudieGebiedPand_rel := rlookup(pand_rel, StudieGebiedPand/nr_orgentity);
 
@@ -386,7 +393,6 @@ template WarmtenetTempl
 		}
 	}
 
-	parameter<EUR_kW> Ki_distr_max := 200000[EUR_kW]; // TODO: reconsider and move naar kentallen
 	container BronAllocatie: KeepData = "True" // facilitate debugging this; REMOVE when done.
 	{
 		parameter<Float64> Ki_Buis_kW := 10[EUR / m / kW];
@@ -408,14 +414,14 @@ template WarmtenetTempl
 			attribute<Vertex> to   := rlookup(NextPoint, Vertex/Values);
 			
 			attribute<m>      dist := arc_length(UnionData, m);
-			attribute<EUR_kW> cost := dist * Ki_Buis_kW;
+//REMOVE			attribute<EUR_kW> cost := dist * Ki_Buis_kW;
 		}
 		unit<uint32>  PointSet:= union_unit(Edge, Edge) { attribute<rdc_meter> Point := union_data(., Edge/Point, Edge/NextPoint); }
 		unit<uint32>  Vertex := unique(PointSet/Point);
 		
 		attribute<Vertex> PuntBron_Vertex_rel  (WarmteBronnen/Puntbronnen)     := rlookup(WarmteBronnen/Puntbronnen/Geometry, Vertex/Values);
 		attribute<Vertex> LijnBron_Vertex_rel  (WarmteBronnen/Lijnbron_aansluitpunten)     := rlookup(WarmteBronnen/Lijnbron_aansluitpunten/Point, Vertex/Values);
-		attribute<Vertex> StudiePand_Vertex_rel(AllCandidate/StudieGebiedPand) := rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values);
+		attribute<Vertex> StudieGebiedPand_Vertex_rel(AllCandidate/StudieGebiedPand) := rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values);
 		
 		unit<uint32> Vlakbron_Vertex_xrel := point_in_all_polygons(Vertex/Values, WarmteBronnen/VlakBronnen/geometry);
 		
@@ -439,8 +445,8 @@ template WarmtenetTempl
 		{
 			attribute<WarmteBronnen/bron>            OrgZone_rel := union_data(., const(0[WarmteBronnen/bron], AllCandidate/StudieGebiedPand), od_pair_network/OrgZone_rel);
 			attribute<AllCandidate/StudieGebiedPand> DstZone_rel := union_data(., id(AllCandidate/StudieGebiedPand),                           od_pair_network/DstZone_rel);	
-			attribute<m>                             Impedance   := union_data(., const(0[m], AllCandidate/StudieGebiedPand),                  od_pair_network/Impedance)
-				+	rnd_uniform(0, ., range(m, 0.0, 1.0)); // TODO: fix this HACK when better tie-breaks have been implemented
+			attribute<m>                             Impedance   := union_data(., const(0[m], AllCandidate/StudieGebiedPand),                  od_pair_network/Impedance);
+//REMOVE				+	rnd_uniform(0, ., range(m, 0.0, 1.0)); // TODO: fix this HACK when better tie-breaks and bron-clustering have been implemented
 		}
 
 		parameter<uint32> nrBronAllocatieIteraties := 60; // TODO: reconsider and move to kentallen
@@ -457,7 +463,6 @@ template WarmtenetTempl
 			attribute<m> currAugmentation(WarmteBronnen/bron);
 			
 			attribute<m>  augmentedImpedance(od_pair) := od_pair/impedance + currAugmentation[od_pair/OrgZone_rel];
-	//		attribute<EUR_kW>  augmentedImpedance  (od_pair) := iif(augmentedImpedance_0 > Ki_distr_max, 0[EUR_kw] / 0.0, augmentedImpedance_0);
 			
 			attribute<od_pair> favourite_od_rel(AllCandidate/StudieGebiedPand) := min_index(augmentedImpedance, od_pair/DstZone_rel);
 			attribute<Warmtebronnen/bron> favourite_bron_rel(AllCandidate/StudieGebiedPand) := favourite_od_rel->OrgZone_rel;
