@@ -37,9 +37,9 @@ container TVW
 
 		unit<uint32> DC := document_input
 		{
-			attribute<TVW_Classifications/doctype>   doctype_rel   := uint32(doc_type__code_);
-			attribute<TVW_Classifications/docstatus> docstatus_rel := uint32(doc_status__tekst_);
-			attribute<gemeente/GM> GM_rel  := rlookup(gemeente__gem_code_, gemeente/GM/GM_code);
+			attribute<Class/doctype>   doctype_rel   := uint32(doc_type__code_);
+			attribute<Class/docstatus> docstatus_rel := uint32(doc_status__tekst_);
+			attribute<gemeente/GM>     GM_rel        := rlookup(gemeente__gem_code_, gemeente/GM/GM_code);
 		}
 	}
 	
@@ -67,19 +67,20 @@ container TVW
 
 		unit<uint32> PL := plantabel_input
 		{
-			attribute<geography/rdc_meter> geometry (poly) := planshape_input/geometry_RD[shp_rel];
-			attribute<bool> geom_ok := isDefined(geometry);
+			attribute<geography/rdc_meter>  geometry (poly)    := planshape_input/geometry_RD[shp_rel], IntegrityCheck = "isDefined(this)";
+			attribute<string>               Plan_naam          := plantabel_input/naam__tekst_;
+			attribute<document/DC>          DC_rel             := isDefined(rlookup(document__doc_code_, document/DC/label)) ? rlookup(document__doc_code_, document/DC/label) : rlookup('DC' + substr(label, 2, 6), uppercase(document/DC/label)), IntegrityCheck = "isDefined(this)";
+			attribute<gemeente/GM>          GM_rel             := isDefined(document/DC/GM_rel[DC_rel]) ? document/DC/GM_rel[DC_rel] : rlookup('GM' + substr(label, 2, 4), uppercase(gemeente/GM/GM_code)), IntegrityCheck = "isDefined(this)";
 
-			attribute<string> Plan_naam := plantabel_input/naam__tekst_;
+			attribute<Class/Plansoort>      Plansoort_rel      := uint32(Plansoort__code_)              , IntegrityCheck = "isDefined(this)";
+			attribute<Class/Planstatus>     Planstatus_rel     := uint32(pln_planstatus_code__code_)    , IntegrityCheck = "isDefined(this)";
+			attribute<Class/Techniekstatus> Techniekstatus_rel := uint32(pln_techniekstatus_code__code_), IntegrityCheck = "isDefined(this)";
+			attribute<Class/Isolatiegraad>  Isolatiegraad_rel  := uint32(isolatiegraad_code__code_)     , IntegrityCheck = "isDefined(this)";
+			attribute<Class/Installatie>    Installatie_rel    := uint32(installatie_code__code_)       , IntegrityCheck = "isDefined(this)";
+			attribute<Class/Infrastructuur> Infrastructuur_rel := uint32(infrastructuur_code__code_)    , IntegrityCheck = "isDefined(this)";
+			attribute<Class/Energiebron>    Energiebron_rel    := uint32(energiebron_code__code_)       , IntegrityCheck = "isDefined(this)";
 
-			attribute<document/DC> DC_rel_i := rlookup(document__doc_code_, document/DC/label);
-			attribute<document/DC> DC_rel   := isDefined(DC_rel_i) ? DC_rel_i : rlookup('DC' + substr(label, 2, 6), uppercase(document/DC/label));
-			attribute<bool>        DC_ok    := isDefined(DC_rel);
-
-
-			attribute<gemeente/GM> GM_rel_i := document/DC/GM_rel[DC_rel];
-			attribute<gemeente/GM> GM_rel   := isDefined(GM_rel_i) ? GM_rel_i : rlookup('GM' + substr(label, 2, 4), uppercase(gemeente/GM/GM_code));
-			attribute<bool>        GM_ok    := isDefined(GM_rel);
+			attribute<nrAsl>                nrAansluitingen    := VBO/Matching/VBO_count                , IntegrityCheck = "isDefined(this)";
 		}
 
 		unit<uint32> VBO := /Invoer/RuimtelijkeData/BAG/import/VBO
@@ -107,8 +108,125 @@ container TVW
 
 				attribute<uint32> PL_count(p) := pcount(kruistabel/first_rel);
 				
-				attribute<uint32> P_count(PL) := pcount(kruistabel/second_rel);
+				attribute<uint32> P_count   (PL) := pcount(kruistabel/second_rel);
+				attribute<nrAsl>  VBO_count (PL) := sum(nr_Asl[kruistabel/first_rel], kruistabel/second_rel);
 			}
 		}
 	}
+
+	container Class
+		{
+			unit<uint32> Plansoort: nrofrows = 4
+			{
+				attribute<string> label :  [ 'info ontbreekt', 'onderzoek', 'voorbereidend', 'uitvoeren'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Techniekstatus: nrofrows = 11
+			{
+				attribute<string> label :  [ 'definitief', 'geen keuze gemaakt', 'geen techniekkeuze, focus op isolatie',
+					 'kansrijke optie', 'niet van toepassing', 'onbekend', 'onderzoekend',
+					  'verkennend', 'voorkeursoptie', 'voorlopige keuze', 'voorsorterend'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Planstatus: nrofrows = 11
+			{
+				attribute<string> label :  [ 'afwachtend', 'concept', 'definitief', 'uitvoerend',
+					 'kansrijke optie', 'onbekend', 'onderzoekend', 'orienterend',
+					  'richtinggevend', 'verkennend', 'voorbereidend'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Docstatus: nrofrows = 5
+			{
+				attribute<string> label :  [ 'info ontbreekt', 'vastgesteld door raad', 'naar raad gestuurd', 'concept te inzage', 'vastgesteld door college'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Doctype: nrofrows = 4
+			{
+				attribute<string> label :  [ 'info ontbreekt', 'transitievisie', 'bijlage bij transitievisie', 'anders'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Isolatiegraad: nrofrows = 11
+			{
+				attribute<string> label :  [ 'onbekend', 'geen maatregelen', 'isolatie, geen specifiek niveau benoemd', 'standaard en streefwaarden', 
+					'schillabel A+', 'Schillabel B+', 'Schillabel C+', 'Schillabel D+', 'Schillabel D/C (<1940) A/B (overig)'
+					,'Schillabel D+ (wonen) B+ (util)','Doelstelling in kWh/m2 (vergelijkbaar Schillabel A/B)'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Installatie: nrofrows = 17
+			{
+				attribute<string> label :  [ 'onbekend', 'Hr', 'hWP', 'eWP', 
+					'Wnet', 'hWP,Hr', 'hWP,eWP', 'hWP,eWP', 'eWP,Wnet'
+					,'eWP,Hr','Wnet, Hr', 'Wnet, hWP', 'hWP,Wnet,Hr', 'eWP,Wnet,Hr', 'hWP,eWP,Hr', 'hWP,eWP,Wnet', 'hWP,eWP,Wnet,Hr'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				attribute<bool> Hr   := strcount(label, 'Hr')   > 0;
+				attribute<bool> hWP  := strcount(label, 'hWP')  > 0;
+				attribute<bool> eWP  := strcount(label, 'eWP')  > 0;
+				attribute<bool> Wnet := strcount(label, 'Wnet') > 0;
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Infrastructuur: nrofrows = 7
+			{
+				attribute<string> label :  [ 'onbekend', 'niet van toepassing', 'E', 'E,G', 'E,W', 'E,W,G', 'E,W,K'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				attribute<bool> E := strcount(label, 'E') > 0;
+				attribute<bool> G := strcount(label, 'G') > 0;
+				attribute<bool> W := strcount(label, 'W') > 0;
+				attribute<bool> K := strcount(label, 'K') > 0;
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Energiebron: nrofrows = 56
+			{
+				attribute<string> label :  [ 'aquathermie', 'aquathermie, asfalt', 'aquathermie, bestaand warmtenet', 'aquathermie, bestaand warmtenet, WKO', 
+					'aquathermie, geothermie', 'aquathermie, geothermie, restwarmte', 'aquathermie, geothermie, WKO', 'aquathermie, geothermie, zon', 'aquathermie, hernieuwbaar gas'
+					,'aquathermie, restwarmte','aquathermie, restwarmte, asfalt', 'aquathermie, restwarmte, geothermie', 'aquathermie, restwarmte, hernieuwbaar gas',
+					'aquathermie, restwarmte, WKO, geothermie', 'aquathermie, restwarmte, zon', 'aquathermie, WKO', 'aquathermie, WKO, biomassa'
+					, 'aquathermie, WKO, collectieve warmtepomp', 'aquathermie, WKO, geothermie', 'aquathermie, WKO, hernieuwbaar gas', 'aquathermie, WKO, restwarmte'
+					, 'aquathermie, WKO, zon', 'aquathermie, zon', 'aquathermie, zon, asfalt', 'aquathermie, zon, collectieve warmtepomp', 'biomassa', 'biomassa, geothermie',
+					 'biomassa, zon, hernieuwbaar gas', 'collectieve warmtepomp', 'diverse opties mogelijk (>3 genoemd)', 'geothermie', 'geothermie, collectieve warmtepomp',
+					 'geothermie, hernieuwbaar gas', 'geothermie, restwarmte', 'geothermie, restwarmte, biomassa', 'geothermie, zon, collectieve warmtepomp', 'hernieuwbaar gas'
+					 , 'hernieuwbaar gas, biomassa', 'hernieuwbaar gas, WKO', 'niet specifiek benoemd', 'niet van toepassing', 'Onbekend', 'restwarmte', 'restwarmte, biomassa',
+					 'restwarmte, geothermie, collectieve warmtepomp', 'restwarmte, hernieuwbaar gas', 'restwarmte, WKO', 'restwarmte, WKO, collectieve warmtepomp',
+					 'restwarmte, WKO, hernieuwbaar gas', 'restwarmte, zon', 'WKO', 'WKO, collectieve warmtepomp', 'WKO, zon', 'WKO, zon, hernieuwbaar gas', 'zon', 'zon, hernieuwbaar gas'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				attribute<bool> aquathermie            := strcount(label, 'aquathermie')            > 0;
+				attribute<bool> asfalt                 := strcount(label, 'asfalt')                 > 0;
+				attribute<bool> bestaand_warmtenet     := strcount(label, 'bestaand warmtenet')     > 0;
+				attribute<bool> WKO                    := strcount(label, 'WKO')                    > 0;
+				attribute<bool> geothermie             := strcount(label, 'geothermie')             > 0;
+				attribute<bool> restwarmte             := strcount(label, 'restwarmte')             > 0;
+				attribute<bool> zon                    := strcount(label, 'zon')                    > 0;
+				attribute<bool> hernieuwbaar_gas       := strcount(label, 'hernieuwbaar gas')       > 0;
+				attribute<bool> biomassa               := strcount(label, 'biomassa')               > 0;
+				attribute<bool> collectieve_warmtepomp := strcount(label, 'collectieve warmtepomp') > 0;
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+
+		}
 }
