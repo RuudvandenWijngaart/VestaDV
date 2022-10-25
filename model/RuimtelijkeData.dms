@@ -143,7 +143,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			attribute<uint32>                     datum_laatste       := max(src/datum_numeriek, rlookup(src/adres_key, values));
 			attribute<Classifications/SchilLabel> SchilLabel_rel      := rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/schillabel_rel), FreeData = "True";
 		}
-		unit<uint32> defaultlabels := BAG/import/VBO
+		unit<uint32> defaultlabels_2020 := BAG/import/VBO
 		{
 			container Default_Energielabel
 			{
@@ -178,6 +178,52 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 					: Classifications/SchilLabel/V/G;
 			}
 		}
+
+		unit<uint32> defaultlabels_2000 := BAG/import/VBO
+		{
+			container Default_Energielabel
+			{
+				attribute<yr_uint16>                  BJ              (VBO) := BAG/import/pand/bouwjaar_gecorrigeerd[VBO/pand_rel];
+				attribute<Classifications/WoningType> WT              (VBO) := VBO/woningtype_rel;
+				attribute<Classifications/Schillabel> Schillabel_rel  (VBO) := 
+					WT == Classifications/WoningType/V/vrijstaand ? (
+						BJ <= 1945[yr_uint16] ? Classifications/SchilLabel/V/G :
+						BJ <= 1964[yr_uint16] ? Classifications/SchilLabel/V/F :
+						BJ <= 1974[yr_uint16] ? Classifications/SchilLabel/V/D :
+						BJ <= 1987[yr_uint16] ? Classifications/SchilLabel/V/C :
+						BJ <= 1999[yr_uint16] ? Classifications/SchilLabel/V/B :
+						             Classifications/SchilLabel/V/A ) :
+					WT == Classifications/WoningType/V/twee_onder_1_kap ? (
+						BJ <= 1945[yr_uint16] ? Classifications/SchilLabel/V/G :
+						BJ <= 1964[yr_uint16] ? Classifications/SchilLabel/V/F :
+						BJ <= 1974[yr_uint16] ? Classifications/SchilLabel/V/D :
+						BJ <= 1991[yr_uint16] ? Classifications/SchilLabel/V/C :
+						BJ <= 2005[yr_uint16] ? Classifications/SchilLabel/V/B :
+						             Classifications/SchilLabel/V/A ) :
+					WT == Classifications/WoningType/V/hoekwoning ? (
+						BJ <= 1945[yr_uint16] ? Classifications/SchilLabel/V/G :
+						BJ <= 1964[yr_uint16] ? Classifications/SchilLabel/V/F :
+						BJ <= 1974[yr_uint16] ? Classifications/SchilLabel/V/D :
+						BJ <= 1991[yr_uint16] ? Classifications/SchilLabel/V/C :
+						BJ <= 1999[yr_uint16] ? Classifications/SchilLabel/V/B :
+						             Classifications/SchilLabel/V/A ) :
+					WT == Classifications/WoningType/V/tussenwoning ? (
+						BJ <= 1945[yr_uint16] ? Classifications/SchilLabel/V/F :
+						BJ <= 1964[yr_uint16] ? Classifications/SchilLabel/V/E :
+						BJ <= 1991[yr_uint16] ? Classifications/SchilLabel/V/D :
+						BJ <= 1999[yr_uint16] ? Classifications/SchilLabel/V/B :
+						             Classifications/SchilLabel/V/A ) :
+					                                                  (
+						BJ <= 1945[yr_uint16] ? Classifications/SchilLabel/V/G :
+						BJ <= 1964[yr_uint16] ? Classifications/SchilLabel/V/F :
+						BJ <= 1974[yr_uint16] ? Classifications/SchilLabel/V/E :
+						BJ <= 1991[yr_uint16] ? Classifications/SchilLabel/V/C :
+						BJ <= 2005[yr_uint16] ? Classifications/SchilLabel/V/B :
+						             Classifications/SchilLabel/V/A );
+			}
+		}
+
+		unit<uint32> defaultlabels := =Invoer/StartgegevensAan ? 'defaultlabels_2020' : 'defaultlabels_2000';
 
 		//======= Allocatie gebouwdeelkwaliteit per VBO ======
 
@@ -268,7 +314,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 
 				attribute<Classifications/Schillabel> DefaultLabel_rel := Defaultlabels/Default_Energielabel/Schillabel_rel;
 
-				attribute<Classifications/Schillabel> Schillabel_rel  := makedefined(Energielabel/data/SchilLabel_rel[rlookup(BAG/import/VBO/identificatie, Energielabel/data/vbo_id)], DefaultLabel_rel);
+				attribute<Classifications/Schillabel> Schillabel_rel  := =Invoer/StartgegevensAan ? 'makedefined(Energielabel/data/SchilLabel_rel[rlookup(BAG/import/VBO/identificatie, Energielabel/data/vbo_id)], DefaultLabel_rel)' : 'DefaultLabel_rel';
 				
 
 				parameter<uint32>                     seed            := Invoer/TechnischeInstellingen/RandomSeed + 101;
@@ -312,7 +358,10 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			}
 			unit<uint32> vbo := BAG/import/VBO
 			{
-				attribute<Classifications/Schillabel> Schillabel_rel := makedefined(Energielabel/data/SchilLabel_rel[rlookup(BAG/import/VBO/identificatie, Energielabel/data/vbo_id)], BAG/import/VBO/Default_Energielabel_Bouwjaar);
+				attribute<Classifications/Schillabel> DefaultLabel_rel := Defaultlabels/Default_Energielabel/Schillabel_rel;
+
+				attribute<Classifications/Schillabel> Schillabel_rel  := =Invoer/StartgegevensAan ? 'makedefined(Energielabel/data/SchilLabel_rel[rlookup(BAG/import/VBO/identificatie, Energielabel/data/vbo_id)], DefaultLabel_rel)' : 'DefaultLabel_rel';
+				
 				parameter<uint32>                     seed           := 101;
 				attribute<float64>                    RndNr          := rnd_uniform(seed, vbo, range(float64, 0d, 1d));
 				attribute<Src>                        Src_rel        := ='makedefined('+AsItemList(replace('not(Schillabel_rel == Classifications/SchilLabel/V/@SL@) ? (0/0)[src] : Src/ClassBreak_p_Label/@SL@/sub/nr_OrgEntity[Classify(RndNr, Src/ClassBreak_p_Label/@SL@/sub/ClassBreaks)]','@SL@',Classifications/SchilLabel/name))+')';
