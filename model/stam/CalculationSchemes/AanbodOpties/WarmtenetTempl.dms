@@ -404,36 +404,70 @@ template WarmtenetTempl
 		
 		unit<uint32>  network       := /Invoer/RuimtelijkeData/OSM/Read_Final_Network;
 		
-		unit<uint32> Edge := connect(network/Geometry, AansluitPunten/point)
+		unit<uint32> Edge0 := connect(network/Geometry, AansluitPunten/point)
 			,	DialogType = "Map"
 			,	DialogData = "UnionData"
 				{
 			attribute<rdc_meter> Point     := first_point(UnionData);
 			attribute<rdc_meter> NextPoint := last_point(UnionData);
-			attribute<Vertex> from := rlookup(Point,     Vertex/Values);
-			attribute<Vertex> to   := rlookup(NextPoint, Vertex/Values);
+			attribute<Vertex0> from := rlookup(Point,     Vertex0/Values);
+			attribute<Vertex0> to   := rlookup(NextPoint, Vertex0/Values);
 			
 			attribute<m>      dist := arc_length(UnionData, m);
 //REMOVE			attribute<EUR_kW> cost := dist * Ki_Buis_kW;
 		}
-		unit<uint32>  PointSet:= union_unit(Edge, Edge) { attribute<rdc_meter> Point := union_data(., Edge/Point, Edge/NextPoint); }
-		unit<uint32>  Vertex := unique(PointSet/Point);
+		unit<uint32>  PointSet:= union_unit(Edge0, Edge0) { attribute<rdc_meter> Point := union_data(., Edge0/Point, Edge0/NextPoint); }
+		unit<uint32>  Vertex0 := unique(PointSet/Point);
 		
-		attribute<Vertex> PuntBron_Vertex_rel  (WarmteBronnen/Puntbronnen)     := rlookup(WarmteBronnen/Puntbronnen/Geometry, Vertex/Values);
-		attribute<Vertex> LijnBron_Vertex_rel  (WarmteBronnen/Lijnbron_aansluitpunten)     := rlookup(WarmteBronnen/Lijnbron_aansluitpunten/Point, Vertex/Values);
-		attribute<Vertex> StudieGebiedPand_Vertex_rel(AllCandidate/StudieGebiedPand) := rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values);
+		// add an edge from each bron to network in order to identify each bron as different source; TODO: cluster co-located and nearby bronnen.
+		unit<uint32>  Vertex := union_unit(Vertex0, WarmteBronnen/bron)
+		{
+			attribute<rdc_meter> Point := union_data(., Vertex0/Values, WarmteBronnen/bron/geometry);
+			attribute<.> Per_Pand(AllCandidate/StudieGebiedPand) := rlookup(AllCandidate/StudieGebiedPand/Point, Vertex0/Values);
+			
+		}
+		attribute<Vertex> PuntBron_Vertex_rel  (WarmteBronnen/Puntbronnen)             := rlookup(WarmteBronnen/Puntbronnen/Geometry, Vertex/Point);
+		attribute<Vertex> LijnBron_Vertex_rel  (WarmteBronnen/Lijnbron_aansluitpunten) := rlookup(WarmteBronnen/Lijnbron_aansluitpunten/Point, Vertex/Point);
+		unit<uint32> Vlakbron_Vertex_xrel := point_in_all_polygons(Vertex0/Values, WarmteBronnen/VlakBronnen/geometry);
 		
-		unit<uint32> Vlakbron_Vertex_xrel := point_in_all_polygons(Vertex/Values, WarmteBronnen/VlakBronnen/geometry);
+		unit<uint32> Edge := union_unit(Edge0, WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten, Vlakbron_Vertex_xrel)
+		{
+			attribute<rdc_meter> geometry(arc) := union_data(., Edge0/UnionData
+			,	points2sequence(
+					union_data(union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Puntbronnen), WarmteBronnen/Puntbronnen/geometry, Vertex/Point[PuntBron_Vertex_rel])
+				,	union_data(union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Puntbronnen), ID(WarmteBronnen/Puntbronnen), ID(WarmteBronnen/Puntbronnen))
+				)
+			,	points2sequence(
+					union_data(union_unit(WarmteBronnen/Lijnbron_aansluitpunten, WarmteBronnen/Lijnbron_aansluitpunten), WarmteBronnen/Lijnbron_aansluitpunten/Point, Vertex/Point[LijnBron_Vertex_rel])
+				,	union_data(union_unit(WarmteBronnen/Lijnbron_aansluitpunten, WarmteBronnen/Lijnbron_aansluitpunten), ID(WarmteBronnen/Lijnbron_aansluitpunten), ID(WarmteBronnen/Lijnbron_aansluitpunten))
+				)
+			,	points2sequence(
+					union_data(union_unit(Vlakbron_Vertex_xrel, Vlakbron_Vertex_xrel), centroid_or_mid(WarmteBronnen/VlakBronnen/geometry)[Vlakbron_Vertex_xrel/second_rel], Vertex0/Values[Vlakbron_Vertex_xrel/first_rel])
+				,	union_data(union_unit(Vlakbron_Vertex_xrel, Vlakbron_Vertex_xrel), ID(Vlakbron_Vertex_xrel), ID(Vlakbron_Vertex_xrel))
+				)
+			);
+			attribute<bool> bothDirs:= union_data(., const(true, Edge0), const(false, WarmteBronnen/Puntbronnen), const(false, WarmteBronnen/Lijnbron_aansluitpunten), const(false, Vlakbron_Vertex_xrel));
+			attribute<Vertex> from  := union_data(., Edge0/from, #Vertex0 + WarmteBronnen/Puntbronnen/bron_rel, #Vertex0 + WarmteBronnen/Lijnbronnen/bron_rel, #Vertex0 + WarmteBronnen/Vlakbronnen/bron_rel);
+			attribute<Vertex> to    := union_data(., Edge0/to,   PuntBron_Vertex_rel, LijnBron_Vertex_rel, Vlakbron_Vertex_xrel/second_rel);
+			attribute<m>      dist  := union_data(., Edge0/dist, const(0m, WarmteBronnen/Puntbronnen), const(0m, WarmteBronnen/Lijnbron_aansluitpunten), const(0m, Vlakbron_Vertex_xrel));
+		}
+		
+		attribute<Vertex> StudieGebiedPand_Vertex_rel(AllCandidate/StudieGebiedPand) := rlookup(AllCandidate/StudieGebiedPand/Point, Vertex0/Values);
+		
 		
 		// startpoints maken met alle aansluitpunten van alle bronnen (ook vlakbronnen ? )
-		unit<uint32> startPoint := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten, Vlakbron_Vertex_xrel)
+		attribute<Vertex> bron_Vertex_rel(WarmteBronnen/bron) := #Vertex0 + ID(WarmteBronnen/bron);
+/*		
+		unit<uint32> startPoint := 
 		{
-			attribute<Vertex> Vertex_rel := union_data(., PuntBron_Vertex_rel, LijnBron_Vertex_rel, Vlakbron_Vertex_xrel/first_rel);
-			attribute<WarmteBronnen/bron> bron_rel := union_data(.,	WarmteBronnen/Puntbronnen/bron_rel,	WarmteBronnen/Lijnbron_aansluitpunten/bron_rel, Vlakbron_Vertex_xrel/second_rel->bron_rel);
+			attribute<Vertex> Vertex_rel := #Vertex0 + ID(.);
+			attribute<.> per_Vertex(Vertex) := invert(Vertex_rel), IntegrityCheck = "per_Vertex[Vertex_rel] == ID(.)";
+			attribute<uint32> count(Vertex) := pcount(Vertex_rel);
+//			attribute<WarmteBronnen/bron> bron_rel := union_data(.,	WarmteBronnen/Puntbronnen/bron_rel,	WarmteBronnen/Lijnbron_aansluitpunten/bron_rel, Vlakbron_Vertex_xrel/second_rel->bron_rel);
 			// 20km max voor typische connectie van 1 bron op 100 afnemers van ieder 10kW, maar minder bij veel startPoints
 		}
 		// endpoints zijn alle AllCandidate/StudieGebiedPand(en)
-				
+*/				
 			
 		parameter<uint32> nrBronAllocatieIteraties := 60; // TODO: reconsider and move to kentallen
 		unit<uint32> allocIter := range(uint32, 0, nrBronAllocatieIteraties)
@@ -447,76 +481,42 @@ template WarmtenetTempl
 		template allocIterT {
 		
 			attribute<m> currAugmentation(WarmteBronnen/bron);
-			attribute<m> handicap        (WarmteBronnen/bron) := currAugmentation + (max(WarmteBronnen/bron/max_dist)- WarmteBronnen/bron/max_dist);
+			attribute<m> bron_handicap   (WarmteBronnen/bron) := currAugmentation + (max(WarmteBronnen/bron/max_dist)- WarmteBronnen/bron/max_dist);
 			
 			// afstandentabel via dijkstra
-			attribute<m> bron_dist(AllCandidate/StudieGebiedPand) := dijkstra_s('bidirectional;startPoint(Node_rel,impedance);endPoint(Node_rel);cut(OrgZone_max_imp);node:TraceBack'
-				,	Edge/dist, Edge/from, Edge/to
-				,	startPoint/Vertex_rel, handicap[startPoint/bron_rel]
-				,	rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values)
+			attribute<m> bron_dist(AllCandidate/StudieGebiedPand) := dijkstra_s('bidirectional(link_flag);startPoint(Node_rel,impedance);endPoint(Node_rel);cut(OrgZone_max_imp);node:TraceBack'
+				,	Edge/dist, Edge/from, Edge/to, Edge/bothDirs
+				,	bron_Vertex_rel, bron_handicap
+				,	rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Point)
 				,	max(initialAugmentation) + 20[km] * 1000[m / km]
 				);
 				
-			// startPoint/bron_rel
-			attribute<Vertex> Vertex_Vertex_rel(Vertex) := service_area(Edge/from, Edge/to, bron_dist/TraceBack);
-			attribute<WarmteBronnen/bron>  Vertex_bron_rel(Vertex) := rjoin(Vertex_Vertex_rel, startPoint/Vertex_rel, startPoint/Bron_rel);
-			attribute<WarmteBronnen/bron>  Dest_bron_rel(AllCandidate/StudieGebiedPand) := rjoin(AllCandidate/StudieGebiedPand/Point, Vertex/Values, Vertex_bron_rel);
-/*			
-			unit<uint32> od_pair := union_unit(AllCandidate/StudieGebiedPand, od_pair_network)
-			{
-				attribute<WarmteBronnen/bron>            OrgZone_rel := union_data(., const(0[WarmteBronnen/bron], AllCandidate/StudieGebiedPand), od_pair_network/OrgZone_rel);
-				attribute<AllCandidate/StudieGebiedPand> DstZone_rel := union_data(., id(AllCandidate/StudieGebiedPand),                           od_pair_network/DstZone_rel);	
-				attribute<m>                             Impedance   := union_data(., const(0[m], AllCandidate/StudieGebiedPand),                  od_pair_network/Impedance);
-				//REMOVE +	rnd_uniform(0, ., range(m, 0.0, 1.0)); // TODO: fix this HACK when better tie-breaks and bron-clustering have been implemented
-			}
-*/
+			attribute<Vertex>              Vertex_Vertex_rel(Vertex) := service_area(Edge/from, Edge/to, bron_dist/TraceBack);
+			attribute<WarmteBronnen/bron>  Vertex_bron_rel  (Vertex) := rlookup(Vertex_Vertex_rel, bron_Vertex_rel);
+			attribute<WarmteBronnen/bron>  Dest_bron_rel(AllCandidate/StudieGebiedPand) := Vertex_bron_rel[Vertex/Per_Pand];
 
-			attribute<m>  orgImpedance(AllCandidate/StudieGebiedPand) := bron_dist - handicap;
-//			attribute<m>  augmentedImpedance(od_pair) := od_pair/impedance + currAugmentation[od_pair/OrgZone_rel];
+			attribute<kW>    bron_P_wd     (Warmtebronnen/bron) := sum(AllCandidate/StudieGebiedPand/P_wd, dest_bron_rel);
 			
-			attribute<od_pair> favourite_od_rel(AllCandidate/StudieGebiedPand) := min_index(augmentedImpedance, od_pair/DstZone_rel);
-			attribute<Warmtebronnen/bron> favourite_bron_rel(AllCandidate/StudieGebiedPand) := favourite_od_rel->OrgZone_rel;
-			attribute<kW>    bron_P_wd     (Warmtebronnen/bron) := sum(AllCandidate/StudieGebiedPand/P_wd, favourite_bron_rel);
-			
-			attribute<m>  favourite_impedance(AllCandidate/StudieGebiedPand) := augmentedImpedance[favourite_od_rel];
 			attribute<ratio> bron_cap_ratio(Warmtebronnen/bron) := bron_P_wd / Warmtebronnen/bron/kWth_max;
 
-			// te volle bronnen moeten duurder met een aantal augmentedImpedances van een andere bron - favourite_impedance: de impedance van de huidige bron, oplopend gesorteerd
+			// te volle bronnen moeten duurder met een aantal augmentedImpedances van een andere bron - bron_dist: de impedance van de huidige bron, oplopend gesorteerd
 			// mits deze bron vol
-			// zaag bij overvolle bronnen afnemers weg die redelijke alternatieven hebben			
-			attribute<Warmtebronnen/bron> favourite_bron_rel_od(od_pair) := favourite_bron_rel[od_pair/DstZone_rel];
-			attribute<m> favourite_imp_od(od_pair) := favourite_impedance[od_pair/DstZone_rel]; // best of all for this augmentation			
-			attribute<m> CheckPositivity (od_pair) := augmentedImpedance - favourite_imp_od; // best of all for this augmentation
+			// zaag bij overvolle bronnen afnemers weg die redelijke alternatieven hebben						
 			
-			attribute<Ratio>  bron_cap_od     (od_pair) := bron_cap_ratio[od_pair/OrgZone_rel];
-			attribute<Ratio>  bron_cap_favour (od_pair) := bron_cap_ratio[favourite_bron_rel_od];
-			
-			attribute<m> schuif_prijs    (od_pair) := 
-				(bron_cap_od     < 1.0) // niet perse favourite
-			&&  (bron_cap_favour > 1.0)
-			? 0.1[m] + augmentedImpedance - favourite_imp_od
-			: (0[m] / 0.0);
-			
-			attribute<m> best_schuif(AllCandidate/StudieGebiedPand) := min(schuif_prijs, od_pair/DstZone_rel);
-			
-			
-			attribute<m> zaaglijn_0(Warmtebronnen/bron) := nth_element_weighted(
-					best_schuif
-				,	(bron_P_wd - Warmtebronnen/bron/kWth_max) // zoveel moeten we wegschuiven.
+			attribute<m> zaaglijn(Warmtebronnen/bron) := nth_element_weighted(
+					bron_dist
+				,	Warmtebronnen/bron/kWth_max // zoveel moeten we houden
 				,	AllCandidate/StudieGebiedPand/P_wd
-				,	favourite_bron_rel
+				,	dest_bron_rel
 			);
-			attribute<m> zaaglijn(WarmteBronnen/bron) := (bron_P_wd > Warmtebronnen/bron/kWth_max) ? zaaglijn_0 : 0[m];
-			attribute<m> nextAugmentation(Warmtebronnen/bron) := currAugmentation + max_elem(zaaglijn, 0[m]);
+			attribute<m> nextAugmentation(Warmtebronnen/bron) := currAugmentation + (bron_cap_ratio > 1.0 ? max(bron_dist, dest_bron_rel) - zaaglijn : 0[m]);
 		}
 		container Iterations := for_each_ne(allocIter/name, 'allocIterT('+allocIter/prevName+')'), KeepData = "False";
+		container LastIter := ='Iterations/'+last(allocIter/name);
 		
-		attribute<m>                  best_augmentation_WIP(WarmteBronnen/bron)        := ='Iterations/'+last(allocIter/name)+'/currAugmentation';
-		attribute<Warmtebronnen/bron> best_bron_rel_WIP(AllCandidate/StudieGebiedPand) := ='Iterations/'+last(allocIter/name)+'/favourite_bron_rel';
-		
-		attribute<m>             best_augmentation(WarmteBronnen/bron)             := initialAugmentation;
-		attribute<Warmtebronnen/bron> best_bron_rel(AllCandidate/StudieGebiedPand) := ='Iterations/'+first(allocIter/name)+'/dest_bron_rel';
-		
+		attribute<m>                  best_augmentation(WarmteBronnen/bron)        := LastIter/currAugmentation;
+		attribute<Warmtebronnen/bron> best_bron_rel(AllCandidate/StudieGebiedPand) := lastIter/dest_bron_rel;
+/*		
 		attribute<m> reroute(AllCandidate/StudieGebiedPand):= dijkstra_s('bidirectional;startPoint(Node_rel,impedance);endPoint(Node_rel);cut(OrgZone_max_imp);node:TraceBack'
 			,	Edge/dist, Edge/from, Edge/to
 			,	startPoint/Vertex_rel, best_augmentation[startPoint/bron_rel]
@@ -525,12 +525,13 @@ template WarmtenetTempl
 		{
 				attribute<Edge> TraceBack(Vertex);
 		}
-		attribute<kW> NodeDemand(Vertex) := MakeDefined((AllCandidate/StudieGebiedPand/P_wd * Float64(best_bron_rel!=0))[rlookup(Vertex/Values, AllCandidate/StudieGebiedPand/Point)], 0[kW]);
+*/		
+		attribute<kW> NodeDemand(Vertex) := MakeDefined((AllCandidate/StudieGebiedPand/P_wd * Float64(best_bron_rel!=0))[invert(Vertex/Per_pand)], 0[kW]);
 	
-		attribute<kW> edge_flow(Edge) := trace_back(Edge/From, Edge/To, reroute/TraceBack, NodeDemand);
+		attribute<kW> edge_flow(Edge) := trace_back(Edge/From, Edge/To, LastIter/bron_dist/TraceBack, NodeDemand);
 		
-		attribute<Vertex> Vertex_bron_Vertex_rel(Vertex) := service_area(Edge/From, Edge/To, reroute/TraceBack); 
-		attribute<WarmteBronnen/bron> Vertex_bron_rel(Vertex) := startPoint/bron_rel[invert(startPoint/Vertex_rel)][Vertex_bron_Vertex_rel]; 
+		attribute<Vertex> Vertex_bron_Vertex_rel(Vertex) := service_area(Edge/From, Edge/To, LastIter/bron_dist/TraceBack); 
+		attribute<WarmteBronnen/bron> Vertex_bron_rel(Vertex) := invert(bron_Vertex_rel)[Vertex_bron_Vertex_rel];
 		
 		container edge_cost_calc := AllCandidate/PartialContributie/LeidingKosten_T(Edge, edge_flow, const(0[celsius], Edge)); // TODO: DT beter invullen.
 		
