@@ -221,6 +221,8 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 						BJ <= 2005[yr_uint16] ? Classifications/SchilLabel/V/B :
 						             Classifications/SchilLabel/V/A );
 			}
+
+
 		}
 
 		unit<uint32> defaultlabels := =Invoer/StartgegevensAan ? 'defaultlabels_2020' : 'defaultlabels_2000';
@@ -315,6 +317,12 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 				attribute<Classifications/Schillabel> DefaultLabel_rel := Defaultlabels/Default_Energielabel/Schillabel_rel;
 
 				attribute<Classifications/Schillabel> Schillabel_rel  := =Invoer/StartgegevensAan ? 'makedefined(Energielabel/data/SchilLabel_rel[rlookup(BAG/import/VBO/identificatie, Energielabel/data/vbo_id)], DefaultLabel_rel)' : 'DefaultLabel_rel';
+
+				unit<uint32> Alabels := subset(Schillabel_rel == Classifications/SchilLabel/V/A)
+			{
+				attribute<Classifications/Isolatieniveau> NiveauMG := /Invoer/RuimtelijkeData/EnergieLabel/BouwdeelKwaliteit/VBO/Isolatie_writer/MG[nr_OrgEntity];
+				attribute<Classifications/Isolatieniveau> NiveauMS := /Invoer/RuimtelijkeData/EnergieLabel/BouwdeelKwaliteit/VBO/Isolatie_writer/MS[nr_OrgEntity];
+			}
 				
 
 				parameter<uint32>                     seed            := Invoer/TechnischeInstellingen/RandomSeed + 101;
@@ -334,41 +342,64 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 		template BouwdeelKwaliteitAllocatieT2
 		{
 			parameter<string> FreqTableName;
+			unit<uint32> Src: StorageName = "= '%projDir%/isolatie/' + FreqTableName", StorageType = "gdal2.vect", StorageReadOnly = "True";
 
-			unit<uint32> Src: StorageName = "= '%projDir%/isolatie/' + FreqTableName", StorageType = "gdal2.vect", StorageReadOnly = "True"
+			container BouwdeelSamples := for_each_nt(Classifications/Bouwdeel/name, BouwdeelSampleT);
+
+			template BouwdeelSampleT
 			{
-				container data := for_each_nedv(Classifications/Bouwdeel/name ,Classifications/Bouwdeel/name == 'KR' ? 'const((0/0)[Classifications/IsolatieNiveau],src)' : 'rlookup(src/'+Classifications/Bouwdeel/name+', Classifications/IsolatieNiveau/name)' ,src ,Classifications/IsolatieNiveau )
+				parameter<Classifications/bouwdeel> Bouwdeel_rel := ='Classifications/Bouwdeel/V/' + PropValue(., 'name');
+
+				unit<uint32> BouwdeelSrc := ='subset(strlen(src/'+Classifications/Bouwdeel/name[Bouwdeel_rel]+') > 1)' 
 				{
-					attribute<Classifications/SchilLabel> SchilLabel_rel (src) := rlookup(Src/Energielabel, Classifications/SchilLabel/name);
-					attribute<float64>                    Frequency      (src) := float64(src/freq);
-					attribute<float64>                    CumulFrequency (src) := cumulate(Frequency, SchilLabel_rel);
-					attribute<float64>                    ClassBreaks    (src) := CumulFrequency - Frequency;
-					attribute<float64>                    nr_observaties (src) := float64(Count);
-				}
-				container ClassBreak_p_Label := for_each_nt(Classifications/SchilLabel/Name, MakeBreaks);
-				template MakeBreaks
-				{
-					parameter<Classifications/SchilLabel> SchilLabel_rel_here := ='Classifications/SchilLabel/V/' + PropValue(., 'name');
-					unit<uint32> Sub := subset(Src/data/schillabel_rel == SchilLabel_rel_here)
+					container data 
 					{
-						attribute<float64> ClassBreaks := Src/data/ClassBreaks[nr_OrgEntity];
-						attribute<float64> Frequency   := Src/data/Frequency[nr_OrgEntity];
+						attribute<Classifications/SchilLabel> SchilLabel_rel (BouwdeelSrc) := rlookup(Src/Energielabel[nr_OrgEntity], Classifications/SchilLabel/name);
+						attribute<float64>                    Frequency      (BouwdeelSrc) := float64(src/freq[nr_OrgEntity]);
+
+						attribute<float64>                    RelFreq        (BouwdeelSrc) := Frequency / sum(Frequency, SchilLabel_rel)[schillabel_rel];
+						
+
+						attribute<float64>                    CumulFrequency (BouwdeelSrc) := cumulate(RelFreq, SchilLabel_rel);
+
+						attribute<float64>                    ClassBreaks    (BouwdeelSrc) := CumulFrequency - RelFreq;
+						attribute<float64>                    nr_observaties (BouwdeelSrc) := float64(src/Count[nr_OrgEntity]);
+
+						attribute<Classifications/Isolatieniveau> Isolatieniveau_rel (BouwdeelSrc) := ='rlookup(src/' + Classifications/Bouwdeel/name[Bouwdeel_rel] + '[nr_OrgEntity], Classifications/IsolatieNiveau/name)' ;
+					}
+					container ClassBreak_p_Label := for_each_nt(Classifications/SchilLabel/Name, MakeBreaks);
+					template MakeBreaks
+					{
+						parameter<Classifications/SchilLabel> SchilLabel_rel_here := ='Classifications/SchilLabel/V/' + PropValue(., 'name');
+						unit<uint32> Sub := subset(BouwdeelSrc/data/schillabel_rel == SchilLabel_rel_here)
+						{
+							attribute<float64> ClassBreaks := BouwdeelSrc/data/ClassBreaks[nr_OrgEntity];
+							attribute<float64> Frequency   := BouwdeelSrc/data/RelFreq[nr_OrgEntity];
+						}
+					}
+				}
+				unit<uint32> vbo := BAG/import/VBO
+				{
+					attribute<Classifications/Schillabel> DefaultLabel_rel := Defaultlabels/Default_Energielabel/Schillabel_rel;
+
+					attribute<Classifications/Schillabel> Schillabel_rel  := =Invoer/StartgegevensAan ? 'makedefined(Energielabel/data/SchilLabel_rel[rlookup(BAG/import/VBO/identificatie, Energielabel/data/vbo_id)], DefaultLabel_rel)' : 'DefaultLabel_rel';
+					
+					parameter<uint32>                     seed             := 101;
+					attribute<float64>                    RndNr            := rnd_uniform(seed, vbo, range(float64, 0d, 1d));
+					attribute<BouwdeelSrc>                bouwdeelsrc_rel  := ='makedefined('+AsItemList(replace('not(Schillabel_rel == Classifications/SchilLabel/V/@SL@) ? (0/0)[BouwdeelSrc] : BouwdeelSrc/ClassBreak_p_Label/@SL@/sub/nr_OrgEntity[Classify(RndNr, BouwdeelSrc/ClassBreak_p_Label/@SL@/sub/ClassBreaks)]','@SL@',Classifications/SchilLabel/name))+')';
+				
+					container Isolatie_vbo
+					{
+						attribute<bool> HeeftBouwdeel (VBO) := =replace('isnull(RuimtelijkeData/Dimensies/Bouwdelen/@BD@) || RuimtelijkeData/Dimensies/Bouwdelen/@BD@ > 0.0[m2]', '@BD@', Classifications/Bouwdeel/name[Bouwdeel_rel]);
+						attribute<Classifications/Isolatieniveau> Isolatieniveau_rel (VBO) := HeeftBouwdeel ? makedefined(bouwdeelsrc/Data/Isolatieniveau_rel[bouwdeelsrc_rel], Classifications/IsolatieNiveau/V/N0) : Classifications/IsolatieNiveau/V/N0;
 					}
 				}
 			}
 			unit<uint32> vbo := BAG/import/VBO
 			{
-				attribute<Classifications/Schillabel> DefaultLabel_rel := Defaultlabels/Default_Energielabel/Schillabel_rel;
-
-				attribute<Classifications/Schillabel> Schillabel_rel  := =Invoer/StartgegevensAan ? 'makedefined(Energielabel/data/SchilLabel_rel[rlookup(BAG/import/VBO/identificatie, Energielabel/data/vbo_id)], DefaultLabel_rel)' : 'DefaultLabel_rel';
-				
-				parameter<uint32>                     seed           := 101;
-				attribute<float64>                    RndNr          := rnd_uniform(seed, vbo, range(float64, 0d, 1d));
-				attribute<Src>                        Src_rel        := ='makedefined('+AsItemList(replace('not(Schillabel_rel == Classifications/SchilLabel/V/@SL@) ? (0/0)[src] : Src/ClassBreak_p_Label/@SL@/sub/nr_OrgEntity[Classify(RndNr, Src/ClassBreak_p_Label/@SL@/sub/ClassBreaks)]','@SL@',Classifications/SchilLabel/name))+')';
-			
 				container Isolatie_vbo := for_each_nedv(
 					  Classifications/Bouwdeel/Name
-					, 'makedefined(Src/Data/'+Classifications/Bouwdeel/Name+'[Src_rel], Classifications/IsolatieNiveau/V/N0)'
+					, Classifications/Bouwdeel/Name == 'KR' ? 'const(Classifications/Isolatieniveau/V/N0,VBO)' : 'BouwdeelSamples/'+Classifications/Bouwdeel/Name+'/VBO/Isolatie_vbo/IsolatieNiveau_rel'
 						, vbo
 						, Classifications/Isolatieniveau
 					);
