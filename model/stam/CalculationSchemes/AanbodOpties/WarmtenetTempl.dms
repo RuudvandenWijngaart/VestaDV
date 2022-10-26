@@ -434,21 +434,7 @@ template WarmtenetTempl
 		}
 		// endpoints zijn alle AllCandidate/StudieGebiedPand(en)
 				
-		// afstandentabel via dijkstra
-		unit<uint32> od_pair_network := dijkstra_m('bidirectional;startPoint(Node_rel,OrgZone_rel);endPoint(Node_rel);cut(OrgZone_max_imp);od:impedance,OrgZone_rel,DstZone_rel'
-			,	Edge/dist, Edge/from, Edge/to
-			,	startPoint/Vertex_rel, startPoint/bron_rel
-			,	rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values)
-			,	WarmteBronnen/bron/max_dist
-			);
-		unit<uint32> od_pair := union_unit(AllCandidate/StudieGebiedPand, od_pair_network)
-		{
-			attribute<WarmteBronnen/bron>            OrgZone_rel := union_data(., const(0[WarmteBronnen/bron], AllCandidate/StudieGebiedPand), od_pair_network/OrgZone_rel);
-			attribute<AllCandidate/StudieGebiedPand> DstZone_rel := union_data(., id(AllCandidate/StudieGebiedPand),                           od_pair_network/DstZone_rel);	
-			attribute<m>                             Impedance   := union_data(., const(0[m], AllCandidate/StudieGebiedPand),                  od_pair_network/Impedance);
-//REMOVE				+	rnd_uniform(0, ., range(m, 0.0, 1.0)); // TODO: fix this HACK when better tie-breaks and bron-clustering have been implemented
-		}
-
+			
 		parameter<uint32> nrBronAllocatieIteraties := 60; // TODO: reconsider and move to kentallen
 		unit<uint32> allocIter := range(uint32, 0, nrBronAllocatieIteraties)
 		{
@@ -456,13 +442,37 @@ template WarmtenetTempl
 			attribute<string> prevName := MakeDefined(name[ID(.)-1]+'/nextAugmentation', 'initialAugmentation');
 		}
 		
-		attribute<m> initialAugmentation(WarmteBronnen/bron) := (WarmteBronnen/bron/Ki_cap / max(WarmteBronnen/bron/Ki_cap)) * WarmteBronnen/bron/max_dist;
-
+		attribute<m> initialAugmentation(WarmteBronnen/bron) := (1.0 - WarmteBronnen/bron/Ki_cap / max(WarmteBronnen/bron/Ki_cap)) * WarmteBronnen/bron/max_dist;
 		// round 1
 		template allocIterT {
+		
 			attribute<m> currAugmentation(WarmteBronnen/bron);
+			attribute<m> handicap        (WarmteBronnen/bron) := currAugmentation + (max(WarmteBronnen/bron/max_dist)- WarmteBronnen/bron/max_dist);
 			
-			attribute<m>  augmentedImpedance(od_pair) := od_pair/impedance + currAugmentation[od_pair/OrgZone_rel];
+			// afstandentabel via dijkstra
+			attribute<m> bron_dist(AllCandidate/StudieGebiedPand) := dijkstra_s('bidirectional;startPoint(Node_rel,impedance);endPoint(Node_rel);cut(OrgZone_max_imp);node:TraceBack'
+				,	Edge/dist, Edge/from, Edge/to
+				,	startPoint/Vertex_rel, handicap[startPoint/bron_rel]
+				,	rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values)
+				,	max(initialAugmentation) + 20[km] * 1000[m / km]
+				);
+				
+			// startPoint/bron_rel
+			attribute<Vertex> Vertex_Vertex_rel(Vertex) := service_area(Edge/from, Edge/to, bron_dist/TraceBack);
+			attribute<WarmteBronnen/bron>  Vertex_bron_rel(Vertex) := rjoin(Vertex_Vertex_rel, startPoint/Vertex_rel, startPoint/Bron_rel);
+			attribute<WarmteBronnen/bron>  Dest_bron_rel(AllCandidate/StudieGebiedPand) := rjoin(AllCandidate/StudieGebiedPand/Point, Vertex/Values, Vertex_bron_rel);
+/*			
+			unit<uint32> od_pair := union_unit(AllCandidate/StudieGebiedPand, od_pair_network)
+			{
+				attribute<WarmteBronnen/bron>            OrgZone_rel := union_data(., const(0[WarmteBronnen/bron], AllCandidate/StudieGebiedPand), od_pair_network/OrgZone_rel);
+				attribute<AllCandidate/StudieGebiedPand> DstZone_rel := union_data(., id(AllCandidate/StudieGebiedPand),                           od_pair_network/DstZone_rel);	
+				attribute<m>                             Impedance   := union_data(., const(0[m], AllCandidate/StudieGebiedPand),                  od_pair_network/Impedance);
+				//REMOVE +	rnd_uniform(0, ., range(m, 0.0, 1.0)); // TODO: fix this HACK when better tie-breaks and bron-clustering have been implemented
+			}
+*/
+
+			attribute<m>  orgImpedance(AllCandidate/StudieGebiedPand) := bron_dist - handicap;
+//			attribute<m>  augmentedImpedance(od_pair) := od_pair/impedance + currAugmentation[od_pair/OrgZone_rel];
 			
 			attribute<od_pair> favourite_od_rel(AllCandidate/StudieGebiedPand) := min_index(augmentedImpedance, od_pair/DstZone_rel);
 			attribute<Warmtebronnen/bron> favourite_bron_rel(AllCandidate/StudieGebiedPand) := favourite_od_rel->OrgZone_rel;
@@ -501,8 +511,11 @@ template WarmtenetTempl
 		}
 		container Iterations := for_each_ne(allocIter/name, 'allocIterT('+allocIter/prevName+')'), KeepData = "False";
 		
-		attribute<m>             best_augmentation(WarmteBronnen/bron)        := ='Iterations/'+last(allocIter/name)+'/currAugmentation';
-		attribute<Warmtebronnen/bron> best_bron_rel(AllCandidate/StudieGebiedPand) := ='Iterations/'+last(allocIter/name)+'/favourite_bron_rel';
+		attribute<m>                  best_augmentation_WIP(WarmteBronnen/bron)        := ='Iterations/'+last(allocIter/name)+'/currAugmentation';
+		attribute<Warmtebronnen/bron> best_bron_rel_WIP(AllCandidate/StudieGebiedPand) := ='Iterations/'+last(allocIter/name)+'/favourite_bron_rel';
+		
+		attribute<m>             best_augmentation(WarmteBronnen/bron)             := initialAugmentation;
+		attribute<Warmtebronnen/bron> best_bron_rel(AllCandidate/StudieGebiedPand) := ='Iterations/'+first(allocIter/name)+'/dest_bron_rel';
 		
 		attribute<m> reroute(AllCandidate/StudieGebiedPand):= dijkstra_s('bidirectional;startPoint(Node_rel,impedance);endPoint(Node_rel);cut(OrgZone_max_imp);node:TraceBack'
 			,	Edge/dist, Edge/from, Edge/to
