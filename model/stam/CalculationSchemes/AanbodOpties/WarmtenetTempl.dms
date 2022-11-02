@@ -160,8 +160,9 @@ template WarmtenetTempl
 
 		unit<uint32> StudieGebiedPand_candidate := subset(pand/vbo_count_studiegebied > 0.0[uint32])
 		{
-			attribute<pand>                pand_rel        := nr_orgentity;
-			attribute<kW>                  P_wd            := sum(PartialContributie/P_wd, rlookup(AllCandidate/pand_rel, pand_rel)); 
+			attribute<pand>                pand_rel    := nr_orgentity;
+			attribute<kW>                  P_wd        := sum(PartialContributie/P_wd, rlookup(AllCandidate/pand_rel, pand_rel)); 
+			attribute<Eur_yr>              Contributie := sum(PartialContributie/Contributie, rlookup(AllCandidate/pand_rel, pand_rel)); 
 		}
 		unit<uint32> StudieGebiedPand := subset(StudieGebiedPand_candidate/P_wd > 0[kW])
 		,	KeepData = "True" // facilitate debugging; REMOVE when done		
@@ -170,8 +171,9 @@ template WarmtenetTempl
 			attribute<geography/rdc_meter> geometry (poly) := pand_rel->geometry;
 			attribute<geography/rdc_meter> point           := Centroid_or_mid(geometry);
 			attribute<kW>                  P_wd            := nr_orgentity->P_wd; 
+			attribute<Eur_yr>              Contributie     := nr_orgentity->Contributie;
 		}
-		attribute<StudieGebiedPand> StudieGebiedPand_rel := rlookup(pand_rel, StudieGebiedPand/nr_orgentity);
+		attribute<StudieGebiedPand> StudieGebiedPand_rel := rlookup(pand_rel, StudieGebiedPand_candidate/nr_orgentity[StudieGebiedPand/nr_orgentity]);
 
 		attribute<rdc_meter> Geometry      := BO/geometry[BO_rel];
 		attribute<BO>        BO_rel        := nr_orgentity;	
@@ -223,8 +225,12 @@ template WarmtenetTempl
 			
 						//====== berekening kosten aansluitleiding (van gevel tot straat)
 			attribute<kW>      P_id_pand     (StudieGebiedPand) := sum(P_id, StudieGebiedPand_rel);
-			attribute<BronAllocatie/Edge0>  Edge_rel(StudieGebiedPand) := rlookup(rlookup( AllCandidate/StudieGebiedPand/Point , BronAllocatie/Vertex0/Values ), BronAllocatie/Edge0/to);
-			attribute<m>       L_asl_pand    (StudieGebiedPand) := Edge_rel->dist;
+
+			unit<uint32>         network       := /Invoer/RuimtelijkeData/OSM/Read_Final_Network;
+		
+			container            connect_info  := connect_info(network/geometry, StudieGebiedPand/point);
+
+			attribute<m>       L_asl_pand    (StudieGebiedPand) := connect_info/dist[m];
 			attribute<Celsius> DeltaT_pand   (StudieGebiedPand) := mean(DeltaT_wd, StudieGebiedPand_rel);
 			attribute<eur>     Ki_asl_pand   (StudieGebiedPand) := LeidingKosten_asl/Ki * L_asl_pand;
 			attribute<ratio>   pand_aandeel      (AllCandidate) := BO/pand_aandeel[BO_rel] / 1.0[pand_asl];
@@ -251,18 +257,18 @@ template WarmtenetTempl
 					Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.55 tabel 32";
 
 			parameter<eur_asl> K_id_booster := leerCurves/eWPww/Curve * (Schuiven/KostenMin * 2225.98[eur_asl] + Schuiven/KostenMax * 2560.84[eur_asl]);
-			attribute<eur>     Ki_id_booster (AllCandidate) := =T_sec < 55[Celsius] ? 'const(0.0,AllCandidate)' :  'BO/nrAansluitingen[BO_rel] * float64(Booster) * K_id_booster',
+			attribute<eur>     Ki_id_booster (AllCandidate) := =T_sec > 55[Celsius] ? 'const(0.0[eur],AllCandidate)' :  'BO/nrAansluitingen[BO_rel] * float64(Booster) * K_id_booster',
 					Descr  = "Kosten boosterwarmtepomp voor tapwater, indien van toepassing",
 					Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.55 tabel 32";
 			
-			attribute<eur>     Ki_id_ewp (AllCandidate) := =T_sec < 55[Celsius] ? 'const(0.0,AllCandidate)' : 'leerCurves/eWPww/Curve * (float64(WP) * (not(isUtil) ? BO/nrAansluitingen[BO_rel] * (BO/Schillabel_rel[BO_rel] <= Classifications/Schillabel/V/B ? 4500[eur_asl] : 7000[eur_asl]) : P_id * 700[eur_kw]))',
+			attribute<eur>     Ki_id_ewp (AllCandidate) := =T_sec > 55[Celsius] ? 'const(0.0[eur],AllCandidate)' : 'leerCurves/eWPww/Curve * (float64(WP) * (not(isUtil) ? BO/nrAansluitingen[BO_rel] * (BO/Schillabel_rel[BO_rel] <= Classifications/Schillabel/V/B ? 4500[eur_asl] : 7000[eur_asl]) : P_id * 700[eur_kw]))',
 					Descr  = "Inpandige w/w warmtepomp, indien van toepassing",
 					Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.55 tabel 32";
 
 			parameter<eur_m2>  K_LTAS_u   := leerCurves/LTAS/Curve * (Schuiven/KostenMin * Invoer/Kengetallen/BCkentallen/Ki_LTAS_u_min  + Schuiven/KostenMax * Invoer/Kengetallen/BCkentallen/Ki_LTAS_u_max);
 			parameter<eur_asl> K_LTAS_egw := leerCurves/LTAS/Curve * (Schuiven/KostenMin * Invoer/Kengetallen/BCkentallen/Ki_LTAS_wl_min + Schuiven/KostenMax * Invoer/Kengetallen/BCkentallen/Ki_LTAS_wl_max);
 			parameter<eur_asl> K_LTAS_mgw := leerCurves/LTAS/Curve * (Schuiven/KostenMin * Invoer/Kengetallen/BCkentallen/Ki_LTAS_wh_min + Schuiven/KostenMax * Invoer/Kengetallen/BCkentallen/Ki_LTAS_wh_max);			
-			attribute<eur>     Ki_id_LTAS (AllCandidate) := =T_sec < 55[Celsius] ? 'const(0.0,AllCandidate)' : 'isUtil ? BO/oppervlakte[BO_rel] * K_LTAS_u : BO/isMeergezins[BO_rel] ? K_LTAS_mgw * BO/nrAansluitingen[BO_rel] : K_LTAS_egw * BO/nrAansluitingen[BO_rel]',
+			attribute<eur>     Ki_id_LTAS (AllCandidate) := =T_sec > 55[Celsius] ? 'const(0.0[eur],AllCandidate)' : 'isUtil ? BO/oppervlakte[BO_rel] * K_LTAS_u : BO/isMeergezins[BO_rel] ? K_LTAS_mgw * BO/nrAansluitingen[BO_rel] : K_LTAS_egw * BO/nrAansluitingen[BO_rel]',
 					Descr  = "Kosten LT-afgiftesysteem, indien van toepassing",
 					Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.55 tabel 32";
 
@@ -395,40 +401,44 @@ template WarmtenetTempl
 
 	container BronAllocatie: KeepData = "True" // facilitate debugging this; REMOVE when done.
 	{
+		unit<uint32> ContributiePand := subset(AllCandidate/StudieGebiedPand/Contributie > 0.0[Eur_yr])
+		{
+			attribute<rdc_meter> Geometry := Point;
+			attribute<rdc_meter> Point    := nr_orgEntity->point;
+			attribute<kW>        P_wd     := nr_orgEntity->P_wd;
+		}
+
 		parameter<Float64> Ki_Buis_kW := 10[EUR / m / kW];
 		
-		unit<uint32> AansluitPunten := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten, AllCandidate/StudieGebiedPand)
+		unit<uint32> AansluitPunten := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten, ContributiePand)
 		{
-			attribute<rdc_meter> Point := union_data(., WarmteBronnen/Puntbronnen/Geometry, WarmteBronnen/Lijnbron_aansluitpunten/Point, AllCandidate/StudieGebiedPand/Point);
+			attribute<rdc_meter> Point := union_data(., WarmteBronnen/Puntbronnen/Geometry, WarmteBronnen/Lijnbron_aansluitpunten/Point, ContributiePand/Point);
 		}
 		
 		unit<uint32>  network       := /Invoer/RuimtelijkeData/OSM/Read_Final_Network;
 		
-		unit<uint32> Edge0 := connect(network/Geometry, AansluitPunten/point)
-			,	DialogType = "Map"
-			,	DialogData = "UnionData"
-				{
+		unit<uint32> Edge0 := connect(network/Geometry, AansluitPunten/point),	DialogType = "Map",	DialogData = "UnionData"
+		{
 			attribute<rdc_meter> Point     := first_point(UnionData);
 			attribute<rdc_meter> NextPoint := last_point(UnionData);
-			attribute<Vertex0> from := rlookup(Point,     Vertex0/Values);
-			attribute<Vertex0> to   := rlookup(NextPoint, Vertex0/Values);
-			
-			attribute<m>      dist := arc_length(UnionData, m);
-//REMOVE			attribute<EUR_kW> cost := dist * Ki_Buis_kW;
+			attribute<Vertex0>   from      := rlookup(Point,     Vertex0/Values);
+			attribute<Vertex0>   to        := rlookup(NextPoint, Vertex0/Values);
+			attribute<m>         dist      := arc_length(UnionData, m);
 		}
-		unit<uint32>  PointSet:= union_unit(Edge0, Edge0) { attribute<rdc_meter> Point := union_data(., Edge0/Point, Edge0/NextPoint); }
-		unit<uint32>  Vertex0 := unique(PointSet/Point);
+		unit<uint32>  PointSet := union_unit(Edge0, Edge0) { attribute<rdc_meter> Point := union_data(., Edge0/Point, Edge0/NextPoint); }
+		unit<uint32>  Vertex0  := unique(PointSet/Point);
 		
 		// add an edge from each bron to network in order to identify each bron as different source; TODO: cluster co-located and nearby bronnen.
 		unit<uint32>  Vertex := union_unit(Vertex0, WarmteBronnen/bron)
 		{
-			attribute<rdc_meter> Point := union_data(., Vertex0/Values, WarmteBronnen/bron/geometry);
-			attribute<.> Per_Pand(AllCandidate/StudieGebiedPand) := rlookup(AllCandidate/StudieGebiedPand/Point, Vertex0/Values);
+			attribute<rdc_meter> Point  := union_data(., Vertex0/Values, WarmteBronnen/bron/geometry);
+			attribute<.>         Per_Pand (ContributiePand) := rlookup(ContributiePand/Point, Vertex0/Values);
 			
 		}
 		attribute<Vertex> PuntBron_Vertex_rel  (WarmteBronnen/Puntbronnen)             := rlookup(WarmteBronnen/Puntbronnen/Geometry, Vertex/Point);
 		attribute<Vertex> LijnBron_Vertex_rel  (WarmteBronnen/Lijnbron_aansluitpunten) := rlookup(WarmteBronnen/Lijnbron_aansluitpunten/Point, Vertex/Point);
-		unit<uint32> Vlakbron_Vertex_xrel := point_in_all_polygons(Vertex0/Values, WarmteBronnen/VlakBronnen/geometry)
+		
+		unit<uint32>      Vlakbron_Vertex_xrel := point_in_all_polygons(Vertex0/Values, WarmteBronnen/VlakBronnen/geometry)
 		{
 			attribute<WarmteBronnen/bron> bron_rel := WarmteBronnen/VlakBronnen/bron_rel[second_rel];
 		}
@@ -455,7 +465,7 @@ template WarmtenetTempl
 			attribute<m>      dist  := union_data(., Edge0/dist, const(0m, WarmteBronnen/Puntbronnen), const(0m, WarmteBronnen/Lijnbron_aansluitpunten), const(0m, Vlakbron_Vertex_xrel));
 		}
 		
-		attribute<Vertex> StudieGebiedPand_Vertex_rel(AllCandidate/StudieGebiedPand) := rlookup(AllCandidate/StudieGebiedPand/Point, Vertex0/Values);
+		attribute<Vertex> StudieGebiedPand_Vertex_rel(ContributiePand) := rlookup(ContributiePand/Point, Vertex0/Values);
 		
 		
 		// startpoints maken met alle aansluitpunten van alle bronnen (ook vlakbronnen ? )
@@ -487,18 +497,18 @@ template WarmtenetTempl
 			attribute<m> bron_handicap   (WarmteBronnen/bron) := currAugmentation + (max(WarmteBronnen/bron/max_dist)- WarmteBronnen/bron/max_dist);
 			
 			// afstandentabel via dijkstra
-			attribute<m> bron_dist(AllCandidate/StudieGebiedPand) := dijkstra_s('bidirectional(link_flag);startPoint(Node_rel,impedance);endPoint(Node_rel);cut(OrgZone_max_imp);node:TraceBack'
+			attribute<m> bron_dist(ContributiePand) := dijkstra_s('bidirectional(link_flag);startPoint(Node_rel,impedance);endPoint(Node_rel);cut(OrgZone_max_imp);node:TraceBack'
 				,	Edge/dist, Edge/from, Edge/to, Edge/bothDirs
 				,	bron_Vertex_rel, bron_handicap
-				,	rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Point)
+				,	rlookup(ContributiePand/Point, Vertex/Point)
 				,	max(initialAugmentation) + 20[km] * 1000[m / km]
 				);
 				
-			attribute<Vertex>              Vertex_Vertex_rel(Vertex) := service_area(Edge/from, Edge/to, bron_dist/TraceBack);
-			attribute<WarmteBronnen/bron>  Vertex_bron_rel  (Vertex) := rlookup(Vertex_Vertex_rel, bron_Vertex_rel);
-			attribute<WarmteBronnen/bron>  Dest_bron_rel(AllCandidate/StudieGebiedPand) := Vertex_bron_rel[Vertex/Per_Pand];
+			attribute<Vertex>              Vertex_Vertex_rel (Vertex)          := service_area(Edge/from, Edge/to, bron_dist/TraceBack);
+			attribute<WarmteBronnen/bron>  Vertex_bron_rel   (Vertex)          := rlookup(Vertex_Vertex_rel, bron_Vertex_rel);
+			attribute<WarmteBronnen/bron>  Dest_bron_rel     (ContributiePand) := Vertex_bron_rel[Vertex/Per_Pand];
 
-			attribute<kW>    bron_P_wd     (Warmtebronnen/bron) := sum(AllCandidate/StudieGebiedPand/P_wd, dest_bron_rel);
+			attribute<kW>    bron_P_wd     (Warmtebronnen/bron) := sum(ContributiePand/P_wd, dest_bron_rel);
 			
 			attribute<ratio> bron_cap_ratio(Warmtebronnen/bron) := bron_P_wd / Warmtebronnen/bron/kWth_max;
 
@@ -509,7 +519,7 @@ template WarmtenetTempl
 			attribute<m> zaaglijn(Warmtebronnen/bron) := nth_element_weighted(
 					bron_dist
 				,	Warmtebronnen/bron/kWth_max // zoveel moeten we houden
-				,	AllCandidate/StudieGebiedPand/P_wd
+				,	ContributiePand/P_wd
 				,	dest_bron_rel
 			);
 			attribute<m> nextAugmentation(Warmtebronnen/bron) := currAugmentation + (bron_cap_ratio > 1.0 ? max(bron_dist, dest_bron_rel) - zaaglijn : 0[m]);
@@ -517,8 +527,9 @@ template WarmtenetTempl
 		container Iterations := for_each_ne(allocIter/name, 'allocIterT('+allocIter/prevName+')'), KeepData = "False";
 		container LastIter := ='Iterations/'+last(allocIter/name);
 		
-		attribute<m>                  best_augmentation(WarmteBronnen/bron)        := LastIter/currAugmentation;
-		attribute<Warmtebronnen/bron> best_bron_rel(AllCandidate/StudieGebiedPand) := lastIter/dest_bron_rel;
+		attribute<m>                  best_augmentation (WarmteBronnen/bron) := LastIter/currAugmentation;
+		attribute<Warmtebronnen/bron> best_bron_rel     (ContributiePand)    := lastIter/dest_bron_rel;
+		attribute<uint32>             SGP_count         (WarmteBronnen/bron) := count(best_bron_rel, Best_bron_rel);
 /*		
 		attribute<m> reroute(AllCandidate/StudieGebiedPand):= dijkstra_s('bidirectional;startPoint(Node_rel,impedance);endPoint(Node_rel);cut(OrgZone_max_imp);node:TraceBack'
 			,	Edge/dist, Edge/from, Edge/to
@@ -529,14 +540,16 @@ template WarmtenetTempl
 				attribute<Edge> TraceBack(Vertex);
 		}
 */		
-		attribute<kW> NodeDemand(Vertex) := MakeDefined((AllCandidate/StudieGebiedPand/P_wd * Float64(best_bron_rel!=0))[invert(Vertex/Per_pand)], 0[kW]);
+		attribute<kW> NodeDemand(Vertex) := MakeDefined((ContributiePand/P_wd * Float64(best_bron_rel!=0))[invert(Vertex/Per_pand)], 0[kW]);
 	
 		attribute<kW> edge_flow(Edge) := trace_back(Edge/From, Edge/To, LastIter/bron_dist/TraceBack, NodeDemand);
 		
 		attribute<Vertex> Vertex_bron_Vertex_rel(Vertex) := service_area(Edge/From, Edge/To, LastIter/bron_dist/TraceBack); 
 		attribute<WarmteBronnen/bron> Vertex_bron_rel(Vertex) := invert(bron_Vertex_rel)[Vertex_bron_Vertex_rel];
+
+		attribute<Celsius> DT_edge (Edge) := const(0[celsius], Edge); // TODO: DT beter invullen.
 		
-		container edge_cost_calc := AllCandidate/PartialContributie/LeidingKosten_T(Edge, edge_flow, const(0[celsius], Edge)); // TODO: DT beter invullen.
+		container edge_cost_calc := AllCandidate/PartialContributie/LeidingKosten_T(Edge, edge_flow, DT_edge);
 		
 		attribute<EUR> edge_cost  (Edge) := edge_cost_calc/Ki * Edge/dist;
 		attribute<EUR> bron_Ki_buis(WarmteBronnen/bron) := sum(edge_cost, Vertex_bron_rel[Edge/From]);
@@ -544,6 +557,37 @@ template WarmtenetTempl
 		// TODO: vlakbronnen per raster
 		// TODO: Rotterdam case
 }	
+	// Prospects: potentiele businesscases voor warmtenetten
+	unit<uint32> Prospect := subset(BronAllocatie/SGP_count > 0[uint32])
+	{
+		attribute<BronAllocatie/ContributiePand> ContributiePand_rel (AllCandidate/StudieGebiedPand) := invert(BronAllocatie/ContributiePand/nr_orgentity);
+		attribute<WarmteBronnen/bron>            Bron_rel            (AllCandidate/StudieGebiedPand) := BronAllocatie/Best_bron_rel[ContributiePand_rel];
+
+		unit<uint32> Afnemer := subset(IsDefined(Bron_rel[AllCandidate/StudieGebiedPand_rel]))
+		{
+			attribute<rdc_meter>    Geometry     := nr_orgEntity->AllCandidate/Geometry;
+			attribute<Prospect>     Prospect_rel := rlookup( Bron_rel[AllCandidate/StudieGebiedPand_rel][nr_orgentity] , Prospect/nr_orgentity);
+			
+			container Kosten
+			{
+				attribute<Eur_yr> Kj_id_elek     (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_id_elek[nr_orgentity];
+				attribute<Eur_yr> Kji_id_net     (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kji_id_net[nr_orgentity];
+				attribute<Eur_yr> Kj_id_oh       (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_id_oh[nr_orgentity];
+				attribute<Eur_yr> Kj_id_adm      (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_id_adm[nr_orgentity];
+				attribute<Eur_yr> Kji_ge_net     (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kji_ge_net[nr_orgentity];
+				attribute<Eur_yr> Kji_wd_asl_net (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kji_wd_asl_net[nr_orgentity];
+				attribute<Eur_yr> Kj_wd_asl_oh   (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_wd_asl_oh[nr_orgentity];
+				attribute<Eur_yr> Kj_wd_asl_adm  (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_wd_asl_adm[nr_orgentity];
+			}
+
+			container Vraag
+			{
+				attribute<GJ_yr> V_Wd_warmte  (Afnemer) := AllCandidate/PartialContributie/V_warmte[nr_orgentity] + AllCandidate/PartialContributie/V_wd_verlies[nr_orgentity];
+				attribute<GJ_yr> V_wd_koude   (Afnemer) := AllCandidate/PartialContributie/V_koude[nr_orgentity];
+				attribute<kW>    P_wd         (Afnemer) := AllCandidate/PartialContributie/P_wd[nr_orgentity], Descr = "Capaciteitsvraag aan secundair net inclusief capaciteitsverlies";
+			}
+		}
+	}
 	
 	unit<uint32> Candidate := subset(AllCandidate/PartialContributie/Contributie > 0.0[Eur_yr])
 	{
