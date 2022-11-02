@@ -10,6 +10,11 @@
 		unit<uint32> ObjectDomain;
 		//end parameters
 
+		parameter<Celsius> DT_SetPointTemp_def := 18[Celsius] - 6[Celsius], Source = "Energiebesparingsmethode TNO v3 binnentemperatuur";
+		parameter<Celsius> DT_SetPointTemp_NTA := 20[Celsius] - 6[Celsius], Source = "NTA8800 Tabel 7.11 woonfuncties";
+
+		parameter<ratio>   SetPointTemp_correctie := DT_SetPointTemp_NTA / DT_SetPointTemp_def;
+
 		attribute<ratio> Emissiefactor (Classifications/BemeterdeGebouwInput) : [
 			  1.450	//elek
 			, 1.000	//gas
@@ -28,7 +33,7 @@
 			GJ_yr)
 		{
 			attribute<GJ_yr> Vrv_VT (ObjectDomain) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[OverigeInstallaties/Ventilatie/Installatietype_rel] * BO/nrAansluitingen[ObjectDomain/BO_rel];
-			attribute<GJ_yr> Totaal (ObjectDomain) := ='add('+AsItemList(Classifications/Bouwdeel/name)+') + Vrv_VT';
+			attribute<GJ_yr> Totaal (ObjectDomain) := ='SetPointTemp_correctie * (add('+AsItemList(Classifications/Bouwdeel/name)+') + Vrv_VT)';
 		}
 
 		container warmtewinst
@@ -52,10 +57,10 @@
 		{
 			container Functioneel := ObjectDomain/Functioneel
 			{
-				attribute<gj_yr> RV (ObjectDomain) := warmteverlies/Totaal - warmtewinst/Totaal * (BO/Aansluitingen/Warmtenet[ObjectDomain/BO_rel] ? Emissiefactor_warmte : 1.0[ratio] );
+				attribute<gj_yr> RV (ObjectDomain) := (warmteverlies/Totaal - warmtewinst/Totaal) * (BO/Aansluitingen/Warmtenet[ObjectDomain/BO_rel] ? Emissiefactor_warmte : 1.0[ratio] );
 				attribute<gj_yr> TW (ObjectDomain) := (Func2Meter/metervraag_per_product/TWb + Func2Meter/metervraag_per_product/TWp) / SpecifiekeInstellingen/RuimtelijkeVraag/Gedrag/TW;
 				attribute<gj_yr> KD (ObjectDomain) := (Func2Meter/metervraag_per_product/KDb + Func2Meter/metervraag_per_product/KDp) / SpecifiekeInstellingen/RuimtelijkeVraag/Gedrag/KD / ( 1.0 + 3.66 *(1.0 - BO/Functioneel_base/Klimaateffect[ObjectDomain/BO_rel] ));
-				attribute<gj_yr> EA (ObjectDomain) := Func2Meter/eEffect/Vj_elek + ObjectDomain/Functioneel/EA * Invoer/Kengetallen/Constanten/Efficiency_EA / SpecifiekeInstellingen/RuimtelijkeVraag/Gedrag/EA;
+				attribute<gj_yr> EA (ObjectDomain) := Func2Meter/eEffect/Vj_elek + ObjectDomain/Functioneel/EA / Invoer/Kengetallen/Constanten/Efficiency_EA / SpecifiekeInstellingen/RuimtelijkeVraag/Gedrag/EA;
 			}
 		}
 
@@ -68,7 +73,7 @@
 			, kWh_yr
 			)
 		{
-			attribute<kWh_yr>    Total  (ObjectDomain) := ='add('+AsItemList(Classifications/BemeterdeGebouwInput/name)+') - ((Func2meter_NTA/Koken/Vj_gas + Func2meter_NTA/Koken/Vj_elek) * 277.78 [kWh / GJ]) + (float64(BO/Aansluitingen/Warmtenet[ObjectDomain/BO_rel]) * Emissiefactor_warmte * (Obs/Functioneel/RV + Obs/Functioneel/TW) * 277.78 [kWh / GJ])';
+			attribute<kWh_yr>    Total  (ObjectDomain) := ='add('+AsItemList(Classifications/BemeterdeGebouwInput/name)+')';
 			attribute<kwh_yr_m2> Kwh_m2 (ObjectDomain) := BO/Oppervlakte[ObjectDomain/BO_rel] == 0[m2] ? 0.0[kwh_yr_m2] : Total / BO/Oppervlakte[ObjectDomain/BO_rel];
 		}
 		attribute<Classifications/Schillabel> Energielabel_rel (ObjectDomain) := Primair_kWh/Kwh_m2 <= 0.0[kwh_yr_m2] ? Classifications/Schillabel/V/A : classify(Primair_kWh/Kwh_m2, classifications/Schillabel/classbreak);

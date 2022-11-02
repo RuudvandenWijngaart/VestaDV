@@ -37,9 +37,9 @@ container TVW
 
 		unit<uint32> DC := document_input
 		{
-			attribute<TVW_Classifications/doctype>   doctype_rel   := uint32(doc_type__code_);
-			attribute<TVW_Classifications/docstatus> docstatus_rel := uint32(doc_status__tekst_);
-			attribute<gemeente/GM> GM_rel  := rlookup(gemeente__gem_code_, gemeente/GM/GM_code);
+			attribute<Class/doctype>   doctype_rel   := uint32(doc_type__code_);
+			attribute<Class/docstatus> docstatus_rel := uint32(doc_status__tekst_);
+			attribute<gemeente/GM>     GM_rel        := rlookup(gemeente__gem_code_, gemeente/GM/GM_code);
 		}
 	}
 	
@@ -67,52 +67,23 @@ container TVW
 
 		unit<uint32> PL := plantabel_input
 		{
-			attribute<geography/rdc_meter> geometry (poly) := planshape_input/geometry_RD[shp_rel];
-			attribute<bool> geom_ok := isDefined(geometry);
+			attribute<geography/rdc_meter>  geometry (poly)    := planshape_input/geometry_RD[shp_rel], IntegrityCheck = "isDefined(this)";
+			attribute<string>               Plan_naam          := plantabel_input/naam__tekst_;
+			attribute<document/DC>          DC_rel             := isDefined(rlookup(document__doc_code_, document/DC/label)) ? rlookup(document__doc_code_, document/DC/label) : rlookup('DC' + substr(label, 2, 6), uppercase(document/DC/label)), IntegrityCheck = "isDefined(this)";
+			attribute<gemeente/GM>          GM_rel             := isDefined(document/DC/GM_rel[DC_rel]) ? document/DC/GM_rel[DC_rel] : rlookup('GM' + substr(label, 2, 4), uppercase(gemeente/GM/GM_code)), IntegrityCheck = "isDefined(this)";
 
-			attribute<document/DC> DC_rel_i := rlookup(document__doc_code_, document/DC/label);
-			attribute<document/DC> DC_rel   := isDefined(DC_rel_i) ? DC_rel_i : rlookup('DC' + substr(label, 2, 6), uppercase(document/DC/label));
-			attribute<bool>        DC_ok    := isDefined(DC_rel);
+			attribute<Class/Plansoort>      Plansoort_rel      := uint32(Plansoort__code_)              , IntegrityCheck = "isDefined(this)";
+			attribute<Class/Planstatus>     Planstatus_rel     := uint32(pln_planstatus_code__code_)    , IntegrityCheck = "isDefined(this)";
+			attribute<Class/Techniekstatus> Techniekstatus_rel := uint32(pln_techniekstatus_code__code_), IntegrityCheck = "isDefined(this)";
+			attribute<Class/Isolatiegraad>  Isolatiegraad_rel  := uint32(isolatiegraad_code__code_)     , IntegrityCheck = "isDefined(this)";
+			attribute<Class/Installatie>    Installatie_rel    := uint32(installatie_code__code_)       , IntegrityCheck = "isDefined(this)";
+			attribute<Class/Infrastructuur> Infrastructuur_rel := uint32(infrastructuur_code__code_)    , IntegrityCheck = "isDefined(this)";
+			attribute<Class/Energiebron>    Energiebron_rel    := uint32(energiebron_code__code_)       , IntegrityCheck = "isDefined(this)";
 
-
-			attribute<gemeente/GM> GM_rel_i := document/DC/GM_rel[DC_rel];
-			attribute<gemeente/GM> GM_rel   := isDefined(GM_rel_i) ? GM_rel_i : rlookup('GM' + substr(label, 2, 4), uppercase(gemeente/GM/GM_code));
-			attribute<bool>        GM_ok    := isDefined(GM_rel);
-
-			attribute<yr_uint16> Startjaar_min := Parser/Startjaar/lower[rlookup(startjaar__yyyy_, Parser/Startjaar/values)];
-			attribute<yr_uint16> Startjaar_max := Parser/Startjaar/upper[rlookup(startjaar__yyyy_, Parser/Startjaar/values)];
-			attribute<yr_uint16> Eindjaar_min  := Parser/Eindjaar/lower[rlookup(eindjaar__yyyy_, Parser/Eindjaar/values)];
-			attribute<yr_uint16> Eindjaar_max  := Parser/Eindjaar/upper[rlookup(eindjaar__yyyy_, Parser/Eindjaar/values)];
-			attribute<bool>      jaren_ok      :=
-				   makedefined(startjaar_min, 2021[yr_uint16]) <= makedefined(startjaar_max, 2050[yr_uint16])
-				&& makedefined(Eindjaar_min, 2021[yr_uint16]) <= makedefined(Eindjaar_max, 2050[yr_uint16]);
-
-			attribute<TVW_Classifications/plansoort>   plansoort_rel_i  := uint32(Plansoort__code_);
-			attribute<bool>                            plansoort_ok     := isdefined(plansoort_rel_i);
-			attribute<TVW_Classifications/plansoort>   plansoort_rel    := makedefined(plansoort_rel_i, TVW_Classifications/planstatus/V/onbekend);
-
-			attribute<TVW_Classifications/planstatus>  planstatus_rel_i := parser/planstatus/planstatus_rel[rlookup(pln_planstatus__tekst_, parser/planstatus/values)];
-			attribute<bool>                            planstatus_ok    := isdefined(planstatus_rel_i);
-			attribute<TVW_Classifications/planstatus>  planstatus_rel   := makedefined(planstatus_rel_i, TVW_Classifications/planstatus/V/onbekend);
-
-			attribute<TVW_Classifications/techniekstatus>  techniekstatus_rel_i := parser/techniekstatus/techniekstatus_rel[rlookup(pln_techniekstatus__tekst_, parser/techniekstatus/values)];
-			attribute<bool>                           techniekstatus_ok    := isdefined(techniekstatus_rel_i);
-			attribute<TVW_Classifications/techniekstatus>  techniekstatus_rel   := makedefined(techniekstatus_rel_i, TVW_Classifications/techniekstatus/V/onbekend);
-
-
-			attribute<bool> Installatie_onbekend  := Parser/installatie/onbekend[rlookup(installatie__tekst_, parser/installatie/values)];
-			attribute<bool> Installatie_eWP       := Parser/installatie/ewp[rlookup(installatie__tekst_, parser/installatie/values)];
-			attribute<bool> Installatie_hWP       := Parser/installatie/hwp[rlookup(installatie__tekst_, parser/installatie/values)];
-			attribute<bool> Installatie_HR        := Parser/installatie/hr[rlookup(installatie__tekst_, parser/installatie/values)];
-			attribute<bool> Installatie_IR        := Parser/installatie/ir[rlookup(installatie__tekst_, parser/installatie/values)];
-			attribute<bool> Installatie_ZonB      := Parser/installatie/zonb[rlookup(installatie__tekst_, parser/installatie/values)];
-			attribute<bool> Installatie_bronnet   := Parser/installatie/bronnet[rlookup(installatie__tekst_, parser/installatie/values)];
-			attribute<bool> Installatie_warmtenet := Parser/installatie/warmtenet[rlookup(installatie__tekst_, parser/installatie/values)];
-
-			attribute<parser/installatie/installatiekeuze> Installatiekeuze_rel := Parser/installatie/installatiekeuze_rel[rlookup(installatie__tekst_, parser/installatie/values)];
+			attribute<nrAsl>                nrAansluitingen    := VBO/Matching/VBO_count                , IntegrityCheck = "isDefined(this)";
 		}
 
-		unit<uint32> VBO := /Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied
+		unit<uint32> VBO := /Invoer/RuimtelijkeData/BAG/import/VBO
 		{
 			attribute<nrAsl> nr_Asl := const(1.0[nrAsl],.);
 
@@ -133,206 +104,148 @@ container TVW
 				parameter<string> piap_expr := 'point_in_all_polygons(p/xy, PL/geometry)';
 				parameter<string> workaround := 'overlay_polygon(driehoek[geography/rdc_mm], PL/geometry[geography/rdc_mm])';
 				unit<uint32> kruistabel  := =(GeoDmsVersion() > 8.0305) ? piap_expr : workaround;
-				
-//				REMOVE
+
 
 				attribute<uint32> PL_count(p) := pcount(kruistabel/first_rel);
-				attribute<uint32> P_count(PL) := pcount(kruistabel/second_rel);
-/*				
-				unit<uint32> kruistabel2 := point_in_all_polygons(p/xy, PL/geometry);
-				attribute<uint32> PL_count2(p) := pcount(kruistabel2/first_rel);
-				attribute<uint32> P_count2(PL) := pcount(kruistabel2/second_rel);
-*/
-				attribute<bool> any_warmtenet (p) := any(PL/Installatie_warmtenet[kruistabel/second_rel], kruistabel/first_rel);
+				
+				attribute<uint32> P_count   (PL) := pcount(kruistabel/second_rel);
+				attribute<nrAsl>  VBO_count (PL) := sum(nr_Asl[kruistabel/first_rel], kruistabel/second_rel);
 			}
-		}
-	}
 
-	container TVW_Classifications
-	{
-		unit<uint32> plansoort : nrofrows = 4
-		{
-			attribute<string> name             :  [ 'onbekend', 'onderzoek', 'voorbereidend', 'uitvoeren'];
-			attribute<string> label            := name, DialogType = "LabelText";
-
-			container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
-		}
-
-		unit<uint32> doctype : nrofrows = 4
-		{
-			attribute<string> name             :  [ 'onbekend', 'transitievisie', 'bijlage', 'anders'];
-			attribute<string> label            := name, DialogType = "LabelText";
-
-			container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
-		}
-
-		unit<uint32> docstatus : nrofrows = 4
-		{
-			attribute<string> name             :  [ 'onbekend', 'vastgesteld', 'naar_raad', 'concept'];
-			attribute<string> label            := name, DialogType = "LabelText";
-
-			container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
-		}
-
-		unit<uint32> planstatus : nrofrows = 6
-		{
-			attribute<string> name             : [ 'onbekend', 'orienterend', 'onderzoek', 'richting', 'uitwerken', 'definitief'];
-			attribute<string> label            : [ 'onbekend', 'orienterend', 'in onderzoek', 'richting bepaald', 'uit te werken', 'definitief'];
-
-			container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
-		}
-
-		unit<uint32> techniekstatus : nrofrows = 6
-		{
-			attribute<string> name             : [ 'onbekend', 'geen', 'uitwerken', 'kansrijk', 'richting', 'definitief'];
-			attribute<string> label            : [ 'onbekend', 'geen keuze', 'uit te werken', 'kansrijke optie', 'richting bepaald', 'definitief'];
-
-			container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
-		}
-	}
-
-	container parser
-	{
-		unit<uint32> startjaar := unique(plan/plantabel_input/startjaar__yyyy_)
-		{
-			attribute<string> datestr := replace(replace(replace(replace(replace(lowercase(values),
-				'of', '-'),
-				' - ', '-'),
-				'onduidelijk', 'onbekend'),
-				'ntb', 'onbekend'),
-				'doorlopend', 'gestart');
-
-			attribute<bool>   single_yr  := AND(
-					isdefined(uint16(datestr)),
-					substr(datestr, 0, 2) == '20',
-					strlen(datestr) == 4);
-
-			attribute<yr_uint16> lower :=
-				  single_yr ? datestr[yr_uint16]
-				: strcount(datestr, '-') > 0 ? substr(datestr, 0, strpos(datestr,'-'))[yr_uint16]
-				: strcount(datestr, 'gestart') > 0 ? 2021[yr_uint16]
-				: strcount(datestr, 'zo snel mogelijk') > 0  ? 2021[yr_uint16]
-				: strcount(datestr, 'voor') > 0  ? 2021[yr_uint16]
-				: strcount(datestr, 'na') > 0 ? substr(datestr, strpos(datestr, '20'), 4)[yr_uint16]
-				: (0/0)[yr_uint16];
-
-			attribute<yr_uint16> upper :=
-				  single_yr ? datestr[yr_uint16]
-				: strcount(datestr, '-') > 0 ? substr(datestr,strpos(datestr,'-')+1,4)[yr_uint16]
-				: strcount(datestr, 'voor') > 0 ? substr(datestr, strpos(datestr, '20'), 4)[yr_uint16]
-				: strcount(datestr, 'gestart') > 0 ? 2021[yr_uint16]
-				: (0/0)[yr_uint16];
-
-			attribute<bool> startjaar_ok := and(isdefined(lower),isDefined(upper));
-		}
-
-		unit<uint32> eindjaar := unique(plan/plantabel_input/eindjaar__yyyy_)
-		{
-			attribute<string> datestr := replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(lowercase(values),
-					'of', '-'),
-					' - ', '-'),
-					'onduidelijk', 'onbekend'),
-					'ntb', 'onbekend'),
-					'doorlopend', 'gestart'),
-					'>', 'na'),
-					'onbekend, mogelijk voor', 'mogelijk'),
-					'niet benoemd', 'onbekend'),
-					'niet genoemd', 'onbekend'),
-					'streven', 'mogelijk'),
-					'mogelijk', 'na');
-
-			attribute<bool>   single_yr  := AND(
-					isdefined(uint16(datestr)),
-					substr(datestr, 0, 2) == '20',
-					strlen(datestr) == 4);
-
-			attribute<yr_uint16> lower :=
-				  single_yr ? datestr[yr_uint16]
-				: strcount(datestr, '-') > 0 ? substr(datestr, 0, strpos(datestr,'-'))[yr_uint16]
-				: strcount(datestr, 'gestart') > 0 ? 2021[yr_uint16]
-				: strcount(datestr, 'zo snel mogelijk') > 0  ? 2021[yr_uint16]
-				: strcount(datestr, 'voor') > 0  ? 2021[yr_uint16]
-				: strcount(datestr, 'na') > 0 ? substr(datestr, strpos(datestr, '20'), 4)[yr_uint16]
-				: (0/0)[yr_uint16];
-
-			attribute<yr_uint16> upper :=
-				  single_yr ? datestr[yr_uint16]
-				: strcount(datestr, '-') > 0 ? substr(datestr,strpos(datestr,'-')+1,4)[yr_uint16]
-				: strcount(datestr, 'voor') > 0 ? substr(datestr, strpos(datestr, '20'), 4)[yr_uint16]
-				: strcount(datestr, 'gestart') > 0 ? 2021[yr_uint16]
-				: strcount(datestr, 'uiterlijk') > 0 ? substr(datestr, strpos(datestr, '20'), 4)[yr_uint16]
-				: (0/0)[yr_uint16];
-
-			attribute<bool> startjaar_ok := and(isdefined(lower),isDefined(upper));
-		}
-
-		unit<uint32> planstatus := unique(plan/plantabel_input/pln_planstatus__tekst_)
-		{
-			attribute<string> rawstr_1 := strlen(values) <= 2 ? 'onbekend' : lowercase(values);
-			attribute<string> rawstr_2 := strcount(rawstr_1, 'onderzo'    ) > 0 || strcount(rawstr_1, 'mogelijk' ) > 0 || strcount(rawstr_1, 'onduidelijk') > 0 || strcount(rawstr_1, 'uitgesteld'     ) > 0 ? 'in onderzoek' : rawstr_1;
-			attribute<string> rawstr_3 := strcount(rawstr_2, 'uitvoer'    ) > 0 || strcount(rawstr_2, 'van start') > 0 || strcount(rawstr_2, 'vastgesteld') > 0 || strcount(rawstr_1, 'niet gestart'   ) > 0? 'definitief'   : rawstr_2;
-			attribute<string> rawstr_4 := strcount(rawstr_3, 'wup'        ) > 0 || strcount(rawstr_3, 'werk'     ) > 0 || strcount(rawstr_3, 'voorbereid' ) > 0 || strcount(rawstr_3, 'wordt opgesteld') > 0 || strcount(rawstr_3, 'opties') > 0 || strcount(rawstr_3, 'berekening') > 0 ? 'uit te werken' : rawstr_3;
-			attribute<string> rawstr_5 := rawstr_4;
-			attribute<string> rawstr_6 := strcount(rawstr_5, 'nterend'    ) > 0 || strcount(rawstr_5, 'kansrijk' ) > 0 || strcount(rawstr_5, 'verken'     ) > 0 ? 'orienterend'  : rawstr_5;
-			attribute<string> rawstr_7 := strcount(rawstr_6, 'perspectief') > 0 || strcount(rawstr_6, 'advies'   ) > 0 || strcount(rawstr_6, 'individu'   ) > 0 || strcount(rawstr_6, 'concept') > 0 || strcount(rawstr_6, 'stimuleren') > 0 || strcount(rawstr_6, 'voorlopig') > 0 || strcount(rawstr_6, 'voors') > 0 || strcount(rawstr_6, 'richting') > 0 ? 'richting bepaald' : rawstr_6;
-		
-			attribute<TVW_Classifications/planstatus> planstatus_rel := rlookup(rawstr_7, TVW_Classifications/planstatus/label);
-		}
-
-		unit<uint32> techniekstatus := unique(plan/plantabel_input/pln_techniekstatus__tekst_)
-		{
-			attribute<string> rawstr_1 := strlen(values) <= 2 ? 'onbekend' : lowercase(values);
-			attribute<string> rawstr_2 := strcount(rawstr_1, 'niet'       ) > 0 || strcount(rawstr_1, 'maatwerk'  ) > 0 || strcount(rawstr_1, 'geen'     ) > 0 || strcount(rawstr_1, 'uitgesteld' ) > 0 || strcount(rawstr_1, 'onduidelijk' ) > 0 || strcount(rawstr_1, 'nader' ) > 0 ? 'geen keuze' : rawstr_1;
-			attribute<string> rawstr_3 := strcount(rawstr_2, 'voorsort'   ) > 0 || strcount(rawstr_2, 'voorlopig' ) > 0 || strcount(rawstr_2, 'oorkeur'  ) > 0 || strcount(rawstr_2, 'voorwaarde' ) > 0 ? 'voorlopig'  : rawstr_2;
-			attribute<string> rawstr_4 := strcount(rawstr_3, 'definitie'  ) > 0 || strcount(rawstr_3, 'voorlopig' ) > 0 || strcount(rawstr_3, 'start'    ) > 0 || strcount(rawstr_3, 'gereed'     ) > 0 || strcount(rawstr_3, 'isoleren'    ) > 0 ? 'definitief' : rawstr_3;
-			attribute<string> rawstr_5 := strcount(rawstr_4, 'kansrijk'   ) > 0 || strcount(rawstr_4, 'logisch'   ) > 0 || strcount(rawstr_4, 'potentie' ) > 0 ? 'kansrijke optie'       : rawstr_4;
-			attribute<string> rawstr_6 := strcount(rawstr_5, 'tussen'     ) > 0 || strcount(rawstr_5, 'verken'    ) > 0 || strcount(rawstr_5, 'opties'   ) > 0 || strcount(rawstr_5, 'afhankelijk') > 0 || strcount(rawstr_5, 'voorbereid'  ) > 0 || strcount(rawstr_5, 'onderzoek'  ) > 0 || strcount(rawstr_5, 'studie'  ) > 0 ? 'uit te werken'  : rawstr_5;
-			attribute<string> rawstr_7 := strcount(rawstr_6, 'perspectief') > 0 || strcount(rawstr_6, 'optioneel' ) > 0 || strcount(rawstr_6, 'nterend'  ) > 0 || strcount(rawstr_6, 'richting'   ) > 0? 'richting bepaald' : rawstr_6;
-
-			attribute<TVW_Classifications/techniekstatus> techniekstatus_rel := rlookup(rawstr_7, TVW_Classifications/techniekstatus/label);
-		}
-
-		unit<uint32> installatie := unique(plan/plantabel_input/installatie__tekst_)
-		{
-			attribute<string> str     := replace(lowercase(values),'0',' ');
-			attribute<bool> onbekend  := strlen(values) <= 2 || strcount(replace(replace(replace(replace(str,'biomassa','geen'),'geen','overige'),'overige','niet'), 'niet', 'onbekend'), 'onbekend') > 0 || strcount(replace(str, '.', ''), 'nvt') > 0 || not(or(eWP,hWP,HR,IR,ZonB,bronnet,warmtenet));
-			attribute<bool> eWP       := strcount(replace(replace(replace(str,'ewp','individueel'),'individueel','electri'),'-',' '), 'electri') > 0 || strcount(str, 'warmtepomp') > 0 && strcount(str, 'hybride warmtepomp') < strcount(str, 'warmtepomp') || strcount(replace(str,'gasvrije','gasloze'), 'gasloze optie') > 0 || strcount(str,'elektrisch') > 0 && strcount(str,'elektrisch koken') == 0;
-			attribute<bool> hWP       := strcount(replace(str,'hwp','hyb'), 'hyb') > 0 || strcount(str,'gas met warmtepomp')>0;
-			attribute<bool> HR        := strcount(replace(replace(str,'gasketel','hr ketel'), 'hr ketel', 'hr'), 'hr') > 0 || str == 'duurzaam gas' || str == 'waterstof' || str == 'groen gas of waterstof';
-			attribute<bool> IR        := strcount(replace(str,'stralingspanelen','rood'), 'rood') > 0 || strcount(replace(str,'gasvrije','gasloze'), 'gasloze optie') > 0 ;
-			attribute<bool> ZonB      := strcount(replace(str,'zonnecollectoren','zonneboiler'),'zonneboiler') > 0;
-			attribute<bool> bronnet   := strcount(replace(str,'wko','bronnet'), 'bronnet') > 0 || strcount(str,'opwaarde') > 0 ||  strcount(replace(str,'(collectief) warmtenet','warmtenet'), 'collectie') > 0 ;		
-			attribute<bool> warmtenet := strcount(replace(replace(replace(str,'lt-net','wko'),'wko','afleverset'), 'afleverset', 'warmtenet'), 'warmtenet') > 0 || strcount(str, 'collectie') > 0 ;
-
-			attribute<string> inst_str := onbekend ? 'onbekend' : substr((eWP ? '_eWP' : '') + (hwp ? '_hWP' : '') + (HR ? '_HR' : '') + (IR ? '_IR' : '') + (zonB ? '_zonB' : '') + (bronnet ? '_bronnet' : '') + (warmtenet ? '_warmtenet' : ''),1);
-
-			attribute<installatiekeuze> installatiekeuze_rel := rlookup(inst_str,installatiekeuze/name);
-
-			unit<uint32> installatiekeuze := unique(inst_str)
+			container Techniekkeuze
 			{
-				attribute<string> label := values;
-				attribute<string> name  := values;
-			}
-		}
+				attribute<bool>  Any_hWP  (VBO) := any(Class/Installatie/hWP [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+				attribute<bool>  Any_eWP  (VBO) := any(Class/Installatie/eWP [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+				attribute<bool>  Any_Wnet (VBO) := any(Class/Installatie/Wnet[PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+				attribute<bool>  Any_Hr   (VBO) := any(Class/Installatie/Hr  [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 
-		unit<uint32> infrastructuur := unique(plan/plantabel_input/infrastructuur__tekst_)
-		{
-			attribute<string> str     := replace(lowercase(values),'0',' ');
-			attribute<bool> elek	  := strcount(str,'ele') > 0;
-			attribute<bool> gas       := strcount(replace(str,'waterstof','gas'),'gas') > 0;
-			attribute<bool> warmte_LT := strcount(replace(str,'collectief','warm'),'warm') > 0 || strcount(replace(replace(str,'wko','bronnet'),'bronnet','LT'),'LT') > 0;
-			attribute<bool> warmte_MT := strcount(replace(str,'collectief','warm'),'warm') > 0 || strcount(replace(str,'HT','MT'),'MT') >0;
-			attribute<bool> onbekend  := not(or(gas,warmte_MT,warmte_LT));
+				attribute<nrAsl> Wnet (VBO) := float64(Any_Wnet && not(Any_hWP) && not(Any_eWP))*VBO/nr_Asl;
+				parameter<nrAsl> hWP   := sum(float64(not(Any_Wnet) && not(Any_hWP) && Any_eWP)*VBO/nr_Asl);
+				parameter<nrAsl> eWP   := sum(float64(not(Any_Wnet) && Any_hWP && not(Any_eWP))*VBO/nr_Asl);
 
-			attribute<string> infra_str := onbekend ? 'onbekend' : substr((elek ? '_E' : '') + (gas ? '_G' : '') + (warmte_MT ? '_MT' : '') + (warmte_LT ? '_LT' : ''),1);
+				parameter<nrAsl> eWPhWP  := sum(float64(not(Any_Wnet) && Any_hWP && Any_eWP)*VBO/nr_Asl);
+				parameter<nrAsl> eWPWnet := sum(float64(Any_Wnet && not(Any_hWP) && Any_eWP)*VBO/nr_Asl);
+				parameter<nrAsl> hWPWnet := sum(float64(Any_Wnet && Any_hWP && not(Any_eWP))*VBO/nr_Asl);
 
-			attribute<infrastructuurkeuze> infrastructuurkeuze_rel := rlookup(infra_str,infrastructuurkeuze/name);
+				parameter<nrAsl> eWPhWPWnet := sum(float64(Any_Wnet && Any_hWP && Any_eWP)*VBO/nr_Asl);
 
-			unit<uint32> infrastructuurkeuze := unique(infra_str)
-			{
-				attribute<string> label := values;
-				attribute<string> name  := values;
 			}
 		}
 	}
+
+	container Class
+		{
+			unit<uint32> Plansoort: nrofrows = 4
+			{
+				attribute<string> label :  [ 'info ontbreekt', 'onderzoek', 'voorbereidend', 'uitvoeren'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Techniekstatus: nrofrows = 11
+			{
+				attribute<string> label :  [ 'definitief', 'geen keuze gemaakt', 'geen techniekkeuze, focus op isolatie',
+					 'kansrijke optie', 'niet van toepassing', 'onbekend', 'onderzoekend',
+					  'verkennend', 'voorkeursoptie', 'voorlopige keuze', 'voorsorterend'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Planstatus: nrofrows = 11
+			{
+				attribute<string> label :  [ 'afwachtend', 'concept', 'definitief', 'uitvoerend',
+					 'kansrijke optie', 'onbekend', 'onderzoekend', 'orienterend',
+					  'richtinggevend', 'verkennend', 'voorbereidend'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Docstatus: nrofrows = 5
+			{
+				attribute<string> label :  [ 'info ontbreekt', 'vastgesteld door raad', 'naar raad gestuurd', 'concept te inzage', 'vastgesteld door college'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Doctype: nrofrows = 4
+			{
+				attribute<string> label :  [ 'info ontbreekt', 'transitievisie', 'bijlage bij transitievisie', 'anders'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Isolatiegraad: nrofrows = 11
+			{
+				attribute<string> label :  [ 'onbekend', 'geen maatregelen', 'isolatie, geen specifiek niveau benoemd', 'standaard en streefwaarden', 
+					'schillabel A+', 'Schillabel B+', 'Schillabel C+', 'Schillabel D+', 'Schillabel D/C (<1940) A/B (overig)'
+					,'Schillabel D+ (wonen) B+ (util)','Doelstelling in kWh/m2 (vergelijkbaar Schillabel A/B)'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Installatie: nrofrows = 17
+			{
+				attribute<string> label :  [ 'onbekend', 'Hr', 'hWP', 'eWP', 
+					'Wnet', 'hWP,Hr', 'hWP,eWP', 'hWP,eWP', 'eWP,Wnet'
+					,'eWP,Hr','Wnet, Hr', 'Wnet, hWP', 'hWP,Wnet,Hr', 'eWP,Wnet,Hr', 'hWP,eWP,Hr', 'hWP,eWP,Wnet', 'hWP,eWP,Wnet,Hr'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				attribute<bool> Hr   := strcount(label, 'Hr')   > 0;
+				attribute<bool> hWP  := strcount(label, 'hWP')  > 0;
+				attribute<bool> eWP  := strcount(label, 'eWP')  > 0;
+				attribute<bool> Wnet := strcount(label, 'Wnet') > 0;
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Infrastructuur: nrofrows = 7
+			{
+				attribute<string> label :  [ 'onbekend', 'niet van toepassing', 'E', 'E,G', 'E,W', 'E,W,G', 'E,W,K'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				attribute<bool> E := strcount(label, 'E') > 0;
+				attribute<bool> G := strcount(label, 'G') > 0;
+				attribute<bool> W := strcount(label, 'W') > 0;
+				attribute<bool> K := strcount(label, 'K') > 0;
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+			unit<uint32> Energiebron: nrofrows = 56
+			{
+				attribute<string> label :  [ 'aquathermie', 'aquathermie, asfalt', 'aquathermie, bestaand warmtenet', 'aquathermie, bestaand warmtenet, WKO', 
+					'aquathermie, geothermie', 'aquathermie, geothermie, restwarmte', 'aquathermie, geothermie, WKO', 'aquathermie, geothermie, zon', 'aquathermie, hernieuwbaar gas'
+					,'aquathermie, restwarmte','aquathermie, restwarmte, asfalt', 'aquathermie, restwarmte, geothermie', 'aquathermie, restwarmte, hernieuwbaar gas',
+					'aquathermie, restwarmte, WKO, geothermie', 'aquathermie, restwarmte, zon', 'aquathermie, WKO', 'aquathermie, WKO, biomassa'
+					, 'aquathermie, WKO, collectieve warmtepomp', 'aquathermie, WKO, geothermie', 'aquathermie, WKO, hernieuwbaar gas', 'aquathermie, WKO, restwarmte'
+					, 'aquathermie, WKO, zon', 'aquathermie, zon', 'aquathermie, zon, asfalt', 'aquathermie, zon, collectieve warmtepomp', 'biomassa', 'biomassa, geothermie',
+					 'biomassa, zon, hernieuwbaar gas', 'collectieve warmtepomp', 'diverse opties mogelijk (>3 genoemd)', 'geothermie', 'geothermie, collectieve warmtepomp',
+					 'geothermie, hernieuwbaar gas', 'geothermie, restwarmte', 'geothermie, restwarmte, biomassa', 'geothermie, zon, collectieve warmtepomp', 'hernieuwbaar gas'
+					 , 'hernieuwbaar gas, biomassa', 'hernieuwbaar gas, WKO', 'niet specifiek benoemd', 'niet van toepassing', 'Onbekend', 'restwarmte', 'restwarmte, biomassa',
+					 'restwarmte, geothermie, collectieve warmtepomp', 'restwarmte, hernieuwbaar gas', 'restwarmte, WKO', 'restwarmte, WKO, collectieve warmtepomp',
+					 'restwarmte, WKO, hernieuwbaar gas', 'restwarmte, zon', 'WKO', 'WKO, collectieve warmtepomp', 'WKO, zon', 'WKO, zon, hernieuwbaar gas', 'zon', 'zon, hernieuwbaar gas'];
+				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
+
+				attribute<bool> aquathermie            := strcount(label, 'aquathermie')            > 0;
+				attribute<bool> asfalt                 := strcount(label, 'asfalt')                 > 0;
+				attribute<bool> bestaand_warmtenet     := strcount(label, 'bestaand warmtenet')     > 0;
+				attribute<bool> WKO                    := strcount(label, 'WKO')                    > 0;
+				attribute<bool> geothermie             := strcount(label, 'geothermie')             > 0;
+				attribute<bool> restwarmte             := strcount(label, 'restwarmte')             > 0;
+				attribute<bool> zon                    := strcount(label, 'zon')                    > 0;
+				attribute<bool> hernieuwbaar_gas       := strcount(label, 'hernieuwbaar gas')       > 0;
+				attribute<bool> biomassa               := strcount(label, 'biomassa')               > 0;
+				attribute<bool> collectieve_warmtepomp := strcount(label, 'collectieve warmtepomp') > 0;
+
+				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
+			}
+
+
+		}
 }
