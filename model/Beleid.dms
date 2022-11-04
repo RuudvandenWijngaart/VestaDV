@@ -83,6 +83,9 @@ container Beleid
 		attribute<yr_uint16> Eindjaar        := Invoer/Eindjaar [nr_orgentity] ;
 		attribute<ratio>     Naleving        := Invoer/RNaleving[nr_orgentity];
 
+		attribute<string>    voorwaarde1     := Invoer/voorwaarde1[nr_orgentity], IsHidden = "True";
+		attribute<string>    voorwaarde2     := Invoer/voorwaarde2[nr_orgentity], IsHidden = "True";
+
 		container Doel_false  := for_each_nedv(Classifications/Eigendom/Label,'const(false,Activatie)',Activatie,bool), IsHidden = "True";
 		container ParseDoelgroep := Doel_false
 		{
@@ -102,6 +105,20 @@ container Beleid
 			attribute<bool> TW (Activatie) := strcount(grondslag, 'TW') + strcount(grondslag, 'product') + strcount(grondslag, 'alle') > 0;
 			attribute<bool> KD (Activatie) := strcount(grondslag, 'KD') + strcount(grondslag, 'product') + strcount(grondslag, 'alle') > 0;
 			attribute<bool> VT (Activatie) := strcount(grondslag, 'VT') + strcount(grondslag, 'product') + strcount(grondslag, 'alle') > 0;
+		}
+
+		container ParseVoorwaarde
+		{
+			attribute<bool>  LabelVoorwaarde (Activatie) := strcount(voorwaarde1, 'Huidig label:') + strcount(voorwaarde2, 'Huidig label:') > 0;
+
+			container HuidigLabel := for_each_nedv(
+				  Classifications/Schillabel/name
+				, 'not(LabelVoorwaarde) ? (0/0)[bool] :
+				  strcount(voorwaarde1,'+ quote('Huidig label:') +') > 0 ? strcount(trim(replace(voorwaarde1,'+ quote('Huidig label:') +','+ quote('')+')), '+quote(Classifications/Schillabel/name)+') > 0 
+				: strcount(trim(replace(voorwaarde2, '+quote('Huidig label:')+', '+quote('')+')), '+quote(Classifications/Schillabel/name)+') > 0'
+				, Activatie
+				, bool
+				);
 		}
 	}
 
@@ -376,6 +393,18 @@ container Beleid
 				attribute<bool> TW (Activatie) := /Invoer/Beleid/Activatie/ParseGrondslag/TW[nr_orgentity];
 				attribute<bool> KD (Activatie) := /Invoer/Beleid/Activatie/ParseGrondslag/KD[nr_orgentity];
 				attribute<bool> VT (Activatie) := /Invoer/Beleid/Activatie/ParseGrondslag/VT[nr_orgentity];
+			}
+
+			container Voorwaarde
+			{
+				attribute<bool>  LabelVoorwaarde (Activatie) := /Invoer/Beleid/Activatie/ParseVoorwaarde/LabelVoorwaarde[nr_orgentity];
+
+				container HuidigLabel := for_each_nedv(
+					  Classifications/Schillabel/name
+					, '/Invoer/Beleid/Activatie/ParseVoorwaarde/HuidigLabel/'+Classifications/Schillabel/name+'[nr_orgentity]'
+					, Activatie
+					, bool
+					);
 			}
 
 			container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
