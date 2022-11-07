@@ -6,35 +6,22 @@
 
 container HestiaRun
 {
-		// Ophalen eenheden, gebiedsafbakeningen en typeringen.
+	//====== Ophalen eenheden, gebiedsafbakeningen en typeringen.
 	#include <%projDir%/model/Units.dms>
 	#include <%projDir%/model/Geography.dms>
 	#include <%projDir%/model/Classifications.dms>
 
-	// Invoer: hier kunnen meerdere rekenstappen gedefinieerd worden.
+	//====== Invoer: over welke periode moet er worden gerekend?
+	parameter<uint16> eerste_jaar := 2000[uint16], Descr = "Eerste zichtjaar";
+	parameter<uint8>  aantal_jaar := 21[uint8]   , Descr = "Aantal zichtjaren";
 
-	unit<uint32> KalibratieInputs : StorageName = "%projDir%/runs/KalibratieInput.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
+	//====== Opbouw lijst van zichtjaren en rekenstappen
+	unit<uint8> all_rekenstap: nrofrows = 51, IsHidden = "True";
+	unit<uint8> rekenstap:= subset(id(all_rekenstap) < aantal_jaar), IsHidden = "True"
 	{
-		parameter<uint8>        Input_nrYears          := first(nryears)[uint8];
-		parameter<string>       Input_StudieGebied     := first(studiegebied)[string];
-		parameter<bool>         Input_StartGegevensAan := first(StartGegevensAan)[bool];
-		parameter<units/ratio>  Input_Spreiding        := first(Spreiding)[units/ratio];
-		parameter<units/ratio>  Input_Staart           := first(Staart)[units/ratio];
-		parameter<uint8>        Input_RenovatieGrens   := first(RenovatieGrens)[uint8];
-	}
-
-	parameter<uint8> rowcount := 21[uint8];
-	//parameter<uint8> rowcount := KalibratieInputs/Input_nrYears;
-
-	unit<uint8> all_rekenstap: nrofrows = 51;
-
-	unit<uint8> rekenstap:= subset(id(all_rekenstap) < rowcount), IsHidden = "True"
-	{
-		attribute<units/yr_uint16> Jaar  := (uint16(2000) + uint16(id(.)))[units/yr_uint16];
-
+		attribute<units/yr_uint16> Jaar  := (eerste_jaar + uint16(id(.)))[units/yr_uint16];
 		attribute<string>          label := string(id(.))+'_'+string(Jaar);
 		attribute<string>          name  := id(.) == 0b ? 'StartJaar' : 'R' + label; 
-
 		unit<uint8> repeats  := subset(id(rekenstap) != 0b), IsHidden = "True"
 		{
 			attribute<string>name:=rekenstap/name[nr_orgentity];
@@ -47,9 +34,7 @@ container HestiaRun
 		// Invoer: Geografische selectie welke gebied wordt onderzocht.
 
 		// Volledig Nederland zonder selectie. Comment uit indien een andere optie gekozen wordt.
-		   parameter<string>   StudieGebied : ['GM0050'];
-		// parameter<string>   StudieGebied := KalibratieInputs/Input_StudieGebied;
-
+		   parameter<string>   StudieGebied : ['NL'];
 
 		// Enkele gemeente als selectie. Comment in om te gebruiken.
 		//	parameter<string>   StudieGebied : ['GM0050']; //GM0050 (Zeewolde) is handig om kleinschalig te testen OF GM0213 (meer oudere gebouwen)
@@ -74,10 +59,7 @@ container HestiaRun
 		container SpecifiekeInstellingen := DefaultInstellingen/Basis
 		{
 			// Invoer: welke energieprijzenbestanden worden gebruikt.
-			parameter<string> Energieprijzenbron       := '20220709_VV_Euro2020';
-			
-			// Invoer: worden bestaande warmtenetten meegenomen JA/NEE.
-			parameter<bool>   HasStartingArcSet := false, IsHidden = "True";
+			parameter<string> Energieprijzenbron := '20220709_VV_Euro2020';
 			
 			// Invoer: Per rekenstap worden specifieke instellingen gebruikt.
 			// De lijst van rekenstappen wordt gedefinieerd bij rekenstap.
