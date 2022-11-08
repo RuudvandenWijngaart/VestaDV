@@ -482,16 +482,17 @@ template WarmtenetTempl
 		// endpoints zijn alle AllCandidate/StudieGebiedPand(en)
 */				
 			
-		parameter<uint32> nrBronAllocatieIteraties := 60; // TODO: reconsider and move to kentallen
+		parameter<uint32> nrBronAllocatieIteraties := 20; // TODO: reconsider and move to kentallen
 		unit<uint32> allocIter := range(uint32, 0, nrBronAllocatieIteraties)
 		{
 			attribute<string> name := 'I'+string(id(.));
 			attribute<string> prevName := MakeDefined(name[ID(.)-1]+'/nextAugmentation', 'initialAugmentation');
 		}
 		
-		attribute<m> initialAugmentation(WarmteBronnen/bron) := (1.0 - WarmteBronnen/bron/Ki_cap / max(WarmteBronnen/bron/Ki_cap)) * WarmteBronnen/bron/max_dist;
+		attribute<m> initialAugmentation(WarmteBronnen/bron) := (1.0 - WarmteBronnen/bron/Ki_cap / max(WarmteBronnen/bron/Ki_cap)) * WarmteBronnen/bron/max_dist, KeepData = "False";
 		// round 1
-		template allocIterT {
+		template allocIterT 
+		{
 		
 			attribute<m> currAugmentation(WarmteBronnen/bron);
 			attribute<m> bron_handicap   (WarmteBronnen/bron) := currAugmentation + (max(WarmteBronnen/bron/max_dist)- WarmteBronnen/bron/max_dist);
@@ -524,8 +525,11 @@ template WarmtenetTempl
 			);
 			attribute<m> nextAugmentation(Warmtebronnen/bron) := currAugmentation + (bron_cap_ratio > 1.0 ? max(bron_dist, dest_bron_rel) - zaaglijn : 0[m]);
 		}
-		container Iterations := for_each_ne(allocIter/name, 'allocIterT('+allocIter/prevName+')'), KeepData = "False";
-		container LastIter := ='Iterations/'+last(allocIter/name);
+		container X : KeepData = "False"
+		{
+			container Iterations := for_each_ne(allocIter/name, 'allocIterT('+allocIter/prevName+')');
+		}
+		container LastIter := ='X/Iterations/'+last(allocIter/name);
 		
 		attribute<m>                  best_augmentation (WarmteBronnen/bron) := LastIter/currAugmentation;
 		attribute<Warmtebronnen/bron> best_bron_rel     (ContributiePand)    := lastIter/dest_bron_rel;
