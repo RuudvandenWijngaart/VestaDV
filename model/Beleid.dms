@@ -15,20 +15,64 @@ container Beleid
 
 		attribute<yr_uint16> Startjaar := eerstejaar[yr_uint16], IsHidden = "True";
 		attribute<yr_uint16> Eindjaar  := laatstejaar[yr_uint16], IsHidden = "True";
-		attribute<ratio>     Aandeel   := procent[ratio], IsHidden = "True";
-		attribute<eur_asl>   Bedrag    := vastbedrag[eur_asl], IsHidden = "True";
-		attribute<eur_m2>    Per_opp   := perm2[eur_m2],IsHidden = "True";
-		attribute<ratio>     RNaleving := naleving[ratio], IsHidden = "True";
+		attribute<ratio>     Aandeel   := replace(procent, ',', '.' )[ratio]     , IsHidden = "True";
+		attribute<eur_asl>   Bedrag    := replace(vastbedrag, ',', '.' )[eur_asl], IsHidden = "True";
+		attribute<eur_m2>    Per_opp   := replace(perm2, ',', '.' )[eur_m2]      , IsHidden = "True";
+		attribute<ratio>     RNaleving := replace(naleving, ',', '.' )[ratio]    , IsHidden = "True";
 
 		//====== Controle aantal criteria om te zien welke instrumenten geldige invoer hebben en meegenomen kunnen worden
 		attribute<bool> GeldigeInvoer := 
 				Isdefined(Startjaar)
 			&&  IsDefined(Eindjaar)
-			&& 	(LowerCase(soort) == 'subsidie' || LowerCase(soort) == 'normering' || LowerCase(soort) == 'activatie')
+			&& 	(LowerCase(soort) == 'subsidie' || LowerCase(soort) == 'normering' || LowerCase(soort) == 'activatie' || LowerCase(soort) == 'verbod')
 			&&  (LowerCase(soort) == 'subsidie' ? (IsDefined(Aandeel) && IsDefined(Bedrag)) : true)
 			&&  IsDefined(grondslag)
 			;
 	}
+
+	unit<uint32> Verbod := subset(Invoer/GeldigeInvoer && LowerCase(Invoer/soort) == 'verbod')
+	{
+		attribute<string>    label           := Invoer/label[nr_orgentity]     , IsHidden = "True";
+		attribute<string>    name            := Invoer/code[nr_orgentity]      , IsHidden = "True";
+		attribute<string>    doelgroep       := LowerCase(Invoer/doelgroep[nr_orgentity]) , IsHidden = "True";
+		attribute<string>    grondslag       := Invoer/grondslag[nr_orgentity] , IsHidden = "True";
+		attribute<yr_uint16> Startjaar       := Invoer/Startjaar[nr_orgentity] ;
+		attribute<yr_uint16> Eindjaar        := Invoer/Eindjaar [nr_orgentity] ;
+		attribute<ratio>     Naleving        := Invoer/RNaleving[nr_orgentity];
+
+		attribute<string>    voorwaarde1     := Invoer/voorwaarde1[nr_orgentity], IsHidden = "True";
+		attribute<string>    voorwaarde2     := Invoer/voorwaarde2[nr_orgentity], IsHidden = "True";
+
+		container Doel_false  := for_each_nedv(Classifications/Eigendom/Label,'const(false,Verbod)',Verbod,bool), IsHidden = "True";
+		container ParseDoelgroep := Doel_false
+		{
+			attribute<bool> Koop     (Verbod) := strcount(doelgroep, 'koopw') + strcount(doelgroep, 'alle') > 0;
+			attribute<bool> Parthuur (Verbod) := strcount(doelgroep, 'parti') + strcount(doelgroep, 'alle') > 0;
+			attribute<bool> Wooncorp (Verbod) := strcount(doelgroep, 'socia') + strcount(doelgroep, 'alle') > 0;
+		}
+
+		container ParseGrondslag := for_each_nedv(
+			  Classifications/Installatie/Label
+			, '(strcount(grondslag,'+quote(Classifications/Installatie/Label)+')) > 0'
+			, Verbod
+			, bool
+			);
+
+		container ParseVoorwaarde
+		{
+			attribute<bool>  LabelVoorwaarde (Verbod) := strcount(voorwaarde1, 'Huidig label:') + strcount(voorwaarde2, 'Huidig label:') > 0;
+
+			container HuidigLabel := for_each_nedv(
+				  Classifications/Schillabel/name
+				, 'not(LabelVoorwaarde) ? (0/0)[bool] :
+				  strcount(voorwaarde1,'+ quote('Huidig label:') +') > 0 ? strcount(trim(replace(voorwaarde1,'+ quote('Huidig label:') +','+ quote('')+')), '+quote(Classifications/Schillabel/name)+') > 0 
+				: strcount(trim(replace(voorwaarde2, '+quote('Huidig label:')+', '+quote('')+')), '+quote(Classifications/Schillabel/name)+') > 0'
+				, Verbod
+				, bool
+				);
+		}
+	}
+
 	unit<uint32> Activatie := subset(Invoer/GeldigeInvoer && LowerCase(Invoer/soort) == 'activatie')
 	{
 		attribute<string>    label           := Invoer/label[nr_orgentity]     , IsHidden = "True";
@@ -38,6 +82,9 @@ container Beleid
 		attribute<yr_uint16> Startjaar       := Invoer/Startjaar[nr_orgentity] ;
 		attribute<yr_uint16> Eindjaar        := Invoer/Eindjaar [nr_orgentity] ;
 		attribute<ratio>     Naleving        := Invoer/RNaleving[nr_orgentity];
+
+		attribute<string>    voorwaarde1     := Invoer/voorwaarde1[nr_orgentity], IsHidden = "True";
+		attribute<string>    voorwaarde2     := Invoer/voorwaarde2[nr_orgentity], IsHidden = "True";
 
 		container Doel_false  := for_each_nedv(Classifications/Eigendom/Label,'const(false,Activatie)',Activatie,bool), IsHidden = "True";
 		container ParseDoelgroep := Doel_false
@@ -58,6 +105,20 @@ container Beleid
 			attribute<bool> TW (Activatie) := strcount(grondslag, 'TW') + strcount(grondslag, 'product') + strcount(grondslag, 'alle') > 0;
 			attribute<bool> KD (Activatie) := strcount(grondslag, 'KD') + strcount(grondslag, 'product') + strcount(grondslag, 'alle') > 0;
 			attribute<bool> VT (Activatie) := strcount(grondslag, 'VT') + strcount(grondslag, 'product') + strcount(grondslag, 'alle') > 0;
+		}
+
+		container ParseVoorwaarde
+		{
+			attribute<bool>  LabelVoorwaarde (Activatie) := strcount(voorwaarde1, 'Huidig label:') + strcount(voorwaarde2, 'Huidig label:') > 0;
+
+			container HuidigLabel := for_each_nedv(
+				  Classifications/Schillabel/name
+				, 'not(LabelVoorwaarde) ? (0/0)[bool] :
+				  strcount(voorwaarde1,'+ quote('Huidig label:') +') > 0 ? strcount(trim(replace(voorwaarde1,'+ quote('Huidig label:') +','+ quote('')+')), '+quote(Classifications/Schillabel/name)+') > 0 
+				: strcount(trim(replace(voorwaarde2, '+quote('Huidig label:')+', '+quote('')+')), '+quote(Classifications/Schillabel/name)+') > 0'
+				, Activatie
+				, bool
+				);
 		}
 	}
 
@@ -283,6 +344,36 @@ container Beleid
 		parameter<yr_uint16> Zichtjaar;
 		//end case parameters
 
+		unit<uint32> Verbod := subset(/Invoer/Beleid/Verbod/StartJaar <= Zichtjaar && /Invoer/Beleid/Verbod/EindJaar >= Zichtjaar)
+		{
+			attribute<string>  label           := /Invoer/Beleid/Verbod/label[nr_orgentity]     , IsHidden = "True";
+			attribute<string>  name            := /Invoer/Beleid/Verbod/name[nr_orgentity] ;
+			attribute<ratio>   Naleving        := /Invoer/Beleid/Verbod/Naleving[nr_orgentity];
+
+			container Doelgroep := for_each_nedv(Classifications/Eigendom/label,'/Invoer/Beleid/Verbod/ParseDoelgroep/'+Classifications/Eigendom/label+'[nr_orgentity]',Verbod,bool);
+
+			container Grondslag := for_each_nedv(
+				  Classifications/Installatie/label
+				, '/Invoer/Beleid/Verbod/ParseGrondslag/'+Classifications/Installatie/label+'[nr_orgentity]'
+				, Verbod
+				, bool
+			);
+
+			container Voorwaarde
+			{
+				attribute<bool>  LabelVoorwaarde (Verbod) := /Invoer/Beleid/Verbod/ParseVoorwaarde/LabelVoorwaarde[nr_orgentity];
+
+				container HuidigLabel := for_each_nedv(
+					  Classifications/Schillabel/name
+					, '/Invoer/Beleid/Verbod/ParseVoorwaarde/HuidigLabel/'+Classifications/Schillabel/name+'[nr_orgentity]'
+					, Verbod
+					, bool
+					);
+			}
+
+			container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+		}
+
 		unit<uint32> Activatie := subset(/Invoer/Beleid/Activatie/StartJaar <= Zichtjaar && /Invoer/Beleid/Activatie/EindJaar >= Zichtjaar)
 		{
 			attribute<string>  label           := /Invoer/Beleid/Activatie/label[nr_orgentity]     , IsHidden = "True";
@@ -302,6 +393,18 @@ container Beleid
 				attribute<bool> TW (Activatie) := /Invoer/Beleid/Activatie/ParseGrondslag/TW[nr_orgentity];
 				attribute<bool> KD (Activatie) := /Invoer/Beleid/Activatie/ParseGrondslag/KD[nr_orgentity];
 				attribute<bool> VT (Activatie) := /Invoer/Beleid/Activatie/ParseGrondslag/VT[nr_orgentity];
+			}
+
+			container Voorwaarde
+			{
+				attribute<bool>  LabelVoorwaarde (Activatie) := /Invoer/Beleid/Activatie/ParseVoorwaarde/LabelVoorwaarde[nr_orgentity];
+
+				container HuidigLabel := for_each_nedv(
+					  Classifications/Schillabel/name
+					, '/Invoer/Beleid/Activatie/ParseVoorwaarde/HuidigLabel/'+Classifications/Schillabel/name+'[nr_orgentity]'
+					, Activatie
+					, bool
+					);
 			}
 
 			container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);

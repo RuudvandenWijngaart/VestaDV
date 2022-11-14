@@ -448,10 +448,47 @@ template SubsetGebouwOptieT
 	attribute<Classifications/SchilLabel> LabelNorm (GeschiktObject) := const(min(ZichtjaarBeleid/BestaandeBouwNorm/LabelNorm/Min_label),GeschiktObject);
 	attribute<bool> LabelNormOK (GeschiktObject) := Energielabel_rel <= LabelNorm;
 
-	attribute<Eur_yr> kosten_or_undefined (GeschiktObject) := select_data(GeschiktObject, Criterium) && LabelNormOK ? kosten : (0/0)[Eur_yr];
+	attribute<Eur_yr> kosten_or_undefined (GeschiktObject) := select_data(GeschiktObject, Criterium) && LabelNormOK && not(Verboden) ? kosten : (0/0)[Eur_yr];
 
 	container energielabelberekening := CalculationSchemes/NTA8800(GeschiktObject);
 	attribute<Classifications/Schillabel> Energielabel_rel     (GeschiktObject) := energielabelberekening/Energielabel_rel;
+
+
+	unit<uint32> ZBV := ZichtjaarBeleid/Verbod, ishidden = "True";
+	container VerbodBerekening := for_each_ne(ZBV/name, 'ImplVerbod(ZBV/V/'+ZBV/name+')');
+	template ImplVerbod : ishidden = "True"
+	{
+		//case parameters
+		parameter<ZBV> ZBV_rel;
+		//end case parameters
+
+		container Naleving
+		{
+			parameter<ratio> AandeelNaleving := ZBV/Naleving[ZBV_rel];
+			attribute<bool>  PerObject (Geschiktobject) := rnd_uniform(JaarSeed * 173u, Geschiktobject, range(float64, 0d, 1d)) <= AandeelNaleving;
+
+		}
+		container LabelVoorwaarde := for_each_nedv(Classifications/Schillabel/name , 'ZBV/Voorwaarde/HuidigLabel/'+Classifications/SchilLabel/name+'[ZBV_rel]', void, bool)
+		{
+			attribute<bool> Voldaan (GeschiktObject) := ='merge(uint8(BO/Energielabel_rel[GeschiktObject/BO_rel]), bool, '+AsItemList(Classifications/Schillabel/name)+')';
+		}
+		container Installatie := for_each_nedv(Classifications/Installatie/label , 'ZBV/grondslag/'+Classifications/Installatie/label+'[ZBV_rel]', void, bool)
+		{
+			container CheckPerProduct := for_each_nedv(
+				  Classifications/Product/name
+				, replace(
+						'merge(uint8(GeschiktObject/InstallatiePerProduct/@PROD@), bool, '+AsItemList(Classifications/Installatie/label)+') && BO/Activatie/Producten/@PROD@[GeschiktObject/BO_rel]'
+					, '@PROD@', Classifications/Product/name)
+				, GeschiktObject
+				, bool);
+
+			attribute<bool> InOptie (GeschiktObject) := ='or('+AsItemList('CheckPerProduct/'+Classifications/Product/name)+')';
+		}
+
+		attribute<bool> GeldigVerbod  (GeschiktObject) := LabelVoorwaarde/Voldaan;
+		attribute<bool> OptieVerboden (GeschiktObject) := GeldigVerbod && Naleving/PerObject && Installatie/InOptie;
+	}
+	attribute<bool> Verboden (GeschiktObject) := =count(ZBV/naleving) > 0u ? 'or('+AsItemList('VerbodBerekening/'+ZBV/name+'/OptieVerboden')+')' : 'const(false,GeschiktObject)';
 
 	unit<uint32> results := GeschiktObject 
 	{
