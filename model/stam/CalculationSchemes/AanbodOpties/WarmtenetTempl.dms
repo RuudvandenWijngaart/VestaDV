@@ -482,7 +482,7 @@ template WarmtenetTempl
 		// endpoints zijn alle AllCandidate/StudieGebiedPand(en)
 */				
 			
-		parameter<uint32> nrBronAllocatieIteraties := 20; // TODO: reconsider and move to kentallen
+		parameter<uint32> nrBronAllocatieIteraties := 40; // TODO: reconsider and move to kentallen
 		unit<uint32> allocIter := range(uint32, 0, nrBronAllocatieIteraties)
 		{
 			attribute<string> name := 'I'+string(id(.));
@@ -491,7 +491,7 @@ template WarmtenetTempl
 		
 		attribute<m> initialAugmentation(WarmteBronnen/bron) := (1.0 - WarmteBronnen/bron/Ki_cap / max(WarmteBronnen/bron/Ki_cap)) * WarmteBronnen/bron/max_dist, KeepData = "False";
 		// round 1
-		template allocIterT 
+		template allocIterT : KeepData = "False"
 		{
 		
 			attribute<m> currAugmentation(WarmteBronnen/bron);
@@ -525,25 +525,14 @@ template WarmtenetTempl
 			);
 			attribute<m> nextAugmentation(Warmtebronnen/bron) := currAugmentation + (bron_cap_ratio > 1.0 ? max(bron_dist, dest_bron_rel) - zaaglijn : 0[m]);
 		}
-		container X : KeepData = "False"
-		{
-			container Iterations := for_each_ne(allocIter/name, 'allocIterT('+allocIter/prevName+')');
-		}
-		container LastIter := ='X/Iterations/'+last(allocIter/name);
+		container Iterations := for_each_ne(allocIter/name, 'allocIterT('+allocIter/prevName+')'), KeepData = "False";
+
+		container LastIter := ='Iterations/'+last(allocIter/name);
 		
 		attribute<m>                  best_augmentation (WarmteBronnen/bron) := LastIter/currAugmentation;
 		attribute<Warmtebronnen/bron> best_bron_rel     (ContributiePand)    := lastIter/dest_bron_rel;
 		attribute<uint32>             SGP_count         (WarmteBronnen/bron) := count(best_bron_rel, Best_bron_rel);
-/*		
-		attribute<m> reroute(AllCandidate/StudieGebiedPand):= dijkstra_s('bidirectional;startPoint(Node_rel,impedance);endPoint(Node_rel);cut(OrgZone_max_imp);node:TraceBack'
-			,	Edge/dist, Edge/from, Edge/to
-			,	startPoint/Vertex_rel, best_augmentation[startPoint/bron_rel]
-			,	rlookup(AllCandidate/StudieGebiedPand/Point, Vertex/Values)
-			,	max(WarmteBronnen/bron/max_dist))
-		{
-				attribute<Edge> TraceBack(Vertex);
-		}
-*/		
+		
 		attribute<kW> NodeDemand(Vertex) := MakeDefined((ContributiePand/P_wd * Float64(best_bron_rel!=0))[invert(Vertex/Per_pand)], 0[kW]);
 	
 		attribute<kW> edge_flow(Edge) := trace_back(Edge/From, Edge/To, LastIter/bron_dist/TraceBack, NodeDemand);
