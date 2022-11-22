@@ -445,8 +445,30 @@ template SubsetGebouwOptieT
 		
 	attribute<Eur_yr> kosten (GeschiktObject) := =(LocatieSpecifiekeOpties/GebouwOpties/KiesMaatschappelijk) ? 'kosten_m' : 'kosten_j';
 
-	attribute<Classifications/SchilLabel> LabelNorm (GeschiktObject) := const(min(ZichtjaarBeleid/BestaandeBouwNorm/LabelNorm/Min_label),GeschiktObject);
-	attribute<bool> LabelNormOK (GeschiktObject) := Energielabel_rel <= LabelNorm;
+	//====== Verwerken normering op energielabel
+	container LabelNormen
+	{
+		unit<uint32> BBN := ZichtjaarBeleid/BestaandeBouwNorm, ishidden = "True";
+		parameter<bool> GeenNormen := sum(BBN/naleving) <= 0.0[ratio];
+		container Normen := for_each_ne(BBN/name, 'ImplSubs(BBN/V/'+BBN/name+')');
+		template ImplSubs : ishidden = "True"
+		{
+			//case parameters
+			parameter<BBN> BBN_rel;
+			//end case parameters
+
+			attribute<bool> Naleving      (GeschiktObject) := first(rnd_uniform(JaarSeed * 106u, GeschiktObject, range(float64, 0d, 1d)), GeschiktObject/BO_rel)[GeschiktObject/BO_rel] <= BBN/Naleving[BBN_rel];
+			attribute<bool> InDoelgroepED (GeschiktObject) := ='OR('+AsItemList(replace('BBN/doelgroep/@ED[BBN_rel] && BO/Eigendom_rel[geschiktobject/BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')', ishidden = "True";
+			attribute<bool> InDoelgroepWT (GeschiktObject) := BBN/doelgroep/EGW[BBN_rel] && BO/IsMeergezins[GeschiktObject/BO_rel] || BBN/doelgroep/MGW[BBN_rel] && not(BO/IsMeergezins[GeschiktObject/BO_rel]);
+			attribute<bool> Geldig        (GeschiktObject) := Naleving && InDoelgroepED && InDoelgroepWT;
+
+			attribute<Classifications/SchilLabel> LabelNorm (GeschiktObject) := not(Geldig) ? Classifications/Schillabel/V/N : BBN/LabelNorm/Min_label[BBN_rel];
+		}
+		attribute<Classifications/SchilLabel> Norm (GeschiktObject) := ='min_elem('+AsItemList('Normen/'+BBN/name+'/LabelNorm')+')';
+	}
+	
+	attribute<bool> LabelNormOK (GeschiktObject) := =LabelNormen/GeenNormen ? 'const(true,GeschiktObject)' : 'Energielabel_rel <= LabelNormen/Norm';
+	//======
 
 	attribute<Eur_yr> kosten_or_undefined (GeschiktObject) := select_data(GeschiktObject, Criterium) && LabelNormOK && not(Verboden) ? kosten : (0/0)[Eur_yr];
 
