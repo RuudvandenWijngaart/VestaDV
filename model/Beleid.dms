@@ -137,7 +137,7 @@ container Beleid
 		attribute<yr_uint16> Eindjaar        := Invoer/Eindjaar [nr_orgentity] ;
 		attribute<ratio>     Naleving        := Invoer/RNaleving[nr_orgentity];
 
-		unit<uint32> NieuwbouwNorm := subset(lowercase(doelgroep) == 'nieuwbouw')
+		unit<uint32> NieuwbouwNorm := subset(strcount(lowercase(doelgroep), 'nieuwbouw') > 0)
 		{
 			attribute<string>    label       := Normering/label[nr_orgentity]     , IsHidden = "True";
 			attribute<string>    name        := Normering/name[nr_orgentity]      , IsHidden = "True";
@@ -163,7 +163,7 @@ container Beleid
 				attribute<bool> InputIntegrity (NieuwbouwNorm) := HasVTnorm ? IsDefined(Ventilatietype_norm) : IsNull(Ventilatietype_norm);
 			}
 		}
-		unit<uint32> BestaandeBouwNorm := subset(lowercase(replace(doelgroep, ' ', '')) == 'bestaandebouw')
+		unit<uint32> BestaandeBouwNorm := subset(strcount(lowercase(replace(doelgroep, ' ', '')), 'bestaandebouw') > 0)
 		{
 			attribute<string>    label       := Normering/label[nr_orgentity]     , IsHidden = "True";
 			attribute<string>    name        := Normering/name[nr_orgentity]      , IsHidden = "True";
@@ -174,6 +174,16 @@ container Beleid
 			attribute<ratio>     Naleving    := Normering/Naleving[nr_orgentity];
 			attribute<string>    voorwaarde1 := LowerCase(Normering/voorwaarde1[nr_orgentity]), IsHidden = "True";
 			attribute<string>    voorwaarde2 := LowerCase(Normering/voorwaarde2[nr_orgentity]), IsHidden = "True";
+
+			container Doel_false  := for_each_nedv(Classifications/Eigendom/Label,'const(false,BestaandeBouwNorm)',BestaandeBouwNorm,bool), IsHidden = "True";
+			container ParseDoelgroep := Doel_false
+			{
+				attribute<bool> Koop     (BestaandeBouwNorm) := strcount(doelgroep, 'koopw') + strcount(doelgroep, 'alle') > 0;
+				attribute<bool> Parthuur (BestaandeBouwNorm) := strcount(doelgroep, 'parti') + strcount(doelgroep, 'alle') > 0;
+				attribute<bool> Wooncorp (BestaandeBouwNorm) := strcount(doelgroep, 'socia') + strcount(doelgroep, 'alle') > 0;
+				attribute<bool> EGW      (BestaandeBouwNorm) := strcount(doelgroep, 'meerg') == 0;
+				attribute<bool> MGW      (BestaandeBouwNorm) := strcount(doelgroep, 'engez') == 0;
+			}
 
 			container BouwdeelNorm := for_each_nedv(
 				  Classifications/Bouwdeel/name
@@ -491,6 +501,12 @@ container Beleid
 			attribute<string>  label           := /Invoer/Beleid/Normering/BestaandebouwNorm/label[nr_orgentity]     , IsHidden = "True";
 			attribute<string>  name            := /Invoer/Beleid/Normering/BestaandebouwNorm/name[nr_orgentity] ;
 			attribute<ratio>   Naleving        := /Invoer/Beleid/Normering/BestaandebouwNorm/Naleving[nr_orgentity] ;
+
+			container Doelgroep := for_each_nedv(Classifications/Eigendom/label,'/Invoer/Beleid/normering/BestaandebouwNorm/ParseDoelgroep/'+Classifications/Eigendom/label+'[nr_orgentity]',BestaandebouwNorm,bool)
+			{
+				attribute<bool> EGW (BestaandeBouwNorm) := /Invoer/Beleid/Normering/BestaandeBouwNorm/ParseDoelgroep/EGW[nr_orgentity];
+				attribute<bool> MGW (BestaandeBouwNorm) := /Invoer/Beleid/Normering/BestaandeBouwNorm/ParseDoelgroep/MGW[nr_orgentity];
+			}
 
 			container Voorwaarde
 			{
