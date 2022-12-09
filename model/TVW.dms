@@ -144,6 +144,134 @@ container TVW
 
 			}
 		}
+		
+		unit<uint32> woning := /Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied
+		{
+			attribute<nrAsl> nr_Asl := const(1.0[nrAsl],.);
+
+			container Matching
+			{
+				unit<uint32> p := woning
+				{
+					attribute<geography/rdc_meter> xy (p) := woning/geometry;
+				}
+
+				// driehoek wordt alleen gebruikt in workaround voor point_in_all_polygons voor GeoDmsVersion < 8.031				
+				attribute<geography/rdc_meter> driehoek  (p, poly)  :=
+					points2sequence(
+						union_data(union_unit(p,p,p,p), p/xy, p/xy+point(0.1,0.0), p/xy+point(0.1,0.1), p/xy),
+						union_data(union_unit(p,p,p,p), id(p), id(p), id(p), id(p)),
+						union_data(union_unit(p,p,p,p), const(0,p), const(1,p), const(2,p), const(3,p))
+									);
+				parameter<string> piap_expr := 'point_in_all_polygons(p/xy, PL/geometry)';
+				parameter<string> workaround := 'overlay_polygon(driehoek[geography/rdc_mm], PL/geometry[geography/rdc_mm])';
+				unit<uint32> kruistabel  := =(GeoDmsVersion() > 8.0305) ? piap_expr : workaround;
+
+				attribute<uint32> PL_count(p) := pcount(kruistabel/first_rel);
+				
+				attribute<nrAsl> Koop     (woning) := float64(woning/eigendom_rel == Classifications/Eigendom/V/Koop)     * nr_Asl;
+				attribute<nrAsl> PartHuur (woning) := float64(woning/eigendom_rel == Classifications/Eigendom/V/Parthuur) * nr_Asl;
+				attribute<nrAsl> WoonCorp (woning) := float64(woning/eigendom_rel == Classifications/Eigendom/V/Wooncorp) * nr_Asl;
+				
+				attribute<nrAsl> bouwjaar_voor_1945 (woning) := float64(woning/bouwjaar < 1945w) * nr_Asl;
+				attribute<nrAsl> bouwjaar_voor_1940 (woning) := float64(woning/bouwjaar < 1940w) * nr_Asl;
+				
+				attribute<Units/m2>    oppervlak_woning (woning) := woning/oppervlakte;
+				attribute<Units/m2>    schiloppervlak_woning (woning) := woning/Bouwdelen/Totaal;
+				attribute<ratio>  	   standaard_compactheid (woning) := oppervlak_woning / schiloppervlak_woning;
+				
+				attribute<TussenResultaten/StartJaar/AllocatieResultaten/Woning/BO> BO_rel (woning):= rlookup(woning/identificatie, /TussenResultaten/StartJaar/AllocatieResultaten/Woning/BO/code);
+				
+				attribute<Units/GJ_yr> RVvraag_woning   (woning) := TussenResultaten/StartJaar/AllocatieResultaten/Woning/BO/Functioneel/V_RV[BO_rel];
+				attribute<Units/GJ_yr> gasvraag_woning  (woning) := TussenResultaten/StartJaar/AllocatieResultaten/Woning/Metervraag/AardGas[BO_rel];
+				
+				attribute<Units/m2>    woonoppervlak_plan (PL)     := sum(oppervlak_woning[kruistabel/first_rel], kruistabel/second_rel);
+				attribute<ratio>       gem_standaard_compactheid_plan (PL)     := mean(standaard_compactheid[kruistabel/first_rel], kruistabel/second_rel);
+				attribute<Units/GJ_yr> RVvraag_plan       (PL)     := sum(gasvraag_woning[kruistabel/first_rel], kruistabel/second_rel);
+				attribute<Units/GJ_yr> gasvraag_plan      (PL)     := sum(gasvraag_woning[kruistabel/first_rel], kruistabel/second_rel);			
+				attribute<ratio>       aandeel_gas_in_RV  (PL)     := gasvraag_plan / RVvraag_plan;
+							
+				attribute<uint32> P_count        (PL) := pcount(kruistabel/second_rel);
+				attribute<nrAsl>  VBO_count      (PL) := sum(nr_Asl[kruistabel/first_rel], kruistabel/second_rel);
+				attribute<nrAsl>  koop_count     (PL) := sum(Koop[kruistabel/first_rel], kruistabel/second_rel);
+				attribute<nrAsl>  parthuur_count (PL) := sum(PartHuur[kruistabel/first_rel], kruistabel/second_rel);
+				attribute<nrAsl>  wooncorp_count (PL) := sum(WoonCorp[kruistabel/first_rel], kruistabel/second_rel);
+				attribute<nrAsl>  voor_1945_count(PL) := sum(bouwjaar_voor_1945[kruistabel/first_rel], kruistabel/second_rel);
+				attribute<nrAsl>  voor_1940_count(PL) := sum(bouwjaar_voor_1945[kruistabel/first_rel], kruistabel/second_rel);
+				
+				attribute<ratio>  aandeel_bouwjaar_voor_1945 (PL) := voor_1945_count / VBO_count;
+				attribute<ratio>  aandeel_bouwjaar_voor_1940 (PL) := voor_1940_count / VBO_count;
+			}
+
+			container Techniekkeuze
+			{
+				attribute<bool>  Any_hWP  (woning) := any(Class/Installatie/hWP [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+				attribute<bool>  Any_eWP  (woning) := any(Class/Installatie/eWP [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+				attribute<bool>  Any_Wnet (woning) := any(Class/Installatie/Wnet[PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+				attribute<bool>  Any_Hr   (woning) := any(Class/Installatie/Hr  [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+
+				attribute<nrAsl> Wnet (woning) := float64(Any_Wnet && not(Any_hWP) && not(Any_eWP))*woning/nr_Asl;
+				parameter<nrAsl> hWP   := sum(float64(not(Any_Wnet) && not(Any_hWP) && Any_eWP)*woning/nr_Asl);
+				parameter<nrAsl> eWP   := sum(float64(not(Any_Wnet) && Any_hWP && not(Any_eWP))*woning/nr_Asl);
+
+				parameter<nrAsl> eWPhWP  := sum(float64(not(Any_Wnet) && Any_hWP && Any_eWP)*woning/nr_Asl);
+				parameter<nrAsl> eWPWnet := sum(float64(Any_Wnet && not(Any_hWP) && Any_eWP)*woning/nr_Asl);
+				parameter<nrAsl> hWPWnet := sum(float64(Any_Wnet && Any_hWP && not(Any_eWP))*woning/nr_Asl);
+
+				parameter<nrAsl> eWPhWPWnet := sum(float64(Any_Wnet && Any_hWP && Any_eWP)*woning/nr_Asl);
+
+			}
+		}
+		
+		unit<uint32> uBouw := /Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied
+		{
+			attribute<nrAsl> nr_Asl := const(1.0[nrAsl],.);
+
+			container Matching
+			{
+				unit<uint32> p := uBouw
+				{
+					attribute<geography/rdc_meter> xy (p) := uBouw/geometry;
+				}
+
+				// driehoek wordt alleen gebruikt in workaround voor point_in_all_polygons voor GeoDmsVersion < 8.031				
+				attribute<geography/rdc_meter> driehoek  (p, poly)  :=
+					points2sequence(
+						union_data(union_unit(p,p,p,p), p/xy, p/xy+point(0.1,0.0), p/xy+point(0.1,0.1), p/xy),
+						union_data(union_unit(p,p,p,p), id(p), id(p), id(p), id(p)),
+						union_data(union_unit(p,p,p,p), const(0,p), const(1,p), const(2,p), const(3,p))
+									);
+				parameter<string> piap_expr := 'point_in_all_polygons(p/xy, PL/geometry)';
+				parameter<string> workaround := 'overlay_polygon(driehoek[geography/rdc_mm], PL/geometry[geography/rdc_mm])';
+				unit<uint32> kruistabel  := =(GeoDmsVersion() > 8.0305) ? piap_expr : workaround;
+
+
+				attribute<uint32> PL_count(p) := pcount(kruistabel/first_rel);
+				
+				attribute<uint32> P_count   (PL) := pcount(kruistabel/second_rel);
+				attribute<nrAsl>  VBO_count (PL) := sum(nr_Asl[kruistabel/first_rel], kruistabel/second_rel);
+			}
+
+			container Techniekkeuze
+			{
+				attribute<bool>  Any_hWP  (uBouw) := any(Class/Installatie/hWP [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+				attribute<bool>  Any_eWP  (uBouw) := any(Class/Installatie/eWP [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+				attribute<bool>  Any_Wnet (uBouw) := any(Class/Installatie/Wnet[PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+				attribute<bool>  Any_Hr   (uBouw) := any(Class/Installatie/Hr  [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+
+				attribute<nrAsl> Wnet (uBouw) := float64(Any_Wnet && not(Any_hWP) && not(Any_eWP))*uBouw/nr_Asl;
+				parameter<nrAsl> hWP   := sum(float64(not(Any_Wnet) && not(Any_hWP) && Any_eWP)*uBouw/nr_Asl);
+				parameter<nrAsl> eWP   := sum(float64(not(Any_Wnet) && Any_hWP && not(Any_eWP))*uBouw/nr_Asl);
+
+				parameter<nrAsl> eWPhWP  := sum(float64(not(Any_Wnet) && Any_hWP && Any_eWP)*uBouw/nr_Asl);
+				parameter<nrAsl> eWPWnet := sum(float64(Any_Wnet && not(Any_hWP) && Any_eWP)*uBouw/nr_Asl);
+				parameter<nrAsl> hWPWnet := sum(float64(Any_Wnet && Any_hWP && not(Any_eWP))*uBouw/nr_Asl);
+
+				parameter<nrAsl> eWPhWPWnet := sum(float64(Any_Wnet && Any_hWP && Any_eWP)*uBouw/nr_Asl);
+
+			}
+		}
+		
 	}
 
 	container Class
