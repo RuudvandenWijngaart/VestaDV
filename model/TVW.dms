@@ -143,6 +143,35 @@ container TVW
 				parameter<nrAsl> eWPhWPWnet := sum(float64(Any_Wnet && Any_hWP && Any_eWP)*VBO/nr_Asl);
 
 			}
+			
+			container CBSKoppeling
+			{	
+				container VBONiveau
+				{
+					attribute<Uint32> MateVanStedelijkheidVBO (VBO) := /Geography/RegioIndelingen/Buurt/STED[buurt_rel][Uint32];
+					attribute<nrAsl> ZeerSterkStedelijk      (VBO) := float64(MateVanStedelijkheidVBO == 1[Uint32]) *nr_Asl;
+					attribute<nrAsl> SterkStedelijk 		 (VBO) := float64(MateVanStedelijkheidVBO == 2[Uint32]) *nr_Asl;
+					attribute<nrAsl> MatigStedelijk 		 (VBO) := float64(MateVanStedelijkheidVBO == 3[Uint32]) *nr_Asl;
+					attribute<nrAsl> WeinigStedelijk 		 (VBO) := float64(MateVanStedelijkheidVBO == 4[Uint32]) *nr_Asl;
+					attribute<nrAsl> NietStedelijk 			 (VBO) := float64(MateVanStedelijkheidVBO == 5[Uint32]) *nr_Asl;
+				  //attribute<nrAsl> Overigstedelijk 		 (VBO) := float64(MateVanStedelijkheidVBO == -99999999[Uint32] ) *nr_Asl;
+				  
+					attribute<Uint32> OmgevingsAdressenDichtheid (VBO) := /Geography/RegioIndelingen/Buurt/OAD[buurt_rel][Uint32];
+				}
+				
+				container PlanNiveau
+				{
+					attribute<nrAsl>  VBO_count_ZeerSterkStedelijk (PL) := sum(VBONiveau/ZeerSterkStedelijk[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl>  VBO_count_SterkStedelijk     (PL) := sum(VBONiveau/SterkStedelijk    [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl>  VBO_count_MatigStedelijk 	   (PL) := sum(VBONiveau/MatigStedelijk	   [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl>  VBO_count_WeinigStedelijk    (PL) := sum(VBONiveau/WeinigStedelijk   [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl>  VBO_count_NietStedelijk 	   (PL) := sum(VBONiveau/NietStedelijk	   [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+				  //attribute<nrAsl>  VBO_count_Overigstedelijk    (PL) := sum(VBONiveau/Overigstedelijk   [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+				  
+				  	attribute<Uint32>  OmgevingsAdressenDichtheid  (PL) := mean(VBONiveau/OmgevingsAdressenDichtheid	   [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+
+				}		
+			}
 		}
 		
 		unit<uint32> woning := /Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied
@@ -170,9 +199,10 @@ container TVW
 				attribute<woning> invert_first_rel (woning) := invert(kruistabel/first_rel);
 				attribute<kruistabel> woning_kruistabel_rel (woning) := rlookup(invert_first_rel, kruistabel/first_rel);
 
-				attribute<uint32> PL_countp(p) := pcount(kruistabel/first_rel);
-				attribute<TussenResultaten/StartJaar/AllocatieResultaten/Woning/BO> BO_rel (woning):= rlookup(woning/identificatie, /TussenResultaten/StartJaar/AllocatieResultaten/Woning/BO/code);							
-
+				attribute<uint32> PL_count(p) := pcount(kruistabel/first_rel);
+				
+				attribute<Invoer/RuimtelijkeData/Bebouwing/Woning>   				ruimtelijkedata_rel  (woning):= rlookup(woning/identificatie, /Invoer/RuimtelijkeData/Bebouwing/Woning/code);							
+				attribute<BeginSituatie/StartingStateComponenten/Woning/PreStartJaar>   StartingStateComponenten_rel  (woning):= rlookup(woning/identificatie, /BeginSituatie/StartingStateComponenten/Woning/PreStartJaar/code);							
 			}
 			
 			container eigendom 
@@ -182,179 +212,227 @@ container TVW
 				attribute<nrAsl> WoonCorp (woning) := float64(woning/eigendom_rel == Classifications/Eigendom/V/Wooncorp) * nr_Asl;			
 			}
 					
-			container gasvraag
-			{
-					
-				attribute<Units/GJ_yr> RV (woning) := /TussenResultaten/StartJaar/BebouwingsComponenten/Woning/BO/MetervraagBerekening/BemeterdeGebouwInput_rel/RVb[Matching/BO_rel] == /Classifications/BemeterdeGebouwInput/V/Gas 
-				? /TussenResultaten/StartJaar/BebouwingsComponenten/Woning/BO/MetervraagBerekening/metervraag_per_product/RVb[Matching/BO_rel] + /TussenResultaten/StartJaar/BebouwingsComponenten/Woning/BO/MetervraagBerekening/metervraag_per_product/RVp[Matching/BO_rel]
+			container StandaardGasvraag
+			{ 
+				attribute<Units/GJ_yr> RV (woning) := /BeginSituatie/StartingStateComponenten/Woning/PreStartJaar/BemeterdeGebouwInput_rel/RVb[Matching/StartingStateComponenten_rel] == /Classifications/BemeterdeGebouwInput/V/Gas 
+				? /BeginSituatie/StartingStateComponenten/Woning/Results/Func2Meter/metervraag_per_product/RVb[Matching/ruimtelijkedata_rel] + /BeginSituatie/StartingStateComponenten/Woning/Results/Func2Meter/metervraag_per_product/RVp[Matching/ruimtelijkedata_rel]
 				: 0[GJ_yr];
 				
-				attribute<Units/GJ_yr> TW (woning) := /TussenResultaten/StartJaar/BebouwingsComponenten/Woning/BO/MetervraagBerekening/BemeterdeGebouwInput_rel/TWb[Matching/BO_rel] == /Classifications/BemeterdeGebouwInput/V/Gas 
-				? /TussenResultaten/StartJaar/BebouwingsComponenten/Woning/BO/MetervraagBerekening/metervraag_per_product/TWb[Matching/BO_rel] + /TussenResultaten/StartJaar/BebouwingsComponenten/Woning/BO/MetervraagBerekening/metervraag_per_product/TWp[Matching/BO_rel]
+				attribute<Units/GJ_yr> TW (woning) := /BeginSituatie/StartingStateComponenten/Woning/PreStartJaar/BemeterdeGebouwInput_rel/TWb[Matching/StartingStateComponenten_rel] == /Classifications/BemeterdeGebouwInput/V/Gas 
+				? /BeginSituatie/StartingStateComponenten/Woning/Results/Func2Meter/metervraag_per_product/TWb[Matching/ruimtelijkedata_rel] + /BeginSituatie/StartingStateComponenten/Woning/Results/Func2Meter/metervraag_per_product/twp[Matching/ruimtelijkedata_rel]
 				: 0[GJ_yr];
 			}
 			
 			container isolatie
 			{
-				attribute<uint8> schillabel (woning) := /TussenResultaten/StartJaar/AllocatieResultaten/Woning/BO/schillabel_rel[Matching/BO_rel];				
-				attribute<uint32> isolatiegraad_klasse (woning) := PL/Isolatiegraad_rel[Matching/kruistabel/second_rel][Matching/woning_kruistabel_rel];
-			
-				attribute<uint8> beoogd_energielabel (woning) := 
-					isolatiegraad_klasse == 0 ? schillabel[uint8] : 										// 0 onbekend
-					isolatiegraad_klasse == 1 ? schillabel[uint8] : 										// 1 geen maatregelen
-					isolatiegraad_klasse == 2 ? Classifications/schillabel/V/B :		 					// 2 isolatie, geen speciefiek niveau benoemd
-					isolatiegraad_klasse == 3 ? Classifications/schillabel/V/A : 							// 3 standaard en streefwaarden
-					isolatiegraad_klasse == 4 ? Classifications/schillabel/V/A : 							// 4 schillabel A+
-					isolatiegraad_klasse == 5 ? Classifications/schillabel/V/B : 							// 5 schillabel B+
-					isolatiegraad_klasse == 6 ? Classifications/schillabel/V/C : 							// 6 schillabel C+
-					isolatiegraad_klasse == 7 ? Classifications/schillabel/V/D : 							// 7 schillabel D+
-					isolatiegraad_klasse == 8 && woning/bouwjaar < 1945w ? Classifications/schillabel/V/D : // 8 schillabel D/c <1940, A/B overig
-					isolatiegraad_klasse == 8 && woning/bouwjaar > 1945w ? Classifications/schillabel/V/B : // 8 schillabel D/c <1940, A/B overig
-					isolatiegraad_klasse == 9 ? Classifications/schillabel/V/D : 							// 9 D+ wonen, B+ util
-					isolatiegraad_klasse == 10 ? Classifications/schillabel/V/B : schillabel[uint8];		// 10 doelstelling in kWh/m2, vergelijkbaar met A/B
+				container Any_IsolatiegraadKlasse
+				{
+					attribute<bool>  onbekend  			(woning) := any(Class/Isolatiegraad/onbekend 						[PL/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  GeenMaatregelen  	(woning) := any(Class/Isolatiegraad/geen_maatregelen 				[PL/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  IsolatieGeenNiveau (woning) := any(Class/Isolatiegraad/isolatie_geen_specifiek_niveau 	[PL/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  StandaardEnStreef  (woning) := any(Class/Isolatiegraad/standaard_en_streefwaarden 		[PL/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  ALabel  			(woning) := any(Class/Isolatiegraad/A 								[PL/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  BLabel  			(woning) := any(Class/Isolatiegraad/B								[PL/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  CLabel  			(woning) := any(Class/Isolatiegraad/C								[PL/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  DLabel  			(woning) := any(Class/Isolatiegraad/D								[PL/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  DC1940AB  			(woning) := any(Class/Isolatiegraad/DC_1940_AB_overig 				[PL/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  DWonenBUtil  		(woning) := any(Class/Isolatiegraad/D_wonen_B_util 					[PL/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  kWhM2  			(woning) := any(Class/Isolatiegraad/kWh_m2_AB 						[PL/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+				}
 				
-				attribute<uint8> beoogd_energielabel2 (woning) := 
-					any(Class/Isolatiegraad/onbekend) 									   ? schillabel[uint8] : 
-					any(Class/Isolatiegraad/geen_maatregelen) 							   ? schillabel[uint8] : 
-					any(Class/Isolatiegraad/isolatie_geen_specifiek_niveau) 			   ? Classifications/schillabel/V/B :
-					any(Class/Isolatiegraad/standaard_en_streefwaarden) 				   ? Classifications/schillabel/V/A :
-					any(Class/Isolatiegraad/A)  										   ? Classifications/schillabel/V/A :
-					any(Class/Isolatiegraad/B)											   ? Classifications/schillabel/V/B :
-					any(Class/Isolatiegraad/C) 											   ? Classifications/schillabel/V/C :
-					any(Class/Isolatiegraad/D) 											   ? Classifications/schillabel/V/D :
-					any(Class/Isolatiegraad/DC_1940_AB_overig)  && woning/bouwjaar < 1945w ? Classifications/schillabel/V/D :
-					any(Class/Isolatiegraad/DC_1940_AB_overig)  && woning/bouwjaar > 1945w ? Classifications/schillabel/V/B :
-					any(Class/Isolatiegraad/D_wonen_B_util) 							   ? Classifications/schillabel/V/D :
-					any(Class/Isolatiegraad/kWh_m2_AB) 									   ? Classifications/schillabel/V/B : schillabel;
-					
-				attribute<uint8> bouwjaarklasse (woning) := woning/bouwjaarwoning_rel;
-				attribute<uint8> woningtype     (woning) := woning/woningtype_rel;
-				
-				unit<uint32> woningtype_bouwjaarklasse := combine_unit(woningtype, bouwjaarklasse);
+				attribute<Classifications/schillabel>     schillabel     	   (woning) := BeginSituatie/StartingStateComponenten/Woning/Results/schillabel_rel[Matching/ruimtelijkedata_rel];
+				attribute<Classifications/BouwjaarWoning> bouwjaarklasse 	   (woning) := woning/bouwjaarwoning_rel;
+				attribute<Classifications/WoningType>     woningtype     	   (woning) := woning/woningtype_rel;
+				attribute<Class/Isolatiegraad>            isolatiegraad_klasse (woning) := PL/isolatiegraad_rel[Matching/kruistabel/second_rel][Matching/woning_kruistabel_rel];				
+
+				unit<uint32> woningtype_bouwjaarklasse := combine_unit(Classifications/WoningType, Classifications/BouwjaarWoning);
 				attribute<woningtype_bouwjaarklasse> combine_type_bouwjaar (woning) :=combine_data(woningtype_bouwjaarklasse, woningtype, bouwjaarklasse);
 				
-				attribute<uint32>  combine_type_bouwjaar_label    (woning) := combine_data(Classifications/RV_besparing_labelsprong, schillabel, combine_type_bouwjaar);
-				attribute<float64> gasbesparingsfactor_schillabel (woning) := 
-					Classifications/RV_besparing_labelsprong2/besparing_F[
-						combine_data(Classifications/RV_besparing_labelsprong2, 
-							schillabel, 
-							combine_data(combine_unit(woningtype, bouwjaarklasse), 
-								woningtype,
-								bouwjaarklasse))
-						];
+				attribute<Classifications/RV_besparing_labelsprong> RV_besparing_labelsprong_huidig_rel (woning) := 
+					combine_data(Classifications/RV_besparing_labelsprong, combine_type_bouwjaar, schillabel);
+								
+				container optimistisch
+				{
+					attribute<Classifications/schillabel> beoogd_energielabel (woning) := 
+						Any_IsolatiegraadKlasse/onbekend								? schillabel : 
+						Any_IsolatiegraadKlasse/GeenMaatregelen							? schillabel : 
+						Any_IsolatiegraadKlasse/IsolatieGeenNiveau 			   			? Classifications/schillabel/V/B :
+						Any_IsolatiegraadKlasse/StandaardEnStreef 				   		? Classifications/schillabel/V/A :
+						Any_IsolatiegraadKlasse/ALabel 									? Classifications/schillabel/V/A :
+						Any_IsolatiegraadKlasse/BLabel									? Classifications/schillabel/V/B :
+						Any_IsolatiegraadKlasse/CLabel								    ? Classifications/schillabel/V/C :
+						Any_IsolatiegraadKlasse/DLabel									? Classifications/schillabel/V/D :
+						Any_IsolatiegraadKlasse/DC1940AB  && woning/bouwjaar < 1945w 	? Classifications/schillabel/V/C :
+						Any_IsolatiegraadKlasse/DC1940AB  && woning/bouwjaar > 1945w 	? Classifications/schillabel/V/A :
+						Any_IsolatiegraadKlasse/DWonenBUtil							   	? Classifications/schillabel/V/D :
+						Any_IsolatiegraadKlasse/kWhM2								    ? Classifications/schillabel/V/A : schillabel;
+					
+					attribute<Classifications/RV_besparing_labelsprong> RV_besparing_labelsprong_beoogd_rel (woning) := 
+						combine_data(Classifications/RV_besparing_labelsprong, combine_type_bouwjaar, beoogd_energielabel);
+					
+					attribute<float64> RVFactorHuidig   (woning) := Classifications/RV_besparing_labelsprong/besparing_F[RV_besparing_labelsprong_huidig_rel];
+					attribute<float64> RVFactorBeoogd   (woning) := Classifications/RV_besparing_labelsprong/besparing_F[RV_besparing_labelsprong_beoogd_rel];
+					attribute<float64> RVFactorUitkomst (woning) := RVFactorBeoogd / RVFactorHuidig;
+					
+					attribute<float64> gasbesparingsfactor_schillabel (woning) := beoogd_energielabel < schillabel ? 1[float64] - RVFactorUitkomst : 0d;
+					
+					attribute<GJ_yr> gasbesparing_RV_isolatie (woning) := gasbesparingsfactor_schillabel * StandaardGasvraag/RV;
+					attribute<GJ_yr> gas_RV_na_labelsprong    (woning) := StandaardGasvraag/RV - gasbesparing_RV_isolatie;
+				}
 				
-				attribute<GJ_yr> gasbesparing_RV_isolatie (woning) := gasbesparingsfactor_schillabel * gasvraag/RV;
-				attribute<GJ_yr> gas_RV_na_labelsprong    (woning) := gasvraag/RV - gasbesparing_RV_isolatie;
+				container pessimistisch
+				{
+					attribute<Classifications/schillabel> beoogd_energielabel (woning) := 
+						Any_IsolatiegraadKlasse/onbekend								? schillabel : 
+						Any_IsolatiegraadKlasse/GeenMaatregelen							? schillabel : 
+						Any_IsolatiegraadKlasse/IsolatieGeenNiveau 			   			? Classifications/schillabel/V/C :
+						Any_IsolatiegraadKlasse/StandaardEnStreef 				   		? Classifications/schillabel/V/A :
+						Any_IsolatiegraadKlasse/ALabel 									? Classifications/schillabel/V/A :
+						Any_IsolatiegraadKlasse/BLabel									? Classifications/schillabel/V/B :
+						Any_IsolatiegraadKlasse/CLabel								    ? Classifications/schillabel/V/C :
+						Any_IsolatiegraadKlasse/DLabel									? Classifications/schillabel/V/D :
+						Any_IsolatiegraadKlasse/DC1940AB  && woning/bouwjaar < 1945w 	? Classifications/schillabel/V/D :
+						Any_IsolatiegraadKlasse/DC1940AB  && woning/bouwjaar > 1945w 	? Classifications/schillabel/V/B :
+						Any_IsolatiegraadKlasse/DWonenBUtil							   	? Classifications/schillabel/V/D :
+						Any_IsolatiegraadKlasse/kWhM2								    ? Classifications/schillabel/V/B : schillabel;
+					
+					attribute<Classifications/RV_besparing_labelsprong> RV_besparing_labelsprong_beoogd_rel (woning) := 
+						combine_data(Classifications/RV_besparing_labelsprong, combine_type_bouwjaar, beoogd_energielabel);
+					
+					attribute<float64> RVFactorHuidig   (woning) := Classifications/RV_besparing_labelsprong/besparing_F[RV_besparing_labelsprong_huidig_rel];
+					attribute<float64> RVFactorBeoogd   (woning) := Classifications/RV_besparing_labelsprong/besparing_F[RV_besparing_labelsprong_beoogd_rel];
+					attribute<float64> RVFactorUitkomst (woning) := RVFactorBeoogd / RVFactorHuidig;
+					
+					attribute<float64> gasbesparingsfactor_schillabel (woning) := beoogd_energielabel < schillabel ? 1[float64] - RVFactorUitkomst : 0d;
+					
+					attribute<GJ_yr> gasbesparing_RV_isolatie (woning) := gasbesparingsfactor_schillabel * StandaardGasvraag/RV;
+					attribute<GJ_yr> gas_RV_na_labelsprong    (woning) := StandaardGasvraag/RV - gasbesparing_RV_isolatie;
+				}
 			}
 			
 			container Techniekkeuze
 			{
-			
+				container OnbekendCombinatieCheck
+				{
+					attribute<bool>   WoningInMaarEenPlan (woning) 				 := Matching/PL_count = 1 ;
+					unit<uint32>      OnbekendCombinatieWoningen 				 := subset(Any_onbekend && (Any_hWP || Any_eWP || Any_Wnet || Any_Hr) && EenPlan);
+					parameter<uint32> AantalWoningenOnebekendCombinatieEnEenPlan := count(OnbekendCombinatieWoningen/nr_OrgEntity);
+					parameter<bool>   GeenWoningenMetOnbekendCombinatie 		 := AantalWoningenOnebekendCombinatieEnEenPlan = 0 ? 1  0;
+				}
+								
 				attribute<bool>  Any_hWP  (woning) := any(Class/Installatie/hWP [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 				attribute<bool>  Any_eWP  (woning) := any(Class/Installatie/eWP [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 				attribute<bool>  Any_Wnet (woning) := any(Class/Installatie/Wnet[PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 				attribute<bool>  Any_Hr   (woning) := any(Class/Installatie/Hr  [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 				attribute<bool>  Any_onbekend   (woning) := any(Class/Installatie/onbekend  [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 
-				attribute<nrAsl> Only_hWP  (woning) := float64(Any_hWP && not(Any_eWP) && not(Any_Wnet) && not(Any_Hr) && not(Any_onbekend))*woning/nr_Asl;
-				attribute<nrAsl> Only_eWP  (woning) := float64(Any_eWP && not(Any_hWP) && not(Any_Wnet) && not(Any_Hr) && not(Any_onbekend))*woning/nr_Asl;
-				attribute<nrAsl> Only_Wnet (woning) := float64(Any_Wnet && not(Any_hWP) && not(Any_eWP) && not(Any_Hr) && not(Any_onbekend))*woning/nr_Asl;
-				attribute<nrAsl> Only_Hr   (woning) := float64(Any_Hr && not(Any_hWP) && not(Any_eWP) && not(Any_Wnet) && not(Any_onbekend))*woning/nr_Asl;
+				attribute<nrAsl> Only_hWP  (woning) := float64(Any_hWP && not(Any_eWP) && not(Any_Wnet) && not(Any_Hr))*woning/nr_Asl;
+				attribute<nrAsl> Only_eWP  (woning) := float64(Any_eWP && not(Any_hWP) && not(Any_Wnet) && not(Any_Hr))*woning/nr_Asl;
+				attribute<nrAsl> Only_Wnet (woning) := float64(Any_Wnet && not(Any_hWP) && not(Any_eWP) && not(Any_Hr))*woning/nr_Asl;
+				attribute<nrAsl> Only_Hr   (woning) := float64(Any_Hr && not(Any_hWP) && not(Any_eWP) && not(Any_Wnet))*woning/nr_Asl;
 				attribute<nrAsl> Only_onbekend (woning) := float64(Any_onbekend && not(Any_hWP) && not(Any_eWP) && not(Only_Wnet) && not(Any_Hr))*woning/nr_Asl;
+				attribute<bool>  Only_onbekend_bool (woning) := Any_onbekend && not(Any_hWP) && not(Any_eWP) && not(Only_Wnet) && not(Any_Hr);
 				
-				container optellingen
-				{
-					parameter<nrAsl> hWP      := sum(Only_hWP);
-					parameter<nrAsl> eWP      := sum(Only_eWP);
-					parameter<nrAsl> Wnet     := sum(Only_Wnet);
-					parameter<nrAsl> Hr       := sum(Only_Hr);
-					parameter<nrAsl> Onbekend := sum(Only_onbekend);
+				attribute<Class/Installatie> beoogde_installatie(woning) := PL/installatie_rel[Matching/kruistabel/second_rel][Matching/woning_kruistabel_rel];
+				
+				container optimistisch{
+					attribute<float64> gasbesparingsfactor_installatie_RV (woning) := 
+						Any_Wnet || Any_eWP 	  ? 1d : 
+						Any_hWP && isolatie/optimistisch/beoogd_energielabel = Classifications/schillabel/V/A ? 0.65d :
+						Any_hWP && isolatie/optimistisch/beoogd_energielabel = Classifications/schillabel/V/B ? 0.63d :
+						Any_hWP && isolatie/optimistisch/beoogd_energielabel = Classifications/schillabel/V/C ? 0.59d :
+						Any_hWP && isolatie/optimistisch/beoogd_energielabel = Classifications/schillabel/V/D ? 0.52d :
+						Any_hWP && isolatie/optimistisch/beoogd_energielabel = Classifications/schillabel/V/E ? 0.47d :
+						Any_hWP && isolatie/optimistisch/beoogd_energielabel = Classifications/schillabel/V/F ? 0.43d :
+						Any_hWP && isolatie/optimistisch/beoogd_energielabel = Classifications/schillabel/V/N ? 0.42d : 0d;
 					
-					parameter<nrAsl> All_hWP      := sum(float64(Any_hWP)*woning/nr_Asl);
-					parameter<nrAsl> All_eWP      := sum(float64(Any_eWP)*woning/nr_Asl);
-					parameter<nrAsl> All_Wnet     := sum(float64(Any_Wnet)*woning/nr_Asl);
-					parameter<nrAsl> All_Hr       := sum(float64(Any_Hr)*woning/nr_Asl);
-					parameter<nrAsl> All_Onbekend := sum(float64(Any_onbekend)*woning/nr_Asl);
+					attribute<float64> gasbesparingsfactor_installatie_TW (woning) := 
+						Any_Wnet || Any_eWP 	  ? 1d : 0d;
+						
+					attribute<GJ_yr> gas_na_isolatie_installatie_RV (woning) := 
+						gasbesparingsfactor_installatie_RV = 1d ? 0[GJ_yr] : isolatie/optimistisch/gas_RV_na_labelsprong * (1d - gasbesparingsfactor_installatie_RV);
+						
+					attribute<GJ_yr> gas_na_isolatie_installatie_TW (woning) := 
+						gasbesparingsfactor_installatie_TW = 1d ? 0[GJ_yr] : StandaardGasvraag/TW  * (1d - gasbesparingsfactor_installatie_TW);
 					
-					parameter<nrAsl> hWPeWP  	        := sum(float64(    Any_hWP  &&     Any_eWP  && not(Any_Wnet) && not(Any_Hr) && not(Any_onbekend))*woning/nr_Asl);
-					parameter<nrAsl> hWPWnet 	        := sum(float64(    Any_hWP  && not(Any_eWP) &&     Any_Wnet  && not(Any_Hr) && not(Any_onbekend))*woning/nr_Asl);
-					parameter<nrAsl> hWPHr   	        := sum(float64(    Any_hWP  && not(Any_eWP) && not(Any_Wnet) &&     Any_Hr  && not(Any_onbekend))*woning/nr_Asl);
-					parameter<nrAsl> hWPOnbekend        := sum(float64(    Any_hWP  && not(Any_eWP) && not(Any_Wnet) && not(Any_Hr) &&     Any_onbekend )*woning/nr_Asl);
-					parameter<nrAsl> eWPWnet 	        := sum(float64(not(Any_hWP) &&     Any_eWP  &&     Any_Wnet  && not(Any_Hr) && not(Any_onbekend))*woning/nr_Asl);
-					parameter<nrAsl> eWPHr   	        := sum(float64(not(Any_hWP) &&     Any_eWP  && not(Any_Wnet) &&     Any_Hr  && not(Any_onbekend))*woning/nr_Asl);
-					parameter<nrAsl> eWPOnbekend        := sum(float64(not(Any_hWP) &&     Any_eWP  && not(Any_Wnet) && not(Any_Hr) &&     Any_onbekend )*woning/nr_Asl);
-					parameter<nrAsl> WnetHr  	        := sum(float64(not(Any_hWP) && not(Any_eWP) &&     Any_Wnet  &&     Any_Hr  && not(Any_onbekend))*woning/nr_Asl);
-					parameter<nrAsl> WnetOnbekend       := sum(float64(not(Any_hWP) && not(Any_eWP) &&     Any_Wnet  && not(Any_Hr) &&     Any_onbekend )*woning/nr_Asl);
-					parameter<nrAsl> HrOnbekend         := sum(float64(not(Any_hWP) && not(Any_eWP) && not(Any_Wnet) &&     Any_Hr  &&     Any_onbekend )*woning/nr_Asl);
-					
-					parameter<nrAsl> hWPeWPWnet         := sum(float64(    Any_hWP  &&     Any_eWP  &&     Any_Wnet  && not(Any_Hr) && not(Any_onbekend))*woning/nr_Asl);
-					parameter<nrAsl> hWPeWPHr           := sum(float64(    Any_hWP  &&     Any_eWP  && not(Any_Wnet) &&     Any_Hr  && not(Any_onbekend))*woning/nr_Asl);
-					parameter<nrAsl> hWPeWPOnbekend     := sum(float64(    Any_hWP  &&     Any_eWP  && not(Any_Wnet) && not(Any_Hr) &&     Any_onbekend )*woning/nr_Asl);
-					parameter<nrAsl> hWPWnetHr          := sum(float64(    Any_hWP  && not(Any_eWP) &&     Any_Wnet  &&     Any_Hr  && not(Any_onbekend))*woning/nr_Asl);
-					parameter<nrAsl> hWPWnetOnbekend    := sum(float64(    Any_hWP  && not(Any_eWP) &&     Any_Wnet  && not(Any_Hr) &&     Any_onbekend )*woning/nr_Asl);
-					parameter<nrAsl> hWPHrOnbekend      := sum(float64(    Any_hWP  && not(Any_eWP) && not(Any_Wnet) &&     Any_Hr  &&     Any_onbekend )*woning/nr_Asl);
-					parameter<nrAsl> eWPHrOnbekend      := sum(float64(not(Any_hWP) &&     Any_eWP  && not(Any_Wnet) &&     Any_Hr  &&     Any_onbekend )*woning/nr_Asl);
-					parameter<nrAsl> eWPWnetOnbekend    := sum(float64(not(Any_hWP) &&     Any_eWP  &&     Any_Wnet  && not(Any_Hr) &&     Any_onbekend )*woning/nr_Asl);
-					parameter<nrAsl> eWPWnetHr          := sum(float64(not(Any_hWP) &&     Any_eWP  &&     Any_Wnet  &&     Any_Hr  && not(Any_onbekend))*woning/nr_Asl);
-					parameter<nrAsl> WnetHrOnbekend     := sum(float64(not(Any_hWP) && not(Any_eWP) &&     Any_Wnet  &&     Any_Hr  &&     Any_onbekend )*woning/nr_Asl);
-					
-					parameter<nrAsl> ewpWnetHrOnbekend  := sum(float64(not(Any_hWP) &&     Any_eWP  &&     Any_Wnet  &&     Any_Hr  &&     Any_onbekend )*woning/nr_Asl);
-					parameter<nrAsl> hWPWnetHrOnbekend  := sum(float64(    Any_hWP  && not(Any_eWP) &&     Any_Wnet  &&     Any_Hr  &&     Any_onbekend )*woning/nr_Asl);
-					parameter<nrAsl> hWPeWPHrOnbekend   := sum(float64(    Any_hWP  &&     Any_eWP  && not(Any_Wnet) &&     Any_Hr  &&     Any_onbekend )*woning/nr_Asl);
-					parameter<nrAsl> hWPeWPWnetonbekend := sum(float64(    Any_hWP  &&     Any_eWP  &&     Any_Wnet  && not(Any_Hr) &&     Any_onbekend )*woning/nr_Asl);
-					parameter<nrAsl> hWPeWPWnetHr       := sum(float64(    Any_hWP  &&     Any_eWP  &&     Any_Wnet  &&     Any_Hr  && not(Any_onbekend))*woning/nr_Asl);
-					
-					parameter<nrAsl> hWPeWPWnetHrOnbekend := sum(float64(  Any_hWP  &&     Any_eWP  &&     Any_Wnet  &&     Any_Hr  &&     Any_onbekend )*woning/nr_Asl);
+					attribute<GJ_yr> gasbesparing_RV_isolatie_installatie (woning) := StandaardGasvraag/RV - gas_na_isolatie_installatie_RV;
+					attribute<GJ_yr> gasbesparing_TW_isolatie_installatie (woning) := StandaardGasvraag/TW - gas_na_isolatie_installatie_TW;
+					attribute<GJ_yr> gasbesparing_totaal 			      (woning) := gasbesparing_RV_isolatie_installatie + gasbesparing_TW_isolatie_installatie;
 				}
 				
-				
+				container pessimistisch{
+					attribute<float64> gasbesparingsfactor_installatie_RV (woning) := 
+						Any_Hr  || Only_onbekend_bool ? 0d : 
+						Any_hWP && isolatie/pessimistisch/beoogd_energielabel = Classifications/schillabel/V/A ? 0.65d :
+						Any_hWP && isolatie/pessimistisch/beoogd_energielabel = Classifications/schillabel/V/B ? 0.63d :
+						Any_hWP && isolatie/pessimistisch/beoogd_energielabel = Classifications/schillabel/V/C ? 0.59d :
+						Any_hWP && isolatie/pessimistisch/beoogd_energielabel = Classifications/schillabel/V/D ? 0.52d :
+						Any_hWP && isolatie/pessimistisch/beoogd_energielabel = Classifications/schillabel/V/E ? 0.47d :
+						Any_hWP && isolatie/pessimistisch/beoogd_energielabel = Classifications/schillabel/V/F ? 0.43d :
+						Any_hWP && isolatie/pessimistisch/beoogd_energielabel = Classifications/schillabel/V/N ? 0.42d : 1d;
+					
+					attribute<float64> gasbesparingsfactor_installatie_TW (woning) := 
+						Any_Hr  || Only_onbekend_bool || Any_hWP ? 0d : 1d;
 
-				
-				attribute<uint32> beoogde_installatie(woning) := PL/installatie_rel[Matching/kruistabel/second_rel][Matching/woning_kruistabel_rel];
+					attribute<GJ_yr> gas_na_isolatie_installatie_RV (woning) := 
+						gasbesparingsfactor_installatie_RV = 1d ? 0[GJ_yr] : isolatie/optimistisch/gas_RV_na_labelsprong * (1d - gasbesparingsfactor_installatie_RV);
 						
-				attribute<float64> gasbesparingsfactor_installatie_RV (woning) := 
-				beoogde_installatie == 0  ? 0d :   // 0 onbekend
-				beoogde_installatie == 1  ? 0d :   // 1 Hr
-				beoogde_installatie == 2  ? 0.5d : // 2 hWP
-				beoogde_installatie == 3  ? 1d :   // 3 eWP
-				beoogde_installatie == 4  ? 1d :   // 4 Wnet
-				beoogde_installatie == 5  ? 0d :   // 5 hWP, Hr
-				beoogde_installatie == 6  ? 0d :   // 6 hWP, eWP
-				beoogde_installatie == 7  ? 0d :   // 7 hWP, Wnet
-				beoogde_installatie == 8  ? 1d :   // 8 eWP, Wnet
-				beoogde_installatie == 9  ? 0d :   // 9 eWP, Hr
-				beoogde_installatie == 10 ? 0d :   // 10 Wnet, Hr
-				beoogde_installatie == 11 ? 0d :   // 11 Wnet, hWP
-				beoogde_installatie == 12 ? 0d :   // 12 hWP, Wnet, Hr
-				beoogde_installatie == 13 ? 0d :   // 13 eWP, wnet, Hr
-				beoogde_installatie == 14 ? 0d :   // 14 hWP, eWP, Hr
-				beoogde_installatie == 15 ? 0d :   // 15 hWP, eWP, Wnet
-				//beoogde_installatie == 16 ?      // 16 hWP, eWP, Wnet, Hr
-				0d;
-
-				attribute<float64> gasbesparingsfactor_installatie_TW (woning) := 
-				beoogde_installatie == 0  ? 0d :   // 0 onbekend
-				beoogde_installatie == 1  ? 0d :   // 1 Hr
-				beoogde_installatie == 2  ? 0.5d : // 2 hWP
-				beoogde_installatie == 3  ? 1d :   // 3 eWP
-				beoogde_installatie == 4  ? 1d :   // 4 Wnet
-				beoogde_installatie == 5  ? 0d :   // 5 hWP, Hr
-				beoogde_installatie == 6  ? 0d :   // 6 hWP, eWP
-				beoogde_installatie == 7  ? 0d :   // 7 hWP, Wnet
-				beoogde_installatie == 8  ? 1d :   // 8 eWP, Wnet
-				beoogde_installatie == 9  ? 0d :   // 9 eWP, Hr
-				beoogde_installatie == 10 ? 0d :   // 10 Wnet, Hr
-				beoogde_installatie == 11 ? 0d :   // 11 Wnet, hWP
-				beoogde_installatie == 12 ? 0d :   // 12 hWP, Wnet, Hr
-				beoogde_installatie == 13 ? 0d :   // 13 eWP, wnet, Hr
-				beoogde_installatie == 14 ? 0d :   // 14 hWP, eWP, Hr
-				beoogde_installatie == 15 ? 0d :   // 15 hWP, eWP, Wnet
-				//beoogde_installatie == 16 ?      // 16 hWP, eWP, Wnet, Hr
-				0d;
-				
-				attribute<GJ_yr> gasbesparing_RV_isolatie_installatie (woning) := isolatie/gas_RV_na_labelsprong * (1d- gasbesparingsfactor_installatie_RV);
-				attribute<GJ_yr> gasbesparing_TW_isolatie_installatie (woning) := gasvraag/TW 					 * (1d- gasbesparingsfactor_installatie_TW);
-				attribute<GJ_yr> gasbesparing_totaal 			      (woning) := gasbesparing_RV_isolatie_installatie + gasbesparing_TW_isolatie_installatie;
+					attribute<GJ_yr> gas_na_isolatie_installatie_TW (woning) := 
+						gasbesparingsfactor_installatie_TW = 1d ? 0[GJ_yr] : StandaardGasvraag/TW  * (1d - gasbesparingsfactor_installatie_TW);
+					
+					attribute<GJ_yr> gasbesparing_RV_isolatie_installatie (woning) := StandaardGasvraag/RV - gas_na_isolatie_installatie_RV;
+					attribute<GJ_yr> gasbesparing_TW_isolatie_installatie (woning) := StandaardGasvraag/TW - gas_na_isolatie_installatie_TW;
+					attribute<GJ_yr> gasbesparing_totaal 			      (woning) := gasbesparing_RV_isolatie_installatie + gasbesparing_TW_isolatie_installatie;
+				}
+			
+			container optellingen
+				{
+					container Alleen
+					{
+						parameter<nrAsl> hWP     	  := sum(Only_hWP);
+						parameter<nrAsl> eWP     	  := sum(Only_eWP);
+						parameter<nrAsl> Wnet    	  := sum(Only_Wnet);
+						parameter<nrAsl> Hr       	  := sum(Only_Hr);
+						parameter<nrAsl> Onbekend 	  := sum(Only_onbekend);
+						
+						parameter<nrAsl> hWPeWP  	  := sum(float64(    Any_hWP  &&     Any_eWP  && not(Any_Wnet) && not(Any_Hr))*woning/nr_Asl);
+						parameter<nrAsl> hWPWnet 	  := sum(float64(    Any_hWP  && not(Any_eWP) &&     Any_Wnet  && not(Any_Hr))*woning/nr_Asl);
+						parameter<nrAsl> hWPHr   	  := sum(float64(    Any_hWP  && not(Any_eWP) && not(Any_Wnet) &&     Any_Hr) *woning/nr_Asl);
+						parameter<nrAsl> eWPWnet 	  := sum(float64(not(Any_hWP) &&     Any_eWP  &&     Any_Wnet  && not(Any_Hr))*woning/nr_Asl);
+						parameter<nrAsl> eWPHr   	  := sum(float64(not(Any_hWP) &&     Any_eWP  && not(Any_Wnet) &&     Any_Hr) *woning/nr_Asl);
+						parameter<nrAsl> WnetHr  	  := sum(float64(not(Any_hWP) && not(Any_eWP) &&     Any_Wnet  &&     Any_Hr) *woning/nr_Asl);
+						
+						parameter<nrAsl> hWPeWPWnet   := sum(float64(    Any_hWP  &&     Any_eWP  &&     Any_Wnet  && not(Any_Hr))*woning/nr_Asl);
+						parameter<nrAsl> hWPeWPHr     := sum(float64(    Any_hWP  &&     Any_eWP  && not(Any_Wnet) &&     Any_Hr) *woning/nr_Asl);
+						parameter<nrAsl> hWPWnetHr    := sum(float64(    Any_hWP  && not(Any_eWP) &&     Any_Wnet  &&     Any_Hr) *woning/nr_Asl);
+						parameter<nrAsl> eWPWnetHr    := sum(float64(not(Any_hWP) &&     Any_eWP  &&     Any_Wnet  &&     Any_Hr) *woning/nr_Asl);
+						
+						parameter<nrAsl> hWPeWPWnetHr := sum(float64(    Any_hWP  &&     Any_eWP  &&     Any_Wnet  &&     Any_Hr) *woning/nr_Asl);
+					}
+					
+					container Minstens
+					{
+						parameter<nrAsl> hWP      := sum(float64(Any_hWP)     *woning/nr_Asl);
+						parameter<nrAsl> eWP      := sum(float64(Any_eWP)     *woning/nr_Asl);
+						parameter<nrAsl> Wnet     := sum(float64(Any_Wnet)    *woning/nr_Asl);
+						parameter<nrAsl> Hr       := sum(float64(Any_Hr)      *woning/nr_Asl);
+						parameter<nrAsl> Onbekend := sum(float64(Any_onbekend)*woning/nr_Asl);
+						
+						parameter<nrAsl> hWPeWP  	  := sum(float64( Any_hWP  && Any_eWP )*woning/nr_Asl);
+						parameter<nrAsl> hWPWnet 	  := sum(float64( Any_hWP  && Any_Wnet)*woning/nr_Asl);
+						parameter<nrAsl> hWPHr   	  := sum(float64( Any_hWP  && Any_Hr  )*woning/nr_Asl);
+						parameter<nrAsl> eWPWnet 	  := sum(float64( Any_eWP  && Any_Wnet)*woning/nr_Asl);
+						parameter<nrAsl> eWPHr   	  := sum(float64( Any_eWP  && Any_Hr  )*woning/nr_Asl);
+						parameter<nrAsl> WnetHr  	  := sum(float64( Any_Wnet && Any_Hr  )*woning/nr_Asl);
+						
+						parameter<nrAsl> hWPeWPWnet   := sum(float64( Any_hWP  && Any_eWP  && Any_Wnet)*woning/nr_Asl);
+						parameter<nrAsl> hWPeWPHr     := sum(float64( Any_hWP  && Any_eWP  && Any_Hr  )*woning/nr_Asl);
+						parameter<nrAsl> hWPWnetHr    := sum(float64( Any_hWP  && Any_Wnet && Any_Hr  )*woning/nr_Asl);
+						parameter<nrAsl> eWPWnetHr    := sum(float64( Any_eWP  && Any_Wnet && Any_Hr  )*woning/nr_Asl);
+						
+						parameter<nrAsl> hWPeWPWnetHr := sum(float64( Any_hWP  && Any_eWP  && Any_Wnet && Any_Hr) *woning/nr_Asl);
+					}
+				}
 			}
 			
 			container planniveau_output
@@ -364,59 +442,11 @@ container TVW
 					attribute<nrAsl>  koop_count     (PL) := sum(eigendom/Koop[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 					attribute<nrAsl>  parthuur_count (PL) := sum(eigendom/PartHuur[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 					attribute<nrAsl>  wooncorp_count (PL) := sum(eigendom/WoonCorp[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  gasbesparing_totaal (PL) := sum(Techniekkeuze/gasbesparing_totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					
+					attribute<GJ_yr>  gasbesparing_totaal_optimistisch  (PL) := sum(Techniekkeuze/optimistisch/gasbesparing_totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  gasbesparing_totaal_pessimistisch (PL) := sum(Techniekkeuze/pessimistisch/gasbesparing_totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 			}
 		}
-		
-		unit<uint32> uBouw := /Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied
-		{
-			attribute<nrAsl> nr_Asl := const(1.0[nrAsl],.);
-
-			container Matching
-			{
-				unit<uint32> p := uBouw
-				{
-					attribute<geography/rdc_meter> xy (p) := uBouw/geometry;
-				}
-
-				// driehoek wordt alleen gebruikt in workaround voor point_in_all_polygons voor GeoDmsVersion < 8.031				
-				attribute<geography/rdc_meter> driehoek  (p, poly)  :=
-					points2sequence(
-						union_data(union_unit(p,p,p,p), p/xy, p/xy+point(0.1,0.0), p/xy+point(0.1,0.1), p/xy),
-						union_data(union_unit(p,p,p,p), id(p), id(p), id(p), id(p)),
-						union_data(union_unit(p,p,p,p), const(0,p), const(1,p), const(2,p), const(3,p))
-									);
-				parameter<string> piap_expr := 'point_in_all_polygons(p/xy, PL/geometry)';
-				parameter<string> workaround := 'overlay_polygon(driehoek[geography/rdc_mm], PL/geometry[geography/rdc_mm])';
-				unit<uint32> kruistabel  := =(GeoDmsVersion() > 8.0305) ? piap_expr : workaround;
-
-
-				attribute<uint32> PL_count(p) := pcount(kruistabel/first_rel);
-				
-				attribute<uint32> P_count   (PL) := pcount(kruistabel/second_rel);
-				attribute<nrAsl>  VBO_count (PL) := sum(nr_Asl[kruistabel/first_rel], kruistabel/second_rel);
-			}
-
-			container Techniekkeuze
-			{
-				attribute<bool>  Any_hWP  (uBouw) := any(Class/Installatie/hWP [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-				attribute<bool>  Any_eWP  (uBouw) := any(Class/Installatie/eWP [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-				attribute<bool>  Any_Wnet (uBouw) := any(Class/Installatie/Wnet[PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-				attribute<bool>  Any_Hr   (uBouw) := any(Class/Installatie/Hr  [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-
-				attribute<nrAsl> Wnet (uBouw) := float64(Any_Wnet && not(Any_hWP) && not(Any_eWP))*uBouw/nr_Asl;
-				parameter<nrAsl> hWP   := sum(float64(not(Any_Wnet) && not(Any_hWP) && Any_eWP)*uBouw/nr_Asl);
-				parameter<nrAsl> eWP   := sum(float64(not(Any_Wnet) && Any_hWP && not(Any_eWP))*uBouw/nr_Asl);
-
-				parameter<nrAsl> eWPhWP  := sum(float64(not(Any_Wnet) && Any_hWP && Any_eWP)*uBouw/nr_Asl);
-				parameter<nrAsl> eWPWnet := sum(float64(Any_Wnet && not(Any_hWP) && Any_eWP)*uBouw/nr_Asl);
-				parameter<nrAsl> hWPWnet := sum(float64(Any_Wnet && Any_hWP && not(Any_eWP))*uBouw/nr_Asl);
-
-				parameter<nrAsl> eWPhWPWnet := sum(float64(Any_Wnet && Any_hWP && Any_eWP)*uBouw/nr_Asl);
-
-			}
-		}
-		
 	}
 
 	container Class
@@ -472,19 +502,17 @@ container TVW
 					,'Schillabel D+ (wonen) B+ (util)','Doelstelling in kWh/m2 (vergelijkbaar Schillabel A/B)'];
 				attribute<string> name  := AsItemName(label), DialogType = "LabelText";
 				
-				attribute<bool> onbekend   := strcount(label, 'onbekend')   > 0;
-				attribute<bool> geen_maatregelen   := strcount(label, 'geen maatregelen')   > 0;
-				attribute<bool> isolatie_geen_specifiek_niveau   := strcount(label, 'isolatie, geen specifiek niveau benoemd')   > 0;
-				attribute<bool> standaard_en_streefwaarden   := strcount(label, 'standaard en streefwaarden')   > 0;
-				attribute<bool> A   := strcount(label, 'schillabel A+')   > 0;
-				attribute<bool> B   := strcount(label, 'schillabel B+')   > 0;
-				attribute<bool> C   := strcount(label, 'schillabel C+')   > 0;
-				attribute<bool> D   := strcount(label, 'schillabel D+')   > 0;
-				attribute<bool> DC_1940_AB_overig   := strcount(label, 'Schillabel D/C (<1940) A/B (overig)')   > 0;
-				attribute<bool> D_wonen_B_util   := strcount(label, 'Schillabel D+ (wonen) B+ (util)')   > 0;
-				attribute<bool> kWh_m2_AB   := strcount(label, 'Doelstelling in kWh/m2 (vergelijkbaar Schillabel A/B)')   > 0;
-
-
+				attribute<bool> onbekend   							:= strcount(label, 'onbekend')   > 0;
+				attribute<bool> geen_maatregelen   					:= strcount(label, 'geen maatregelen')   > 0;
+				attribute<bool> isolatie_geen_specifiek_niveau   	:= strcount(label, 'isolatie, geen specifiek niveau benoemd')   > 0;
+				attribute<bool> standaard_en_streefwaarden   		:= strcount(label, 'standaard en streefwaarden')   > 0;
+				attribute<bool> A   								:= strcount(label, 'schillabel A+')   > 0;
+				attribute<bool> B   								:= strcount(label, 'schillabel B+')   > 0;
+				attribute<bool> C   								:= strcount(label, 'schillabel C+')   > 0;
+				attribute<bool> D   								:= strcount(label, 'schillabel D+')   > 0;
+				attribute<bool> DC_1940_AB_overig   				:= strcount(label, 'Schillabel D/C (<1940) A/B (overig)')   > 0;
+				attribute<bool> D_wonen_B_util   					:= strcount(label, 'Schillabel D+ (wonen) B+ (util)')   > 0;
+				attribute<bool> kWh_m2_AB   						:= strcount(label, 'Doelstelling in kWh/m2 (vergelijkbaar Schillabel A/B)')   > 0;
 
 				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
 			}
@@ -546,7 +574,5 @@ container TVW
 
 				container V := for_each_nedv(name, string(id(.))+'[..]', void, .);
 			}
-
-
 		}
 }
