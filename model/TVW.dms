@@ -325,6 +325,8 @@ container TVW
 				attribute<bool>  Any_Wnet (woning) := any(Class/Installatie/Wnet[PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 				attribute<bool>  Any_Hr   (woning) := any(Class/Installatie/Hr  [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 				attribute<bool>  Any_onbekend   (woning) := any(Class/Installatie/onbekend  [PL/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+				
+				attribute<bool>  Any_hernieuwbaar_gas   (woning) := any(Class/Energiebron/hernieuwbaar_gas [PL/Energiebron_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 
 				attribute<nrAsl> Only_hWP  (woning) := float64(Any_hWP && not(Any_eWP) && not(Any_Wnet) && not(Any_Hr))*woning/nr_Asl;
 				attribute<nrAsl> Only_eWP  (woning) := float64(Any_eWP && not(Any_hWP) && not(Any_Wnet) && not(Any_Hr))*woning/nr_Asl;
@@ -332,10 +334,59 @@ container TVW
 				attribute<nrAsl> Only_Hr   (woning) := float64(Any_Hr && not(Any_hWP) && not(Any_eWP) && not(Any_Wnet))*woning/nr_Asl;
 				attribute<nrAsl> Only_onbekend (woning) := float64(Any_onbekend && not(Any_hWP) && not(Any_eWP) && not(Only_Wnet) && not(Any_Hr))*woning/nr_Asl;
 				attribute<bool>  Only_onbekend_bool (woning) := Any_onbekend && not(Any_hWP) && not(Any_eWP) && not(Only_Wnet) && not(Any_Hr);
+								
+				container optimistisch_zonder_isolatie{
+					attribute<float64> gasbesparingsfactor_installatie_RV (woning) := 
+						Any_Wnet || Any_eWP 	  ? 1d : 
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/A ? 0.65d :
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/B ? 0.63d :
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/C ? 0.59d :
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/D ? 0.52d :
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/E ? 0.47d :
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/F ? 0.43d :
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/N ? 0.42d : 0d;
+
+					attribute<float64> gasbesparingsfactor_installatie_TW (woning) := 
+						Any_Wnet || Any_eWP 	  ? 1d : 0d;
+						
+					attribute<GJ_yr> gas_na_installatie_RV (woning) := StandaardGasvraag/RV * (1d - gasbesparingsfactor_installatie_RV);
+						
+					attribute<GJ_yr> gas_na_installatie_TW (woning) := StandaardGasvraag/TW * (1d - gasbesparingsfactor_installatie_TW);
+					
+					attribute<GJ_yr> gasbesparing_RV_installatie (woning) := StandaardGasvraag/RV - gas_na_installatie_RV;
+					attribute<GJ_yr> gasbesparing_TW_installatie (woning) := StandaardGasvraag/TW - gas_na_installatie_TW;
+					attribute<GJ_yr> gasbesparing_totaal 			      (woning) := gasbesparing_RV_installatie + gasbesparing_TW_installatie;
+					
+					attribute<GJ_yr> duurzaam_gas (woning) := Any_hernieuwbaar_gas ? gas_na_installatie_RV + gas_na_installatie_TW : 0d;
+					
+				}
 				
-				attribute<Class/Installatie> beoogde_installatie(woning) := PL/installatie_rel[Matching/kruistabel/second_rel][Matching/woning_kruistabel_rel];
+				container pessimistisch_zonder_isolatie{
+					attribute<float64> gasbesparingsfactor_installatie_RV (woning) := 
+						Any_Hr  || Only_onbekend_bool ? 0d : 
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/A ? 0.65d :
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/B ? 0.63d :
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/C ? 0.59d :
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/D ? 0.52d :
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/E ? 0.47d :
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/F ? 0.43d :
+						Any_hWP && isolatie/schillabel = Classifications/schillabel/V/N ? 0.42d : 1d;
+					
+					attribute<float64> gasbesparingsfactor_installatie_TW (woning) := 
+						Any_Hr  || Only_onbekend_bool || Any_hWP ? 0d : 1d;
+
+					attribute<GJ_yr> gas_na_installatie_RV (woning) := StandaardGasvraag/RV * (1d - gasbesparingsfactor_installatie_RV);
+						
+					attribute<GJ_yr> gas_na_installatie_TW (woning) := StandaardGasvraag/TW * (1d - gasbesparingsfactor_installatie_TW);
+					
+					attribute<GJ_yr> gasbesparing_RV_installatie (woning) := StandaardGasvraag/RV - gas_na_installatie_RV;
+					attribute<GJ_yr> gasbesparing_TW_installatie (woning) := StandaardGasvraag/TW - gas_na_installatie_TW;
+					attribute<GJ_yr> gasbesparing_totaal 			      (woning) := gasbesparing_RV_installatie + gasbesparing_TW_installatie;
+					
+					attribute<GJ_yr> duurzaam_gas (woning) := Any_hernieuwbaar_gas ? gas_na_installatie_RV + gas_na_installatie_TW : 0d;
+				}
 				
-				container optimistisch{
+				container optimistisch_met_isolatie{
 					attribute<float64> gasbesparingsfactor_installatie_RV (woning) := 
 						Any_Wnet || Any_eWP 	  ? 1d : 
 						Any_hWP && isolatie/optimistisch/beoogd_energielabel = Classifications/schillabel/V/A ? 0.65d :
@@ -345,22 +396,24 @@ container TVW
 						Any_hWP && isolatie/optimistisch/beoogd_energielabel = Classifications/schillabel/V/E ? 0.47d :
 						Any_hWP && isolatie/optimistisch/beoogd_energielabel = Classifications/schillabel/V/F ? 0.43d :
 						Any_hWP && isolatie/optimistisch/beoogd_energielabel = Classifications/schillabel/V/N ? 0.42d : 0d;
-					
+
 					attribute<float64> gasbesparingsfactor_installatie_TW (woning) := 
 						Any_Wnet || Any_eWP 	  ? 1d : 0d;
 						
 					attribute<GJ_yr> gas_na_isolatie_installatie_RV (woning) := 
-						gasbesparingsfactor_installatie_RV = 1d ? 0[GJ_yr] : isolatie/optimistisch/gas_RV_na_labelsprong * (1d - gasbesparingsfactor_installatie_RV);
+						gasbesparingsfactor_installatie_RV = isolatie/optimistisch/gas_RV_na_labelsprong * (1d - gasbesparingsfactor_installatie_RV);
 						
 					attribute<GJ_yr> gas_na_isolatie_installatie_TW (woning) := 
-						gasbesparingsfactor_installatie_TW = 1d ? 0[GJ_yr] : StandaardGasvraag/TW  * (1d - gasbesparingsfactor_installatie_TW);
+						gasbesparingsfactor_installatie_TW = StandaardGasvraag/TW  * (1d - gasbesparingsfactor_installatie_TW);
 					
 					attribute<GJ_yr> gasbesparing_RV_isolatie_installatie (woning) := StandaardGasvraag/RV - gas_na_isolatie_installatie_RV;
 					attribute<GJ_yr> gasbesparing_TW_isolatie_installatie (woning) := StandaardGasvraag/TW - gas_na_isolatie_installatie_TW;
 					attribute<GJ_yr> gasbesparing_totaal 			      (woning) := gasbesparing_RV_isolatie_installatie + gasbesparing_TW_isolatie_installatie;
+					
+					attribute<GJ_yr> duurzaam_gas (woning) := Any_hernieuwbaar_gas ? gas_na_installatie_RV + gas_na_installatie_TW : 0d;
 				}
 				
-				container pessimistisch{
+				container pessimistisch_met_isolatie{
 					attribute<float64> gasbesparingsfactor_installatie_RV (woning) := 
 						Any_Hr  || Only_onbekend_bool ? 0d : 
 						Any_hWP && isolatie/pessimistisch/beoogd_energielabel = Classifications/schillabel/V/A ? 0.65d :
@@ -374,16 +427,37 @@ container TVW
 					attribute<float64> gasbesparingsfactor_installatie_TW (woning) := 
 						Any_Hr  || Only_onbekend_bool || Any_hWP ? 0d : 1d;
 
-					attribute<GJ_yr> gas_na_isolatie_installatie_RV (woning) := 
-						gasbesparingsfactor_installatie_RV = 1d ? 0[GJ_yr] : isolatie/optimistisch/gas_RV_na_labelsprong * (1d - gasbesparingsfactor_installatie_RV);
+					attribute<GJ_yr> gas_na_isolatie_installatie_RV (woning) := isolatie/optimistisch/gas_RV_na_labelsprong * (1d - gasbesparingsfactor_installatie_RV);
 						
-					attribute<GJ_yr> gas_na_isolatie_installatie_TW (woning) := 
-						gasbesparingsfactor_installatie_TW = 1d ? 0[GJ_yr] : StandaardGasvraag/TW  * (1d - gasbesparingsfactor_installatie_TW);
+					attribute<GJ_yr> gas_na_isolatie_installatie_TW (woning) := StandaardGasvraag/TW  * (1d - gasbesparingsfactor_installatie_TW);
 					
 					attribute<GJ_yr> gasbesparing_RV_isolatie_installatie (woning) := StandaardGasvraag/RV - gas_na_isolatie_installatie_RV;
 					attribute<GJ_yr> gasbesparing_TW_isolatie_installatie (woning) := StandaardGasvraag/TW - gas_na_isolatie_installatie_TW;
 					attribute<GJ_yr> gasbesparing_totaal 			      (woning) := gasbesparing_RV_isolatie_installatie + gasbesparing_TW_isolatie_installatie;
+					
+					attribute<GJ_yr> duurzaam_gas (woning) := Any_hernieuwbaar_gas ? gas_na_installatie_RV + gas_na_installatie_TW : 0d;
 				}
+				
+			container planniveau_output
+			{					
+					attribute<uint32> P_count        (PL) := pcount(Matching/kruistabel/second_rel);
+					attribute<nrAsl>  VBO_count      (PL) := sum(woning/nr_Asl[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl>  koop_count     (PL) := sum(eigendom/Koop[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl>  parthuur_count (PL) := sum(eigendom/PartHuur[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl>  wooncorp_count (PL) := sum(eigendom/WoonCorp[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					
+					attribute<GJ_yr>  gasbesparing_isolatie_optimistisch      (PL) := sum(Isolatie/optimistisch/gasbesparing_RV_isolatie                  [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  gasbesparing_isolatie_pessimistisch     (PL) := sum(Isolatie/pessimistisch/gasbesparing_RV_isolatie                 [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  gasbesparing_installaties_optimistisch  (PL) := sum(Techniekkeuze/optimistisch_zonder_isolatie/gasbesparing_totaal  [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  gasbesparing_installaties_pessimistisch (PL) := sum(Techniekkeuze/pessimistisch_zonder_isolatie/gasbesparing_totaal [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  gasbesparing_totaal_optimistisch        (PL) := sum(Techniekkeuze/optimistisch_met_isolatie/gasbesparing_totaal     [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  gasbesparing_totaal_pessimistisch       (PL) := sum(Techniekkeuze/pessimistisch_met_isolatie/gasbesparing_totaal    [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					
+					attribute<GJ_yr>  hernieuwbaar_gas_installaties_optimistisch  (PL) := sum(Techniekkeuze/optimistisch_zonder_isolatie/duurzaam_gas  [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  hernieuwbaar_gas_installaties_pessimistisch (PL) := sum(Techniekkeuze/pessimistisch_zonder_isolatie/duurzaam_gas [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  hernieuwbaar_gas_totaal_optimistisch        (PL) := sum(Techniekkeuze/optimistisch_met_isolatie/duurzaam_gas     [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  hernieuwbaar_gas_totaal_pessimistisch       (PL) := sum(Techniekkeuze/pessimistisch_met_isolatie/duurzaam_gas    [Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+			}
 			
 			container optellingen
 				{
@@ -433,18 +507,6 @@ container TVW
 						parameter<nrAsl> hWPeWPWnetHr := sum(float64( Any_hWP  && Any_eWP  && Any_Wnet && Any_Hr) *woning/nr_Asl);
 					}
 				}
-			}
-			
-			container planniveau_output
-			{					
-					attribute<uint32> P_count        (PL) := pcount(Matching/kruistabel/second_rel);
-					attribute<nrAsl>  VBO_count      (PL) := sum(woning/nr_Asl[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl>  koop_count     (PL) := sum(eigendom/Koop[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl>  parthuur_count (PL) := sum(eigendom/PartHuur[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl>  wooncorp_count (PL) := sum(eigendom/WoonCorp[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					
-					attribute<GJ_yr>  gasbesparing_totaal_optimistisch  (PL) := sum(Techniekkeuze/optimistisch/gasbesparing_totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  gasbesparing_totaal_pessimistisch (PL) := sum(Techniekkeuze/pessimistisch/gasbesparing_totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 			}
 		}
 	}
