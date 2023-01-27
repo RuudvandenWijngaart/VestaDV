@@ -600,6 +600,9 @@ template WarmtenetTempl
 				attribute<Eur>    Ki_id            (Afnemer) := AllCandidate/PartialContributie/Ki_id[nr_orgentity];
 				attribute<Eur>    Ki_ge            (Afnemer) := AllCandidate/PartialContributie/Ki_ge[nr_orgentity];
 
+				//subsidie SDE
+				attribute<Eur_yr> Oj_lv_SDE        (Afnemer) := SpecifiekeInstellingen/Beleid/SDE/SDE[Warmtebronnen/bron/BronType_rel[Bron_rel]] * vraag/V_ow_warmte;
+
 				//kosten te berekenen met inachtneming bronallocatie
 				attribute<Eur>    Ki_wd_OS         (Afnemer) := Vraag/P_wd * 50[eur_kw]                                                                                         , Descr = "kosten van onderstations en hulpketel", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.42";
 				attribute<Eur>    Ki_ow_bron       (Afnemer) := Vraag/P_ow * Warmtebronnen/bron/Ki_cap[Bron_rel]                                                                , Descr = "kosten ingebruikname primaire bron";
@@ -652,12 +655,14 @@ template WarmtenetTempl
 		}
 
 		//kosten te berekenen op prospectniveau
-		attribute<Eur> Ki_wd_dist    (Prospect) := BronAllocatie/bron_Ki_buis[nr_orgentity]           , Descr = "kosten van distributienet niet gebouw incurred";
-		attribute<Eur> Ki_wd_afnemer (Prospect) := sum(Afnemer/kosten/ki_wd, Afnemer/Prospect_rel)    , Descr = "gebouw incurred kosten distributienet";
-		attribute<Eur> Ki_wd         (Prospect) := Ki_wd_afnemer + Ki_wd_dist                         , Descr = "totale investeringskosten distributienet";
-		attribute<Eur> Ki_pt         (Prospect) := const(0.0[eur],Prospect)                           , Descr = "investering transportleiding, zit al opgenomen in buiskosten BronAllocatie";
-		attribute<Eur> Ki_id         (Prospect) := sum(Afnemer/kosten/ki_id, Afnemer/Prospect_rel);
-		attribute<Eur> Ki_ge         (Prospect) := sum(Afnemer/kosten/ki_ge, Afnemer/Prospect_rel);
+		attribute<Eur>    Ki_wd_dist    (Prospect) := BronAllocatie/bron_Ki_buis[nr_orgentity] - Ki_wd_asl , Descr = "kosten van distributienet niet gebouw incurred";
+		attribute<Eur>    Ki_wd_afnemer (Prospect) := sum(Afnemer/kosten/Ki_wd, Afnemer/Prospect_rel)      , Descr = "gebouw incurred kosten distributienet";
+		attribute<Eur>    Ki_wd_asl     (Prospect) := sum(Afnemer/kosten/Ki_wd_asl, Afnemer/Prospect_rel)  , Descr = "redundant deel aansluitleiding, niet dubbel tellen.";
+		attribute<Eur>    Ki_wd         (Prospect) := Ki_wd_afnemer + Ki_wd_dist                           , Descr = "totale investeringskosten distributienet";
+		attribute<Eur>    Ki_pt         (Prospect) := const(0.0[eur],Prospect)                             , Descr = "investering transportleiding, zit al opgenomen in buiskosten BronAllocatie";
+		attribute<Eur>    Ki_id         (Prospect) := sum(Afnemer/kosten/ki_id, Afnemer/Prospect_rel);
+		attribute<Eur>    Ki_ge         (Prospect) := sum(Afnemer/kosten/ki_ge, Afnemer/Prospect_rel);
+		attribute<Eur_yr> Oj_lv_SDE     (Prospect) := sum(Afnemer/kosten/Oj_lv_SDE, Afnemer/Prospect_rel);
 
 		attribute<Eur> Ki_ow_vast    (Prospect) :=
 				  any(WarmteBronnen/bron/BronType_rel[Afnemer/bron_rel] == Invoer/Kengetallen/WarmteBronnen/MetaData/Brontype/V/WKO, Afnemer/Prospect_rel)
@@ -679,11 +684,11 @@ template WarmtenetTempl
 		container KostenOptelling
 		{
 			//kapitaallasten
-			attribute<Eur_yr> Kji_pt           (Prospect) := Ki_pt * NCW/pt28/StartDiscountFactor * NCW/pt28/AnnualisationFactor;
-			attribute<Eur_yr> Kji_ge           (Prospect) := Ki_ge * NCW/ge28/StartDiscountFactor * NCW/ge28/AnnualisationFactor;
-			attribute<Eur_yr> Kji_ow           (Prospect) := Ki_ow * NCW/ow28/StartDiscountFactor * NCW/ow28/AnnualisationFactor;
-			attribute<Eur_yr> Kji_wd           (Prospect) := Ki_wd * NCW/wd28/StartDiscountFactor * NCW/wd28/AnnualisationFactor;
-			attribute<Eur_yr> Kji_id           (Prospect) := Ki_id * NCW/id28/StartDiscountFactor * NCW/id28/AnnualisationFactor;
+			attribute<Eur_yr> Kji_pt           (Prospect) := Ki_pt     * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
+			attribute<Eur_yr> Kji_ge           (Prospect) := Ki_ge     * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
+			attribute<Eur_yr> Kji_ow           (Prospect) := Ki_ow     * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
+			attribute<Eur_yr> Kji_wd           (Prospect) := Ki_wd     * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
+			attribute<Eur_yr> Kji_id           (Prospect) := Ki_id     * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
 			attribute<Eur_yr> Totaal_kapitaal  (Prospect) := add(Kji_pt, Kji_ge, Kji_ow, Kji_wd, Kji_id);
 
 			//o&b kosten
@@ -701,7 +706,8 @@ template WarmtenetTempl
 			attribute<Eur_yr> Kj_wd_elek       (Prospect) := sum(Afnemer/kosten/Kj_wd_elek, Afnemer/Prospect_rel);
 			attribute<Eur_yr> Kj_wd_gas        (Prospect) := sum(Afnemer/kosten/Kj_wd_gas, Afnemer/Prospect_rel);
 			attribute<Eur_yr> Kj_ow_productie  (Prospect) := sum(Afnemer/kosten/Kj_ow_productie, Afnemer/Prospect_rel);
-			attribute<Eur_yr> Totaal_variabel  (Prospect) := add(Kj_id_elek, Kj_wd_elek, Kj_wd_gas, Kj_ow_productie);
+			attribute<Eur_yr> Oj_lv_SDE        (Prospect) := sum(Afnemer/kosten/Oj_lv_SDE, Afnemer/Prospect_rel);
+			attribute<Eur_yr> Totaal_variabel  (Prospect) := add(Kj_id_elek, Kj_wd_elek, Kj_wd_gas, Kj_ow_productie) - Oj_lv_SDE;
 		}
 
 		container Tarieven
@@ -719,7 +725,16 @@ template WarmtenetTempl
 			attribute<Eur_yr> Oji_lv_Aansl    (Prospect) := Oi_lv_Aansl * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
 			attribute<Eur_yr> Oj_lv_verbruik  (Prospect) := Tarieven/WarmteVraag * Tarieven/WarmtePrijs;
 			attribute<Eur_yr> Oj_lv_vastrecht (Prospect) := Tarieven/nrAfnemers  * Tarieven/Vastrecht;
+		}
 
+		unit<uint32> DesAggregatie := Afnemer
+		{
+			attribute<ratio>  ProspectAandeel (Afnemer) := Bo/nrAansluitingen[BO_rel] / Tarieven/nrAfnemers[Prospect_rel];
+			attribute<Eur>    Ki_wd           (Afnemer) := ProspectAandeel * Prospect/Ki_wd[Prospect_rel];
+			attribute<Eur>    Ki_ow           (Afnemer) := ProspectAandeel * Prospect/Ki_ow[Prospect_rel];
+			attribute<Eur>    Oi_lv_Aansl     (Afnemer) := Tarieven/AansluitKosten[Prospect_rel] * Bo/nrAansluitingen[BO_rel] ;
+			attribute<Eur_yr> Oj_lv_verbruik  (Afnemer) := Tarieven/WarmtePrijs[Prospect_rel]    * vraag/V_Wd_warmte ;
+			attribute<Eur_yr> Oj_lv_Vastrecht (Afnemer) := Tarieven/Vastrecht[Prospect_rel]      * Bo/nrAansluitingen[BO_rel] ;
 		}
 	}
 	
@@ -750,12 +765,9 @@ template WarmtenetTempl
 	//====== berekening van kosten van aanleg en operatie
 	unit<uint32> KostenBerekening := Candidate
 	{
-		
-		attribute<Eur> Ki_wd       := const(0.0[Eur], .), Descr = "investeringen in wijkdistributienet";
-		attribute<Eur> Ki_ow       := const(0.0[Eur], .), Descr = "investeringen primaire bron";
-		attribute<Eur> Oi_lv_Aansl := const(0.0[Eur], .), Descr = "opbrengst van aansluitbijdrages";
-
-		//====== resultaten van berekening, gereed voor rapportage in resultaten
+		attribute<Eur>    Ki_wd           := Prospect/DesAggregatie/Ki_wd[Afnemer_rel]                        , Descr = "investeringen in wijkdistributienet";
+		attribute<Eur>    Ki_ow           := Prospect/DesAggregatie/Ki_ow[Afnemer_rel]                        , Descr = "investeringen primaire bron";
+		attribute<Eur>    Oi_lv_Aansl     := Prospect/DesAggregatie/Oi_lv_Aansl[Afnemer_rel]                  , Descr = "opbrengst van aansluitbijdrages";
 		attribute<Eur>    Ki_id           := AllCandidate/PartialContributie/Ki_id[nr_orgentity]              , Descr = "investeringen inpandige systemen";
 		attribute<Eur>    Ki_ge_ov        := AllCandidate/PartialContributie/Ki_ge_ov[nr_orgentity]           , Descr = "investeringen gebouweigenaar in ongeriefsvergoeding";
 		attribute<Eur>    Ki_ge_pm        := AllCandidate/PartialContributie/Ki_ge_pm[nr_orgentity]           , Descr = "investeringen gebouweigenaar in projectmanagement";
@@ -766,21 +778,18 @@ template WarmtenetTempl
 		attribute<Eur_yr> Kmi_id          := AllCandidate/PartialContributie/jaarlijks/Kmi_id[nr_orgentity]   , Descr = "geannualiseerde investeringskosten inpandige componenten van het warmtenet (nationale kosten)";
 		attribute<Eur>    Ki_pt           := const(0.0[Eur], .)                                               , Descr = "investeringen in transportnet, voor nu op nul gezet omdat al onderdeel is van wd";
 		attribute<Eur_yr> Kj_ow_productie := Prospect/afnemer/Kosten/Kj_ow_productie[Afnemer_rel]             , Descr = "jaarlijkse kosten productie uit primaire bron";
-
 	}
 
 	//====== berekening van opbrengsten van leverancier
 	unit<uint32> OpbrengstenBerekening := Candidate
 	{
-		attribute<Eur_yr> Oj_lv_verbruik  := const(0[Eur_yr], .), Descr = "jaarlijkse opbrensten voor leverancier: component verbruik";
-		attribute<Eur_yr> Oj_lv_vastrecht := const(0[Eur_yr], .), Descr = "jaarlijkse opbrensten voor leverancier: component vastrecht";
-		attribute<Eur_yr> Oj_lv_SDE       := const(0[Eur_yr], .), Descr = "jaarlijkse opbrensten voor leverancier: component productiesubsidie";
+		attribute<Eur_yr> Oj_lv_verbruik  := Prospect/DesAggregatie/Oj_lv_verbruik[Afnemer_rel]               , Descr = "jaarlijkse opbrensten voor leverancier: component verbruik";
+		attribute<Eur_yr> Oj_lv_vastrecht := Prospect/DesAggregatie/Oj_lv_vastrecht[Afnemer_rel]              , Descr = "jaarlijkse opbrensten voor leverancier: component vastrecht";
+		attribute<Eur_yr> Oj_lv_SDE       := Prospect/afnemer/Kosten/Oj_lv_SDE[Afnemer_rel]                   , Descr = "jaarlijkse opbrensten voor leverancier: component productiesubsidie";
 	}
-
 
 	//====== indicatie per kandidaat of deze nu is aangesloten op een nieuw warmtenet
 	attribute<bool> connect (Candidate) := const(false, Candidate);
-	
 
 	//====== resultaten van warmteoptie voor verder gebruik
 	unit<uint32> PlanRegio := /Invoer/RuimtelijkeData/StudieGebied/Buurt;
