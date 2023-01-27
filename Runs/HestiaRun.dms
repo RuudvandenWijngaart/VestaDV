@@ -6,35 +6,22 @@
 
 container HestiaRun
 {
-		// Ophalen eenheden, gebiedsafbakeningen en typeringen.
+	//====== Ophalen eenheden, gebiedsafbakeningen en typeringen.
 	#include <%projDir%/model/Units.dms>
 	#include <%projDir%/model/Geography.dms>
 	#include <%projDir%/model/Classifications.dms>
 
-	// Invoer: hier kunnen meerdere rekenstappen gedefinieerd worden.
+	//====== Invoer: over welke periode moet er worden gerekend?
+	parameter<uint16> eerste_jaar := 2000[uint16], Descr = "Eerste zichtjaar";
+	parameter<uint8>  aantal_jaar := 21[uint8]   , Descr = "Aantal zichtjaren";
 
-	unit<uint32> KalibratieInputs : StorageName = "%projDir%/runs/KalibratieInput.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
+	//====== Opbouw lijst van zichtjaren en rekenstappen
+	unit<uint8> all_rekenstap: nrofrows = 51, IsHidden = "True";
+	unit<uint8> rekenstap:= subset(id(all_rekenstap) < aantal_jaar), IsHidden = "True"
 	{
-		parameter<uint8>        Input_nrYears          := first(nryears)[uint8];
-		parameter<string>       Input_StudieGebied     := first(studiegebied)[string];
-		parameter<bool>         Input_StartGegevensAan := first(StartGegevensAan)[bool];
-		parameter<units/ratio>  Input_Spreiding        := first(Spreiding)[units/ratio];
-		parameter<units/ratio>  Input_Staart           := first(Staart)[units/ratio];
-		parameter<uint8>        Input_RenovatieGrens   := first(RenovatieGrens)[uint8];
-	}
-
-	parameter<uint8> rowcount := 51[uint8];
-	//parameter<uint8> rowcount := KalibratieInputs/Input_nrYears;
-
-	unit<uint8> all_rekenstap: nrofrows = 51;
-
-	unit<uint8> rekenstap:= subset(id(all_rekenstap) < rowcount), IsHidden = "True"
-	{
-		attribute<units/yr_uint16> Jaar  := (uint16(2000) + uint16(id(.)))[units/yr_uint16];
-
+		attribute<units/yr_uint16> Jaar  := (eerste_jaar + uint16(id(.)))[units/yr_uint16];
 		attribute<string>          label := string(id(.))+'_'+string(Jaar);
 		attribute<string>          name  := id(.) == 0b ? 'StartJaar' : 'R' + label; 
-
 		unit<uint8> repeats  := subset(id(rekenstap) != 0b), IsHidden = "True"
 		{
 			attribute<string>name:=rekenstap/name[nr_orgentity];
@@ -48,8 +35,6 @@ container HestiaRun
 
 		// Volledig Nederland zonder selectie. Comment uit indien een andere optie gekozen wordt.
 		   parameter<string>   StudieGebied : ['GM0034'];
-		// parameter<string>   StudieGebied := KalibratieInputs/Input_StudieGebied;
-
 
 		// Enkele gemeente als selectie. Comment in om te gebruiken.
 		//	parameter<string>   StudieGebied : ['GM0050']; //GM0050 (Zeewolde) is handig om kleinschalig te testen OF GM0213 (meer oudere gebouwen)
@@ -62,7 +47,7 @@ container HestiaRun
 		//	parameter<string>   StudieGebied :=
 		//	Geography/RegioIndelingen/Energieregio/GM_code_list[rlookup(RES_Gebied, Geography/RegioIndelingen/Energieregio/name)];
 
-		parameter<bool> StartgegevensAan := false, Descr = "Worden invoer voor isolatieniveaus en gebouwopties meegenomen?";
+		parameter<bool> StartgegevensAan := true, Descr = "Worden invoer voor isolatieniveaus en gebouwopties meegenomen?";
 
 		container DefaultInstellingen
 		{
@@ -74,10 +59,7 @@ container HestiaRun
 		container SpecifiekeInstellingen := DefaultInstellingen/Basis
 		{
 			// Invoer: welke energieprijzenbestanden worden gebruikt.
-			parameter<string> Energieprijzenbron       := '20220709_VV_Euro2020';
-			
-			// Invoer: worden bestaande warmtenetten meegenomen JA/NEE.
-			parameter<bool>   HasStartingArcSet := false, IsHidden = "True";
+			parameter<string> Energieprijzenbron := '20220709_VV_Euro2020';
 			
 			// Invoer: Per rekenstap worden specifieke instellingen gebruikt.
 			// De lijst van rekenstappen wordt gedefinieerd bij rekenstap.
@@ -135,6 +117,79 @@ container HestiaRun
 		attribute<uint32> A_Zonder_xIO          := ='ActieveWoning        - union_data(., '+AsItemList('sum_uint32(pcount(/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/xInvesteringsOptie/ActieveWoning_rel )>0)')+')';
 		attribute<uint32> AxIO_Zonder_GO        := ='A_xInvesteringsOptie - union_data(., '+AsItemList('sum_uint32(pcount(/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/GeschikteOptie/xInvesteringsOptie_rel)>0)')+')';
 
+		container SELPETellingen
+		{
+			attribute<units/GJ_yr> Vf_RV         (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vf_RV')+')';
+			attribute<units/GJ_yr> Vf_TW         (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vf_TW')+')';
+			attribute<units/GJ_yr> Vf_KK         (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vf_KK')+')';
+			attribute<units/GJ_yr> Vf_EA_VT_KD   (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vf_EA_VT_KD')+')';
+
+			attribute<units/GJ_yr> Vm_g_RV       (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vm_g_RV')+')';
+			attribute<units/GJ_yr> Vm_g_TW       (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vm_g_TW')+')';
+			attribute<units/GJ_yr> Vm_g_KK       (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vm_g_KK')+')';
+
+			attribute<units/GJ_yr> Vm_w_RV       (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vm_w_RV')+')';
+			attribute<units/GJ_yr> Vm_w_TW       (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vm_w_TW')+')';
+
+			attribute<units/GJ_yr> Vm_e_RV       (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vm_e_RV')+')';
+			attribute<units/GJ_yr> Vm_e_TW       (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vm_e_TW')+')';
+			attribute<units/GJ_yr> Vm_e_KK       (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vm_e_KK')+')';
+			attribute<units/GJ_yr> Vm_e_EA_VT_KD (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vm_e_EA_VT_KD')+')';
+
+			attribute<units/GJ_yr> Vm_o_RV       (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vm_o_RV')+')';
+			attribute<units/GJ_yr> Vm_o_TW       (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vm_o_TW')+')';
+
+			attribute<units/GJ_yr> Vm_b_RV       (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vm_b_RV')+')';
+			attribute<units/GJ_yr> Vm_b_TW       (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/Vm_b_TW')+')';
+
+			attribute<units/GJ_yr> V_omgeving    (Tellingen) :=  ='union_data(.., '+AsItemList('/Resultaten/'+name+'/SELPE/V_omgeving')+')';
+
+			unit<uint32> all_rekenstap: nrofrows = 51;
+
+			unit<uint32> rekenstap32 := subset(id(all_rekenstap) < uint32(aantal_jaar)), IsHidden = "True"
+			{
+				attribute<units/yr_uint16> Jaar  := (uint16(2000) + uint16(id(.)))[units/yr_uint16];
+
+				attribute<string>          label := string(id(.))+'_'+string(Jaar);
+				attribute<string>          name  := id(.) == 0u ? 'StartJaar' : 'R' + label; 
+			}	
+
+			unit<uint32> table := Rekenstap32
+			{
+				attribute<Tellingen> Tellingen_rel := rlookup(name, Tellingen/name);
+
+				attribute<units/nrAsl> Asl := SELPETellingen/Asl[Tellingen_rel];
+
+				attribute<units/GJ_yr> Vf_RV         := SELPETellingen/Vf_RV[Tellingen_rel];
+				attribute<units/GJ_yr> Vf_TW         := SELPETellingen/Vf_TW[Tellingen_rel];
+				attribute<units/GJ_yr> Vf_KK         := SELPETellingen/Vf_KK[Tellingen_rel];
+				attribute<units/GJ_yr> Vf_EA_VT_KD   := SELPETellingen/Vf_EA_VT_KD[Tellingen_rel];
+
+				attribute<units/GJ_yr> Vm_g_RV       := SELPETellingen/Vm_g_RV[Tellingen_rel];
+				attribute<units/GJ_yr> Vm_g_TW       := SELPETellingen/Vm_g_TW[Tellingen_rel];
+				attribute<units/GJ_yr> Vm_g_KK       := SELPETellingen/Vm_g_KK[Tellingen_rel];
+
+				attribute<units/GJ_yr> Vm_w_RV       := SELPETellingen/Vm_w_RV[Tellingen_rel];
+				attribute<units/GJ_yr> Vm_w_TW       := SELPETellingen/Vm_w_TW[Tellingen_rel];
+
+				attribute<units/GJ_yr> Vm_e_RV       := SELPETellingen/Vm_e_RV[Tellingen_rel];
+				attribute<units/GJ_yr> Vm_e_TW       := SELPETellingen/Vm_e_TW[Tellingen_rel];
+				attribute<units/GJ_yr> Vm_e_KK       := SELPETellingen/Vm_e_KK[Tellingen_rel];
+				attribute<units/GJ_yr> Vm_e_EA_VT_KD := SELPETellingen/Vm_e_EA_VT_KD[Tellingen_rel];
+
+				attribute<units/GJ_yr> Vm_o_RV       := SELPETellingen/Vm_o_RV[Tellingen_rel];
+				attribute<units/GJ_yr> Vm_o_TW       := SELPETellingen/Vm_o_TW[Tellingen_rel];
+
+				attribute<units/GJ_yr> Vm_b_RV       := SELPETellingen/Vm_b_RV[Tellingen_rel];
+				attribute<units/GJ_yr> Vm_b_TW       := SELPETellingen/Vm_b_TW[Tellingen_rel];
+
+				attribute<units/GJ_yr> V_omgeving    := SELPETellingen/V_omgeving[Tellingen_rel];
+			}
+			parameter<string> OutputFolder := '%localDataProjDir%/Results/SELPE/';
+			unit<uint32> variable := SubItem_PropValues(table,'name');
+			container export_csv := Model/CalculationSchemes/Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), OutputFolder+'SELPETellingen.csv');
+		}
+
 		container KalibratieTellingen
 		{
 			attribute<units/nrAsl> Asl             (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/Asl')+')';
@@ -155,7 +210,7 @@ container HestiaRun
 
 			unit<uint32> all_rekenstap: nrofrows = 51;
 
-			unit<uint32> rekenstap32 := subset(id(all_rekenstap) < uint32(rowcount)), IsHidden = "True"
+			unit<uint32> rekenstap32 := subset(id(all_rekenstap) < uint32(aantal_jaar)), IsHidden = "True"
 			{
 				attribute<units/yr_uint16> Jaar  := (uint16(2000) + uint16(id(.)))[units/yr_uint16];
 
@@ -223,7 +278,7 @@ container HestiaRun
 
 			unit<uint32> all_rekenstap: nrofrows = 51;
 
-			unit<uint32> rekenstap32 := subset(id(all_rekenstap) < uint32(rowcount)), IsHidden = "True"
+			unit<uint32> rekenstap32 := subset(id(all_rekenstap) < uint32(aantal_jaar)), IsHidden = "True"
 			{
 				attribute<units/yr_uint16> Jaar  := (uint16(2000) + uint16(id(.)))[units/yr_uint16];
 

@@ -167,7 +167,7 @@ template SubsetGebouwOptieT
 		(GeschiktObject/InstallatiePerProduct/AS >= Classifications/AfgifteSysteem/V/LTAS) && (BO/InstallatiePerProduct/AS[GeschiktObject/BO_rel] < Classifications/AfgifteSysteem/V/LTAS)
 			? (BO/IsMeergezins[GeschiktObject/BO_rel]
 				? BO/BCkentallen/Ki_LTAS_h_asl 
-				: BO/BCkentallen/Ki_LTAS_l_asl) * BO/nrAansluitingen[GeschiktObject/BO_rel] + BO/BCkentallen/Ki_LTAS_opp * BO/Oppervlakte[GeschiktObject/BO_rel]
+				: BO/BCkentallen/Ki_LTAS_l_asl) * BO/nrAansluitingen[GeschiktObject/BO_rel] // + BO/BCkentallen/Ki_LTAS_opp * BO/Oppervlakte[GeschiktObject/BO_rel]
 			: const(0[Eur], GeschiktObject);
 			
 	// #TRELLO35 KiXX per product tbv per installatie varierende EIA
@@ -422,7 +422,6 @@ template SubsetGebouwOptieT
 	attribute<Eur_yr> kosten_j (GeschiktObject) :=
 		  (Kji_GV - Oji_GV)      * BTW_Factor_gv
 		+ sum(Kji_LO - (Oji30_LO+Oji20_LO+Oji15_LO), GeschiktObject/xProduct/GeschiktObject_rel) * BTW_Factor
-		+ Kji_LTAS               * BTW_Factor
 		+ (Kji_Asl_Gnet - Oji_Gnet)  * BTW_Factor
 		+ (Kji_Asl_Enet - Oji_Enet)  * BTW_Factor
 		+ (Kji_LTAS - Oji_LTAS)  * BTW_Factor
@@ -445,13 +444,72 @@ template SubsetGebouwOptieT
 		
 	attribute<Eur_yr> kosten (GeschiktObject) := =(LocatieSpecifiekeOpties/GebouwOpties/KiesMaatschappelijk) ? 'kosten_m' : 'kosten_j';
 
-	attribute<Classifications/SchilLabel> LabelNorm (GeschiktObject) := const(min(ZichtjaarBeleid/BestaandeBouwNorm/LabelNorm/Min_label),GeschiktObject);
-	attribute<bool> LabelNormOK (GeschiktObject) := Energielabel_rel <= LabelNorm;
+	//====== Verwerken normering op energielabel
+	container LabelNormen
+	{
+		unit<uint32> BBN := ZichtjaarBeleid/BestaandeBouwNorm, ishidden = "True";
+		parameter<bool> GeenNormen := sum(BBN/naleving) <= 0.0[ratio];
+		container Normen := for_each_ne(BBN/name, 'ImplSubs(BBN/V/'+BBN/name+')');
+		template ImplSubs : ishidden = "True"
+		{
+			//case parameters
+			parameter<BBN> BBN_rel;
+			//end case parameters
 
-	attribute<Eur_yr> kosten_or_undefined (GeschiktObject) := select_data(GeschiktObject, Criterium) && LabelNormOK ? kosten : (0/0)[Eur_yr];
+			attribute<bool> Naleving      (GeschiktObject) := first(rnd_uniform(JaarSeed * 106u, GeschiktObject, range(float64, 0d, 1d)), GeschiktObject/BO_rel)[GeschiktObject/BO_rel] <= BBN/Naleving[BBN_rel];
+			attribute<bool> InDoelgroepED (GeschiktObject) := ='OR('+AsItemList(replace('BBN/doelgroep/@ED[BBN_rel] && BO/Eigendom_rel[geschiktobject/BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')', ishidden = "True";
+			attribute<bool> InDoelgroepWT (GeschiktObject) := BBN/doelgroep/EGW[BBN_rel] && BO/IsMeergezins[GeschiktObject/BO_rel] || BBN/doelgroep/MGW[BBN_rel] && not(BO/IsMeergezins[GeschiktObject/BO_rel]);
+			attribute<bool> Geldig        (GeschiktObject) := Naleving && InDoelgroepED && InDoelgroepWT;
+
+			attribute<Classifications/SchilLabel> LabelNorm (GeschiktObject) := not(Geldig) ? Classifications/Schillabel/V/N : BBN/LabelNorm/Min_label[BBN_rel];
+		}
+		attribute<Classifications/SchilLabel> Norm (GeschiktObject) := ='makedefined(min_elem('+AsItemList('Normen/'+BBN/name+'/LabelNorm')+'), Classifications/Schillabel/V/N)';
+	}
+	
+	attribute<bool> LabelNormOK (GeschiktObject) := =LabelNormen/GeenNormen ? 'const(true,GeschiktObject)' : 'Energielabel_rel <= LabelNormen/Norm';
+	//======
+
+	attribute<Eur_yr> kosten_or_undefined (GeschiktObject) := select_data(GeschiktObject, Criterium) && LabelNormOK && not(Verboden) ? kosten : (0/0)[Eur_yr];
 
 	container energielabelberekening := CalculationSchemes/NTA8800(GeschiktObject);
 	attribute<Classifications/Schillabel> Energielabel_rel     (GeschiktObject) := energielabelberekening/Energielabel_rel;
+
+
+	unit<uint32> ZBV := ZichtjaarBeleid/Verbod, ishidden = "True";
+	container VerbodBerekening := for_each_ne(ZBV/name, 'ImplVerbod(ZBV/V/'+ZBV/name+')');
+	template ImplVerbod : ishidden = "True"
+	{
+		//case parameters
+		parameter<ZBV> ZBV_rel;
+		//end case parameters
+
+		container Naleving
+		{
+			parameter<ratio> AandeelNaleving := ZBV/Naleving[ZBV_rel];
+			attribute<bool>  PerObject (Geschiktobject) := rnd_uniform(JaarSeed * 173u, Geschiktobject, range(float64, 0d, 1d)) <= AandeelNaleving;
+
+		}
+		container LabelVoorwaarde := for_each_nedv(Classifications/Schillabel/name , 'ZBV/Voorwaarde/HuidigLabel/'+Classifications/SchilLabel/name+'[ZBV_rel]', void, bool)
+		{
+			attribute<bool> Voldaan (GeschiktObject) := ='merge(uint8(BO/Energielabel_rel[GeschiktObject/BO_rel]), bool, '+AsItemList(Classifications/Schillabel/name)+')';
+		}
+		container Installatie := for_each_nedv(Classifications/Installatie/label , 'ZBV/grondslag/'+Classifications/Installatie/label+'[ZBV_rel]', void, bool)
+		{
+			container CheckPerProduct := for_each_nedv(
+				  Classifications/Product/name
+				, replace(
+						'merge(uint8(GeschiktObject/InstallatiePerProduct/@PROD@), bool, '+AsItemList(Classifications/Installatie/label)+') && BO/Activatie/Producten/@PROD@[GeschiktObject/BO_rel]'
+					, '@PROD@', Classifications/Product/name)
+				, GeschiktObject
+				, bool);
+
+			attribute<bool> InOptie (GeschiktObject) := ='or('+AsItemList('CheckPerProduct/'+Classifications/Product/name)+')';
+		}
+
+		attribute<bool> GeldigVerbod  (GeschiktObject) := LabelVoorwaarde/Voldaan;
+		attribute<bool> OptieVerboden (GeschiktObject) := GeldigVerbod && Naleving/PerObject && Installatie/InOptie;
+	}
+	attribute<bool> Verboden (GeschiktObject) := =count(ZBV/naleving) > 0u ? 'or('+AsItemList('VerbodBerekening/'+ZBV/name+'/OptieVerboden')+')' : 'const(false,GeschiktObject)';
 
 	unit<uint32> results := GeschiktObject 
 	{
