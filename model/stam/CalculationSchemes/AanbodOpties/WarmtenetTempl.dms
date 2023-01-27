@@ -24,6 +24,7 @@ template WarmtenetTempl
 	parameter<Float64> MinimaleRentabiliteitLeverancier := 1.1, Descr = "minimale ratio tussen CW van de verwachtte opbrengsten per hoeveelheid investeringen.";
 	
 	parameter<EUR_kW> Ki_distr_max := 200000[EUR_kW]; // TODO: reconsider and move naar kentallen
+	parameter<ratio>  LeerCurve    := LeerCurves/Warmtenet/curve;
 
 	container WarmteBronnen
 	{
@@ -35,7 +36,8 @@ template WarmtenetTempl
 			attribute<rdc_meter> Geometry        := PuntBronnen_zichtjaar/geometry;
 			attribute<Brontype>  Brontype_rel    := PuntBronnen_zichtjaar/Brontype_rel;
 			attribute<bool>      Koude           := Brontype/Koude[Brontype_rel];
-			attribute<bool>      Geschikt        := = KoudeLevering ? 'Koude' : 'const(true,.)';
+			attribute<bool>      inStudieGebied  := IsDefined(point_in_polygon(Geometry, /Invoer/RuimtelijkeData/StudieGebied/Gemeente/geometry));
+			attribute<bool>      Geschikt        := = KoudeLevering ? 'inStudieGebied && Koude' : 'inStudieGebied';
 		}
 		unit<uint32> Puntbronnen := subset(Puntbronnen_all/Geschikt)
 		{
@@ -63,7 +65,7 @@ template WarmtenetTempl
 			attribute<rdc_meter> Geometry (poly) := VlakBronnen_zichtjaar/geometry;
 			attribute<Brontype>  Brontype_rel    := VlakBronnen_zichtjaar/Brontype_rel;
 			attribute<bool>      Koude           := Brontype/Koude[Brontype_rel];
-			attribute<bool>      Geschikt        := const(false, .); // = KoudeLevering ? 'Koude' : 'const(true,.)'; // DEBUG, TODO; Vlakbronnen even uit t.b.v. Rotterdam debuggen.
+			attribute<bool>      Geschikt        := IsDefined(point_in_polygon(centroid_or_mid(geometry), /Invoer/RuimtelijkeData/StudieGebied/Gemeente/geometry)); //= KoudeLevering ? 'Koude' : 'const(true,.)'; uit voor testpurposes
 		}
 		unit<uint32> VlakBronnen := subset(VlakBronnen_all/Geschikt)
 		{
@@ -133,10 +135,18 @@ template WarmtenetTempl
 			
 			attribute<string> label := union_data(., 'GeenBron', Puntbronnen/Label, VlakBronnen/Label, Lijnbronnen/Label);
 			
-			attribute<EUR_kW> Ki_cap_min := union_data(., Ki_distr_max, Puntbronnen/Ki_cap_min, VlakBronnen/Ki_cap_min, Lijnbronnen/Ki_cap_min);
-			attribute<EUR_kW> Ki_cap_max := union_data(., Ki_distr_max, Puntbronnen/Ki_cap_max, VlakBronnen/Ki_cap_max, Lijnbronnen/Ki_cap_max);
-			attribute<EUR_kw> Ki_cap := Schuiven/KostenMin * Ki_cap_min + Schuiven/KostenMax * Ki_cap_max;
-			
+			attribute<EUR_kW>   Ki_cap_min   := union_data(., Ki_distr_max, Puntbronnen/Ki_cap_min, VlakBronnen/Ki_cap_min, Lijnbronnen/Ki_cap_min);
+			attribute<EUR_kW>   Ki_cap_max   := union_data(., Ki_distr_max, Puntbronnen/Ki_cap_max, VlakBronnen/Ki_cap_max, Lijnbronnen/Ki_cap_max);
+			attribute<ratio>    P_vol        := union_data(., 0.0[ratio], Puntbronnen/P_vol, VlakBronnen/P_vol, Lijnbronnen/P_vol);
+			attribute<ratio>    P_cap        := union_data(., 0.0[ratio], Puntbronnen/P_cap, VlakBronnen/P_cap, Lijnbronnen/P_cap);
+			attribute<Brontype> Brontype_rel := union_data(., (0/0)[Brontype], Puntbronnen/Brontype_rel, VlakBronnen/Brontype_rel, Lijnbronnen/Brontype_rel);
+			attribute<EUR_kw>   Ki_cap       := Schuiven/KostenMin * Ki_cap_min + Schuiven/KostenMax * Ki_cap_max;
+			attribute<Eur_GJ>   K_GJ_w       := union_data(., 0.0[Eur_GJ], Puntbronnen/K_GJ, VlakBronnen/K_GJ, Lijnbronnen/K_GJ);
+			attribute<Eur_GJ>   K_GJ_k       := const(0.0[eur_GJ],.), Descr = "aanname dat koude puur restproduct is en niet voor wordt betaald";
+			attribute<Eur_GJ>   Km_GJ_w      := union_data(., 0.0[Eur_GJ], Puntbronnen/Km_GJ, VlakBronnen/Km_GJ, Lijnbronnen/Km_GJ);
+			attribute<Eur_GJ>   Km_GJ_k      := const(0.0[eur_GJ],.), Descr = "aanname dat koude puur restproduct is en niet voor wordt betaald";
+			attribute<Celsius>  T_bron       := union_data(., (0/0)[Celsius], Puntbronnen/T_bron, VlakBronnen/T_bron, Lijnbronnen/T_bron);
+
 			attribute<MW> MWth_max := union_data(., 1e+10[MW], Puntbronnen/MWth_max, VlakBronnen/MWth_max, Lijnbronnen/MWth_max);
 			attribute<kW> kWth_max := MWth_max * (1000KW / 1MW);
 			attribute<m>  max_dist := union_data(., 100000[m], Puntbronnen/max_dist, VlakBronnen/max_dist, lijnbronnen/max_dist);
@@ -162,6 +172,7 @@ template WarmtenetTempl
 		{
 			attribute<pand>                pand_rel    := nr_orgentity;
 			attribute<kW>                  P_wd        := sum(PartialContributie/P_wd, rlookup(AllCandidate/pand_rel, pand_rel)); 
+			attribute<Celsius>             DT          := mean(PartialContributie/DeltaT_wd, rlookup(AllCandidate/pand_rel, pand_rel));
 			attribute<Eur_yr>              Contributie := sum(PartialContributie/Contributie, rlookup(AllCandidate/pand_rel, pand_rel)); 
 		}
 		unit<uint32> StudieGebiedPand := subset(StudieGebiedPand_candidate/P_wd > 0[kW])
@@ -171,6 +182,7 @@ template WarmtenetTempl
 			attribute<geography/rdc_meter> geometry (poly) := pand_rel->geometry;
 			attribute<geography/rdc_meter> point           := Centroid_or_mid(geometry);
 			attribute<kW>                  P_wd            := nr_orgentity->P_wd; 
+			attribute<Celsius>             DT              := nr_orgentity->DT; 
 			attribute<Eur_yr>              Contributie     := nr_orgentity->Contributie;
 		}
 		attribute<StudieGebiedPand> StudieGebiedPand_rel := rlookup(pand_rel, StudieGebiedPand_candidate/nr_orgentity[StudieGebiedPand/nr_orgentity]);
@@ -220,7 +232,7 @@ template WarmtenetTempl
 
 			//====== extra vraag in het wijkdistributienet door leidingverlies en bepaling van verschil tussen aanlever- en retourtemperatuur
 			attribute<Celsius>   DeltaT_wd     (AllCandidate) := T_sec <= 35[Celsius] && Booster ? 10[Celsius] : T_sec <= 35[Celsius] && WP ? 20[Celsius] : 30[Celsius];
-			attribute<GJ_yr_asl> Volumeverlies (AllCandidate) := leerCurves/Verl/Curve * (T_sec <= 35[Celsius] ? ( DeltaT_wd <= 10[Celsius] ? 3.2[GJ_yr_asl] : DeltaT_wd <= 15[Celsius] ? 2.6[GJ_yr_asl] : 1.9[GJ_yr_asl] ) : 10.5[GJ_yr_asl]);
+			attribute<GJ_yr_asl> Volumeverlies (AllCandidate) := leerCurve * (T_sec <= 35[Celsius] ? ( DeltaT_wd <= 10[Celsius] ? 3.2[GJ_yr_asl] : DeltaT_wd <= 15[Celsius] ? 2.6[GJ_yr_asl] : 1.9[GJ_yr_asl] ) : 10.5[GJ_yr_asl]);
 			attribute<GJ_yr>     V_wd_verlies  (AllCandidate) := BO/nrAansluitingen[BO_rel] * Volumeverlies; // <- resultaat
 			
 						//====== berekening kosten aansluitleiding (van gevel tot straat)
@@ -234,45 +246,45 @@ template WarmtenetTempl
 			attribute<Celsius> DeltaT_pand   (StudieGebiedPand) := mean(DeltaT_wd, StudieGebiedPand_rel);
 			attribute<eur>     Ki_asl_pand   (StudieGebiedPand) := LeidingKosten_asl/Ki * L_asl_pand;
 			attribute<ratio>   pand_aandeel      (AllCandidate) := BO/pand_aandeel[BO_rel] / 1.0[pand_asl];
-			attribute<eur>     Ki_wd_asl         (AllCandidate) := leerCurves/Aansl/Curve * Ki_asl_pand[StudieGebiedPand_rel] * pand_aandeel;
+			attribute<eur>     Ki_wd_asl         (AllCandidate) := leerCurve * Ki_asl_pand[StudieGebiedPand_rel] * pand_aandeel;
 			container LeidingKosten_asl := LeidingKosten_T(StudieGebiedPand, P_id_pand, DeltaT_pand);
 
 			//====== investeringskosten inpandig
-			parameter<eur_asl> K_id_bouw_mgw := leerCurves/Inpand/Curve * (Schuiven/VerketelingMax * (Schuiven/KostenMin * 400[eur_asl] + Schuiven/KostenMax * 2500[eur_asl]) + Schuiven/VerketelingMin * (Schuiven/KostenMin *   0[eur_asl] + Schuiven/KostenMax * 400[eur_asl]));
-			parameter<eur_asl> K_id_bouw_egw := leerCurves/Inpand/Curve * (Schuiven/KostenMin * 400[eur_asl] + Schuiven/KostenMax * 4500[eur_asl]);
+			parameter<eur_asl> K_id_bouw_mgw := leerCurve * (Schuiven/VerketelingMax * (Schuiven/KostenMin * 400[eur_asl] + Schuiven/KostenMax * 2500[eur_asl]) + Schuiven/VerketelingMin * (Schuiven/KostenMin *   0[eur_asl] + Schuiven/KostenMax * 400[eur_asl]));
+			parameter<eur_asl> K_id_bouw_egw := leerCurve * (Schuiven/KostenMin * 400[eur_asl] + Schuiven/KostenMax * 4500[eur_asl]);
 			attribute<eur>     Ki_id_bouw (AllCandidate) := BO/nrAansluitingen[BO_rel] * (BO/isMeergezins[BO_rel] ? K_id_bouw_mgw : K_id_bouw_egw),
 					Descr  = "bouwkundige kosten t/m de afleverset (herstel tuin, sparingen en mantelbuizen)",
 					Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.53 tabel 30";
 
-			parameter<eur_asl> K_id_dist_mgw := leerCurves/Inpand/Curve * (Schuiven/VerketelingMax * (Schuiven/KostenMin * 350[eur_asl] + Schuiven/KostenMax * 4050[eur_asl]) + Schuiven/VerketelingMin * (Schuiven/KostenMin * 350[eur_asl] + Schuiven/KostenMax * 1500[eur_asl]));
-			parameter<eur_asl> K_id_dist_egw := leerCurves/Inpand/Curve * (Schuiven/KostenMin * 350[eur_asl] + Schuiven/KostenMax * 5450[eur_asl]);
+			parameter<eur_asl> K_id_dist_mgw := leerCurve * (Schuiven/VerketelingMax * (Schuiven/KostenMin * 350[eur_asl] + Schuiven/KostenMax * 4050[eur_asl]) + Schuiven/VerketelingMin * (Schuiven/KostenMin * 350[eur_asl] + Schuiven/KostenMax * 1500[eur_asl]));
+			parameter<eur_asl> K_id_dist_egw := leerCurve * (Schuiven/KostenMin * 350[eur_asl] + Schuiven/KostenMax * 5450[eur_asl]);
 			attribute<eur>     Ki_id_dist (AllCandidate) := BO/nrAansluitingen[BO_rel] * (BO/isMeergezins[BO_rel] ? K_id_dist_mgw : K_id_dist_egw),
 					Descr  = "installatietechnische en bouwkundige inpandige distributiekosten",
 					Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.54 tabel 31";
 
-			parameter<eur_asl> K_id_meter_asl := leerCurves/Inpand/Curve * (Schuiven/KostenMin * 898.69[eur_asl] + Schuiven/KostenMax * 926.78[eur_asl]);
-			parameter<Eur_kW>  K_id_meter_cap := leerCurves/Inpand/Curve * (Schuiven/KostenMin *   1.24[Eur_kW]  + Schuiven/KostenMax *   1.46[Eur_kW]);
+			parameter<eur_asl> K_id_meter_asl := leerCurve * (Schuiven/KostenMin * 898.69[eur_asl] + Schuiven/KostenMax * 926.78[eur_asl]);
+			parameter<Eur_kW>  K_id_meter_cap := leerCurve * (Schuiven/KostenMin *   1.24[Eur_kW]  + Schuiven/KostenMax *   1.46[Eur_kW]);
 			attribute<eur>     Ki_id_meter (AllCandidate) := BO/nrAansluitingen[BO_rel] * K_id_meter_asl + P_id * K_id_meter_cap,
 					Descr  = "kosten warmtemeters",
 					Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.55 tabel 32";
 
-			parameter<eur_asl> K_id_booster := leerCurves/eWPww/Curve * (Schuiven/KostenMin * 2225.98[eur_asl] + Schuiven/KostenMax * 2560.84[eur_asl]);
+			parameter<eur_asl> K_id_booster := leerCurve * (Schuiven/KostenMin * 2225.98[eur_asl] + Schuiven/KostenMax * 2560.84[eur_asl]);
 			attribute<eur>     Ki_id_booster (AllCandidate) := =T_sec > 55[Celsius] ? 'const(0.0[eur],AllCandidate)' :  'BO/nrAansluitingen[BO_rel] * float64(Booster) * K_id_booster',
 					Descr  = "Kosten boosterwarmtepomp voor tapwater, indien van toepassing",
 					Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.55 tabel 32";
 			
-			attribute<eur>     Ki_id_ewp (AllCandidate) := =T_sec > 55[Celsius] ? 'const(0.0[eur],AllCandidate)' : 'leerCurves/eWPww/Curve * (float64(WP) * (not(isUtil) ? BO/nrAansluitingen[BO_rel] * (BO/Schillabel_rel[BO_rel] <= Classifications/Schillabel/V/B ? 4500[eur_asl] : 7000[eur_asl]) : P_id * 700[eur_kw]))',
+			attribute<eur>     Ki_id_ewp (AllCandidate) := =T_sec > 55[Celsius] ? 'const(0.0[eur],AllCandidate)' : 'leerCurve * (float64(WP) * (not(isUtil) ? BO/nrAansluitingen[BO_rel] * (BO/Schillabel_rel[BO_rel] <= Classifications/Schillabel/V/B ? 4500[eur_asl] : 7000[eur_asl]) : P_id * 700[eur_kw]))',
 					Descr  = "Inpandige w/w warmtepomp, indien van toepassing",
 					Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.55 tabel 32";
 
-			parameter<eur_m2>  K_LTAS_u   := leerCurves/LTAS/Curve * (Schuiven/KostenMin * Invoer/Kengetallen/BCkentallen/Ki_LTAS_u_min  + Schuiven/KostenMax * Invoer/Kengetallen/BCkentallen/Ki_LTAS_u_max);
-			parameter<eur_asl> K_LTAS_egw := leerCurves/LTAS/Curve * (Schuiven/KostenMin * Invoer/Kengetallen/BCkentallen/Ki_LTAS_wl_min + Schuiven/KostenMax * Invoer/Kengetallen/BCkentallen/Ki_LTAS_wl_max);
-			parameter<eur_asl> K_LTAS_mgw := leerCurves/LTAS/Curve * (Schuiven/KostenMin * Invoer/Kengetallen/BCkentallen/Ki_LTAS_wh_min + Schuiven/KostenMax * Invoer/Kengetallen/BCkentallen/Ki_LTAS_wh_max);			
+			parameter<eur_m2>  K_LTAS_u   := leerCurve * (Schuiven/KostenMin * Invoer/Kengetallen/BCkentallen/Ki_LTAS_u_min  + Schuiven/KostenMax * Invoer/Kengetallen/BCkentallen/Ki_LTAS_u_max);
+			parameter<eur_asl> K_LTAS_egw := leerCurve * (Schuiven/KostenMin * Invoer/Kengetallen/BCkentallen/Ki_LTAS_wl_min + Schuiven/KostenMax * Invoer/Kengetallen/BCkentallen/Ki_LTAS_wl_max);
+			parameter<eur_asl> K_LTAS_mgw := leerCurve * (Schuiven/KostenMin * Invoer/Kengetallen/BCkentallen/Ki_LTAS_wh_min + Schuiven/KostenMax * Invoer/Kengetallen/BCkentallen/Ki_LTAS_wh_max);			
 			attribute<eur>     Ki_id_LTAS (AllCandidate) := =T_sec > 55[Celsius] ? 'const(0.0[eur],AllCandidate)' : 'isUtil ? BO/oppervlakte[BO_rel] * K_LTAS_u : BO/isMeergezins[BO_rel] ? K_LTAS_mgw * BO/nrAansluitingen[BO_rel] : K_LTAS_egw * BO/nrAansluitingen[BO_rel]',
 					Descr  = "Kosten LT-afgiftesysteem, indien van toepassing",
 					Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.55 tabel 32";
 
-			attribute<eur>     Ki_id_aflever (AllCandidate) := WP ? 0.0[eur] : leerCurves/Inpand/Curve * BO/nrAansluitingen[BO_rel] * 1300[eur_asl],
+			attribute<eur>     Ki_id_aflever (AllCandidate) := WP ? 0.0[eur] : leerCurve * BO/nrAansluitingen[BO_rel] * 1300[eur_asl],
 					Descr  = "Kosten afleverset voor warmtelevering wanneer geen opwaardering nodig is",
 					Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.55 tabel 32";
 
@@ -321,23 +333,23 @@ template WarmtenetTempl
 			container jaarlijks
 			{
 				attribute<Eur_yr> Kj_id_elek     (AllCandidate) := prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl[ind_gebruiksgrootteklasse_rel] * V_id_Elek;
-				attribute<Eur_yr> Kji_ge_net     (AllCandidate) := (Ki_ge     - Oi_ge_EIA    ) * NCW/wd28/StartDiscountFactor * NCW/wd28/AnnualisationFactor;
+				attribute<Eur_yr> Kji_ge_net     (AllCandidate) := (Ki_ge     - Oi_ge_EIA    ) * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
 
-				attribute<Eur_yr> Kji_id_30      (AllCandidate) := add(Ki_id_dist   , Ki_id_bouw ) * NCW/id30/AnnualisationFactor;
-				attribute<Eur_yr> Kji_id_20      (AllCandidate) := add(Ki_id_booster, Ki_id_eWP  ) * NCW/id20/AnnualisationFactor;
-				attribute<Eur_yr> Kji_id_15      (AllCandidate) := add(Ki_id_aflever, Ki_id_meter) * NCW/id15/AnnualisationFactor;
+				attribute<Eur_yr> Kji_id_30      (AllCandidate) := add(Ki_id_dist   , Ki_id_bouw ) * NCW/wb30/AnnualisationFactor;
+				attribute<Eur_yr> Kji_id_20      (AllCandidate) := add(Ki_id_booster, Ki_id_eWP  ) * NCW/wb20/AnnualisationFactor;
+				attribute<Eur_yr> Kji_id_15      (AllCandidate) := add(Ki_id_aflever, Ki_id_meter) * NCW/wb15/AnnualisationFactor;
 				attribute<Eur_yr> Kji_id         (AllCandidate) := add(Kji_id_30, Kji_id_20, Kji_id_15);
 				attribute<Eur_yr> Kmi_id_30      (AllCandidate) := add(Ki_id_dist   , Ki_id_bouw ) * NCW/mr30/AnnualisationFactor;
 				attribute<Eur_yr> Kmi_id_20      (AllCandidate) := add(Ki_id_booster, Ki_id_eWP  ) * NCW/mr20/AnnualisationFactor;
 				attribute<Eur_yr> Kmi_id_15      (AllCandidate) := add(Ki_id_aflever, Ki_id_meter) * NCW/mr15/AnnualisationFactor;
 				attribute<Eur_yr> Kmi_id         (AllCandidate) := add(Kmi_id_30, Kmi_id_20, Kmi_id_15);
-				attribute<Eur_yr> Kji_id_net     (AllCandidate) := Kji_id - (Oi_id_EIA  * NCW/id28/StartDiscountFactor * NCW/id28/AnnualisationFactor);
+				attribute<Eur_yr> Kji_id_net     (AllCandidate) := Kji_id - (Oi_id_EIA  * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor);
 
-				attribute<Eur_yr> Kji_wd_Asl_net (AllCandidate) := (Ki_wd_asl - Oi_wd_asl_EIA) * NCW/wd28/StartDiscountFactor * NCW/wd28/AnnualisationFactor;
-				attribute<Eur_yr> Kj_id_oh       (AllCandidate) := leerCurves/OenM/Curve * ((Ki_id - Ki_id_meter) * Invoer/Kengetallen/Onderhoud/R_id_onderhoud + Ki_id_meter * Invoer/Kengetallen/Onderhoud/R_Inst_onderhoud);
-				attribute<Eur_yr> Kj_id_adm      (AllCandidate) := leerCurves/OenM/Curve * ((Ki_id - Ki_id_meter) * Invoer/Kengetallen/Onderhoud/R_id_admin     + Ki_id_meter * Invoer/Kengetallen/Onderhoud/R_Inst_admin    );
-				attribute<Eur_yr> Kj_wd_asl_oh   (AllCandidate) := leerCurves/OenM/Curve * Ki_wd_asl * Invoer/Kengetallen/Onderhoud/R_wd_onderhoud;
-				attribute<Eur_yr> Kj_wd_asl_adm  (AllCandidate) := leerCurves/OenM/Curve * Ki_wd_asl * Invoer/Kengetallen/Onderhoud/R_wd_admin;
+				attribute<Eur_yr> Kji_wd_Asl_net (AllCandidate) := (Ki_wd_asl - Oi_wd_asl_EIA) * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
+				attribute<Eur_yr> Kj_id_oh       (AllCandidate) := leerCurve * ((Ki_id - Ki_id_meter) * Invoer/Kengetallen/Onderhoud/R_id_onderhoud + Ki_id_meter * Invoer/Kengetallen/Onderhoud/R_Inst_onderhoud);
+				attribute<Eur_yr> Kj_id_adm      (AllCandidate) := leerCurve * ((Ki_id - Ki_id_meter) * Invoer/Kengetallen/Onderhoud/R_id_admin     + Ki_id_meter * Invoer/Kengetallen/Onderhoud/R_Inst_admin    );
+				attribute<Eur_yr> Kj_wd_asl_oh   (AllCandidate) := leerCurve * Ki_wd_asl * Invoer/Kengetallen/Onderhoud/R_wd_onderhoud;
+				attribute<Eur_yr> Kj_wd_asl_adm  (AllCandidate) := leerCurve * Ki_wd_asl * Invoer/Kengetallen/Onderhoud/R_wd_admin;
 
 				attribute<Eur_yr> kosten         (AllCandidate) := add(Kj_id_elek, Kji_ge_net, Kji_id_net, Kji_wd_Asl_net, Kj_id_oh, Kj_id_adm, Kj_wd_asl_oh, Kj_wd_asl_adm);
 			}
@@ -403,9 +415,11 @@ template WarmtenetTempl
 	{
 		unit<uint32> ContributiePand := subset(AllCandidate/StudieGebiedPand/Contributie > 0.0[Eur_yr])
 		{
-			attribute<rdc_meter> Geometry := Point;
-			attribute<rdc_meter> Point    := nr_orgEntity->point;
-			attribute<kW>        P_wd     := nr_orgEntity->P_wd;
+			attribute<rdc_meter> Geometry  := Point;
+			attribute<rdc_meter> Point     := nr_orgEntity->point;
+			attribute<kW>        P_wd      := nr_orgEntity->P_wd;
+			attribute<Celsius>   DT        := nr_orgEntity->DT;
+			attribute<uint32>    SGP_count := const(1[uint32],.);
 		}
 
 		parameter<Float64> Ki_Buis_kW := 10[EUR / m / kW];
@@ -505,13 +519,11 @@ template WarmtenetTempl
 				,	max(initialAugmentation) + 20[km] * 1000[m / km]
 				);
 				
-			attribute<Vertex>              Vertex_Vertex_rel (Vertex)          := service_area(Edge/from, Edge/to, bron_dist/TraceBack);
-			attribute<WarmteBronnen/bron>  Vertex_bron_rel   (Vertex)          := rlookup(Vertex_Vertex_rel, bron_Vertex_rel);
-			attribute<WarmteBronnen/bron>  Dest_bron_rel     (ContributiePand) := Vertex_bron_rel[Vertex/Per_Pand];
-
-			attribute<kW>    bron_P_wd     (Warmtebronnen/bron) := sum(ContributiePand/P_wd, dest_bron_rel);
-			
-			attribute<ratio> bron_cap_ratio(Warmtebronnen/bron) := bron_P_wd / Warmtebronnen/bron/kWth_max;
+			attribute<Vertex>              Vertex_Vertex_rel (Vertex)             := service_area(Edge/from, Edge/to, bron_dist/TraceBack);
+			attribute<WarmteBronnen/bron>  Vertex_bron_rel   (Vertex)             := rlookup(Vertex_Vertex_rel, bron_Vertex_rel);
+			attribute<WarmteBronnen/bron>  Dest_bron_rel     (ContributiePand)    := Vertex_bron_rel[Vertex/Per_Pand];
+			attribute<kW>                  bron_P_wd         (Warmtebronnen/bron) := sum(ContributiePand/P_wd, dest_bron_rel);
+			attribute<ratio>               bron_cap_ratio    (Warmtebronnen/bron) := bron_P_wd / Warmtebronnen/bron/kWth_max;
 
 			// te volle bronnen moeten duurder met een aantal augmentedImpedances van een andere bron - bron_dist: de impedance van de huidige bron, oplopend gesorteerd
 			// mits deze bron vol
@@ -529,80 +541,208 @@ template WarmtenetTempl
 
 		container LastIter := ='Iterations/'+last(allocIter/name);
 		
-		attribute<m>                  best_augmentation (WarmteBronnen/bron) := LastIter/currAugmentation;
-		attribute<Warmtebronnen/bron> best_bron_rel     (ContributiePand)    := lastIter/dest_bron_rel;
-		attribute<uint32>             SGP_count         (WarmteBronnen/bron) := count(best_bron_rel, Best_bron_rel);
+		attribute<m>                  best_augmentation      (WarmteBronnen/bron) := LastIter/currAugmentation                                                                                , Descr = "verwijzing naar iteratie met beste uitkomst, wordt verder gebruikt";
+		attribute<Warmtebronnen/bron> best_bron_rel          (ContributiePand)    := lastIter/dest_bron_rel                                                                                   , Descr = "bron waarbij een pand is ingedeeld";
+		attribute<uint32>             SGP_count              (WarmteBronnen/bron) := count(best_bron_rel, Best_bron_rel)                                                                      , Descr = "aantal panden geselecteerd per bron";
+		attribute<kW>                 NodeDemand             (Vertex)             := MakeDefined((ContributiePand/P_wd      * Float64(best_bron_rel!=0))[invert(Vertex/Per_pand)], 0[kW])     , Descr = "Vermogenvraag van aangesloten pand";
+		attribute<Celsius>            NodeDT                 (Vertex)             := MakeDefined((ContributiePand/DT        * Float64(best_bron_rel!=0))[invert(Vertex/Per_pand)], 0[Celsius]), Descr = "Verchil aanlever/retour temp aangesloten pand";
+		attribute<uint32>             Node_SGP_count         (Vertex)             := MakeDefined((ContributiePand/SGP_count *  uint32(best_bron_rel!=0))[invert(Vertex/Per_pand)], 0[uint32]);
+		attribute<kW>                 edge_flow              (Edge)               := trace_back(Edge/From, Edge/To, LastIter/bron_dist/TraceBack, NodeDemand)                                 , Descr = "optelling van vermogensvraag per buisleidingelement";
+		attribute<Celsius>            edge_DT_sum            (Edge)               := trace_back(Edge/From, Edge/To, LastIter/bron_dist/TraceBack, NodeDT);
+		attribute<uint32>             edge_SGP_count         (Edge)               := trace_back(Edge/From, Edge/To, LastIter/bron_dist/TraceBack, Node_SGP_count);
+		attribute<Celsius>            edge_DT                (Edge)               := edge_DT_sum / float64(edge_SGP_count);
+		attribute<Vertex>             Vertex_bron_Vertex_rel (Vertex)             := service_area(Edge/From, Edge/To, LastIter/bron_dist/TraceBack); 
+		attribute<WarmteBronnen/bron> Vertex_bron_rel        (Vertex)             := invert(bron_Vertex_rel)[Vertex_bron_Vertex_rel];
 		
-		attribute<kW> NodeDemand(Vertex) := MakeDefined((ContributiePand/P_wd * Float64(best_bron_rel!=0))[invert(Vertex/Per_pand)], 0[kW]);
-	
-		attribute<kW> edge_flow(Edge) := trace_back(Edge/From, Edge/To, LastIter/bron_dist/TraceBack, NodeDemand);
+		container edge_cost_calc := AllCandidate/PartialContributie/LeidingKosten_T(Edge, edge_flow, edge_DT);
 		
-		attribute<Vertex> Vertex_bron_Vertex_rel(Vertex) := service_area(Edge/From, Edge/To, LastIter/bron_dist/TraceBack); 
-		attribute<WarmteBronnen/bron> Vertex_bron_rel(Vertex) := invert(bron_Vertex_rel)[Vertex_bron_Vertex_rel];
-
-		attribute<Celsius> DT_edge (Edge) := const(0[celsius], Edge); // TODO: DT beter invullen.
-		
-		container edge_cost_calc := AllCandidate/PartialContributie/LeidingKosten_T(Edge, edge_flow, DT_edge);
-		
-		attribute<EUR> edge_cost  (Edge) := edge_cost_calc/Ki * Edge/dist;
-		attribute<EUR> bron_Ki_buis(WarmteBronnen/bron) := sum(edge_cost, Vertex_bron_rel[Edge/From]);
-		
-		// TODO: vlakbronnen per raster
-		// TODO: Rotterdam case
+		attribute<EUR> edge_cost    (Edge)               := edge_cost_calc/Ki * Edge/dist;
+		attribute<EUR> bron_Ki_buis (WarmteBronnen/bron) := sum(edge_cost, Vertex_bron_rel[Edge/From]);
 }	
 	// Prospects: potentiele businesscases voor warmtenetten
 	unit<uint32> Prospect := subset(BronAllocatie/SGP_count > 0[uint32])
 	{
 		attribute<BronAllocatie/ContributiePand> ContributiePand_rel (AllCandidate/StudieGebiedPand) := invert(BronAllocatie/ContributiePand/nr_orgentity);
-		attribute<WarmteBronnen/bron>            Bron_rel            (AllCandidate/StudieGebiedPand) := BronAllocatie/Best_bron_rel[ContributiePand_rel];
+		attribute<WarmteBronnen/bron>            Bron_rel_SGP        (AllCandidate/StudieGebiedPand) := BronAllocatie/Best_bron_rel[ContributiePand_rel];
+		attribute<WarmteBronnen/bron>            Bron_rel_candidate  (AllCandidate)                  := Bron_rel_SGP[AllCandidate/StudieGebiedPand_rel]     ;
 
-		unit<uint32> Afnemer := subset(IsDefined(Bron_rel[AllCandidate/StudieGebiedPand_rel]))
+		unit<uint32> Afnemer := subset(IsDefined(Bron_rel_SGP[AllCandidate/StudieGebiedPand_rel]))
 		{
-			attribute<rdc_meter>    Geometry     := nr_orgEntity->AllCandidate/Geometry;
-			attribute<Prospect>     Prospect_rel := rlookup( Bron_rel[AllCandidate/StudieGebiedPand_rel][nr_orgentity] , Prospect/nr_orgentity);
-			
+			attribute<rdc_meter>          Geometry     := nr_orgEntity->AllCandidate/Geometry;
+			attribute<Prospect>           Prospect_rel := rlookup( Prospect/Bron_rel_SGP[AllCandidate/StudieGebiedPand_rel][nr_orgentity] , Prospect/nr_orgentity);
+			attribute<WarmteBronnen/bron> Bron_rel     := nr_orgEntity->Prospect/Bron_rel_candidate;
+			attribute<BO>                 BO_rel       := nr_orgEntity->AllCandidate/BO_rel;
+			attribute<Celsius>            T_bron       := Warmtebronnen/bron/T_bron[bron_rel];
+			attribute<bool>               CollWP       := T_bron < T_sec;
+
+			attribute<ratio>              SPF_collWP   := not(CollWP) ? (0.0)[ratio]
+					: T_bron < 25[Celsius] && T_sec < 45[Celsius] ? 7.90[ratio] //opwaarderen 15C -> 30C
+					: T_bron < 25[Celsius] && T_sec < 65[Celsius] ? 3.20[ratio] //opwaarderen 15C -> 50C
+					: T_bron < 25[Celsius] && T_sec > 65[Celsius] ? 3.00[ratio] //opwaarderen 15C -> 70C
+					: T_bron < 45[Celsius] && T_sec < 65[Celsius] ? 4.20[ratio] //opwaarderen 30C -> 50C
+					: T_bron < 45[Celsius] && T_sec > 65[Celsius] ? 3.20[ratio] //opwaarderen 30C -> 70C
+					: T_bron < 60[Celsius] && T_sec > 65[Celsius] ? 4.20[ratio] //opwaarderen 50C -> 70C
+					: (0.0)[ratio]
+				, IntegrityCheck = "IsDefined(this) || not(CollWP)"
+				, Descr = "rendement van collectieve warmtepomp, indien van toepassing"
+				, Source = "Functioneel ontwerp Vesta MAIS 5.0, p140 Tabel A.5";
+
 			container Kosten
 			{
-				attribute<Eur_yr> Kj_id_elek     (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_id_elek[nr_orgentity];
-				attribute<Eur_yr> Kji_id_net     (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kji_id_net[nr_orgentity];
-				attribute<Eur_yr> Kj_id_oh       (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_id_oh[nr_orgentity];
-				attribute<Eur_yr> Kj_id_adm      (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_id_adm[nr_orgentity];
-				attribute<Eur_yr> Kji_ge_net     (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kji_ge_net[nr_orgentity];
-				attribute<Eur_yr> Kji_wd_asl_net (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kji_wd_asl_net[nr_orgentity];
-				attribute<Eur_yr> Kj_wd_asl_oh   (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_wd_asl_oh[nr_orgentity];
-				attribute<Eur_yr> Kj_wd_asl_adm  (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_wd_asl_adm[nr_orgentity];
-			}
+				//kosten reeds berekend in partialcontributie
+				attribute<Eur_yr> Kj_id_elek       (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_id_elek[nr_orgentity];
+				attribute<Eur_yr> Kji_id_net       (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kji_id_net[nr_orgentity];
+				attribute<Eur_yr> Kji_ge_net       (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kji_ge_net[nr_orgentity];
+				attribute<Eur_yr> Kji_wd_asl_net   (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kji_wd_asl_net[nr_orgentity];
+				attribute<Eur_yr> Kj_wd_asl_oh     (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_wd_asl_oh[nr_orgentity];
+				attribute<Eur_yr> Kj_wd_asl_adm    (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_wd_asl_adm[nr_orgentity];
+				attribute<Eur>    Ki_wd_asl        (Afnemer) := AllCandidate/PartialContributie/Ki_wd_asl[nr_orgentity];
+				attribute<Eur>    Ki_id            (Afnemer) := AllCandidate/PartialContributie/Ki_id[nr_orgentity];
+				attribute<Eur>    Ki_ge            (Afnemer) := AllCandidate/PartialContributie/Ki_ge[nr_orgentity];
 
+				//kosten te berekenen met inachtneming bronallocatie
+				attribute<Eur>    Ki_wd_OS         (Afnemer) := Vraag/P_wd * 50[eur_kw]                                                                                         , Descr = "kosten van onderstations en hulpketel", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.42";
+				attribute<Eur>    Ki_ow_bron       (Afnemer) := Vraag/P_ow * Warmtebronnen/bron/Ki_cap[Bron_rel]                                                                , Descr = "kosten ingebruikname primaire bron";
+				attribute<Eur>    Ki_ow_buffer     (Afnemer) := T_bron > 65[Celsius] ? 0.0[Eur] : 1.000[eur_asl] * BO/nrAansluitingen[BO_rel]                                   , Descr = "kosten van bufferfaciliteit bij primaire bron, indien van toepassing", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.41 Tabel 16";
+				attribute<Eur_yr> Kj_wd_gas        (Afnemer) := Vraag/V_wd_gas  * last(prijzen/Aardgas/Staffel/KGJ_eindgebruik_excl)                                            , Descr = "kosten van gasverbruik in hulpinstallatie";
+				attribute<Eur_yr> Kj_wd_elek       (Afnemer) := Vraag/V_wd_elek * last(prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl)                                      , Descr = "kosten van elektriciteitsverbruik in hulpinstallatie";
+				attribute<Eur_yr> Kj_ow_productie  (Afnemer) := Vraag/V_ow_koude * Warmtebronnen/bron/K_GJ_k[Bron_rel] + Vraag/V_ow_warmte * Warmtebronnen/bron/K_GJ_w[Bron_rel], Descr = "kosten productie warmte/koude";
+				attribute<Eur>    Ki_wd_eWP        (Afnemer) := float64(CollWP) * Vraag/P_ow * 547.5[eur_kw]                                                                    , Descr = "investeringen collectieve warmtepomp", Source = "functioneel ontwerp Vesta MAIS 5.0";
+				attribute<Eur>    Ki_wd            (Afnemer) := Ki_wd_eWP + Ki_wd_OS + Ki_wd_asl                                                                                , Descr = "Totale wijkdistributriekosten, incurred door aansluiting gebouw";
+				
+				//onderhoudskosten
+				attribute<Eur_yr> Kj_ow_oh_buffer  (Afnemer) := Ki_ow_bron * Invoer/Kengetallen/Onderhoud/R_buffer_onderhoud;
+				attribute<Eur_yr> Kj_ow_oh_bron    (Afnemer) := Ki_ow_bron * Invoer/Kengetallen/Onderhoud/R_ow_onderhoud;
+				attribute<Eur_yr> Kj_ow_oh         (Afnemer) := Kj_ow_oh_buffer + Kj_ow_oh_bron;
+				attribute<Eur_yr> Kj_wd_oh_OS      (Afnemer) := Ki_wd_OS  * Invoer/Kengetallen/Onderhoud/R_OS_onderhoud                                                         , Descr = "onderhoudskosten wijkdistributienet voor WOS en OS";
+				attribute<Eur_yr> Kj_wd_oh_eWP     (Afnemer) := Ki_wd_eWP * Invoer/Kengetallen/Onderhoud/R_wpColl_onderhoud                                                     , Descr = "onderhoudskosten collectieve warmtepomp";
+				attribute<Eur_yr> Kj_wd_oh         (Afnemer) := Kj_wd_oh_OS + Kj_wd_asl_oh + Kj_wd_asl_oh                                                                       , Descr = "totale onderhoudskosten wijkdistributienet incurrec door individuele afnemer";
+				attribute<Eur_yr> Kj_id_oh         (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_id_oh[nr_orgentity];
+
+				//administratiekosten
+				attribute<Eur_yr> Kj_ow_adm_bron   (Afnemer) := Ki_ow_bron * Invoer/Kengetallen/Onderhoud/R_ow_admin;
+				attribute<Eur_yr> Kj_ow_adm_buffer (Afnemer) := Ki_ow_bron * Invoer/Kengetallen/Onderhoud/R_buffer_admin;
+				attribute<Eur_yr> Kj_ow_adm        (Afnemer) := Kj_ow_adm_bron + Kj_ow_adm_buffer;
+				attribute<Eur_yr> Kj_wd_adm_eWP    (Afnemer) := Ki_wd_eWP  * Invoer/Kengetallen/Onderhoud/R_wpColl_admin;
+				attribute<Eur_yr> Kj_wd_adm_OS     (Afnemer) := Ki_wd_OS   * Invoer/Kengetallen/Onderhoud/R_OS_admin;
+				attribute<Eur_yr> Kj_wd_adm        (Afnemer) := Kj_wd_adm_eWP + Kj_wd_adm_OS + Kj_wd_asl_adm;
+				attribute<Eur_yr> Kj_id_adm        (Afnemer) := AllCandidate/PartialContributie/Jaarlijks/Kj_id_adm[nr_orgentity];
+				attribute<Eur_yr> Kj_lv_adm        (Afnemer) := BO/nrAansluitingen[BO_rel] * 36[eur_yr_asl]                                                                     , Descr ="administratiekosten voor leverancier", Source = "Berekend als 1% jaarlijkse kosten (FO 5.0 Vesta MAIS) berekend op 3594.87 aansluitbijdrage (ACM warmtebesluit 2020)";
+			}
 			container Vraag
 			{
-				attribute<GJ_yr> V_Wd_warmte  (Afnemer) := AllCandidate/PartialContributie/V_warmte[nr_orgentity] + AllCandidate/PartialContributie/V_wd_verlies[nr_orgentity];
-				attribute<GJ_yr> V_wd_koude   (Afnemer) := AllCandidate/PartialContributie/V_koude[nr_orgentity];
-				attribute<kW>    P_wd         (Afnemer) := AllCandidate/PartialContributie/P_wd[nr_orgentity], Descr = "Capaciteitsvraag aan secundair net inclusief capaciteitsverlies";
+				//vraag reeds berekend in partialcontributie
+				attribute<GJ_yr> V_Wd_warmte       (Afnemer) := AllCandidate/PartialContributie/V_warmte[nr_orgentity] + AllCandidate/PartialContributie/V_wd_verlies[nr_orgentity];
+				attribute<GJ_yr> V_wd_koude        (Afnemer) := AllCandidate/PartialContributie/V_koude[nr_orgentity];
+				attribute<kW>    P_wd              (Afnemer) := AllCandidate/PartialContributie/P_wd[nr_orgentity], Descr = "Capaciteitsvraag aan secundair net inclusief capaciteitsverlies";
+			
+				//vraag te berekenen met inachtneming bronallocatie
+				parameter<ratio> SPF_hulpketel              := Schuiven/EfficiencySchuif * 0.78 + (1.0-Schuiven/EfficiencySchuif) * 1.07, Descr = "rendement van gasgestookte hulpketel", Source = "Functioneel ontwerp Vesta MAIS 5.0, p140 Tabel A.5";
+				attribute<kW>    P_ow              (Afnemer) := P_wd * WarmteBronnen/bron/P_cap[Bron_rel]                               , Descr = "Capaciteitsvraag aan primaire bron";
+				attribute<kW>    P_WOS             (Afnemer) := P_wd * (1.15 - WarmteBronnen/bron/P_cap[Bron_rel])                      , Descr = "Capaciteitsvraag aan hulpinstallatie en, indien van toepassing, warmteoverdrachtstation", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.44 Tabel 24";
+				attribute<GJ_yr> V_pt_verlies      (Afnemer) := const(0.0[GJ_yr],Afnemer)                                               , Descr = "Volume verlies warmte in primair transportnet, momenteel niet apart opgenomen, volledig verlies wordt berekend in wd";
+				attribute<GJ_yr> V_ow_warmte       (Afnemer) := V_wd_warmte - V_WOS_warmte + V_pt_verlies                               , Descr = "Volume warmtevraag aan primaire bron";
+				attribute<GJ_yr> V_ow_koude        (Afnemer) := V_wd_koude                                                              , Descr = "Volume koudevraag aan primaire bron";
+				attribute<GJ_yr> V_WOS_warmte      (Afnemer) := V_wd_warmte * (1.00 - WarmteBronnen/bron/P_vol[Bron_rel])               , Descr = "Volume warmtevraag ingevuld door hulpinstallatie";
+				attribute<GJ_yr> V_wd_elek_pomp    (Afnemer) := (V_wd_warmte + V_wd_koude) * 0.0072[GJ_GJ]                              , Descr = "Volume elektriciteitsverbruik in wijkdistributienet voor pompenergie";
+				attribute<GJ_yr> V_wd_elek_WOS     (Afnemer) := not(CollWP) ? 0.0[GJ_yr] : V_ow_warmte / SPF_collWP                     , Descr = "Volume elektriciteitsverbruik in wijkdistributienet voor hulpinstallatie";
+				attribute<Gj_yr> V_wd_elek         (Afnemer) := V_wd_elek_pomp + V_wd_elek_WOS                                          , Descr = "totale volumevraag elektriciteit in wijkdistributienet";
+				attribute<GJ_yr> V_wd_gas          (Afnemer) := CollWP ? 0.0[GJ_yr] : V_WOS_warmte / SPF_hulpketel                      , Descr = "Volume gasverbruik in wijkdistributienet";
 			}
+		}
+
+		//kosten te berekenen op prospectniveau
+		attribute<Eur> Ki_wd_dist    (Prospect) := BronAllocatie/bron_Ki_buis[nr_orgentity]           , Descr = "kosten van distributienet niet gebouw incurred";
+		attribute<Eur> Ki_wd_afnemer (Prospect) := sum(Afnemer/kosten/ki_wd, Afnemer/Prospect_rel)    , Descr = "gebouw incurred kosten distributienet";
+		attribute<Eur> Ki_wd         (Prospect) := Ki_wd_afnemer + Ki_wd_dist                         , Descr = "totale investeringskosten distributienet";
+		attribute<Eur> Ki_pt         (Prospect) := const(0.0[eur],Prospect)                           , Descr = "investering transportleiding, zit al opgenomen in buiskosten BronAllocatie";
+		attribute<Eur> Ki_id         (Prospect) := sum(Afnemer/kosten/ki_id, Afnemer/Prospect_rel);
+		attribute<Eur> Ki_ge         (Prospect) := sum(Afnemer/kosten/ki_ge, Afnemer/Prospect_rel);
+
+		attribute<Eur> Ki_ow_vast    (Prospect) :=
+				  any(WarmteBronnen/bron/BronType_rel[Afnemer/bron_rel] == Invoer/Kengetallen/WarmteBronnen/MetaData/Brontype/V/WKO, Afnemer/Prospect_rel)
+				  	? Schuiven/KostenMax * 165000[eur] + Schuiven/KostenMin * 135000[eur]
+				: any(WarmteBronnen/bron/BronType_rel[Afnemer/bron_rel] == Invoer/Kengetallen/WarmteBronnen/MetaData/Brontype/V/TEO, Afnemer/Prospect_rel)
+					? Schuiven/KostenMax * 165000[eur] + Schuiven/KostenMin * 135000[eur] + Schuiven/KostenMax * 110000[eur] + Schuiven/KostenMin *  90000[eur] //TEO vereis ook WKO
+				: 0.0[eur]
+			, Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.41 Tabel 17"
+			, Descr = "vaste component TEO en WKO warmtebronnen";
+		
+		attribute<Eur> Ki_ow         (Prospect) := 
+				(any(WarmteBronnen/bron/BronType_rel[Afnemer/bron_rel] == Invoer/Kengetallen/WarmteBronnen/MetaData/Brontype/V/WKO, Afnemer/Prospect_rel) ? 1.1 : 1.0) * (  //1.1 = extra kosten regeneratiemechanisme
+				  Ki_ow_vast
+				+ sum(Afnemer/kosten/Ki_ow_bron, Afnemer/Prospect_rel))
+				+ min_elem(sum(Afnemer/kosten/Ki_ow_buffer, Afnemer/Prospect_rel), 100000[Eur])
+			, Descr = "totale investeringskosten bron"
+			, Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.41 Tabel 16";
+
+		container KostenOptelling
+		{
+			//kapitaallasten
+			attribute<Eur_yr> Kji_pt           (Prospect) := Ki_pt * NCW/pt28/StartDiscountFactor * NCW/pt28/AnnualisationFactor;
+			attribute<Eur_yr> Kji_ge           (Prospect) := Ki_ge * NCW/ge28/StartDiscountFactor * NCW/ge28/AnnualisationFactor;
+			attribute<Eur_yr> Kji_ow           (Prospect) := Ki_ow * NCW/ow28/StartDiscountFactor * NCW/ow28/AnnualisationFactor;
+			attribute<Eur_yr> Kji_wd           (Prospect) := Ki_wd * NCW/wd28/StartDiscountFactor * NCW/wd28/AnnualisationFactor;
+			attribute<Eur_yr> Kji_id           (Prospect) := Ki_id * NCW/id28/StartDiscountFactor * NCW/id28/AnnualisationFactor;
+			attribute<Eur_yr> Totaal_kapitaal  (Prospect) := add(Kji_pt, Kji_ge, Kji_ow, Kji_wd, Kji_id);
+
+			//o&b kosten
+			attribute<Eur_yr> Kj_id_oh         (Prospect) := sum(Afnemer/kosten/Kj_id_oh, Afnemer/Prospect_rel);
+			attribute<Eur_yr> Kj_wd_oh         (Prospect) := sum(Afnemer/kosten/Kj_wd_oh, Afnemer/Prospect_rel) + Invoer/Kengetallen/Onderhoud/R_wd_onderhoud * Ki_wd_dist;
+			attribute<Eur_yr> Kj_ow_oh         (Prospect) := sum(Afnemer/kosten/Kj_ow_oh, Afnemer/Prospect_rel) + Invoer/Kengetallen/Onderhoud/R_ow_onderhoud * Ki_ow_vast;
+			attribute<Eur_yr> Kj_id_adm        (Prospect) := sum(Afnemer/kosten/Kj_id_adm, Afnemer/Prospect_rel);
+			attribute<Eur_yr> Kj_lv_adm        (Prospect) := sum(Afnemer/kosten/Kj_lv_adm, Afnemer/Prospect_rel);
+			attribute<Eur_yr> Kj_wd_adm        (Prospect) := sum(Afnemer/kosten/Kj_wd_adm, Afnemer/Prospect_rel) + Invoer/Kengetallen/Onderhoud/R_wd_admin * Ki_wd_dist;
+			attribute<Eur_yr> Kj_ow_adm        (Prospect) := sum(Afnemer/kosten/Kj_ow_adm, Afnemer/Prospect_rel) + Invoer/Kengetallen/Onderhoud/R_ow_admin * Ki_ow_vast;
+			attribute<Eur_yr> Totaal_jaarlijks (Prospect) := add(Kj_id_oh, Kj_wd_oh, Kj_ow_oh, Kj_id_adm, Kj_wd_adm, Kj_ow_adm, Kj_lv_adm);
+
+			//verbruikskosten
+			attribute<Eur_yr> Kj_id_elek       (Prospect) := sum(Afnemer/kosten/Kj_id_elek, Afnemer/Prospect_rel);
+			attribute<Eur_yr> Kj_wd_elek       (Prospect) := sum(Afnemer/kosten/Kj_wd_elek, Afnemer/Prospect_rel);
+			attribute<Eur_yr> Kj_wd_gas        (Prospect) := sum(Afnemer/kosten/Kj_wd_gas, Afnemer/Prospect_rel);
+			attribute<Eur_yr> Kj_ow_productie  (Prospect) := sum(Afnemer/kosten/Kj_ow_productie, Afnemer/Prospect_rel);
+			attribute<Eur_yr> Totaal_variabel  (Prospect) := add(Kj_id_elek, Kj_wd_elek, Kj_wd_gas, Kj_ow_productie);
+		}
+
+		container Tarieven
+		{
+			attribute<GJ_yr>      WarmteVraag    (Prospect) := sum(Afnemer/vraag/V_Wd_warmte, Afnemer/Prospect_rel);
+			attribute<Eur_GJ>     WarmtePrijs    (Prospect) := KostenOptelling/Totaal_variabel / WarmteVraag;
+			attribute<nrAsl>      nrAfnemers     (Prospect) := sum(BO/nrAansluitingen[Afnemer/BO_rel], Afnemer/Prospect_rel);
+			attribute<eur_yr_asl> Vastrecht      (Prospect) := KostenOptelling/Totaal_jaarlijks / nrAfnemers;
+			attribute<Eur_asl>    AansluitKosten (Prospect) := add(Ki_pt, Ki_ge, Ki_ow, Ki_wd, Ki_id) / nrAfnemers;
+		}
+
+		container OpbrengstenOptelling
+		{
+			attribute<Eur>    Oi_lv_Aansl     (Prospect) := Tarieven/nrAfnemers  * Tarieven/AansluitKosten;
+			attribute<Eur_yr> Oji_lv_Aansl    (Prospect) := Oi_lv_Aansl * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
+			attribute<Eur_yr> Oj_lv_verbruik  (Prospect) := Tarieven/WarmteVraag * Tarieven/WarmtePrijs;
+			attribute<Eur_yr> Oj_lv_vastrecht (Prospect) := Tarieven/nrAfnemers  * Tarieven/Vastrecht;
+
 		}
 	}
 	
 	unit<uint32> Candidate := subset(AllCandidate/PartialContributie/Contributie > 0.0[Eur_yr])
 	{
-		attribute<BO>        BO_rel        := AllCandidate/BO_rel[nr_orgentity];
-		attribute<rdc_meter> Geometry      := AllCandidate/geometry[nr_orgentity];
-		attribute<PlanRegio> PlanRegio_rel := AllCandidate/PlanRegio_rel[nr_orgentity];
+		attribute<BO>               BO_rel        := AllCandidate/BO_rel[nr_orgentity];
+		attribute<rdc_meter>        Geometry      := AllCandidate/geometry[nr_orgentity];
+		attribute<PlanRegio>        PlanRegio_rel := AllCandidate/PlanRegio_rel[nr_orgentity];
+		attribute<Prospect/Afnemer> Afnemer_rel   := rlookup(BO_rel, Prospect/Afnemer/BO_rel);
 	}
 	
 	//====== berekening van jaarlijke vraag en verlies energiedragers
 	unit<uint32> VerbruikBerekening := Candidate
 	{
-		attribute<Gj_yr> V_wd_gas     := const(0[Gj_yr], .), Descr = "gasverbruik in systemen die onderdeel zijn van het distributienet";
-		attribute<Gj_yr> V_ow_gas     := const(0[Gj_yr], .), Descr = "gasverbruik bij de primaire bron van het warmtenet";
-		attribute<Gj_yr> V_wd_elek    := const(0[Gj_yr], .), Descr = "elektriciteitsverbruik in systemen die onderdeel zijn van het distributienet";
-		attribute<Gj_yr> V_ow_elek    := const(0[Gj_yr], .), Descr = "elektriciteitsverbruik bij de primaire bron van het warmtenet";
-		attribute<Gj_yr> V_pt_verlies := const(0[Gj_yr], .), Descr = "warmteverlies in leidingen die onderdeel zijn van het transportnet";
-
-		//====== resultaten van berekening, gereed voor rapportage in resultaten
+		attribute<Gj_yr> V_wd_gas     := Prospect/afnemer/Vraag/V_wd_gas[Afnemer_rel]              , Descr = "gasverbruik in systemen die onderdeel zijn van het distributienet";
+		attribute<Gj_yr> V_wd_elek    := Prospect/afnemer/Vraag/V_wd_elek[Afnemer_rel]             , Descr = "elektriciteitsverbruik in systemen die onderdeel zijn van het distributienet";
 		attribute<Gj_yr> V_warmte     := AllCandidate/PartialContributie/V_warmte[nr_orgentity]    , Descr = "warmtevraag van gebouwen aan het warmtenet";
 		attribute<Gj_yr> V_koude      := AllCandidate/PartialContributie/V_koude[nr_orgentity]     , Descr = "koudevraag van gebouwen aan het koudenet";
 		attribute<Gj_yr> V_id_elek    := AllCandidate/PartialContributie/V_id_elek[nr_orgentity]   , Descr = "elektriciteitsverbruik in inpandige systemen als onderdeel van het warmtenet";
 		attribute<Gj_yr> V_wd_verlies := AllCandidate/PartialContributie/V_wd_verlies[nr_orgentity], Descr = "warmteverlies in leidingen die onderdeel zijn van het distributienet";
+		attribute<Gj_yr> V_ow_gas     := const(0[Gj_yr], .)                                        , Descr = "gasverbruik bij de primaire bron van het warmtenet, voor nu op nul";
+		attribute<Gj_yr> V_ow_elek    := const(0[Gj_yr], .)                                        , Descr = "elektriciteitsverbruik bij de primaire bron van het warmtenet, voor nu op nul";
+		attribute<Gj_yr> V_pt_verlies := const(0[Gj_yr], .)                                        , Descr = "warmteverlies in leidingen die onderdeel zijn van het transportnet, voor nu op nul (zit al in verlies wd)";
 
 		attribute<classifications/gebruiksgrootteklasse> ind_gebruiksgrootteklasse_rel := AllCandidate/PartialContributie/ind_gebruiksgrootteklasse_rel[nr_orgentity];
 	}
@@ -610,22 +750,23 @@ template WarmtenetTempl
 	//====== berekening van kosten van aanleg en operatie
 	unit<uint32> KostenBerekening := Candidate
 	{
-		attribute<Eur_yr> Kj_ow_productie := const(0[Eur_yr], .), Descr = "jaarlijkse kosten productie uit primaire bron";
 		
 		attribute<Eur> Ki_wd       := const(0.0[Eur], .), Descr = "investeringen in wijkdistributienet";
-		attribute<Eur> Ki_pt       := const(0.0[Eur], .), Descr = "investeringen in transportnet";
 		attribute<Eur> Ki_ow       := const(0.0[Eur], .), Descr = "investeringen primaire bron";
-		attribute<Eur> Oi_lv_Aansl := const(0[Eur], .), Descr = "opbrengst van aansluitbijdrages";
+		attribute<Eur> Oi_lv_Aansl := const(0.0[Eur], .), Descr = "opbrengst van aansluitbijdrages";
 
 		//====== resultaten van berekening, gereed voor rapportage in resultaten
-		attribute<Eur>    Ki_id     := AllCandidate/PartialContributie/Ki_id[nr_orgentity]              , Descr = "investeringen inpandige systemen";
-		attribute<Eur>    Ki_ge_ov  := AllCandidate/PartialContributie/Ki_ge_ov[nr_orgentity]           , Descr = "investeringen gebouweigenaar in ongeriefsvergoeding";
-		attribute<Eur>    Ki_ge_pm  := AllCandidate/PartialContributie/Ki_ge_pm[nr_orgentity]           , Descr = "investeringen gebouweigenaar in projectmanagement";
-		attribute<Eur>    Oi_ge_EIA := AllCandidate/PartialContributie/Oi_ge_EIA[nr_orgentity]          , Descr = "investeringssubsidies op kosten ongeriefsvergoeding en projectmanagement";
-		attribute<Eur_yr> Kj_id_oh  := AllCandidate/PartialContributie/jaarlijks/Kj_id_oh[nr_orgentity] , Descr = "jaarlijkse onderhoudskosten inpandige componenten van het warmtenet";
-		attribute<Eur_yr> Kj_id_adm := AllCandidate/PartialContributie/jaarlijks/Kj_id_adm[nr_orgentity], Descr = "jaarlijkse administratiekosten inpandige componenten van het warmtenet";
-		attribute<Eur_yr> Kji_id    := AllCandidate/PartialContributie/jaarlijks/Kji_id[nr_orgentity]   , Descr = "geannualiseerde investeringskosten inpandige componenten van het warmtenet (eindgebruikerskosten)";
-		attribute<Eur_yr> Kmi_id    := AllCandidate/PartialContributie/jaarlijks/Kmi_id[nr_orgentity]   , Descr = "geannualiseerde investeringskosten inpandige componenten van het warmtenet (nationale kosten)";
+		attribute<Eur>    Ki_id           := AllCandidate/PartialContributie/Ki_id[nr_orgentity]              , Descr = "investeringen inpandige systemen";
+		attribute<Eur>    Ki_ge_ov        := AllCandidate/PartialContributie/Ki_ge_ov[nr_orgentity]           , Descr = "investeringen gebouweigenaar in ongeriefsvergoeding";
+		attribute<Eur>    Ki_ge_pm        := AllCandidate/PartialContributie/Ki_ge_pm[nr_orgentity]           , Descr = "investeringen gebouweigenaar in projectmanagement";
+		attribute<Eur>    Oi_ge_EIA       := AllCandidate/PartialContributie/Oi_ge_EIA[nr_orgentity]          , Descr = "investeringssubsidies op kosten ongeriefsvergoeding en projectmanagement";
+		attribute<Eur_yr> Kj_id_oh        := AllCandidate/PartialContributie/jaarlijks/Kj_id_oh[nr_orgentity] , Descr = "jaarlijkse onderhoudskosten inpandige componenten van het warmtenet";
+		attribute<Eur_yr> Kj_id_adm       := AllCandidate/PartialContributie/jaarlijks/Kj_id_adm[nr_orgentity], Descr = "jaarlijkse administratiekosten inpandige componenten van het warmtenet";
+		attribute<Eur_yr> Kji_id          := AllCandidate/PartialContributie/jaarlijks/Kji_id[nr_orgentity]   , Descr = "geannualiseerde investeringskosten inpandige componenten van het warmtenet (eindgebruikerskosten)";
+		attribute<Eur_yr> Kmi_id          := AllCandidate/PartialContributie/jaarlijks/Kmi_id[nr_orgentity]   , Descr = "geannualiseerde investeringskosten inpandige componenten van het warmtenet (nationale kosten)";
+		attribute<Eur>    Ki_pt           := const(0.0[Eur], .)                                               , Descr = "investeringen in transportnet, voor nu op nul gezet omdat al onderdeel is van wd";
+		attribute<Eur_yr> Kj_ow_productie := Prospect/afnemer/Kosten/Kj_ow_productie[Afnemer_rel]             , Descr = "jaarlijkse kosten productie uit primaire bron";
+
 	}
 
 	//====== berekening van opbrengsten van leverancier
@@ -657,16 +798,16 @@ template WarmtenetTempl
 				container ge
 				{
 					//====== jaarlijkse kosten gebouweigenaar
-					attribute<Eur_yr> Kji_ge_ov       (PlanRegio) := eenmalig/Ki_ge_ov    * NCW/wd28/StartDiscountFactor * NCW/wd28/AnnualisationFactor, Descr = "geannualiseerde investeringen ongeriefsvergoeding, eindgebruikerskosten";
-					attribute<Eur_yr> Kji_ge_pm       (PlanRegio) := eenmalig/Ki_ge_pm    * NCW/wd28/StartDiscountFactor * NCW/wd28/AnnualisationFactor, Descr = "geannualiseerde investeringen projectmanagement, eindgebruikerskosten";
+					attribute<Eur_yr> Kji_ge_ov       (PlanRegio) := eenmalig/Ki_ge_ov    * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor, Descr = "geannualiseerde investeringen ongeriefsvergoeding, eindgebruikerskosten";
+					attribute<Eur_yr> Kji_ge_pm       (PlanRegio) := eenmalig/Ki_ge_pm    * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor, Descr = "geannualiseerde investeringen projectmanagement, eindgebruikerskosten";
 					attribute<Eur_yr> Kmi_ge_ov       (PlanRegio) := eenmalig/Ki_ge_ov    * NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor, Descr = "geannualiseerde investeringen ongeriefsvergoeding, nationale kosten";
 					attribute<Eur_yr> Kmi_ge_pm       (PlanRegio) := eenmalig/Ki_ge_pm    * NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor, Descr = "geannualiseerde investeringen projectmanagement, nationale kosten";
-					attribute<Eur_yr> Bji_ge_Aansl    (PlanRegio) := eenmalig/Oi_lv_Aansl * NCW/wd28/StartDiscountFactor * NCW/wd28/AnnualisationFactor, Descr = "geannualiseerde aansluitbijdrages inpandig, eindgebruikerskosten";
-					attribute<Eur_yr> Oji_ge_EIA      (PlanRegio) := eenmalig/Oi_ge_EIA   * NCW/wd28/StartDiscountFactor * NCW/wd28/AnnualisationFactor, Descr = "geannualiseerde subsidies projectmanagement en ongeriefsvergoeding, eindgebruikerskosten";
+					attribute<Eur_yr> Bji_ge_Aansl    (PlanRegio) := eenmalig/Oi_lv_Aansl * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor, Descr = "geannualiseerde aansluitbijdrages inpandig, eindgebruikerskosten";
+					attribute<Eur_yr> Oji_ge_EIA      (PlanRegio) := eenmalig/Oi_ge_EIA   * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor, Descr = "geannualiseerde subsidies projectmanagement en ongeriefsvergoeding, eindgebruikerskosten";
 					attribute<Eur_yr> Omi_ge_EIA      (PlanRegio) := eenmalig/Oi_ge_EIA   * NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor, Descr = "geannualiseerde subsidies projectmanagement en ongeriefsvergoeding, nationale kosten";
 
-					attribute<Eur_yr> Kj_ge_hv      (PlanRegio) := const(0.0[Eur_yr],PlanRegio); //TODO: remove
-					attribute<Eur_yr> Om_ge_comfort (PlanRegio) := const(0.0[Eur_yr],PlanRegio); //TODO: remove
+					attribute<Eur_yr> Kj_ge_hv        (PlanRegio) := const(0.0[Eur_yr],PlanRegio); //TODO: remove
+					attribute<Eur_yr> Om_ge_comfort   (PlanRegio) := const(0.0[Eur_yr],PlanRegio); //TODO: remove
 				}
 
 				container id
@@ -679,7 +820,7 @@ template WarmtenetTempl
 					attribute<Eur_yr> Kj_id_adm       (PlanRegio) := sum(float64(connect) * KostenBerekening/Kj_id_adm, Candidate/PlanRegio_rel)       , Descr = "administratiekosten inpandig";
 					attribute<Eur_yr> Kji_id          (PlanRegio) := sum(float64(connect) * KostenBerekening/Kji_id, Candidate/PlanRegio_rel)          , Descr = "geannualiseerde investeringen inpandig, eindgebruikerskosten";
 					attribute<Eur_yr> Kmi_id          (PlanRegio) := sum(float64(connect) * KostenBerekening/Kmi_id, Candidate/PlanRegio_rel)          , Descr = "geannualiseerde investeringen inpandig, nationale kosten";
-					attribute<Eur_yr> Oji_id_EIA      (PlanRegio) := eenmalig/Oi_id_EIA * NCW/id28/StartDiscountFactor * NCW/id28/AnnualisationFactor  , Descr = "geannualiseerde investeringssubsidies inpandig, eindgebruikerskosten";
+					attribute<Eur_yr> Oji_id_EIA      (PlanRegio) := eenmalig/Oi_id_EIA * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor  , Descr = "geannualiseerde investeringssubsidies inpandig, eindgebruikerskosten";
 					attribute<Eur_yr> Omi_id_EIA      (PlanRegio) := eenmalig/Oi_id_EIA * NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor  , Descr = "geannualiseerde investeringssubsidies inpandig, nationale kosten";  
 
 					attribute<Eur_yr> Oj_id_SDE       (PlanRegio) := const(0.0[Eur_yr],PlanRegio); //TODO: remove
@@ -700,38 +841,38 @@ template WarmtenetTempl
 					attribute<Eur_yr> Kj_wd_elek      (PlanRegio) := Verbruik/V_wd_elek * last(prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl)           , Descr = "Kosten elektriciteitsverbruik wijkdistributienet (eindgebruikerskosten)";
 					attribute<Eur_yr> Kj_wd_elek_EH   (PlanRegio) := Verbruik/V_wd_elek * last(prijzen/Elektriciteit/Staffel/KGJ_EnergieHeffing)             , Descr = "Kosten elektriciteitsverbruik wijkdistributienet (energieheffing)";
 					attribute<Eur_yr> Km_wd_elek      (PlanRegio) := Verbruik/V_wd_elek * last(prijzen/Elektriciteit/Staffel/KGJ_Maatschappelijk)            , Descr = "Kosten elektriciteitsverbruik wijkdistributienet (nationale kosten)";
-					attribute<Eur_yr> Kj_wd_oh        (PlanRegio) := eenmalig/Ki_wd     * leerCurves/OenM/Curve * Invoer/Kengetallen/Onderhoud/R_wd_onderhoud, Descr = "onderhoudskosten wijkdistributienet";
-					attribute<Eur_yr> Kj_wd_adm       (PlanRegio) := eenmalig/Ki_wd     * leerCurves/OenM/Curve * Invoer/Kengetallen/Onderhoud/R_wd_admin    , Descr = "administratiekosten wijkdistributienet";
-					attribute<Eur_yr> Kji_wd          (PlanRegio) := eenmalig/Ki_wd     * NCW/wd28/StartDiscountFactor * NCW/wd28/AnnualisationFactor        , Descr = "geannualiseerde investeringen wijkdistributienet, eindgebruikerskosten";
+					attribute<Eur_yr> Kj_wd_oh        (PlanRegio) := eenmalig/Ki_wd     * leerCurve * Invoer/Kengetallen/Onderhoud/R_wd_onderhoud            , Descr = "onderhoudskosten wijkdistributienet";
+					attribute<Eur_yr> Kj_wd_adm       (PlanRegio) := eenmalig/Ki_wd     * leerCurve * Invoer/Kengetallen/Onderhoud/R_wd_admin                , Descr = "administratiekosten wijkdistributienet";
+					attribute<Eur_yr> Kji_wd          (PlanRegio) := eenmalig/Ki_wd     * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor        , Descr = "geannualiseerde investeringen wijkdistributienet, eindgebruikerskosten";
 					attribute<Eur_yr> Kmi_wd          (PlanRegio) := eenmalig/Ki_wd     * NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor        , Descr = "geannualiseerde investeringen wijkdistributienet, nationale kosten";
-					attribute<Eur_yr> Oji_wd_EIA      (PlanRegio) := eenmalig/Oi_wd_EIA * NCW/wd28/StartDiscountFactor * NCW/wd28/AnnualisationFactor        , Descr = "geannualiseerde investeringssubsidies wijkdistributienet, eindgebruikerskosten";
+					attribute<Eur_yr> Oji_wd_EIA      (PlanRegio) := eenmalig/Oi_wd_EIA * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor        , Descr = "geannualiseerde investeringssubsidies wijkdistributienet, eindgebruikerskosten";
 					attribute<Eur_yr> Omi_wd_EIA      (PlanRegio) := eenmalig/Oi_wd_EIA * NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor        , Descr = "geannualiseerde investeringssubsidies wijkdistributienet, nationale kosten";
 
-					attribute<Eur_yr> Oj_wd_SDE     (PlanRegio) := const(0.0[Eur_yr],PlanRegio); //TODO: remove
-					attribute<Eur_yr> Kji_wd_Gnet   (PlanRegio) := const(0.0[Eur_yr],PlanRegio); //TODO: remove
-					attribute<Eur_yr> Kmi_wd_Gnet   (PlanRegio) := const(0.0[Eur_yr],PlanRegio); //TODO: remove
-					attribute<Eur_yr> Kj_wd_Gnet_oh (PlanRegio) := const(0.0[Eur_yr],PlanRegio); //TODO: remove
+					attribute<Eur_yr> Oj_wd_SDE       (PlanRegio) := const(0.0[Eur_yr],PlanRegio); //TODO: remove
+					attribute<Eur_yr> Kji_wd_Gnet     (PlanRegio) := const(0.0[Eur_yr],PlanRegio); //TODO: remove
+					attribute<Eur_yr> Kmi_wd_Gnet     (PlanRegio) := const(0.0[Eur_yr],PlanRegio); //TODO: remove
+					attribute<Eur_yr> Kj_wd_Gnet_oh   (PlanRegio) := const(0.0[Eur_yr],PlanRegio); //TODO: remove
 				}
 
 				container pt
 				{
 					//====== jaarlijkse kosten primair transport
-					attribute<Eur_yr> Kj_pt_oh        (PlanRegio) := eenmalig/Ki_pt     * leerCurves/OenM/Curve * Invoer/Kengetallen/Onderhoud/R_pt_onderhoud, Descr = "onderhoudskosten transportnet";
-					attribute<Eur_yr> Kj_pt_adm       (PlanRegio) := eenmalig/Ki_pt     * leerCurves/OenM/Curve * Invoer/Kengetallen/Onderhoud/R_pt_admin    , Descr = "administratiekosten transportnet";
-					attribute<Eur_yr> Kji_pt          (PlanRegio) := eenmalig/Ki_pt     * NCW/pt28/StartDiscountFactor * NCW/pt28/AnnualisationFactor        , Descr = "geannualiseerde investeringen transportnet, eindgebruikerskosten";
+					attribute<Eur_yr> Kj_pt_oh        (PlanRegio) := eenmalig/Ki_pt     * leerCurve * Invoer/Kengetallen/Onderhoud/R_pt_onderhoud            , Descr = "onderhoudskosten transportnet";
+					attribute<Eur_yr> Kj_pt_adm       (PlanRegio) := eenmalig/Ki_pt     * leerCurve * Invoer/Kengetallen/Onderhoud/R_pt_admin                , Descr = "administratiekosten transportnet";
+					attribute<Eur_yr> Kji_pt          (PlanRegio) := eenmalig/Ki_pt     * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor        , Descr = "geannualiseerde investeringen transportnet, eindgebruikerskosten";
 					attribute<Eur_yr> Kmi_pt          (PlanRegio) := eenmalig/Ki_pt     * NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor        , Descr = "geannualiseerde investeringen transportnet, nationale kosten";
-					attribute<Eur_yr> Oji_pt_EIA      (PlanRegio) := eenmalig/Oi_pt_EIA * NCW/pt28/StartDiscountFactor * NCW/pt28/AnnualisationFactor        , Descr = "geannualiseerde investeringssubsidies transportnet, eindgebruikerskosten";
+					attribute<Eur_yr> Oji_pt_EIA      (PlanRegio) := eenmalig/Oi_pt_EIA * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor        , Descr = "geannualiseerde investeringssubsidies transportnet, eindgebruikerskosten";
 					attribute<Eur_yr> Omi_pt_EIA      (PlanRegio) := eenmalig/Oi_pt_EIA * NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor        , Descr = "geannualiseerde investeringssubsidies transportnet, nationale Kosten";
 				}
 				container ow
 				{
 					//====== Jaarlijkse kosten en subsidies primaire bron
 					attribute<Eur_yr> Kj_ow_productie (PlanRegio) := sum(float64(connect) * KostenBerekening/Kj_ow_productie, Candidate/PlanRegio_rel)       , Descr = "jaarlijkse kosten productie uit primaire bron";
-					attribute<Eur_yr> Kj_ow_oh        (PlanRegio) := eenmalig/Ki_ow     * leerCurves/OenM/Curve * Invoer/Kengetallen/Onderhoud/R_ow_onderhoud, Descr = "onderhoudskosten primaire bron";
-					attribute<Eur_yr> Kj_ow_adm       (PlanRegio) := eenmalig/Ki_ow     * leerCurves/OenM/Curve * Invoer/Kengetallen/Onderhoud/R_ow_admin    , Descr = "administratiekosten primaire bron";
-					attribute<Eur_yr> Kji_ow          (PlanRegio) := eenmalig/Ki_ow     * NCW/ow28/StartDiscountFactor * NCW/ow28/AnnualisationFactor        , Descr = "geannualiseerde investeringen primaire bron (eindgebruikerskosten)";
+					attribute<Eur_yr> Kj_ow_oh        (PlanRegio) := eenmalig/Ki_ow     * leerCurve * Invoer/Kengetallen/Onderhoud/R_ow_onderhoud            , Descr = "onderhoudskosten primaire bron";
+					attribute<Eur_yr> Kj_ow_adm       (PlanRegio) := eenmalig/Ki_ow     * leerCurve * Invoer/Kengetallen/Onderhoud/R_ow_admin                , Descr = "administratiekosten primaire bron";
+					attribute<Eur_yr> Kji_ow          (PlanRegio) := eenmalig/Ki_ow     * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor        , Descr = "geannualiseerde investeringen primaire bron (eindgebruikerskosten)";
 					attribute<Eur_yr> Kmi_ow          (PlanRegio) := eenmalig/Ki_ow     * NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor        , Descr = "geannualiseerde investeringen primaire bron (nationale kosten)";
-					attribute<Eur_yr> Oji_ow_EIA      (PlanRegio) := eenmalig/Oi_ow_EIA * NCW/ow28/StartDiscountFactor * NCW/ow28/AnnualisationFactor        , Descr = "geannualiseerde subsidies primaire bron (eindgebruikerskosten)";
+					attribute<Eur_yr> Oji_ow_EIA      (PlanRegio) := eenmalig/Oi_ow_EIA * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor        , Descr = "geannualiseerde subsidies primaire bron (eindgebruikerskosten)";
 					attribute<Eur_yr> Omi_ow_EIA      (PlanRegio) := eenmalig/Oi_ow_EIA * NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor        , Descr = "geannualiseerde subsidies primaire bron (nationale kosten)";
 					attribute<Eur_yr> Kj_ow_gas       (PlanRegio) := Verbruik/V_ow_gas  * last(prijzen/AardGas/Staffel/KGJ_eindgebruik_excl)                 , Descr = "Kosten aardgasverbruik primaire bron (eindgebruikerskosten)";
 					attribute<Eur_yr> Kj_ow_gas_EH    (PlanRegio) := Verbruik/V_ow_gas  * last(prijzen/AardGas/Staffel/KGJ_EnergieHeffing)                   , Descr = "Kosten aardgasverbruik primaire bron (energieheffing)";
@@ -751,7 +892,7 @@ template WarmtenetTempl
 					attribute<Eur_yr> Oj_lv_SDE       (PlanRegio) := sum(float64(connect) * OpbrengstenBerekening/Oj_lv_SDE      , Candidate/PlanRegio_rel)  , Descr = "jaarlijkse opbrensten voor leverancier: component productiesubsidie";
 
 					//====== geannualiseerde opbrengsten aansluitbijdrages
-					attribute<Eur_yr> Oji_lv_Aansl    (PlanRegio) := eenmalig/Oi_lv_Aansl * NCW/wd28/StartDiscountFactor * NCW/wd28/AnnualisationFactor      , Descr = "geannualiseerde opbrengsten aansluitbijdrages, eindgebruikerskosten";
+					attribute<Eur_yr> Oji_lv_Aansl    (PlanRegio) := eenmalig/Oi_lv_Aansl * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor      , Descr = "geannualiseerde opbrengsten aansluitbijdrages, eindgebruikerskosten";
 					attribute<Eur_yr> Omi_lv_Aansl    (PlanRegio) := eenmalig/Oi_lv_Aansl * NCW/mr28/StartDiscountFactor * NCW/mr28/AnnualisationFactor      , Descr = "geannualiseerde opbrengsten aansluitbijdrages, nationale kosten";
 				}
 			}
