@@ -106,14 +106,24 @@ container TVW
 					attribute<geography/rdc_meter>  gemeente_geometry   (Geography/RegioIndelingen/Gemeente, poly) := Geography/RegioIndelingen/Gemeente/geometry;
 					attribute<ipoint>			 	gemeente_geometry_i (Geography/RegioIndelingen/Gemeente, poly) := ipolygon(gemeente_geometry);
 
-					unit<uint32>      GemeenteKruistabel := overlay_polygon(geometry_i, gemeente_geometry_i);
-					attribute<uint32> Aantal  		(PL) := count(GemeenteKruistabel/second_rel, GemeenteKruistabel/first_rel);
+					unit<uint32>      GemeenteKruistabel := overlay_polygon(geometry_i, gemeente_geometry_i)
+					{
+						attribute<units/m2>  oppervlak_overlap  (GemeenteKruistabel)  := area(GemeenteKruistabel/geometry[geography/rdc_meter], units/m2);
+					}
+					unit<uint32> GemeenteKruistabelGecorrigeerd := select_afew(GemeenteKruistabel, GemeenteKruistabel/oppervlak_overlap > 10000[m2]);
+					
+					attribute<uint32> Aantal  		(PL) := count(GemeenteKruistabelGecorrigeerd/second_rel, GemeenteKruistabelGecorrigeerd/first_rel);
 				}
 				
 				container Bedrijventerreinen
 				{
-				unit<uint32>      BedrijventerreinenKruistabel := overlay_polygon(geometry_i, UBouw/Bedrijventerreinshape_input/geometry_bedrijventerrein_i);
-				attribute<uint32> Aantal (PL) 				   := count(BedrijventerreinenKruistabel/second_rel, BedrijventerreinenKruistabel/first_rel);
+					attribute<ratio>  RatioUBouw  (PL) := UBouw/Matching/RatioUBouw_plan;
+					attribute<nrAsl>  VBO_count   (PL) := UBouw/Matching/VBO_count;
+					attribute<nrAsl>  UBouw_count (PL) := UBouw/Matching/UBouw_count;
+					attribute<bool>   InNaam (PL)      := UBouw/Matching/BedrijventerreinInNaam;
+					attribute<bool>   InDoel (PL)      := UBouw/Matching/BedrijventerreinInDoel;
+					unit<uint32>      Kruistabel       := overlay_polygon(geometry_i, UBouw/Bedrijventerreinshape_input/geometry_bedrijventerrein_i);
+					attribute<uint32> Aantal (PL)      := count(Kruistabel/second_rel, Kruistabel/first_rel);
 				}
 			}
 		}		
@@ -122,77 +132,40 @@ container TVW
 		{
 			unit<uint32> BinnenEindjaarCutoff := select_many(PL, Woning/matching/eindjaar/binnen_cutoff);
 
-			unit<uint32> WnetConcreet := select_many(PL, 
+			unit<uint32> WnetConcreet := select_afew(PL, 
 			PL/Installatie_rel == Class/Installatie/V/Wnet 
 			&& Class/Energiebron/aquathermie[PL/Energiebron_rel]             == False  
 			&& Class/Energiebron/geothermie[PL/Energiebron_rel]              == False
 			&& Class/Energiebron/onbekend[PL/Energiebron_rel]                == False
 			&& Class/Energiebron/niet_specifiek_benoemd[PL/Energiebron_rel]  == False
 			&& Class/Energiebron/niet_van_toepassing[PL/Energiebron_rel]     == False
-			&& Class/Energiebron/diverse_opties_mogelijk[PL/Energiebron_rel] == False )
-			{
-				container MatchingGemeentes
-				{
-					attribute<ipoint> 				geometry_i  		(WnetConcreet, poly) 			           := ipolygon(geometry);
-					attribute<geography/rdc_meter>  gemeente_geometry   (Geography/RegioIndelingen/Gemeente, poly) := Geography/RegioIndelingen/Gemeente/geometry;
-					attribute<ipoint>			 	gemeente_geometry_i (Geography/RegioIndelingen/Gemeente, poly) := ipolygon(gemeente_geometry);
-
-					unit<uint32>      GemeenteKruistabel             := overlay_polygon(geometry_i, gemeente_geometry_i);
-					attribute<uint32> AantalGemeentes (WnetConcreet) := count(GemeenteKruistabel/second_rel, GemeenteKruistabel/first_rel);
-				}
-			}
+			&& Class/Energiebron/diverse_opties_mogelijk[PL/Energiebron_rel] == False );
 			
-			unit<uint32> WnetMeerdereGemeentes := select_many(PL, 
+			unit<uint32> WnetMeerdereGemeentes := select_afew(PL, 
 				PL/Matching/Gemeentes/Aantal > 1
-				&& PL/Installatie_rel == Class/Installatie/V/Wnet );
+				&& PL/Installatie_rel == Class/Installatie/V/Wnet);
 			
-			unit<uint32> WnetConcreetMeerdereGemeentes := select_many(WnetConcreet, WnetConcreet/MatchingGemeentes/AantalGemeentes > 1);
+			unit<uint32> WnetConcreetMeerdereGemeentes := select_afew(WnetConcreet, PL/Matching/Gemeentes/Aantal[WnetConcreet/org_rel] > 1);
 
-			unit<uint32> PL_Bedrijventerrein_Ratio_80  := select_afew(PL, UBouw/Matching/RatioUBouw_plan > 0.79)
-			{
-				attribute<ratio>  RatioUBouw  (PL_Bedrijventerrein_Ratio_80) := UBouw/Matching/RatioUBouw_plan[org_rel];
-			}
-			
-			unit<uint32> PL_Bedrijventerrein_naam      := select_afew(PL, UBouw/Matching/BedrijventerreinInNaam)
-			{
-				attribute<ratio>  RatioUBouw  (PL_Bedrijventerrein_naam) := UBouw/Matching/RatioUBouw_plan[org_rel];
-				attribute<nrAsl>  VBO_count   (PL_Bedrijventerrein_naam) := UBouw/Matching/VBO_count[org_rel];
-				attribute<nrAsl>  UBouw_count (PL_Bedrijventerrein_naam) := UBouw/Matching/UBouw_count[org_rel];
-				attribute<ipoint> geometry_i  (poly) 			         := ipolygon(geometry);
-				unit<uint32>      BedrijventerreinenKruistabel           := overlay_polygon(geometry_i, UBouw/Bedrijventerreinshape_input/geometry_bedrijventerrein_i);
-			}
-			
-			unit<uint32> PL_Bedrijventerrein_doel      := select_afew(PL, UBouw/Matching/BedrijventerreinInDoel)
-			{
-				attribute<ratio>  RatioUBouw  (PL_Bedrijventerrein_doel) := UBouw/Matching/RatioUBouw_plan[org_rel];
-				attribute<nrAsl>  VBO_count   (PL_Bedrijventerrein_doel) := UBouw/Matching/VBO_count[org_rel];
-				attribute<nrAsl>  UBouw_count (PL_Bedrijventerrein_doel) := UBouw/Matching/UBouw_count[org_rel];					
-				attribute<ipoint> geometry_i  (poly) 			         := ipolygon(geometry);
-				unit<uint32>      BedrijventerreinenKruistabel           := overlay_polygon(geometry_i, UBouw/Bedrijventerreinshape_input/geometry_bedrijventerrein_i);
-			}
-			
-			unit<uint32> PL_Bedrijventerrein      := select_afew(PL, UBouw/Matching/BedrijventerreinInDoel || UBouw/Matching/BedrijventerreinInNaam)
+			unit<uint32> PL_Bedrijventerrein  := select_afew(PL, isDefined(PL/geometry))
 			{
 				attribute<ratio>  RatioUBouw  (PL_Bedrijventerrein) := UBouw/Matching/RatioUBouw_plan[org_rel];
 				attribute<nrAsl>  VBO_count   (PL_Bedrijventerrein) := UBouw/Matching/VBO_count[org_rel];
 				attribute<nrAsl>  UBouw_count (PL_Bedrijventerrein) := UBouw/Matching/UBouw_count[org_rel];
+				attribute<bool>   BedrijventerreinInNaam (PL_Bedrijventerrein) := UBouw/Matching/BedrijventerreinInNaam[org_rel];
+				attribute<bool>   BedrijventerreinInDoel (PL_Bedrijventerrein) := UBouw/Matching/BedrijventerreinInDoel[org_rel];
 				attribute<ipoint> geometry_i  (poly) 			    := ipolygon(geometry);
 				unit<uint32>      BedrijventerreinenKruistabel      := overlay_polygon(geometry_i, UBouw/Bedrijventerreinshape_input/geometry_bedrijventerrein_i);
 				attribute<uint32> AantalBedrijventerreinen (PL_Bedrijventerrein) := count(BedrijventerreinenKruistabel/second_rel, BedrijventerreinenKruistabel/first_rel);
 			}
 			
-			unit<uint32> PL_OpBedrijventerrein := select_afew(PL, PL/Matching/Bedrijventerreinen/Aantal > 0)
-			{			
-				attribute<ipoint> geometry_i  (poly) 		   := ipolygon(geometry);
-				unit<uint32>      BedrijventerreinenKruistabel := overlay_polygon(geometry_i, UBouw/Bedrijventerreinshape_input/geometry_bedrijventerrein_i);
-
-			}
-			unit<uint32> PL_Bedrijventerrein_OpBedrijventerrein := select_many(PL_Bedrijventerrein, PL_Bedrijventerrein/AantalBedrijventerreinen > 0)
-			{			
-				attribute<ipoint> geometry_i  (poly) 		   := ipolygon(geometry);
-				unit<uint32>      BedrijventerreinenKruistabel := overlay_polygon(geometry_i, UBouw/Bedrijventerreinshape_input/geometry_bedrijventerrein_i);
-
-			}
+			unit<uint32> PL_Bedrijventerrein_Ratio_80  := select_afew(PL_Bedrijventerrein, PL_Bedrijventerrein/RatioUBouw >= 0.80);
+			unit<uint32> PL_Bedrijventerrein_naam      := select_afew(PL_Bedrijventerrein, PL_Bedrijventerrein/BedrijventerreinInNaam);
+			unit<uint32> PL_Bedrijventerrein_doel      := select_afew(PL_Bedrijventerrein, PL_Bedrijventerrein/BedrijventerreinInDoel);
+			unit<uint32> PL_Bedrijventerrein_naam_doel := select_afew(PL_Bedrijventerrein, PL_Bedrijventerrein/BedrijventerreinInDoel || PL_Bedrijventerrein/BedrijventerreinInNaam);
+		
+			unit<uint32> PL_OpBedrijventerrein 							  := select_afew(PL_Bedrijventerrein, PL_Bedrijventerrein/AantalBedrijventerreinen > 0);
+			unit<uint32> PL_Bedrijventerrein_naam_doel_OpBedrijventerrein := select_afew(PL_Bedrijventerrein_naam_doel, PL_Bedrijventerrein_naam_doel/AantalBedrijventerreinen > 0);
 		}
 
 		unit<uint32> VBO := /Invoer/RuimtelijkeData/BAG/import/VBO
