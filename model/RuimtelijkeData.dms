@@ -70,8 +70,6 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			attribute<ratio>                                   Overigen_r_land_com := RegioIndelingen/buurt/Overigen/r_land_com[nr_OrgEntity], IsHidden = "True";
 
 			attribute<ha>                                      AreaLandHa          := AreaInHa * Overigen_r_land_com ;
-			attribute<float64>                                 nrPers_hh           := Geography/RegioIndelingen/buurt/Overigen/nrPers_hh[nr_OrgEntity];
-
 			attribute<percent>                                 Overigen_p_stadsv   := RegioIndelingen/buurt/Overigen/p_stadsv[nr_OrgEntity], IsHidden = "True";
 			attribute<ratio>                                   R_StadV             := makedefined(Overigen_p_stadsv / 100[percent], 0[ratio]), Descr = "Aandeel woningen aangesloten op stadsverwarming", ishidden = "True";
 
@@ -121,7 +119,9 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 		,	StorageType     = "gdal.vect"
 		,	StorageReadOnly = "True"
 		{
-			attribute<Classifications/SchilLabel>   schillabel_rel := rlookup(replace(Pand_energieklasse, '+',''), Classifications/SchilLabel/name), IntegrityCheck = "strlen(Pand_energieklasse) == 0 || IsDefined(this)";
+			attribute<Classifications/SchilLabel>   schillabel_rel   := rlookup(replace(Pand_energieklasse, '+','') , Classifications/SchilLabel/name)  , IntegrityCheck = "strlen(Pand_energieklasse) == 0 || IsDefined(this)";
+			attribute<Classifications/EnergieLabel> EnergieLabel_rel := rlookup(replace(Pand_energieklasse, '+','p'), Classifications/EnergieLabel/name), IntegrityCheck = "strlen(Pand_energieklasse) == 0 || IsDefined(this)";
+
 			attribute<BAG/import/vbo>               vbo_rel        := rlookup(Pand_bagverblijfsobjectid, BAG/import/vbo/identificatie);
 			attribute<uint32>                       datum_numeriek := uint32(replace(Pand_opnamedatum,'''',''));
 			attribute<string>                       HLT_unquoted   := trim(replace(Pand_huisnummertoevoeging,'''',''));
@@ -138,7 +138,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 
 		unit<uint32> src_NTA := subset(strcount(Invoer/RuimtelijkeData/EnergieLabel/src/Pand_berekeningstype, 'NTA 8800') > 0)
 		{
-			attribute<Classifications/SchilLabel>   schillabel_rel := src/schillabel_rel[nr_OrgEntity];
+			attribute<Classifications/EnergieLabel>  EnergieLabel_rel := src/EnergieLabel_rel[nr_OrgEntity];
 
 			attribute<string> Pand_primaire_fossiele_energie := src/Pand_primaire_fossiele_energie[nr_OrgEntity];
 			attribute<string> Pand_eis_primaire_fossiele_energie := src/Pand_eis_primaire_fossiele_energie[nr_OrgEntity];
@@ -150,19 +150,19 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			attribute<units/yr_uint16> bouwjaar_gecorrigeerd := Invoer/RuimtelijkeData/BAG/import/pand/bouwjaar_gecorrigeerd[pand_rel];
 		}
 
-		unit<uint32> unique_data := unique(src/adres_key)
+		unit<uint32> data := unique(src/adres_key)
 		{
-			attribute<nummeraanduiding>           nummeraanduiding_rel:= rlookup(unique_data/values, nummeraanduiding/adres_key);
-			attribute<vbo>                        vbo_rel             := rlookup(nummeraanduiding_rel->identificatie, vbo/nummeraanduiding_id);
-			attribute<uint32>                     datum_laatste       := max(src/datum_numeriek, rlookup(src/adres_key, values));
-			attribute<Classifications/SchilLabel> SchilLabel_rel      := rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/schillabel_rel);
-		}
-		unit<uint32> data: StorageName = "%HestiaDataDir%/vraag/wonen/v20220801.fss"
-		{
-			attribute<nummeraanduiding>           nummeraanduiding_rel;
-			attribute<vbo>                        vbo_rel;
-			attribute<uint32>                     datum_laatste;
-			attribute<Classifications/SchilLabel> SchilLabel_rel;
+			attribute<string>                       nummeraanduiding_id := nummeraanduiding/identificatie[rlookup(values, nummeraanduiding/adres_key)];
+			attribute<string>                       vbo_id              := rjoin(nummeraanduiding_id, vbo/nummeraanduiding_id, vbo/identificatie), FreeData = "True";
+			attribute<uint32>                       datum_laatste       := max(src/datum_numeriek, rlookup(src/adres_key, values));
+			attribute<Classifications/SchilLabel>   SchilLabel_rel      := rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/schillabel_rel)  , FreeData = "True";
+			attribute<Classifications/EnergieLabel> EnergieLabel_rel    := rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/EnergieLabel_rel), FreeData = "True";
+			attribute<bool>                         isNTA8800           := strcount(rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/Pand_berekeningstype), 'NTA 8800') > 0;
+			
+			unit<uint32> NTA8800 := subset(isNTA8800)
+			{
+				attribute<Classifications/EnergieLabel> EnergieLabel_rel := data/EnergieLabel_rel[nr_OrgEntity];
+			}
 		}
 		unit<uint32> defaultlabels_2020 := BAG/import/VBO
 		{
