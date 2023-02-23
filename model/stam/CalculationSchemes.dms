@@ -162,4 +162,64 @@ container CalculationSchemes: Using = "Units;Geography"
 			container Criteria;
 		}
 	}
+
+	template HuishoudensGrootteSchatting
+	{
+		//begin parameters
+		unit<uint32> Obs;
+		//end parameters
+
+		attribute<m2>    Oppervlakte     (Obs) := Obs/Oppervlakte_i, descr = "oppervlakte van verblijfsobject";
+		attribute<nrAsl> Aansluitingen   (Obs) := Obs/nrAansluitingen_i, descr = "aantal eenheden dat het verblijfsobject voor meetelt";
+		attribute<Classifications/Woningtype> BebouwingsType_rel (Obs) := Obs/BebouwingsType, descr = "type woning (vrijstaand, rij, appartement, etc.)";
+		attribute<nrPers> nrPersonen     (Obs) :=
+			  Oppervlakte   * Classifications/Woningtype/Huishoudgrootte/Personen_per_m2[BebouwingsType_rel]
+			+ Aansluitingen * Classifications/Woningtype/Huishoudgrootte/Personen_per_aansluiting[BebouwingsType_rel], descr = "toepassing regressiecoefficienten huishoudensgrootte o.b.v. statistieken CBS, verwerkt in VIVET referentieverbruiken";
+		attribute<nrPers> nrPersonen_rnd (Obs) := float64(round(nrPersonen)), descr = "aantal persongen in huishouden afgerond, voor toepassingen waar dat vereist is, anders onafgerond getal gebruken.";
+	}
+
+	template TWprofiel_selectie
+	{
+		//begin parameters
+		unit<uint32> Obs;
+		//end parameters
+
+		//============ schatting aantal personen per huishouden 		
+		container HuishoudensGrootte := model/calculationschemes/HuishoudensGrootteSchatting(Obs);
+
+		attribute<nrPers> Personen    (Obs) := HuishoudensGrootte/nrPersonen_rnd, descr = "inschatting aantal personen in huishouden";
+		attribute<m2>     Oppervlakte (Obs) := Obs/Oppervlakte_i, descr = "oppervlakte van verblijfsobject";
+
+		attribute<Invoer/Kengetallen/Bebouwing/Woning/TWprofiel> TWprofiel_rel (Obs) :=
+				rlookup( 
+						(Personen <= 1[nrPers] ?'A': Personen <= 2[nrPers] ?'B': Personen <= 3[nrPers] ?'C': Personen <= 4[nrPers] ?'D':'E')
+					+   (Oppervlakte_i < 75[m2] ? 'A': Oppervlakte_i < 100[m2] ?'B': Oppervlakte_i < 125[m2] ?'C': Oppervlakte_i < 150[m2]?'D':'E')
+				, Invoer/Kengetallen/Bebouwing/Woning/TWprofiel/code) ;
+	}
+
+	template BerekenWarmtewinst
+	{
+		//begin parameters
+		unit<uint32> Obs;
+		parameter<string> warmteverlies_path;
+		//end parameters
+
+		//============ warmtewinst door personen wordt bepaald als constante
+		container HuishoudensGrootte := model/calculationschemes/HuishoudensGrootteSchatting(Obs);
+
+		attribute<GJ_yr> warmtewinst_personen         (Obs) := HuishoudensGrootte/nrPersonen * Invoer/Kengetallen/WarmteVraag/warmtewinst_personen;
+
+		//============ warmtewinst door apparaten wordt gelijkgesteld aan de vraag naar elektriciteit voor elektrische apparatuur
+		attribute<GJ_yr> warmtewinst_apparaten        (Obs) := Obs/Functioneel/EA * Invoer/Kengetallen/Warmtevraag/EA_winst_nuttig;
+
+		//============ warmtewist door zoninstralen door ramen boven (RB) en onder (RO) als functie van oppervlak bouwdeel en waarde horende bij isolatiegraad
+		attribute<GJ_yr> warmtewinst_zoninstraling_RB (Obs) := ='Obs/bouwdelen/RB * merge(uint8(Obs/bouwdelen/isolatie/RB), GJ_yr_m2,'+ AsItemList('Invoer/Kengetallen/Warmtevraag/Zoninstraling[Classifications/IsolatieNiveau/V/'+Classifications/IsolatieNiveau/name+']')+')', descr = "warmtewinst ramen boven";
+		attribute<GJ_yr> warmtewinst_zoninstraling_RO (Obs) := ='Obs/bouwdelen/RO * merge(uint8(Obs/bouwdelen/isolatie/RO), GJ_yr_m2,'+ AsItemList('Invoer/Kengetallen/Warmtevraag/Zoninstraling[Classifications/IsolatieNiveau/V/'+Classifications/IsolatieNiveau/name+']')+')', descr = "warmtewinst ramen onder";
+		attribute<GJ_yr> warmtewinst_zoninstraling    (Obs) := warmtewinst_zoninstraling_RO + warmtewinst_zoninstraling_RB;	
+
+		//============ totaal warmtewinsten
+		attribute<GJ_yr> Totaal (Obs) := = 'min_elem(warmtewinst_personen + warmtewinst_apparaten + warmtewinst_zoninstraling, Invoer/Kengetallen/WarmteVraag/Max_warmtewinst * ' + warmteverlies_path + ')';
+	}
 }
+
+// (NTA ? '((RV_per_Bouwdeel_now/totaal + Vrv_VT) * Correction_RV)' : 'warmteverlies/totaal)'
