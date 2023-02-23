@@ -156,9 +156,9 @@ template WarmtenetTempl
 	unit<uint32> BO := BebouwingsComponenten/Woning/BebouwingsObjectMetGebouwOptie
 	{
 		//====== checks of bebouwingscomponenten geschikt zijn voor aansluiting op een warmtenet
-		attribute<bool> heeftGasOK    := BO/Metervraag/gas > 0.0[GJ_yr];
-		attribute<bool> gebouwOptieOK := Classifications/gebouwoptie/kanGebiedsOptie[BO/gebouwoptie_rel];
-		attribute<bool> labelOK       := = T_sec < 65[Celsius] ? 'BO/Schillabel_rel <= Classifications/Schillabel/V/E' : 'const(true,BO)';
+		attribute<bool> heeftGasOK    := BebouwingsComponenten/Woning/BO/Metervraag/gas > 0.0[GJ_yr];
+		attribute<bool> gebouwOptieOK := Classifications/gebouwoptie/kanGebiedsOptie[BebouwingsComponenten/Woning/BO/gebouwoptie_rel];
+		attribute<bool> labelOK       := = T_sec < 65[Celsius] ? 'BebouwingsComponenten/Woning/BO/Schillabel_rel <= Classifications/Schillabel/V/E' : 'const(true,BO)';
 		attribute<bool> IsCandidate   := heeftGasOK && gebouwOptieOK && labelOK;
 	}
 	unit<uint32> AllCandidate := subset(BO/IsCandidate)
@@ -738,6 +738,22 @@ template WarmtenetTempl
 		}
 	}
 	
+	unit<uint32> AfnemersAfweging := Prospect/Afnemer
+	{
+		
+		attribute<Eur_yr> Kosten_alt := AllCandidate/PartialContributie/alternatief/kosten[nr_orgentity];
+
+		attribute<Eur_yr> Kosten_w   :=
+			  Prospect/DesAggregatie/Oj_lv_verbruik
+			+ Prospect/DesAggregatie/Oj_lv_vastrecht
+			+ Prospect/DesAggregatie/Oi_lv_Aansl * BebouwingsComponenten/Woning/NCWrefs/AF_28[BO_rel];
+
+		attribute<Eur_yr> subsidie   := 10000[Eur] * BebouwingsComponenten/Woning/NCWrefs/AF_28[BO_rel];
+
+		attribute<bool>   Afweging   := Kosten_alt > Kosten_w - subsidie;
+		
+	}
+
 	unit<uint32> Candidate := subset(AllCandidate/PartialContributie/Contributie > 0.0[Eur_yr])
 	{
 		attribute<BO>               BO_rel        := AllCandidate/BO_rel[nr_orgentity];
