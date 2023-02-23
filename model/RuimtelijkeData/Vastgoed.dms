@@ -182,7 +182,20 @@ container Vastgoed
 
 			attribute<Geography/rdc_grids/m100>    gridm100_rel      := Geometry[Geography/rdc_grids/m100];
 			attribute<Classifications/Eigendom>    Eigendom_rel      := NB/Eigendom_rel[nr_OrgEntity];
-			attribute<Classifications/GebouwOptie> GebouwOptie_rel   := const(rlookup(DefaultInstellingen/Basis/StartGebouwOpties/NieuwbouwWoning, Classifications/GebouwOptie/name),.);
+
+			container NieuwbouwWarmtenet
+			{
+				attribute<float64> rnd (BebouwingsObject) := rnd_uniform(/Invoer/TechnischeInstellingen/RandomSeed * 316[uint32], BebouwingsObject, range(float64, 0d, 1d));
+				attribute<bool> StartWarmtenet (BebouwingsObject) := 
+					  Woningtype_rel == Classifications/WoningType/V/vrijstaand ? (rnd < 0.052[ratio])
+					: Woningtype_rel == Classifications/WoningType/V/twee_onder_1_kap ? (rnd < 0.040[ratio])
+					: Woningtype_rel == Classifications/WoningType/V/hoekwoning || Woningtype_rel == Classifications/WoningType/V/tussenwoning ? (rnd < 0.243[ratio])
+					: Woningtype_rel == Classifications/WoningType/V/meergezinspand_laag_midden || Woningtype_rel == Classifications/WoningType/V/meergezinspand_hoog ? (rnd < 0.262[ratio])
+					: false;
+			}
+			attribute<Classifications/GebouwOptie> GebouwOptie_rel  := 
+				NieuwbouwWarmtenet/StartWarmtenet ? Classifications/GebouwOptie/V/Gebied_zK :
+				rlookup(DefaultInstellingen/Basis/StartGebouwOpties/NieuwbouwWoning, Classifications/GebouwOptie/name);
 			
 			unit<uint32> BestaandAflevergebied := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data;
 			unit<uint32> BestaandWarmtenet     := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Warmtenetten;
@@ -269,12 +282,9 @@ container Vastgoed
 					attribute<GJ_yr> Total (...) := ='add('+AsItemList(Classifications/bouwdeel/name)+')';
 				}
 
-				attribute<int32> Pbu (..) := makedefined(round(Invoer/RuimtelijkeData/StudieGebied/Buurt/nrpers_hh[Buurt_rel]), 2i);
-				attribute<Invoer/Kengetallen/Bebouwing/Woning/TWprofiel> TWprofiel_rel (..) :=
-					rlookup( 
-							(Pbu = 1i ?'A': Pbu = 2i ?'B': Pbu = 3i ?'C': Pbu = 4i ?'D':'E')
-						+   (Oppervlakte_i < 75[m2] ? 'A': Oppervlakte_i < 100[m2] ?'B': Oppervlakte_i < 125[m2] ?'C': Oppervlakte_i < 150[m2]?'D':'E')
-					, Invoer/Kengetallen/Bebouwing/Woning/TWprofiel/code) ;
+				container TWprofiel := Model/CalculationSchemes/TWprofiel_selectie(..);
+
+				attribute<Invoer/Kengetallen/Bebouwing/Woning/TWprofiel> TWprofiel_rel (..) := TWprofiel/TWprofiel_rel;
 				
 				container BaseValues := for_each_nedv(
 					Classifications/FunctioneleVraag/name,
