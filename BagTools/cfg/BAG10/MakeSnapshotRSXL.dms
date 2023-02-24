@@ -1,0 +1,893 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//    Configuratie voor project: BAG FSS Files > Snapshot voor RSXL                   //
+//                                                                                    //
+//                              Object Vision 2016                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+// Met deze configuratie kan uit een historische BAG database (in FSS formaat)        //
+// een snapshot op een bepaalde datum gegenereerd worden (ook in FSS formaat).........//
+//                                                                                    //
+// De RSXL specifieke snapshot probeert inzicht te geven in een historische situatie  //
+// Met een gewone snapshot terug gaan in de tijd werkt niet goed voor 2015            //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container BAG_MakeSnapshot_RSXL
+{
+	container eenheden
+	{
+		unit<int32> datum;
+		unit<int16> jaar;
+		unit<int32> mm;
+	}
+	container typeringen
+	{
+		unit<uint8> gebruiksdoel_vbo: nrofrows = 11
+		{
+			attribute<string> label:
+			[
+				'bijeenkomstfunctie','celfunctie','gezondheidszorgfunctie','industriefunctie','kantoorfunctie','logiesfunctie'
+				,'onderwijsfunctie','overige gebruiksfunctie','sportfunctie','winkelfunctie','woonfunctie'
+			];
+			attribute<string> label_ti := replace(replace(label,' ','_'), 'functie','');
+		}
+		unit<uint8> status_pand: nrofrows = 9
+		{
+			attribute<string> label:
+			[
+				 'onbekend'
+				,'bouwvergunning verleend'
+				,'niet gerealiseerd pand'
+				,'bouw gestart'
+				,'pand in gebruik (niet ingemeten)'
+				,'pand in gebruik'
+				,'sloopvergunning verleend'
+				,'pand gesloopt'
+				,'pand buiten gebruik'
+			];
+			attribute<string> name := replace(label, ' ', '_', '(','',')','');
+			attribute<bool> pand_bestaat:
+			[
+				 'False'
+				,'False'
+				,'False'
+				,'False'
+				,'True'
+				,'True'
+				,'True'
+				,'False'
+				,'True'
+			];
+			attribute<bool> pand_inaanbouw:
+			[
+				 'False'
+				,'True'
+				,'True'
+				,'True'
+				,'False'
+				,'False'
+				,'False'
+				,'False'
+				,'False'
+			];
+			attribute<bool> pand_isgesloopt:
+			[
+				 'False'
+				,'False'
+				,'False'
+				,'False'
+				,'False'
+				,'False'
+				,'False'
+				,'True'
+				,'False'
+			];
+			container V := for_each_nedv(lowercase(name), 'value('+string(id(.))+', ..)', void, .);
+		}
+		unit<uint8> status_vbo : nrofrows = 7
+		{
+			attribute<string> label:
+			[
+				 'onbekend'
+				,'verblijfsobject gevormd'
+				,'niet gerealiseerd verblijfsobject'
+				,'verblijfsobject in gebruik (niet ingemeten)'
+				,'verblijfsobject in gebruik'
+				,'verblijfsobject ingetrokken'
+				,'verblijfsobject buiten gebruik'
+			];
+			attribute<string> name := replace(label, ' ', '_', '(','',')','');
+			attribute<bool> vbo_invorming:
+			[
+				 'False'
+				,'True'
+				,'True'
+				,'False'
+				,'False'
+				,'False'
+				,'False'
+			];
+			attribute<bool> vbo_ingetrokken:
+			[
+				 'False'
+				,'False'
+				,'False'
+				,'False'
+				,'False'
+				,'True'
+				,'False'
+			];
+			container V := for_each_nedv(lowercase(name), 'value('+string(id(.))+', ..)', void, .);
+		}
+		unit<uint8> status_nummeraanduiding : nrofrows = 3
+		{
+			attribute<string> label:
+			[
+				 'onbekend'
+				,'naamgeving ingetrokken'
+				,'naamgeving uitgegeven'
+			];
+		}
+	}
+	container geometries
+	{
+		unit<fpoint> rdc_base;
+		unit<fpoint> rdc    := range(rdc_base, point(300000f,0f), point(625000f,280000f));
+		unit<ipoint> rdc_mm := gridset(rdc, point(0.001,0.001), point(0.0, 0.0), ipoint);
+		
+		container selectie_extent
+		{
+			parameter<eenheden/mm> x_min := 125000000[eenheden/mm];
+			parameter<eenheden/mm> x_max := 145000000[eenheden/mm];
+			parameter<eenheden/mm> y_min := 450000000[eenheden/mm];
+			parameter<eenheden/mm> y_max := 463000000[eenheden/mm];
+			parameter<string> Label      := 'GrootUtrecht';
+			parameter<bool>   isActive   := False;
+		}
+	}
+	parameter<eenheden/datum> date := 20170807[eenheden/datum];
+	parameter<string> FSSDir          := '%SourceDataDir%/BAG/'+string(date)+'/fss';
+	parameter<string> SnapshotBaseDir := '%SourceDataDir%/BAG/snapshots.ext' + (geometries/selectie_extent/isActive ? '/' + geometries/selectie_extent/Label : '');
+
+	container SnapshotRSL_2010 := MakeSnapshotTempl( date, 2010s);
+	container SnapshotRSL_2011 := MakeSnapshotTempl( date, 2011s);
+	container SnapshotRSL_2012 := MakeSnapshotTempl( date, 2012s);
+
+	template MakeSnapshotTempl
+	{
+		// begin case parameters
+		parameter<eenheden/datum> prik_datum;
+		parameter<int16>          bouwjaarafkapgrens;
+		// end case parameters
+
+		parameter<string> SnapshotDir := SnapshotBaseDir + '/RSL_' + string(bouwjaarafkapgrens) + '_' + string(prik_datum) + '.new';
+
+		parameter<string> MaakVolledigeSnapshot := 'ready',
+			ExplicitSuppliers = 
+			//	"ligplaats/results/unique;standplaats/results/unique;"
+				"pand/results/unique;vbo/results/unique;"
+			//  "openbareruimte/results/unique;"
+			//	"nummeraanduiding/results/unique;openbareruimte/results/unique;woonplaats/results/unique;"
+			//	"afleidingen/adres;"
+				"overzichten/impl/rapport_tekst";
+
+		//parameter<string> MaakAdressenTabel := 'ready'
+		//,	ExplicitSuppliers = "afleidingen/adres";
+
+		container ligplaats
+		{
+			unit<uint32> src
+			:	StorageName     = "= FSSDir + '/ligplaats.fss'"
+			,	StorageReadOnly = "True"
+			{
+				attribute<geometries/rdc_mm> geometry_mm (polygon);
+				attribute<string>            identificatie;
+				attribute<string>            nummeraanduiding_id;
+
+				container meta             := meta_src_template(src);
+				container inSelectieExtent := BepaalInSelectieExtent(src, geometry_mm);
+
+				unit<uint32> nevenadres // 1->0..n relatie
+				{
+					attribute<string> nummeraanduiding_id;
+					attribute<src>    parent_rel;
+					attribute<string> ligplaats_id := src/identificatie[parent_rel], DisableStorage = "True";
+				}
+			}
+
+			container results:=
+				='datum_selectie(src, prik_datum, False, '
+				+ (geometries/selectie_extent/isActive 
+						?  'True,  src/inSelectieExtent/result'
+						:  'False'
+					)
+				+ ')'
+			{
+				unit<uint32> selectie
+				{
+					attribute<geometries/rdc_mm> geometry_mm (polygon) := domain/geometry_mm[selectie/nr_OrgEntity];
+					attribute<string>            identificatie         := domain/identificatie[selectie/nr_OrgEntity];
+					attribute<string>            nummeraanduiding_id   := domain/nummeraanduiding_id[selectie/nr_OrgEntity];
+					attribute<unique>            unique_rel            := rlookup(identificatie,unique/values);
+				}
+
+				unit<uint32> unique:= unique(selectie/identificatie)//, StorageName= "= SnapshotDir + '/ligplaats.fss'"
+				{
+					attribute<uint32>    count := pcount(selectie/unique_rel), DisableStorage = "True";
+					//  DEBUG
+					// attribute<geometries/rdc>  geometry (polygon) := last(selectie/geometry, selectie/unique_rel);
+					attribute<geometries/rdc_mm> geometry_mm (polygon) := rjoin(values, selectie/identificatie, selectie/geometry_mm);
+
+					attribute<string> values              : DisableStorage = "True";
+					attribute<string> identificatie       := values;
+					attribute<string> nummeraanduiding_id := last(selectie/nummeraanduiding_id, selectie/unique_rel);
+
+					container meta := meta_template(selectie, unique);
+
+					unit<uint32> nevenadres:= Subset(isDefined(rlookup(src/nevenadres/parent_rel,selectie/nr_OrgEntity))) // is een 1->0..n relatie
+					{
+						attribute<string> nummeraanduiding_id := src/nevenadres/nummeraanduiding_id[nr_OrgEntity];
+						attribute<string> ligplaats_id        := src/nevenadres/ligplaats_id[nr_OrgEntity];
+						attribute<uint32> nr_OrgEntity        : DisableStorage = "True";
+					}
+				}
+			}
+		}
+
+		container standplaats
+		{
+			unit<uint32> src
+			:	StorageName     = "= FSSDir + '/standplaats.fss'"
+			,	StorageReadOnly = "True"
+			{
+				attribute<geometries/rdc_mm> geometry_mm (polygon);
+				attribute<string>            identificatie;
+				attribute<string>            nummeraanduiding_id;
+
+				container meta             := meta_src_template(src);
+				container inSelectieExtent := BepaalInSelectieExtent(src, geometry_mm);
+
+				unit<uint32> nevenadres // 1->0..n relatie
+				{
+					attribute<string> nummeraanduiding_id;
+					attribute<src>    parent_rel;
+					attribute<string> standplaats_id := src/identificatie[parent_rel], DisableStorage = "True";
+				}
+			}
+
+			container results :=
+				='datum_selectie(src, prik_datum, False, '
+				+ (geometries/selectie_extent/isActive 
+						? 'True,  src/inSelectieExtent/result'
+						: 'False'
+					)
+				+ ')'
+			{
+				unit<uint32> selectie
+				{
+					attribute<geometries/rdc_mm> geometry_mm (polygon) := domain/geometry_mm[selectie/nr_OrgEntity];
+					attribute<string>            identificatie         := domain/identificatie[selectie/nr_OrgEntity];
+					attribute<string>            nummeraanduiding_id   := domain/nummeraanduiding_id[selectie/nr_OrgEntity];
+					attribute<unique>            unique_rel            := rlookup(identificatie,unique/values);
+				}
+
+				unit<uint32> unique := unique(selectie/identificatie)//, StorageName= "= SnapshotDir + '/standplaats.fss'"
+				{
+					attribute<uint32> count := pcount(selectie/unique_rel), DisableStorage = "True";
+					// DEBUG
+					// attribute<geometries/rdc>  geometry (polygon) := last(selectie/geometry, selectie/unique_rel);
+					attribute<geometries/rdc_mm> geometry_mm (polygon) := rjoin(values, selectie/identificatie, selectie/geometry_mm);
+
+					attribute<string> values              : DisableStorage = "True";
+					attribute<string> identificatie       := values;
+					attribute<string> nummeraanduiding_id := last(selectie/nummeraanduiding_id, selectie/unique_rel);
+
+					container meta := meta_template(selectie, unique);
+
+					unit<uint32> nevenadres := Subset(isDefined(rlookup(src/nevenadres/parent_rel,selectie/nr_OrgEntity))) // is een 1->0..n relatie
+					{
+						attribute<string> nummeraanduiding_id := src/nevenadres/nummeraanduiding_id[nr_OrgEntity];
+						attribute<string> standplaats_id      := src/nevenadres/standplaats_id[nr_OrgEntity];
+						attribute<uint32> nr_OrgEntity        : DisableStorage = "True";
+					}
+				}
+			}
+		}
+
+		container pand
+		{
+			unit<uint32> src
+			:	StorageName     = "= FSSDir + '/pand.fss'"
+			,	StorageReadOnly = "True"
+			{
+				attribute<geometries/rdc_mm> geometry_mm (polygon);
+				attribute<string>            identificatie;
+				attribute<eenheden/jaar>     bouwjaar;
+
+				container meta := meta_src_template(src)
+				{
+					attribute<typeringen/status_pand> status_pand_rel (src) := rlookup(lowercase(STATUS), typeringen/status_pand/label);
+					attribute<bool>                   pand_inaanbouw  (src) := typeringen/status_pand/pand_inaanbouw[status_pand_rel];
+					attribute<bool>                   pand_isgesloopt (src) := typeringen/status_pand/pand_isgesloopt[status_pand_rel];
+				}
+				container inSelectieExtent := BepaalInSelectieExtent(src,geometry_mm);
+			}
+
+			container extents
+			{
+				attribute<geometries/rdc_mm> NW (src) := lower_bound(src/geometry_mm);
+				attribute<geometries/rdc_mm> SE (src) := upper_bound(src/geometry_mm);
+				attribute<int32> X_ext          (src) := PointCol(SE) - PointCol(NW);
+				attribute<int32> Y_ext          (src) := PointRow(SE) - PointRow(NW);
+			}
+
+			parameter<string> bouwjaar_filter :=
+			   '&& not(domain/Meta/pand_inaanbouw)' +                                                         //niet in aanbouw 
+			   '&& domain/bouwjaar < bouwjaarafkapgrens' +                                                    //gebouwd voor 2010
+			   '&& not(domain/Meta/pand_isgesloopt && domain/meta/BEGINDATUM < bouwjaarafkapgrens_datum) ' +  //als gesloopt dan na 2010
+			   '&& extents/X_ext < 10000000i && extents/Y_ext < 10000000i';                                   //geen grote objecten voor Point In Polygon;
+
+			container results :=
+				='datum_selectie(src, const(prik_datum,src), bouwjaar_filter,'
+				+ (geometries/selectie_extent/isActive 
+						?  'True,  src/inSelectieExtent/result'
+						:  'False'
+					)
+				+ ')'
+			{
+				unit<uint32> selectie
+				{
+					attribute<geometries/rdc_mm> geometry_mm (polygon) := domain/geometry_mm[selectie/nr_OrgEntity];
+					attribute<string>            identificatie         := domain/identificatie[selectie/nr_OrgEntity];
+					attribute<eenheden/jaar>     bouwjaar              := domain/bouwjaar[selectie/nr_OrgEntity];
+					attribute<unique>            unique_rel            := rlookup(identificatie,unique/identificatie);
+				}
+
+				unit<uint32> unique_base := unique(selectie/identificatie);
+				unit<uint32> unique      := TiledUnit(1000000[unique_base])
+				,	StorageName = "= SnapshotDir + '/pand.fss'"
+				,	DialogType  = "Map"
+				,	DialogData  = "geometry_mm"
+				,	FreeData    = "False"
+				{
+					attribute<uint32>                                     sel_count             := pcount(selectie/unique_rel)        , DisableStorage = "True";
+					attribute<uint32>                                     vbo_count             := pcount(vbo/results/unique/pand_rel), DisableStorage = "True";
+					attribute<geometries/rdc_mm>                          geometry_mm (polygon) := rjoin(identificatie, selectie/identificatie, selectie/geometry_mm);
+
+					attribute<string>                                     identificatie         := unique_base/values[mapping(unique,unique_base)];
+					attribute<eenheden/jaar>                              bouwjaar              := last(selectie/bouwjaar, selectie/unique_rel);
+
+					// Uitzetten voor snelle generatie van snapshot zonder afleidingen
+					
+					attribute<uint32>                                     nr_buurpanden         := afleidingen/panden/geometrie/results/nr_buurpanden;
+					attribute<afleidingen/panden/geometrie/type_woonpand> type_woonpand_rel     := afleidingen/panden/geometrie/results/type_woonpand_rel;
+					attribute<uint8>                                      nr_bouwlagen          := afleidingen/panden/hoogte/nr_bouwlagen;
+
+					container meta := meta_template(selectie, unique);
+				}
+			}
+		}
+
+		container vbo
+		{
+			unit<uint32> src
+			:	StorageName     = "= FSSDir + '/vbo.fss'"
+			,	StorageReadOnly = "True"
+			{
+				attribute<geometries/rdc_mm> geometry_mm;
+				attribute<string>            identificatie;
+				attribute<string>            nummeraanduiding_id;
+				attribute<int32>             oppervlakte;
+
+				container meta := meta_src_template(src)
+				{
+					attribute<typeringen/status_vbo> status_vbo_rel  (src) := rlookup(lowercase(STATUS), typeringen/status_vbo/label);
+					attribute<bool>                  vbo_invorming   (src) := typeringen/status_vbo/vbo_invorming[status_vbo_rel];
+					attribute<bool>                  vbo_ingetrokken (src) := typeringen/status_vbo/vbo_ingetrokken[status_vbo_rel];
+
+					container per_status := for_each_nedv(
+						typeringen/status_vbo/name
+						, 'sum(status_vbo_rel == ' + string(id(typeringen/status_vbo)) + '[typeringen/status_vbo] ? 1 : 0)'
+						,void
+						,uint32
+					);
+					container per_status_relatief := for_each_nedv(
+						typeringen/status_vbo/name
+						, 'per_status/'
+						,void
+						,uint32
+					);
+				}
+
+				container gebruiksdoelen :=
+					for_each_ndv(
+						typeringen/gebruiksdoel_vbo/Label_ti
+						, src
+						, bool
+					);
+
+				unit<uint32> polygon // is een 1->0..1 relatie
+				{
+					attribute<geometries/rdc_mm> geometry_mm (polygon);
+					attribute<src>               parent_rel;
+					attribute<string>            vbo_id      := src/identificatie[parent_rel], DisableStorage = "True";
+					attribute<geometries/rdc_mm> centroid_mm := centroid_or_mid(geometry_mm);
+				}
+				attribute<geometries/rdc_mm>     centroid_mm   := polygon/centroid_mm[invert(polygon/parent_rel)];
+
+
+				unit<uint32> gerelateerdPand // is een 1->0..n relatie
+				{
+					attribute<string> pand_id;
+					attribute<src>    parent_rel;
+					attribute<string> vbo_id := src/identificatie[parent_rel], DisableStorage = "True";
+					attribute<bool>   PandInSelectieExtent := IsDefined(rlookup(pand_id, pand/results/selectie/identificatie));
+				}
+
+				unit<uint32> nevenadres // is een 1->0..n relatie
+				{
+					attribute<string> nummeraanduiding_id;
+					attribute<src>    parent_rel;
+					attribute<string> vbo_id := src/identificatie[parent_rel], DisableStorage = "True";
+				}
+				
+				attribute<bool>   GerelateerdPandInSelectieExtent := any(gerelateerdPand/PandInSelectieExtent, gerelateerdPand/parent_rel);
+				
+				//attribute<geometries/rdc_mm>     locatie (src) := MakeDefined(src/geometry_mm, src/centroid_mm);
+				attribute<string> eerste_pand_id := rjoin(identificatie, selectie_impl/vbo_gerelateerd_pand/values, selectie_impl/vbo_gerelateerd_pand/pand_id);
+			}
+			unit<uint32> test:= subset(src/identificatie = '0289010000002241' || src/identificatie = '0289010000020024'  || src/identificatie = '0289010000020025' )
+			{
+				attribute<string>                identificatie := src/identificatie[nr_OrgEntity]; 
+				attribute<geometries/rdc_mm>     locatie  := src/locatie[nr_OrgEntity];
+				attribute<pand/results/selectie> pand_rel := src/pand_rel[nr_OrgEntity];
+				attribute<string> Status     := src/meta/Status[nr_OrgEntity];
+				attribute<int32 > BEGINDATUM := src/meta/BEGINDATUM[nr_OrgEntity];
+				attribute<int32>  EINDDATUM  := src/meta/EINDDATUM[nr_OrgEntity];
+				attribute<int32> prikdatum_met_intrekking := selectie_impl/prikdatum_met_intrekking[nr_OrgEntity];
+			}
+			container selectie_impl
+			{
+				attribute<string>               pand_id                     (src/gerelateerdPand) := src/gerelateerdPand/pand_id;
+				attribute<int32>                begindatum_gerelateerd_pand (src/gerelateerdPand) := rjoin(pand_id, pand/src/identificatie, pand/src/meta/BEGINDATUM);
+				attribute<vbo_gerelateerd_pand> vbo_gerelateerd_pand_rel    (src/gerelateerdPand) := rlookup(src/gerelateerdPand/vbo_id, vbo_gerelateerd_pand/values);
+				
+				unit<uint32> vbo_gerelateerd_pand := unique(src/gerelateerdPand/vbo_id)
+				{
+					attribute<string> eerste_pand_id_str := 
+						min(string(begindatum_gerelateerd_pand) + '_' + selectie_impl/pand_id, vbo_gerelateerd_pand_rel);
+					attribute<uint32> strlen_datum := strpos(eerste_pand_id_str,'_');
+					attribute<string> pand_id := 
+						substr(eerste_pand_id_str, strlen_datum + 1, strlen(eerste_pand_id_str) - (strlen_datum + 1)); 
+				}
+
+				unit<uint32> ingetrokken_mutaties := Subset(src/Meta/status_vbo_rel == typeringen/status_vbo/V/verblijfsobject_ingetrokken &&!(src/Meta/IS_INACTIEF))
+				{
+					attribute<string>                identificatie           := src/identificatie[nr_OrgEntity];
+					attribute<string>                pand_id                 := rjoin(identificatie, selectie_impl/vbo_gerelateerd_pand/values, selectie_impl/vbo_gerelateerd_pand/pand_id);
+					attribute<pand_met_intrekking>   pand_met_intrekking_rel := rlookup(pand_id, pand_met_intrekking/values);
+					attribute<int32>                 EersteBegindatum        := pand_met_intrekking/Begindatum[pand_met_intrekking_rel];
+
+					container Meta
+					{
+						attribute<string> Status     (..) := src/meta/Status[nr_OrgEntity];
+						attribute<int32 > BEGINDATUM (..) := src/meta/BEGINDATUM[nr_OrgEntity];
+						attribute<int32>  EINDDATUM  (..) := src/meta/EINDDATUM[nr_OrgEntity];
+					}
+
+					unit<uint32> pand_met_intrekking := unique(pand_id)
+					{
+						attribute<int32> Begindatum := min(Meta/BEGINDATUM, pand_met_intrekking_rel);
+					}
+				}
+				attribute<int32> prikdatum_eerste_begindatum (src) := 
+					 rjoin(src/identificatie, selectie_impl/ingetrokken_mutaties/identificatie, selectie_impl/ingetrokken_mutaties/EersteBegindatum -1i);
+
+				attribute<int32> prikdatum_eerste_begindatum_met_afkapgrens (src) :=
+					IsDefined(prikdatum_eerste_begindatum) ? max_elem(prikdatum_eerste_begindatum, 20100101i) : 0i / 0i;
+
+				attribute<int32> prikdatum_met_intrekking (src) := 
+					MakeDefined(
+						  prikdatum_eerste_begindatum_met_afkapgrens
+						, prik_datum
+					);
+			}
+
+			parameter<string> vbo_status_filter := '&& not(domain/Meta/vbo_invorming) && not(domain/meta/status_vbo_rel == typeringen/status_vbo/V/verblijfsobject_ingetrokken)'; //niet in vorming
+			//parameter<string> vbo_status_filter := '&& not(domain/Meta/vbo_invorming) '; //niet in vorming
+
+			container results:= 
+				='datum_selectie(src, selectie_impl/prikdatum_met_intrekking, vbo_status_filter, '
+				+ (geometries/selectie_extent/isActive 
+						?  'True,  src/GerelateerdPandInSelectieExtent'
+						:  'False'
+					)
+				+ ')'
+			{
+				unit<uint32> selectie
+				{
+					attribute<geometries/rdc_mm> geometry_mm_raw_or_centroid := MakeDefined(domain/geometry_mm, domain/centroid_mm)[selectie/nr_OrgEntity]; // Op snapshot moment willen we alleen punt geometrien hebben voor vbo's
+					attribute<int32> X:= PointCol(geometry_mm_raw_or_centroid);
+					attribute<int32> Y:= PointRow(geometry_mm_raw_or_centroid);
+					attribute<geometries/rdc_mm> geometry_mm:= 
+						   X >=  -8000000i &&  X <= 300000000i
+						&& Y >= 289000000i &&  Y <= 629000000i
+						?	geometry_mm_raw_or_centroid
+						:	point(0i/0i, 0i/0i, geometries/rdc_mm);
+					// Op snapshot moment willen we alleen geometrien in NL (https://nl.wikipedia.org/wiki/Rijksdriehoeksco%C3%B6rdinaten), dit ten behoeve van gemiddelde bepalingen (denk aan coordinaten voor geocode)
+
+					attribute<string> identificatie       := domain/identificatie[selectie/nr_OrgEntity];
+					attribute<int32>  oppervlakte         := domain/oppervlakte[selectie/nr_OrgEntity];
+					attribute<string> nummeraanduiding_id := domain/nummeraanduiding_id[selectie/nr_OrgEntity];
+					attribute<string> pand_id             := domain/eerste_pand_id[selectie/nr_OrgEntity];
+
+					//attribute<unique> unique_rel          := rlookup(identificatie,unique/identificatie);
+
+				container gebruiksdoelen :=
+					for_each_nedv(
+						typeringen/gebruiksdoel_vbo/Label_ti
+						, 'domain/gebruiksdoelen/' + typeringen/gebruiksdoel_vbo/Label_ti + '[selectie/nr_OrgEntity]'
+						, selectie
+						, bool
+					);
+				}
+
+				unit<uint32> gerelateerdPandInSnapshot := Subset(IsDefined(rlookup(src/gerelateerdPand/pand_id, pand/results/unique/identificatie))) // is een 1->0..n relatie
+				{
+					attribute<string> pand_id    := src/gerelateerdPand/pand_id[nr_OrgEntity];
+					attribute<src>    parent_rel := src/gerelateerdPand/parent_rel[nr_OrgEntity];
+					attribute<string> vbo_id     := src/gerelateerdPand/vbo_id[nr_OrgEntity];
+				}
+
+				unit<uint32> selectie_gerelateerd_aan_panden := Subset(isDefined(rlookup(selectie/pand_id, pand/results/selectie/identificatie)))
+				{
+					attribute<geometries/rdc_mm> geometry_mm         := selectie/geometry_mm[nr_OrgEntity];
+					attribute<string>            identificatie       := selectie/identificatie[nr_OrgEntity];
+					attribute<int32>             oppervlakte         := selectie/oppervlakte[nr_OrgEntity];
+					attribute<string>            nummeraanduiding_id := selectie/nummeraanduiding_id[nr_OrgEntity];
+					attribute<unique>            unique_rel          := rlookup(identificatie,unique/identificatie);
+
+					container gebruiksdoelen :=
+						for_each_nedv(
+							typeringen/gebruiksdoel_vbo/Label_ti
+							, 'selectie/gebruiksdoelen/' + typeringen/gebruiksdoel_vbo/Label_ti + '[nr_OrgEntity]'
+							, selectie_gerelateerd_aan_panden
+							, bool
+						);
+						
+					container meta
+					{
+						attribute<string>         STATUS         (selectie_gerelateerd_aan_panden):= selectie/meta/STATUS[nr_OrgEntity];
+						attribute<eenheden/datum> BEGINDATUM     (selectie_gerelateerd_aan_panden):= selectie/meta/BEGINDATUM[nr_OrgEntity];
+						attribute<eenheden/datum> EINDDATUM      (selectie_gerelateerd_aan_panden):= selectie/meta/EINDDATUM[nr_OrgEntity];
+						attribute<eenheden/datum> DOCUMENTDATUM  (selectie_gerelateerd_aan_panden):= selectie/meta/DOCUMENTDATUM[nr_OrgEntity];
+						attribute<string>         DOCUMENTNUMMER (selectie_gerelateerd_aan_panden):= selectie/meta/DOCUMENTNUMMER[nr_OrgEntity];
+
+						attribute<bool>           IS_ONDERZOEK   (selectie_gerelateerd_aan_panden):= selectie/meta/IS_ONDERZOEK[nr_OrgEntity];
+						attribute<bool>           IS_CORRECTIE   (selectie_gerelateerd_aan_panden):= selectie/meta/IS_CORRECTIE[nr_OrgEntity];
+						attribute<bool>           IS_INACTIEF    (selectie_gerelateerd_aan_panden):= selectie/meta/IS_INACTIEF[nr_OrgEntity];
+						attribute<bool>           IS_OFFICIEEL   (selectie_gerelateerd_aan_panden):= selectie/meta/IS_OFFICIEEL[nr_OrgEntity]; 
+					}
+				}
+
+				unit<uint32> unique_base := unique(selectie_gerelateerd_aan_panden/identificatie);
+				unit<uint32> unique      := TiledUnit(1000000[unique_base])
+				,	StorageName = "= SnapshotDir + '/vbo.fss'"
+				,	DialogType  = "Map"
+				,	DialogData  = "geometry_mm"
+				,	FreeData    = "False"
+				{
+					attribute<uint32> count := pcount(selectie_gerelateerd_aan_panden/unique_rel), DisableStorage = "True";
+
+					attribute<geometries/rdc_mm>   geometry_mm         := rjoin(identificatie, selectie_gerelateerd_aan_panden/identificatie, selectie_gerelateerd_aan_panden/geometry_mm);
+					attribute<string>              identificatie       := unique_base/values[mapping(unique, unique_base)];
+					attribute<int32>               oppervlakte         := last(selectie_gerelateerd_aan_panden/oppervlakte, selectie_gerelateerd_aan_panden/unique_rel);
+					attribute<string>              nummeraanduiding_id := last(selectie_gerelateerd_aan_panden/nummeraanduiding_id, selectie_gerelateerd_aan_panden/unique_rel);
+
+					attribute<string>              postcode            := rjoin(vbo/results/unique/nummeraanduiding_id, nummeraanduiding/results/unique/identificatie, nummeraanduiding/results/unique/postcode);
+					attribute<int32>               huisnummer          := rjoin(vbo/results/unique/nummeraanduiding_id, nummeraanduiding/results/unique/identificatie, nummeraanduiding/results/unique/huisnummer);
+					attribute<string>              huisletter          := rjoin(vbo/results/unique/nummeraanduiding_id, nummeraanduiding/results/unique/identificatie, nummeraanduiding/results/unique/huisletter);
+					attribute<string>              toevoeging          := rjoin(vbo/results/unique/nummeraanduiding_id, nummeraanduiding/results/unique/identificatie, nummeraanduiding/results/unique/toevoeging);
+
+					attribute<pand/results/unique> pand_rel            := point_in_polygon(geometry_mm, pand/results/unique/geometry_mm);
+					attribute<string>              pand_id_geom        := pand/results/unique/identificatie[pand_rel];
+
+					container gebruiksdoelen:=
+						for_each_nedv(
+							typeringen/gebruiksdoel_vbo/Label_ti
+							, 'last(selectie_gerelateerd_aan_panden/gebruiksdoelen/' + typeringen/gebruiksdoel_vbo/Label_ti + ', selectie_gerelateerd_aan_panden/unique_rel)'
+							, unique
+							, bool
+						);
+
+					container meta := meta_template(selectie_gerelateerd_aan_panden, unique);
+
+					unit<uint32> gerelateerdPand := results/gerelateerdPandInSnapshot;
+
+					/*unit<uint32> nevenadres:= Subset(isDefined(rlookup(src/nevenadres/parent_rel,selectie_gerelateerd_aan_panden/nr_OrgEntity))) // is een 1->0..n relatie
+					{
+						attribute<string> nummeraanduiding_id := src/nevenadres/nummeraanduiding_id[nr_OrgEntity];
+						attribute<string> vbo_id              := src/nevenadres/vbo_id[nr_OrgEntity];
+						attribute<uint32> nr_OrgEntity        : DisableStorage = "True";
+					}*/
+				}
+			}
+		}
+
+		container nummeraanduiding
+		{
+			unit<uint32> src
+			:	StorageName     = "= FSSDir + '/nummeraanduiding.fss'"
+			,	StorageReadOnly = "True"
+			{
+				attribute<string> identificatie;
+				attribute<int32>  huisnummer;
+				attribute<string> huisletter;
+				attribute<string> toevoeging;
+				attribute<string> postcode;
+				attribute<string> typeAdresseerbaarObject;
+				attribute<string> openbareruimte_id;
+
+				container meta := meta_src_template(src);
+				//attribute<bool> OpenbareruimteInSelectie := isDefined(rlookup(openbareruimte_id, openbareruimte/results/selectie/identificatie));
+
+				unit<uint32> gerelateerdeWoonplaats // is een 1->0..n relatie
+				{
+					attribute<string> woonplaats_id;
+					attribute<src>    parent_rel;
+					attribute<string> nummeraanduiding_id := src/identificatie[parent_rel], DisableStorage = "True";
+				}
+			}
+			parameter<String> bouwjaar_filter := '';
+
+			container results :=
+				='datum_selectie(src, const(prik_datum,src), bouwjaar_filter, '
+				+ (geometries/selectie_extent/isActive 
+						?  'True,  src/OpenbareruimteInSelectie'
+						:  'False'
+					)
+				+ ')'
+			{
+				unit<uint32> selectie
+				{
+					attribute<string> identificatie           := domain/identificatie[selectie/nr_OrgEntity];
+					attribute<int32>  huisnummer              := domain/huisnummer[selectie/nr_OrgEntity];
+					attribute<string> huisletter              := domain/huisletter[selectie/nr_OrgEntity];
+					attribute<string> toevoeging              := domain/toevoeging[selectie/nr_OrgEntity];
+					attribute<string> postcode                := domain/postcode[selectie/nr_OrgEntity];
+					attribute<string> typeAdresseerbaarObject := domain/typeAdresseerbaarObject[selectie/nr_OrgEntity];
+					attribute<string> openbareruimte_id       := domain/openbareruimte_id[selectie/nr_OrgEntity];
+
+					attribute<unique> unique_rel              := rlookup(identificatie,unique/identificatie);
+				}
+
+				unit<uint32> unique_base := unique(selectie/identificatie);
+				unit<uint32> unique      := TiledUnit(1000000[unique_base])
+				//,	StorageName = "= SnapshotDir + '/nummeraanduiding.fss'"
+				,	FreeData    = "False"
+				{
+					attribute<uint32> count := pcount(selectie/unique_rel), DisableStorage = "True";
+
+					attribute<string> identificatie           := unique_base/values[mapping(unique, unique_base)];
+					attribute<int32>  huisnummer              := last(selectie/huisnummer, selectie/unique_rel);
+					attribute<string> huisletter              := last(selectie/huisletter, selectie/unique_rel);
+					attribute<string> toevoeging              := last(selectie/toevoeging, selectie/unique_rel);
+					attribute<string> postcode                := last(selectie/postcode  , selectie/unique_rel);
+					attribute<string> typeAdresseerbaarObject := last(selectie/typeAdresseerbaarObject  , selectie/unique_rel);
+					attribute<string> openbareruimte_id       := last(selectie/openbareruimte_id  , selectie/unique_rel);
+
+					container meta := meta_template(selectie, unique);
+
+					unit<uint32> gerelateerdeWoonplaats := Subset(isDefined(rlookup(src/gerelateerdeWoonplaats/parent_rel,selectie/nr_OrgEntity))) // is een 1->0..n relatie
+					{
+						attribute<string> woonplaats_id       := src/gerelateerdeWoonplaats/woonplaats_id[nr_OrgEntity];
+						attribute<string> nummeraanduiding_id := src/gerelateerdeWoonplaats/nummeraanduiding_id[nr_OrgEntity];
+						attribute<uint32> nr_OrgEntity        : DisableStorage = "True";
+					}
+				}
+			}
+		}
+
+		container openbareruimte
+		{
+			unit<uint32> src
+			:	StorageName     = "= FSSDir + '/openbareruimte.fss'"
+			,	StorageReadOnly = "True"
+			{
+				attribute<string> identificatie;
+				attribute<string> naam;
+				attribute<string> type;
+				attribute<string> woonplaats_id;
+
+				container meta := meta_src_template(src);
+				attribute<bool> WoonplaatsInSelectieExtent := isDefined(rlookup(woonplaats_id, woonplaats/results/selectie/identificatie));
+			}
+
+			container results:=
+				='datum_selectie(src, prik_datum, False, '
+				+ (geometries/selectie_extent/isActive 
+						?  'True,  src/WoonplaatsInSelectieExtent'
+						:  'False'
+					)
+				+ ')'
+			{
+				unit<uint32> selectie
+				{
+					attribute<string> identificatie := domain/identificatie[nr_OrgEntity];
+					attribute<string> naam          := domain/naam[nr_OrgEntity];
+					attribute<string> type          := domain/type[nr_OrgEntity];
+					attribute<string> woonplaats_id := domain/woonplaats_id[nr_OrgEntity];
+
+					attribute<unique> unique_rel    := rlookup(identificatie,unique/values);
+				}
+	
+				unit<uint32> unique:= unique(selectie/identificatie), StorageName= "= SnapshotDir + '/openbareruimte.fss'"
+				{
+					attribute<uint32> count  := pcount(selectie/unique_rel), DisableStorage = "True";
+					attribute<string> values : DisableStorage = "True";
+
+					attribute<string> identificatie := values;
+					attribute<string> naam          := last(selectie/naam, selectie/unique_rel);
+					attribute<string> type          := last(selectie/type, selectie/unique_rel);
+					attribute<string> woonplaats_id := last(selectie/naam, selectie/unique_rel);
+
+					container meta := meta_template(selectie, unique);
+				}
+			}
+		}
+		container woonplaats
+		{
+			unit<uint32> src
+			:	StorageName     = "= FSSDir + '/woonplaats.fss'"
+			,	StorageReadOnly = "True"
+			{
+				attribute<geometries/rdc_mm> geometry_mm (polygon);
+				attribute<string>            identificatie;
+				attribute<string>            woonplaatsNaam;
+
+				container meta := meta_src_template(src);
+				container inSelectieExtent := BepaalInSelectieExtent(src, geometry_mm);
+			}
+
+			container results:=
+				='datum_selectie(src, prik_datum, False,'
+				+ (geometries/selectie_extent/isActive 
+						?  'True,  src/inSelectieExtent/result'
+						:  'False'
+					)
+				+ ')'
+			{
+				unit<uint32> selectie
+				{
+					attribute<geometries/rdc_mm> geometry_mm (polygon) := domain/geometry_mm[selectie/nr_OrgEntity];
+					attribute<string>            identificatie         := domain/identificatie[selectie/nr_OrgEntity];
+					attribute<string>            woonplaatsNaam        := domain/woonplaatsNaam[selectie/nr_OrgEntity];
+
+					attribute<unique>            unique_rel            := rlookup(identificatie,unique/values);
+				}
+
+				unit<uint32> unique:= unique(selectie/identificatie)//, StorageName= "= SnapshotDir + '/woonplaats.fss'"
+				{
+					attribute<uint32> count  := pcount(selectie/unique_rel), DisableStorage = "True";
+					attribute<string> values : DisableStorage = "True";
+
+					attribute<geometries/rdc_mm> geometry_mm (polygon) := rjoin(values, selectie/identificatie, selectie/geometry_mm);
+					attribute<string>            identificatie         := values;
+					attribute<string>            woonplaatsNaam        := last(selectie/woonplaatsNaam, selectie/unique_rel);
+
+					container meta := meta_template(selectie, unique);
+				}
+			}
+		}
+		#include<afleidingen.dms>
+		#include<overzichten.dms>
+	}
+
+	template meta_src_template // Voor het inlezen van de generieke BAG attributen
+	{
+		// begin case parameters
+		unit<uint32> domain;
+		// end case parameters
+
+		attribute<string> Status         (domain);
+		attribute<int32 > BEGINDATUM     (domain);
+		attribute<int32>  EINDDATUM      (domain);
+
+		attribute<int32>  DOCUMENTDATUM  (domain);
+		attribute<string> DOCUMENTNUMMER (domain);
+
+		attribute<bool>   IS_ONDERZOEK   (domain);
+		attribute<bool>   IS_CORRECTIE   (domain);
+		attribute<bool>   IS_INACTIEF    (domain);
+		attribute<bool>   IS_OFFICIEEL   (domain);
+	}
+
+	template meta_template // Voor het aggregeren van de generieke BAG attributen
+	{
+		// begin case parameters
+		unit<uint32> src_domain;
+		unit<uint32> target_domain;
+		// end case parameters
+
+		attribute<string>         Status         (target_domain):= AsItemList(src_domain/meta/Status         , src_domain/unique_rel);
+		attribute<eenheden/datum> BEGINDATUM     (target_domain):=       last(src_domain/meta/BEGINDATUM     , src_domain/unique_rel);
+		attribute<eenheden/datum> EINDDATUM      (target_domain):=       last(src_domain/meta/EINDDATUM      , src_domain/unique_rel);
+		attribute<eenheden/datum> DOCUMENTDATUM  (target_domain):=       last(src_domain/meta/DOCUMENTDATUM  , src_domain/unique_rel);
+		attribute<string>         DOCUMENTNUMMER (target_domain):= AsItemList(src_domain/meta/DOCUMENTNUMMER , src_domain/unique_rel);
+
+		attribute<bool>           IS_ONDERZOEK   (target_domain):= any(src_domain/meta/IS_ONDERZOEK, src_domain/unique_rel);
+		attribute<bool>           IS_CORRECTIE   (target_domain):= any(src_domain/meta/IS_CORRECTIE, src_domain/unique_rel);
+		attribute<bool>           IS_INACTIEF    (target_domain):= any(src_domain/meta/IS_INACTIEF , src_domain/unique_rel);
+		attribute<bool>           IS_OFFICIEEL   (target_domain):= any(src_domain/meta/IS_OFFICIEEL, src_domain/unique_rel);
+	}
+
+	template datum_selectie
+	{
+		// begin case parameters
+		unit<uint32>              domain;
+		attribute<eenheden/datum> prik_datum (domain);
+		parameter<string>         bouwjaar_filter;
+		parameter<bool>           extent_filter_actief;
+		attribute<bool>           extent_filter (domain) := const(true, domain);
+		// einde case parameters
+
+		attribute<bool> WasGestart   (domain) := domain/meta/BEGINDATUM <= prik_datum;
+		attribute<bool> WasBeeindigd (domain) := domain/meta/EINDDATUM  <= prik_datum && domain/meta/EINDDATUM > 0i;
+
+		parameter<eenheden/datum> bouwjaarafkapgrens_datum := bouwjaarafkapgrens[eenheden/datum] * 10000i;
+		
+		
+		parameter<string> selectie_expr
+			:= 'WasGestart && not(WasBeeindigd) ' +     // laatste inzicht
+			   '&& not(domain/Meta/IS_INACTIEF) ' +     // niet inactief
+			    + bouwjaar_filter
+				+ (extent_filter_actief 
+					? '&& extent_filter' 
+					: '') ;
+
+
+
+		unit<uint32> selectie:= = 'Subset(' + selectie_expr + ')'
+		,	DialogType = "Map"
+		,	DialogData = "geometry_mm"
+		{
+			container meta
+			{
+				attribute<string>         STATUS         (selectie):= domain/meta/STATUS[nr_OrgEntity];
+				attribute<eenheden/datum> BEGINDATUM     (selectie):= domain/meta/BEGINDATUM[nr_OrgEntity];
+				attribute<eenheden/datum> EINDDATUM      (selectie):= domain/meta/EINDDATUM[nr_OrgEntity];
+				attribute<eenheden/datum> DOCUMENTDATUM  (selectie):= domain/meta/DOCUMENTDATUM[nr_OrgEntity];
+				attribute<string>         DOCUMENTNUMMER (selectie):= domain/meta/DOCUMENTNUMMER[nr_OrgEntity];
+
+				attribute<bool>           IS_ONDERZOEK   (selectie):= domain/meta/IS_ONDERZOEK[nr_OrgEntity];
+				attribute<bool>           IS_CORRECTIE   (selectie):= domain/meta/IS_CORRECTIE[nr_OrgEntity];
+				attribute<bool>           IS_INACTIEF    (selectie):= domain/meta/IS_INACTIEF[nr_OrgEntity];
+				attribute<bool>           IS_OFFICIEEL   (selectie):= domain/meta/IS_OFFICIEEL[nr_OrgEntity];
+			}
+		}
+	}
+
+	template BepaalInSelectieExtent
+	{
+		// begin case parameters
+		unit<uint32> domain;
+		attribute<geometries/rdc_mm> geometry_mm (polygon, domain);
+		// end case parameters
+
+		attribute<geometries/rdc_mm> lowerbound (domain) := lower_bound(geometry_mm);
+		attribute<geometries/rdc_mm> upperbound (domain) := upper_bound(geometry_mm);
+
+		attribute<eenheden/mm> x_min (domain) := PointCol(lowerbound);
+		attribute<eenheden/mm> x_max (domain) := PointCol(upperbound);
+		attribute<eenheden/mm> y_min (domain) := PointRow(lowerbound);
+		attribute<eenheden/mm> y_max (domain) := PointRow(upperbound);
+		
+		attribute<bool> result (domain) :=
+			   x_max >= geometries/selectie_extent/x_min
+			&& x_min <= geometries/selectie_extent/x_max
+			&& y_max >= geometries/selectie_extent/y_min
+			&& y_min <= geometries/selectie_extent/y_max;
+	}
+}

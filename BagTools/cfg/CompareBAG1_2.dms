@@ -1,0 +1,928 @@
+container compare_bag10_bag_20
+{
+	parameter<string> HistorieDir1 := '%SourceDataDir%/BAG/20210319/fss';
+	parameter<string> HistorieDir2 := '%SourceDataDir%/BAG20/20210319/fss';
+	parameter<string> SnapshotDir1 := '%SourceDataDir%/BAG/snapshots.ext/20210301';
+	parameter<string> SnapshotDir2 := '%SourceDataDir%/BAG20/snapshots.ext/20210301';
+	
+	container ligplaats
+	{
+		unit<uint32> historie1
+		:	StorageName     = "= HistorieDir1 + '/ligplaats.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<string>            nummeraanduiding_id;
+			attribute<string>            geometry_list := AsList(string(pointCol(pointset/point)) + '_' + string(pointRow(pointset/point)) + '_' + string(pointset/ordinal), ';', pointset/sequencenr);
+
+			unit<uint32> pointset := Sequence2points(geometry_mm);
+			
+			container meta          := meta_src_template_bag1(historie1, typeringen/status/ligplaats);
+
+			unit<uint32> nevenadres // 1->0..n relatie
+			{
+				attribute<string> nummeraanduiding_id;
+				attribute<uint32> Parent_rel;
+			}
+			
+			unit<uint32> identificatie_unique := unique(identificatie)
+			{
+				attribute<uint32> aantal := pcount(rlookup(identificatie, values));
+			}
+		}
+		unit<uint32> historie2
+		:	StorageName     = "= HistorieDir2 + '/ligplaats.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<string>            nummeraanduiding_id;
+			attribute<string>            geometry_list := AsList(string(pointCol(pointset/point)) + '_' + string(pointRow(pointset/point)) + '_' + string(pointset/ordinal), ';', pointset/sequencenr);
+
+			unit<uint32> pointset := Sequence2points(geometry_mm);
+
+			container meta          := meta_src_template_bag2(historie2, typeringen/status/ligplaats);
+
+			unit<uint32> nevenadres // 1->0..n relatie
+			{
+				attribute<string> nummeraanduiding_id;
+				attribute<string> identificatie;
+			}
+			
+			unit<uint32> identificatie_unique := unique(identificatie)
+			{
+				attribute<uint32> aantal         := pcount(rlookup(identificatie, values));
+				attribute<uint32> aantal_bag1    := pcount(rlookup(historie1/identificatie, values));
+				attribute<bool>   aantal_gt_bag1 := aantal < aantal_bag1;
+			}
+			unit<uint32> identificatie_unique_meer_in_bag1 := subset(identificatie_unique/aantal_gt_bag1)
+			{
+				attribute<string> identificatie := identificatie_unique/values[nr_orgEntity];
+			}
+			
+			unit<uint32> mutaties_opvallend_in_bag1:= Subset(isDefined(rlookup(historie1/identificatie, identificatie_unique_meer_in_bag1/identificatie)))
+			{
+				attribute<string> identificatie := historie1/identificatie[nr_OrgEntity];
+				attribute<string> status        := historie1/meta/status[nr_OrgEntity];
+				attribute<bool>   IS_INACTIEF   := historie1/meta/IS_INACTIEF[nr_OrgEntity];
+				
+			}
+			
+			// vergelijkingen
+			attribute<string> nummeraanduiding_id_1    := rjoin(identificatie, historie1/identificatie, historie1/nummeraanduiding_id);
+			attribute<bool  > nummeraanduiding_id_test := nummeraanduiding_id == nummeraanduiding_id_1;
+
+
+
+			attribute<string> geometry_1    := rjoin(identificatie, historie1/identificatie, historie1/geometry_list);
+			attribute<bool  > geometry_test := geometry_list == geometry_1;
+
+			attribute<string> neven_adres_identificatie_1    (nevenadres) := historie1/identificatie[rjoin(nevenadres/nummeraanduiding_id, historie1/nevenadres/nummeraanduiding_id, historie1/nevenadres/parent_rel)];
+			attribute<bool  > neven_adres_identificatie_test (nevenadres) := nevenadres/identificatie == neven_adres_identificatie_1;
+		}
+
+		
+		unit<uint32> snapshot1
+		:	StorageName     = "= SnapshotDir1 + '/ligplaats.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_ligplaats := #.;
+
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<string>            nummeraanduiding_id;
+			attribute<string>            geometry_list := AsList(string(pointCol(pointset/point)) + '_' + string(pointRow(pointset/point)) + '_' + string(pointset/ordinal), ';', pointset/sequencenr);
+
+			unit<uint32> pointset := Sequence2points(geometry_mm);
+			
+			container meta          := meta_src_template_bag1(snapshot1, typeringen/status/ligplaats);
+
+			unit<uint32> nevenadres // 1->0..n relatie
+			{
+				attribute<string> nummeraanduiding_id;
+				attribute<string> ligplaats_id;
+			}
+			
+			unit<uint32> identificatie_unique := unique(identificatie)
+			{
+				attribute<uint32> aantal := pcount(rlookup(identificatie, values));
+			}
+		}
+		
+		unit<uint32> snapshot2
+		:	StorageName     = "= SnapshotDir2 + '/ligplaats.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<string>            nummeraanduiding_id;
+			attribute<string>            geometry_list := AsList(string(pointCol(pointset/point)) + '_' + string(pointRow(pointset/point)) + '_' + string(pointset/ordinal), ';', pointset/sequencenr);
+
+			unit<uint32> pointset := Sequence2points(geometry_mm);
+
+			container meta          := meta_src_template_bag2(snapshot2, typeringen/status/ligplaats);
+
+			unit<uint32> nevenadres // 1->0..n relatie
+			{
+				attribute<string> nummeraanduiding_id;
+				attribute<string> identificatie;
+			}
+			
+			unit<uint32> identificatie_unique := unique(identificatie)
+			{
+				attribute<uint32> aantal         := pcount(rlookup(identificatie, values));
+				attribute<uint32> aantal_bag1    := pcount(rlookup(historie1/identificatie, values));
+				attribute<bool>   aantal_gt_bag1 := aantal < aantal_bag1;
+			}
+			unit<uint32> identificatie_unique_meer_in_bag1 := subset(identificatie_unique/aantal_gt_bag1)
+			{
+				attribute<string> identificatie := identificatie_unique/values[nr_orgEntity];
+			}
+			
+			unit<uint32> mutaties_opvallend_in_bag1:= Subset(isDefined(rlookup(historie1/identificatie, identificatie_unique_meer_in_bag1/identificatie)))
+			{
+				attribute<string> identificatie := historie1/identificatie[nr_OrgEntity];
+				attribute<string> status        := historie1/meta/status[nr_OrgEntity];
+				attribute<bool>   IS_INACTIEF   := historie1/meta/IS_INACTIEF[nr_OrgEntity];
+				
+			}
+			
+			// vergelijkingen
+			attribute<string> nummeraanduiding_id_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/nummeraanduiding_id);
+			attribute<bool  > nummeraanduiding_id_test := nummeraanduiding_id == nummeraanduiding_id_1;
+
+			attribute<string> geometry_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/geometry_list);
+			attribute<bool  > geometry_test := geometry_list == geometry_1;
+
+			attribute<string> status_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/status);
+			attribute<bool  > status_test := meta/status == status_1;
+
+			attribute<int32>  begindatum_1        := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/begindatum);
+			attribute<bool  > begindatum_test     := meta/begindatum == begindatum_1;
+			attribute<int32>  einddatum_1         := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/einddatum);
+			attribute<bool  > einddatum_test      := meta/einddatum == einddatum_1;
+			attribute<int32>  documentdatum_1     := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentdatum);
+			attribute<bool  > documentdatum_test  := meta/documentdatum == documentdatum_1;
+			attribute<string> documentnummer_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentnummer);
+			attribute<bool  > documentnummer_test := meta/documentnummer == documentnummer_1;
+
+			attribute<string> neven_adres_identificatie_1    (nevenadres) := rjoin(nevenadres/nummeraanduiding_id, snapshot1/nevenadres/nummeraanduiding_id, snapshot1/nevenadres/ligplaats_id);
+			attribute<bool  > neven_adres_identificatie_test (nevenadres) := nevenadres/identificatie == neven_adres_identificatie_1;
+		}
+	}
+	
+	container standplaats
+	{
+		unit<uint32> historie1
+		:	StorageName     = "= HistorieDir1 + '/standplaats.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<string>            nummeraanduiding_id;
+			attribute<string>            geometry_list := AsList(string(pointCol(pointset/point)) + '_' + string(pointRow(pointset/point)) + '_' + string(pointset/ordinal), ';', pointset/sequencenr);
+
+			unit<uint32> pointset := Sequence2points(geometry_mm);
+			
+			container meta          := meta_src_template_bag1(historie1, typeringen/status/standplaats);
+
+			unit<uint32> nevenadres // 1->0..n relatie
+			{
+				attribute<string> nummeraanduiding_id;
+				attribute<uint32> Parent_rel;
+			}
+			
+			unit<uint32> identificatie_unique := unique(identificatie)
+			{
+				attribute<uint32> aantal := pcount(rlookup(identificatie, values));
+			}
+		}
+		unit<uint32> historie2
+		:	StorageName     = "= HistorieDir2 + '/standplaats.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<string>            nummeraanduiding_id;
+			attribute<string>            geometry_list := AsList(string(pointCol(pointset/point)) + '_' + string(pointRow(pointset/point)) + '_' + string(pointset/ordinal), ';', pointset/sequencenr);
+
+			unit<uint32> pointset := Sequence2points(geometry_mm);
+
+			container meta          := meta_src_template_bag2(historie2, typeringen/status/standplaats);
+
+			unit<uint32> nevenadres // 1->0..n relatie
+			{
+				attribute<string> nummeraanduiding_id;
+				attribute<string> identificatie;
+			}
+			
+			unit<uint32> identificatie_unique := unique(identificatie)
+			{
+				attribute<uint32> aantal         := pcount(rlookup(identificatie, values));
+				attribute<uint32> aantal_bag1    := pcount(rlookup(historie1/identificatie, values));
+				attribute<bool>   aantal_gt_bag1 := aantal < aantal_bag1;
+			}
+			unit<uint32> identificatie_unique_meer_in_bag1 := subset(identificatie_unique/aantal_gt_bag1)
+			{
+				attribute<string> identificatie := identificatie_unique/values[nr_orgEntity];
+			}
+			
+			unit<uint32> mutaties_opvallend_in_bag1:= Subset(isDefined(rlookup(historie1/identificatie, identificatie_unique_meer_in_bag1/identificatie)))
+			{
+				attribute<string> identificatie := historie1/identificatie[nr_OrgEntity];
+				attribute<string> status        := historie1/meta/status[nr_OrgEntity];
+				attribute<bool>   IS_INACTIEF   := historie1/meta/IS_INACTIEF[nr_OrgEntity];
+				
+			}
+			
+			// vergelijkingen
+			attribute<string> nummeraanduiding_id_1    := rjoin(identificatie, historie1/identificatie, historie1/nummeraanduiding_id);
+			attribute<bool  > nummeraanduiding_id_test := nummeraanduiding_id == nummeraanduiding_id_1;
+
+
+
+			attribute<string> geometry_1    := rjoin(identificatie, historie1/identificatie, historie1/geometry_list);
+			attribute<bool  > geometry_test := geometry_list == geometry_1;
+
+			attribute<string> neven_adres_identificatie_1    (nevenadres) := historie1/identificatie[rjoin(nevenadres/nummeraanduiding_id, historie1/nevenadres/nummeraanduiding_id, historie1/nevenadres/parent_rel)];
+			attribute<bool  > neven_adres_identificatie_test (nevenadres) := nevenadres/identificatie == neven_adres_identificatie_1;
+		}
+
+		
+		unit<uint32> snapshot1
+		:	StorageName     = "= SnapshotDir1 + '/standplaats.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_standplaats := #.;
+
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<string>            nummeraanduiding_id;
+			attribute<string>            geometry_list := AsList(string(pointCol(pointset/point)) + '_' + string(pointRow(pointset/point)) + '_' + string(pointset/ordinal), ';', pointset/sequencenr);
+
+			unit<uint32> pointset := Sequence2points(geometry_mm);
+			
+			container meta          := meta_src_template_bag1(snapshot1, typeringen/status/standplaats);
+
+			unit<uint32> nevenadres // 1->0..n relatie
+			{
+				attribute<string> nummeraanduiding_id;
+				attribute<string> standplaats_id;
+			}
+			
+			unit<uint32> identificatie_unique := unique(identificatie)
+			{
+				attribute<uint32> aantal := pcount(rlookup(identificatie, values));
+			}
+		}
+		
+		unit<uint32> snapshot2
+		:	StorageName     = "= SnapshotDir2 + '/standplaats.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<string>            nummeraanduiding_id;
+			attribute<string>            geometry_list := AsList(string(pointCol(pointset/point)) + '_' + string(pointRow(pointset/point)) + '_' + string(pointset/ordinal), ';', pointset/sequencenr);
+
+			unit<uint32> pointset := Sequence2points(geometry_mm);
+
+			container meta          := meta_src_template_bag2(snapshot2, typeringen/status/standplaats);
+
+			unit<uint32> nevenadres // 1->0..n relatie
+			{
+				attribute<string> nummeraanduiding_id;
+				attribute<string> identificatie;
+			}
+			
+			unit<uint32> identificatie_unique := unique(identificatie)
+			{
+				attribute<uint32> aantal         := pcount(rlookup(identificatie, values));
+				attribute<uint32> aantal_bag1    := pcount(rlookup(historie1/identificatie, values));
+				attribute<bool>   aantal_gt_bag1 := aantal < aantal_bag1;
+			}
+			unit<uint32> identificatie_unique_meer_in_bag1 := subset(identificatie_unique/aantal_gt_bag1)
+			{
+				attribute<string> identificatie := identificatie_unique/values[nr_orgEntity];
+			}
+			
+			unit<uint32> mutaties_opvallend_in_bag1:= Subset(isDefined(rlookup(historie1/identificatie, identificatie_unique_meer_in_bag1/identificatie)))
+			{
+				attribute<string> identificatie := historie1/identificatie[nr_OrgEntity];
+				attribute<string> status        := historie1/meta/status[nr_OrgEntity];
+				attribute<bool>   IS_INACTIEF   := historie1/meta/IS_INACTIEF[nr_OrgEntity];
+				
+			}
+			
+			// vergelijkingen
+			attribute<string> nummeraanduiding_id_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/nummeraanduiding_id);
+			attribute<bool  > nummeraanduiding_id_test := nummeraanduiding_id == nummeraanduiding_id_1;
+
+			attribute<string> geometry_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/geometry_list);
+			attribute<bool  > geometry_test := geometry_list == geometry_1;
+
+			attribute<string> status_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/status);
+			attribute<bool  > status_test := meta/status == status_1;
+
+			attribute<int32>  begindatum_1        := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/begindatum);
+			attribute<bool  > begindatum_test     := meta/begindatum == begindatum_1;
+			attribute<int32>  einddatum_1         := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/einddatum);
+			attribute<bool  > einddatum_test      := meta/einddatum == einddatum_1;
+			attribute<int32>  documentdatum_1     := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentdatum);
+			attribute<bool  > documentdatum_test  := meta/documentdatum == documentdatum_1;
+			attribute<string> documentnummer_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentnummer);
+			attribute<bool  > documentnummer_test := meta/documentnummer == documentnummer_1;
+
+			attribute<string> neven_adres_identificatie_1    (nevenadres) := rjoin(nevenadres/nummeraanduiding_id, snapshot1/nevenadres/nummeraanduiding_id, snapshot1/nevenadres/standplaats_id);
+			attribute<bool  > neven_adres_identificatie_test (nevenadres) := nevenadres/identificatie == neven_adres_identificatie_1;
+		}
+	}
+	container pand
+	{
+		unit<uint8> type_woonpand: nrofrows = 6
+		{
+			attribute<string> label : ['geen woonpand','vrijstaand','twee onder 1 kap','hoekwoning','tussenwoning','meergezinspand'], DialogType = "LabelText";
+			attribute<string> name  := replace(label, ' ', '_');
+			container V := for_each_nedv(name, String(ID(.))+'[..]', void, .);
+		}
+		unit<uint32> snapshot1
+		:	StorageName     = "= SnapshotDir1 + '/pand.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<int16>             bouwjaar ;
+			attribute<type_woonpand>     woonpand_type;
+			attribute<string>            geometry_list := AsList(string(pointCol(pointset/point)) + '_' + string(pointRow(pointset/point)) + '_' + string(pointset/ordinal), ';', pointset/sequencenr);
+
+			unit<uint32> pointset := Sequence2points(geometry_mm);
+			
+			container meta          := meta_src_template_bag1(snapshot1, typeringen/status/pand);
+		}
+		
+		unit<uint32> snapshot2
+		:	StorageName     = "= SnapshotDir2 + '/pand.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<int16>             bouwjaar ;
+			attribute<type_woonpand>     woonpand_type;
+			attribute<string>            geometry_list := AsList(string(pointCol(pointset/point)) + '_' + string(pointRow(pointset/point)) + '_' + string(pointset/ordinal), ';', pointset/sequencenr);
+
+			unit<uint32> pointset := Sequence2points(geometry_mm);
+
+			container meta          := meta_src_template_bag2(snapshot2, typeringen/status/pand);
+
+			// vergelijkingen
+			attribute<int16>  bouwjaar_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/bouwjaar);
+			attribute<bool  > bouwjaar_test := bouwjaar == bouwjaar_1;
+
+			attribute<type_woonpand> woonpand_type_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/woonpand_type);
+			attribute<bool>          woonpand_type_test := eq_or_both_null(woonpand_type, woonpand_type_1);
+
+			attribute<string> geometry_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/geometry_list);
+			attribute<bool  > geometry_test := geometry_list == geometry_1;
+
+			attribute<string> status_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/status);
+			attribute<bool  > status_test := meta/status == status_1;
+
+			attribute<int32>  begindatum_1        := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/begindatum);
+			attribute<bool  > begindatum_test     := meta/begindatum == begindatum_1;
+			attribute<int32>  einddatum_1         := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/einddatum);
+			attribute<bool  > einddatum_test      := meta/einddatum == einddatum_1;
+			attribute<int32>  documentdatum_1     := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentdatum);
+			attribute<bool  > documentdatum_test  := meta/documentdatum == documentdatum_1;
+			attribute<string> documentnummer_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentnummer);
+			attribute<bool  > documentnummer_test := meta/documentnummer == documentnummer_1;
+
+		}
+	}
+	container vbo
+	{
+		unit<uint32> snapshot1
+		:	StorageName     = "= SnapshotDir1 + '/vbo.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_vbo := #.;
+
+			attribute<geometries/rdc_mm> geometry_mm ;
+			attribute<string>            identificatie;
+			attribute<string>            nummeraanduiding_id;
+			attribute<string>            pand_id_geom;
+			attribute<int32>             oppervlakte;
+
+			container meta          := meta_src_template_bag1(snapshot1, typeringen/status/vbo);
+
+			unit<uint32> nevenadres // 1->0..n relatie
+			{
+				attribute<string> nummeraanduiding_id;
+				attribute<string> vbo_id;
+			}
+			unit<uint32> gerelateerdPand // 1->0..n relatie
+			{
+				attribute<string> pand_id;
+				attribute<string> vbo_id;
+			}
+			unit<uint32> identificatie_unique := unique(identificatie)
+			{
+				attribute<uint32> aantal := pcount(rlookup(identificatie, values));
+			}
+			
+			container gebruiksdoelen
+			{
+				attribute<bool> bijeenkomst (..);
+				attribute<bool> cel (..);
+				attribute<bool> gezondheidszorg (..);
+				attribute<bool> industrie (..);
+				attribute<bool> kantoor (..);
+				attribute<bool> logies (..);
+				attribute<bool> onderwijs (..);
+				attribute<bool> overige_gebruiks (..);
+				attribute<bool> sport (..);
+				attribute<bool> winkel (..);
+				attribute<bool> woon  (..);
+			}
+		}
+		
+		unit<uint32> snapshot2
+		:	StorageName     = "= SnapshotDir2 + '/vbo.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+			attribute<geometries/rdc_mm> geometry_mm ;
+			attribute<string>            identificatie;
+			attribute<string>            nummeraanduiding_id;
+			attribute<int32>             oppervlakte;
+			attribute<string>            pand_id;
+			attribute<string>            pand_id_geom;
+
+			container meta          := meta_src_template_bag2(snapshot2, typeringen/status/vbo);
+
+			unit<uint32> nevenadres // 1->0..n relatie
+			{
+				attribute<string> nummeraanduiding_id;
+				attribute<string> identificatie;
+			}
+			
+			unit<uint32> identificatie_unique := unique(identificatie)
+			{
+				attribute<uint32> aantal         := pcount(rlookup(identificatie, values));
+				attribute<uint32> aantal_bag1    := pcount(rlookup(historie1/identificatie, values));
+				attribute<bool>   aantal_gt_bag1 := aantal < aantal_bag1;
+			}
+			
+			// vergelijkingen
+			attribute<string> nummeraanduiding_id_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/nummeraanduiding_id);
+			attribute<bool  > nummeraanduiding_id_test := nummeraanduiding_id == nummeraanduiding_id_1;
+
+			attribute<string> pand_id_1    := rjoin(identificatie, snapshot1/gerelateerdPand/vbo_id, snapshot1/gerelateerdPand/pand_id);
+			attribute<bool  > pand_id_test := pand_id == pand_id_1;
+
+			attribute<string> pand_id_geom_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/pand_id_geom);
+			attribute<bool  > pand_id_geom_test := pand_id_geom == pand_id_geom_1;
+
+			attribute<geometries/rdc_mm> geometry_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/geometry_mm);
+			attribute<bool>              geometry_test := geometry_mm == geometry_1;
+
+			attribute<int32>  oppervlakte_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/oppervlakte);
+			attribute<bool  > oppervlakte_test := oppervlakte == oppervlakte_1;
+
+			attribute<string> status_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/status);
+			attribute<bool  > status_test := meta/status == status_1;
+
+			attribute<int32>  begindatum_1        := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/begindatum);
+			attribute<bool  > begindatum_test     := meta/begindatum == begindatum_1;
+			attribute<int32>  einddatum_1         := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/einddatum);
+			attribute<bool  > einddatum_test      := meta/einddatum == einddatum_1;
+			attribute<int32>  documentdatum_1     := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentdatum);
+			attribute<bool  > documentdatum_test  := meta/documentdatum == documentdatum_1;
+			attribute<string> documentnummer_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentnummer);
+			attribute<bool  > documentnummer_test := meta/documentnummer == documentnummer_1;
+
+			attribute<string> neven_adres_identificatie_1    (nevenadres) := rjoin(nevenadres/nummeraanduiding_id, snapshot1/nevenadres/nummeraanduiding_id, snapshot1/nevenadres/vbo_id);
+			attribute<bool  > neven_adres_identificatie_test (nevenadres) := nevenadres/identificatie == neven_adres_identificatie_1;
+
+			container gebruiksdoelen
+			{
+				attribute<bool> bijeenkomst (..);
+				attribute<bool> cel (..);
+				attribute<bool> gezondheidszorg (..);
+				attribute<bool> industrie (..);
+				attribute<bool> kantoor (..);
+				attribute<bool> logies (..);
+				attribute<bool> onderwijs (..);
+				attribute<bool> overige_gebruiks (..);
+				attribute<bool> sport (..);
+				attribute<bool> winkel (..);
+				attribute<bool> woon  (..);
+			}
+			container gebruiksdoelen_test
+			{
+				attribute<bool> bijeenkomst (..) := rjoin(identificatie, snapshot1/identificatie, snapshot1/gebruiksdoelen/bijeenkomst)== gebruiksdoelen/bijeenkomst;
+				attribute<bool> cel (..):= rjoin(identificatie, snapshot1/identificatie, snapshot1/gebruiksdoelen/cel)== gebruiksdoelen/cel;
+				attribute<bool> gezondheidszorg (..):= rjoin(identificatie, snapshot1/identificatie, snapshot1/gebruiksdoelen/gezondheidszorg)== gebruiksdoelen/gezondheidszorg;
+				attribute<bool> industrie (..):= rjoin(identificatie, snapshot1/identificatie, snapshot1/gebruiksdoelen/industrie)== gebruiksdoelen/industrie;
+				attribute<bool> kantoor (..):= rjoin(identificatie, snapshot1/identificatie, snapshot1/gebruiksdoelen/kantoor)== gebruiksdoelen/kantoor;
+				attribute<bool> logies (..):= rjoin(identificatie, snapshot1/identificatie, snapshot1/gebruiksdoelen/logies)== gebruiksdoelen/logies;
+				attribute<bool> onderwijs (..):= rjoin(identificatie, snapshot1/identificatie, snapshot1/gebruiksdoelen/onderwijs)== gebruiksdoelen/onderwijs;
+				attribute<bool> overige_gebruiks (..):= rjoin(identificatie, snapshot1/identificatie, snapshot1/gebruiksdoelen/overige_gebruiks)== gebruiksdoelen/overige_gebruiks;
+				attribute<bool> sport (..):= rjoin(identificatie, snapshot1/identificatie, snapshot1/gebruiksdoelen/sport)== gebruiksdoelen/sport;
+				attribute<bool> winkel (..):= rjoin(identificatie, snapshot1/identificatie, snapshot1/gebruiksdoelen/winkel)== gebruiksdoelen/winkel;
+				attribute<bool> woon  (..):= rjoin(identificatie, snapshot1/identificatie, snapshot1/gebruiksdoelen/woon)== gebruiksdoelen/woon;
+			}
+		}
+	}
+	container nummeraanduiding
+	{
+		unit<uint32> snapshot1
+		:	StorageName     = "= SnapshotDir1 + '/nummeraanduiding.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+
+			attribute<string> identificatie;
+			attribute<int32>  huisnummer;
+			attribute<string> huisletter;
+			attribute<string> toevoeging;
+			attribute<string> postcode;
+			attribute<string> typeAdresseerbaarObject;
+			attribute<string> openbareruimte_id;
+			attribute<string> gerelateerdeWoonplaats;
+
+			container meta    := meta_src_template_bag1(snapshot1, typeringen/status/nummeraanduiding);
+		}
+		
+		unit<uint32> snapshot2
+		:	StorageName     = "= SnapshotDir2 + '/nummeraanduiding.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+
+			attribute<string> identificatie;
+			attribute<int32>  huisnummer;
+			attribute<string> huisletter;
+			attribute<string> toevoeging;
+			attribute<string> postcode;
+			attribute<string> typeAdresseerbaarObject;
+			attribute<string> openbareruimte_id;
+			attribute<string> woonplaats_id;
+
+			container meta    := meta_src_template_bag1(snapshot2, typeringen/status/nummeraanduiding);
+
+			// vergelijkingen
+			attribute<int32>  huisnummer_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/huisnummer);
+			attribute<bool  > huisnummer_test := huisnummer == huisnummer_1;
+
+			attribute<string> huisletter_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/huisletter);
+			attribute<bool  > huisletter_test := huisletter == huisletter_1;
+
+			attribute<string> toevoeging_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/toevoeging);
+			attribute<bool  > toevoeging_test := toevoeging == toevoeging_1;
+
+			attribute<string> postcode_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/postcode);
+			attribute<bool  > postcode_test := postcode == postcode_1;
+			
+			attribute<string> typeAdresseerbaarObject_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/typeAdresseerbaarObject);
+			attribute<bool  > typeAdresseerbaarObject_test := typeAdresseerbaarObject == typeAdresseerbaarObject_1;
+			
+			attribute<string> openbareruimte_id_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/openbareruimte_id);
+			attribute<bool  > openbareruimte_id_test := openbareruimte_id == openbareruimte_id_1;
+			
+			attribute<string> woonplaats_id_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/gerelateerdeWoonplaats);
+			attribute<bool  > woonplaats_id_test := woonplaats_id == woonplaats_id_1;
+
+			attribute<string> status_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/status);
+			attribute<bool  > status_test := meta/status == status_1;
+
+			attribute<int32>  begindatum_1        := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/begindatum);
+			attribute<bool  > begindatum_test     := meta/begindatum == begindatum_1;
+			attribute<int32>  einddatum_1         := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/einddatum);
+			attribute<bool  > einddatum_test      := meta/einddatum == einddatum_1;
+			attribute<int32>  documentdatum_1     := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentdatum);
+			attribute<bool  > documentdatum_test  := meta/documentdatum == documentdatum_1;
+			attribute<string> documentnummer_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentnummer);
+			attribute<bool  > documentnummer_test := meta/documentnummer == documentnummer_1;
+		}
+	}
+	container openbareruimte
+	{
+		unit<uint32> snapshot1
+		:	StorageName     = "= SnapshotDir1 + '/openbareruimte.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+
+			attribute<string> identificatie;
+			attribute<int32>  naam;
+			attribute<string> type;
+			attribute<string> woonplaats_id;
+
+			container meta    := meta_src_template_bag1(snapshot1, typeringen/status/openbareruimte);
+		}
+		
+		unit<uint32> snapshot2
+		:	StorageName     = "= SnapshotDir2 + '/openbareruimte.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+
+			attribute<string> identificatie;
+			attribute<int32>  naam;
+			attribute<string> type;
+			attribute<string> woonplaats_id;
+
+			container meta    := meta_src_template_bag1(snapshot2, typeringen/status/openbareruimte);
+
+			// vergelijkingen
+			attribute<int32>  naam_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/naam);
+			attribute<bool  > naam_test := naam == naam_1;
+
+			attribute<string> type_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/type);
+			attribute<bool  > type_test := type == type_1;
+
+			attribute<string> woonplaats_id_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/woonplaats_id);
+			attribute<bool  > woonplaats_id_test := woonplaats_id == woonplaats_id_1;
+
+			attribute<string> status_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/status);
+			attribute<bool  > status_test := meta/status == status_1;
+
+			attribute<int32>  begindatum_1        := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/begindatum);
+			attribute<bool  > begindatum_test     := meta/begindatum == begindatum_1;
+			attribute<int32>  einddatum_1         := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/einddatum);
+			attribute<bool  > einddatum_test      := meta/einddatum == einddatum_1;
+			attribute<int32>  documentdatum_1     := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentdatum);
+			attribute<bool  > documentdatum_test  := meta/documentdatum == documentdatum_1;
+			attribute<string> documentnummer_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentnummer);
+			attribute<bool  > documentnummer_test := meta/documentnummer == documentnummer_1;
+		}
+	}
+	container woonplaats
+	{
+		unit<uint32> snapshot1
+		:	StorageName     = "= SnapshotDir1 + '/woonplaats.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<string>            woonplaatsNaam ;
+			attribute<string>            geometry_list := AsList(string(pointCol(pointset/point)) + '_' + string(pointRow(pointset/point)) + '_' + string(pointset/ordinal), ';', pointset/sequencenr);
+
+			unit<uint32> pointset := Sequence2points(geometry_mm);
+			
+			container meta          := meta_src_template_bag1(snapshot1, typeringen/status/woonplaats);
+		}
+		
+		unit<uint32> snapshot2
+		:	StorageName     = "= SnapshotDir2 + '/woonplaats.fss'"
+		,	StorageReadOnly = "True"
+		{
+			parameter<uint32> nr_mutataies := #.;
+
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<string>            woonplaatsNaam ;
+			attribute<string>            geometry_list := AsList(string(pointCol(pointset/point)) + '_' + string(pointRow(pointset/point)) + '_' + string(pointset/ordinal), ';', pointset/sequencenr);
+
+			unit<uint32> pointset := Sequence2points(geometry_mm);
+
+			container meta          := meta_src_template_bag2(snapshot2, typeringen/status/woonplaats);
+
+			// vergelijkingen
+			attribute<string> woonplaatsNaam_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/woonplaatsNaam);
+			attribute<bool  > woonplaatsNaam_test := woonplaatsNaam == woonplaatsNaam_1;
+
+			attribute<string> geometry_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/geometry_list);
+			attribute<bool  > geometry_test := geometry_list == geometry_1;
+
+			attribute<string> status_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/status);
+			attribute<bool  > status_test := meta/status == status_1;
+
+			attribute<int32>  begindatum_1        := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/begindatum);
+			attribute<bool  > begindatum_test     := meta/begindatum == begindatum_1;
+			attribute<int32>  einddatum_1         := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/einddatum);
+			attribute<bool  > einddatum_test      := meta/einddatum == einddatum_1;
+			attribute<int32>  documentdatum_1     := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentdatum);
+			attribute<bool  > documentdatum_test  := meta/documentdatum == documentdatum_1;
+			attribute<string> documentnummer_1    := rjoin(identificatie, snapshot1/identificatie, snapshot1/meta/documentnummer);
+			attribute<bool  > documentnummer_test := meta/documentnummer == documentnummer_1;
+
+		}
+	}
+	template meta_src_template_bag1 // Voor het inlezen van de generieke BAG attributen
+	{
+		// begin case parameters
+		unit<uint32> domain;
+		unit<uint8>  statustype;
+		// end case parameters
+
+		attribute<string>     STATUS           (domain);
+		attribute<statustype> status_rel       (domain) := rlookup(lowercase(STATUS), statustype/label);
+		attribute<bool>       status_sel       (domain) := statustype/Selected[status_rel];
+
+		attribute<int32>      BEGINDATUM       (domain);
+		attribute<int32>      EINDDATUM        (domain);
+
+		attribute<int32>      BEGINTIJD       (domain);
+		attribute<int32>      EINDTIJD        (domain);
+
+		attribute<int32>      DOCUMENTDATUM    (domain);
+		attribute<string>     DOCUMENTNUMMER   (domain);
+
+		attribute<bool>       IS_CORRECTIE     (domain);
+		attribute<bool>       IS_INACTIEF      (domain);
+		attribute<bool>       IS_OFFICIEEL     (domain);
+		attribute<bool>       IS_ONDERZOEK     (domain);
+	}
+	template meta_src_template_bag2 // Voor het inlezen van de generieke BAG attributen
+	{
+		// begin case parameters
+		unit<uint32> domain;
+		unit<uint8>  statustype;
+		// end case parameters
+
+		attribute<string>     STATUS                 (domain);
+		attribute<statustype> status_rel             (domain) := rlookup(lowercase(STATUS), statustype/label);
+		attribute<bool>       status_sel             (domain) := statustype/Selected[status_rel];
+
+		attribute<int32>      BEGINDATUM             (domain);
+		attribute<int32>      EINDDATUM              (domain);
+
+		attribute<uint32>     VOORKOMENIDENTIFICATIE (domain);
+		attribute<string>     TIJDSTIPREGISTRATIE    (domain);
+		attribute<string>     EINDREGISTRATIE        (domain);
+
+		attribute<int32>      DOCUMENTDATUM          (domain);
+		attribute<string>     DOCUMENTNUMMER         (domain);
+
+		attribute<bool>       IS_GECONSTATEERD       (domain);
+	}
+	
+	container eenheden
+	{
+		unit<int32>   datum;
+		unit<int16>   jaar;
+		unit<int32>   mm        := int32(0.001 * m);
+		unit<uint16>  cm_uint16 := uint16(0.01 * m);
+		unit<float32> m         := baseunit('m', float32);
+	}
+	container geometries
+	{
+		#include <ngr_layer.dms>
+
+		unit<fpoint> rdc_base
+		: format     = "EPSG:28992"
+		, DialogData = "ngr_layer";
+		unit<fpoint> rdc    := range(rdc_base, point(300000f,0f), point(625000f,280000f));
+		unit<ipoint> rdc_mm := gridset(rdc, point(0.001,0.001), point(0.0, 0.0), ipoint);
+	}
+
+		container typeringen
+		{
+		container status
+		{
+			unit<uint8> ligplaats : nrofrows = 3
+			{
+				unit<uint8> elements := range(uint8, 0b, uint8(2*#.))
+				{
+					attribute<string> values:
+					[
+						//name'               , selected
+						 'onbekend'           ,'False'
+						,'plaats aangewezen'  ,'True'
+						,'plaats ingetrokken' ,'False'
+					];
+				}
+				attribute<string> label    := elements/values[value(id(.) * 2b, elements)];
+				attribute<string> name     := replace(label, ' ', '_', '(','',')','');
+				attribute<bool>   selected := bool(elements/values[value(id(.) * 2b + 1b, elements)]);
+		
+				container V := for_each_nedv(lowercase(name), 'value('+string(id(.))+', ..)', void, .);
+			}
+			unit<uint8> standplaats := ligplaats;
+			unit<uint8> pand: nrofrows = 11
+			{
+				unit<uint8> elements := range(uint8, 0b, uint8(2*#.))
+				{
+					attribute<string> values:
+					[
+						//name'                             , selected
+						 'onbekend'                         ,'False'
+						,'bouwvergunning verleend'          ,'False'
+						,'niet gerealiseerd pand'           ,'False'
+						,'bouw gestart'                     ,'False'
+						,'pand in gebruik (niet ingemeten)' ,'True'
+						,'pand in gebruik'                  ,'True'
+						,'sloopvergunning verleend'         ,'True'
+						,'pand gesloopt'                    ,'False'
+						,'pand buiten gebruik'              ,'False'
+						,'verbouwing pand'                  ,'False'
+						,'pand ten onrechte opgevoerd'      ,'False'
+						
+					];
+				}
+		
+				attribute<string> label    := elements/values[value(id(.) * 2b, elements)];
+				attribute<string> name     := replace(label, ' ', '_', '(','',')','');
+				attribute<bool>   selected := bool(elements/values[value(id(.) * 2b + 1b, elements)]);
+		
+				container V := for_each_nedv(lowercase(name), 'value('+string(id(.))+', ..)', void, .);
+			}
+			unit<uint8> vbo : nrofrows = 7
+			{
+				unit<uint8> elements := range(uint8, 0b, uint8(2*#.))
+				{
+					attribute<string> values:
+					[
+						//name'                                        , selected
+						 'onbekend'                                    ,'False'
+						,'verblijfsobject gevormd'                     ,'False'
+						,'niet gerealiseerd verblijfsobject'           ,'False'
+						,'verblijfsobject in gebruik (niet ingemeten)' ,'True'
+						,'verblijfsobject in gebruik'                  ,'True'
+						,'verblijfsobject ingetrokken'                 ,'False'
+						,'verblijfsobject buiten gebruik'              ,'False'
+					];
+				}
+		
+				attribute<string> label    := elements/values[value(id(.) * 2b, elements)];
+				attribute<string> name     := replace(label, ' ', '_', '(','',')','');
+				attribute<bool>   selected := bool(elements/values[value(id(.) * 2b + 1b, elements)]);
+		
+				container V := for_each_nedv(lowercase(name), 'value('+string(id(.))+', ..)', void, .);
+			}
+			unit<uint8> nummeraanduiding : nrofrows = 3
+			{
+				unit<uint8> elements := range(uint8, 0b, uint8(2*#.))
+				{
+					attribute<string> values:
+					[
+						//name'                   , selected
+						 'onbekend'               ,'False'
+						,'naamgeving ingetrokken' ,'False'
+						,'naamgeving uitgegeven'  ,'True'
+					];
+				}
+		
+				attribute<string> label    := elements/values[value(id(.) * 2b, elements)];
+				attribute<string> name     := replace(label, ' ', '_', '(','',')','');
+				attribute<bool>   selected := bool(elements/values[value(id(.) * 2b + 1b, elements)]);
+		
+				container V := for_each_nedv(lowercase(name), 'value('+string(id(.))+', ..)', void, .);
+			}
+			unit<uint8> openbareruimte : nrofrows = 3
+			{
+				unit<uint8> elements := range(uint8, 0b, uint8(2*#.))
+				{
+					attribute<string> values:
+					[
+						//name'                   , selected
+						 'onbekend'               ,'False'
+						,'naamgeving ingetrokken' ,'False'
+						,'naamgeving uitgegeven'  ,'True'
+					];
+				}
+		
+				attribute<string> label    := elements/values[value(id(.) * 2b, elements)];
+				attribute<string> name     := replace(label, ' ', '_', '(','',')','');
+				attribute<bool>   selected := bool(elements/values[value(id(.) * 2b + 1b, elements)]);
+		
+				container V := for_each_nedv(lowercase(name), 'value('+string(id(.))+', ..)', void, .);
+			}
+			unit<uint8> woonplaats : nrofrows = 3
+			{
+				unit<uint8> elements := range(uint8, 0b, uint8(2*#.))
+				{
+					attribute<string> values:
+					[
+						//name'                   , selected
+						 'onbekend'               ,'False'
+						,'woonplaats aangewezen'  ,'True'
+						,'woonplaats ingetrokken' ,'False'
+					];
+				}
+		
+				attribute<string> label    := elements/values[value(id(.) * 2b, elements)];
+				attribute<string> name     := replace(label, ' ', '_', '(','',')','');
+				attribute<bool>   selected := bool(elements/values[value(id(.) * 2b + 1b, elements)]);
+		
+				container V := for_each_nedv(lowercase(name), 'value('+string(id(.))+', ..)', void, .);
+			}
+		}
+	}
+}

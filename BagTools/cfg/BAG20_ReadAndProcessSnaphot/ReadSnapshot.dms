@@ -1,0 +1,177 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//              Configuratie voor project: BAG 2.0 Read And Process Snapshot          //
+//                                                                                    //
+//                              Object Vision 2021                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+// Configuratiebestand voor het inlezen van een Snapshot, gemaakt met de BAG tools    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container ReadSnapshot
+{
+	unit<uint32> ligplaats
+	:	StorageName     = "= SnapshotBaseDir + '/ligplaats.fss'"
+	,	StorageReadOnly = "True"
+	{
+		attribute<geografie/rdc_mm> geometry_mm (polygon);
+		attribute<geografie/rdc   > geometry    (polygon) := geometry_mm[geografie/rdc];
+
+		attribute<string>           identificatie;
+		attribute<string>           nummeraanduiding_id;
+
+		container meta := meta_template(.);
+
+		unit<uint32> nevenadres // is een 1->0..n relatie
+		{
+			attribute<string> nummeraanduiding_id;
+			attribute<string> identificatie;
+		}
+	}
+
+	unit<uint32> standplaats
+	: 	StorageName     = "= SnapshotBaseDir + '/standplaats.fss'"
+	,	StorageReadOnly = "True"
+	{
+		attribute<geografie/rdc_mm> geometry_mm (polygon);
+		attribute<geografie/rdc   > geometry    (polygon) := geometry_mm[geografie/rdc];
+
+		attribute<string>           identificatie;
+		attribute<string>           nummeraanduiding_id;
+
+		container meta := meta_template(.);
+
+		unit<uint32> nevenadres // is een 1->0..n relatie
+		{
+			attribute<string> nummeraanduiding_id;
+			attribute<string> identificatie;
+		}
+	}
+
+	unit<uint32> pand
+	:	StorageName     = "= SnapshotBaseDir + '/pand.fss'"
+	,	StorageReadOnly = "True"
+	{
+		attribute<geografie/rdc_mm>         geometry_mm (polygon);
+		attribute<geografie/rdc   >         geometry    (polygon) := geometry_mm[geografie/rdc];
+		
+		attribute<geografie/rdc   >         geometry_cleaned    (polygon) := (geometry_mm * geometry_mm)[geografie/rdc];
+		attribute<geografie/rdc   >         buffer_m1    (polygon) := bg_buffer_multi_polygon(geometry_cleaned[dpoint], 1.0, 8b)[geografie/rdc];
+
+
+		attribute<string>                   identificatie;
+		attribute<eenheden/jaar>            bouwjaar;
+		attribute<eenheden/jaar>            bouwjaar_cleaned := bouwjaar < 1000[eenheden/jaar] || bouwjaar > 2100[eenheden/jaar] ? (0 / 0)[eenheden/jaar] : bouwjaar; // bouwjaren vooor 1000 en na 2100 beschouwen we als missing data
+
+		attribute<typeringen/type_woonpand> WOONPAND_TYPE;
+
+		container meta := meta_template(.);
+		
+		unit<uint32> ps_uncleaned:= sequence2points(geometry);
+		unit<uint32> ps_cleaned:= sequence2points(geometry_cleaned);
+
+		parameter<uint32> nr_coord_uncleaned := #ps_uncleaned;
+		parameter<uint32> nr_coord_cleaned   := #ps_cleaned;
+		
+	}
+
+	unit<uint32> vbo
+	:	StorageName     = "= SnapshotBaseDir + '/vbo.fss'"
+	,	StorageReadOnly = "True"
+	{
+		attribute<geografie/rdc_mm>  geometry_mm;
+		attribute<geografie/rdc   >  geometry := geometry_mm[geografie/rdc];
+
+		attribute<string>            identificatie;
+		attribute<eenheden/m2_int32> oppervlakte;
+		attribute<string>            nummeraanduiding_id;
+
+		attribute<string>            pand_id_geom;
+
+		container gebruiksdoelen:=
+			for_each_ndv(
+				typeringen/gebruiksdoel_vbo/name
+				, vbo
+				, bool
+			);
+
+		container meta := meta_template(.);
+
+		unit<uint32> nevenadres // is een 1->0..n relatie
+		{
+			attribute<string> nummeraanduiding_id;
+			attribute<string> identificatie;
+		}
+	}
+
+	unit<uint32> nummeraanduiding
+	:	StorageName     = "= SnapshotBaseDir + '/nummeraanduiding.fss'"
+	,	StorageReadOnly = "True"
+	{
+		attribute<string> identificatie;
+		attribute<int32>  huisnummer;
+		attribute<string> huisletter;
+		attribute<string> toevoeging;
+		attribute<string> postcode;
+		attribute<string> typeAdresseerbaarObject;
+		attribute<string> openbareruimte_id;
+		attribute<string> woonplaats_id;
+
+		container meta := meta_template(.);
+	}
+
+	unit<uint32> openbareruimte
+	:	StorageName     = "= SnapshotBaseDir + '/openbareruimte.fss'"
+	,	StorageReadOnly = "True"
+	{
+		attribute<string> identificatie;
+		attribute<string> naam;
+		attribute<string> type;
+		attribute<string> woonplaats_id;
+
+		container meta := meta_template(.);
+	}
+
+	unit<uint32> woonplaats
+	:	StorageName     = "= SnapshotBaseDir + '/woonplaats.fss'"
+	,	StorageReadOnly = "True"
+	{
+		attribute<geografie/rdc_mm> geometry_mm (polygon);
+		attribute<geografie/rdc   > geometry    (polygon) := geometry_mm[geografie/rdc];
+
+		attribute<string>           identificatie;
+		attribute<string>           woonplaatsNaam;
+
+		container meta := meta_template(.);
+	}
+
+	unit<uint32> adres 
+	:	StorageName     = "= SnapshotBaseDir + '/adres.fss'"
+	,	StorageReadOnly = "True"
+	{
+		attribute<string>        nummeraanduiding_id;
+		attribute<string>        straatnaam;
+		attribute<string>        postcode;
+		attribute<int32>         huisnummer;
+		attribute<string>        huisletter;
+		attribute<string>        toevoeging;
+		attribute<string>        woonplaatsnaam;
+
+		attribute<geografie/rdc> geometry;
+	}
+
+	template meta_template // Voor het inlezen van generieke meta BAG attributen
+	{
+		// begin case parameters
+		unit<uint32> domain;
+		// end case parameters
+
+		attribute<string> STATUS     (domain);
+
+		attribute<int32>  BEGINDATUM (domain);
+		attribute<int32>  EINDDATUM  (domain);
+	}
+}

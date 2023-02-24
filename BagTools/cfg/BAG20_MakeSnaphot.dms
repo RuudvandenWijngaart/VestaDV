@@ -1,0 +1,281 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//              Configuratie voor project: BAG 2.0 XML bronfiles > FSS                //
+//                                                                                    //
+//                              Object Vision 2022                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+// Met deze configuratie kan uit een historische BAG database (in FSS formaat)        //
+// een snapshot op een bepaalde datum gegenereerd worden (ook in FSS formaat)         //
+//                                                                                    //
+// De snapshot kan ook voor een ruimtelijke selectie gemaakt worden                   //
+//                                                                                    //
+// Voor de BAG object tabellen geldt dat in resultaat van de snapshot                 //
+// de identificatie attributen uniek zijn (kandidaat primaire sleutel)                //
+//                                                                                    //
+// Tevens kunnen een aantal extra attributen op het snapshot moment afgeleid:         //
+// 1) woonpandtypering                                                                //
+// 2) pandhoogte obv PHN (afgeleid van AHN3). Deze afleiding is optioneel.            //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container BAG20_MakeSnapshot
+{ 
+	// te configureren
+	parameter<string> BAG_Date            := '20230208';	
+	parameter<string> Snapshot_Date_Input := '20230101';
+	//
+	parameter<string> FSSDir              := '%SourceDataDir%/BAG/'+BAG_Date+'/fss.new';
+	parameter<string> SnapshotBaseDir     := '%SourceDataDir%/BAG/snapshots.ext';
+
+	parameter<string> Snapshot_Date_Batch   := expand(., '%ENV:snapshot_date_env%');
+	parameter<string> Snapshot_Date         := replace(Snapshot_Date_Batch, 'ENV:snapshot_date_env', Snapshot_Date_input);
+	
+																				    	// snapshot datum                 , geo selectie, status selectie, vreemde waarden selectie, met pandhoogte
+	container snapshot_date_nl_status_overige_selectie_zonder_hoogte  := ='MakeSnapshot('+Snapshot_Date+'[eenheden/datum], False       , True           , False                   , False)';
+	container snapshot_date_geo_status_selectie_met_hoogte            := ='MakeSnapshot('+Snapshot_Date+'[eenheden/datum], True        , True           , False                   , True)';
+	container snapshot_date_geo_status_selectie_zonder_hoogte         := ='MakeSnapshot('+Snapshot_Date+'[eenheden/datum], True        , True           , False                   , False)';
+	
+	container snapshot_date_nl_geoparaat                              := ='MakeSnapshot('+Snapshot_Date+'[eenheden/datum], False       , False          , False                   , False)';
+	container snapshot_date_nl_geoparaat_gpkg                         := ='MakeSnapshot_gpkg('+Snapshot_Date+'[eenheden/datum], False  , False          , False                   , False)';
+	container snapshot_date_ameland_geoparaat_gpkg                    := ='MakeSnapshot_gpkg('+Snapshot_Date+'[eenheden/datum], True   , False          , False                   , False)';
+	
+	container snapshot_date_nl_vreemde_eruit                          := ='MakeSnapshot('+Snapshot_Date+'[eenheden/datum], False       , False          , True                    , False)';
+
+	container eenheden
+	{
+		unit<int32>   datum;
+		unit<int16>   jaar;
+		unit<int32>   mm        := int32(0.001 * m);
+		unit<uint16>  cm_uint16 := uint16(0.01 * m);
+		unit<float32> m         := baseunit('m', float32);
+	}
+	container geometries
+	{
+		#include <wmts_layer.dms>
+
+		unit<fpoint> rdc_base
+		: format     = "EPSG:28992"
+		, DialogData = "wmts_layer";
+		unit<fpoint> rdc    := range(rdc_base, point(300000f,0f), point(625000f,280000f));
+		unit<ipoint> rdc_mm := gridset(rdc, point(0.001,0.001), point(0.0, 0.0), ipoint);
+	}
+
+	unit<uint32> geo_selectie
+ 	:	nrofrows = 1
+ 	{
+ 		// Voorbeeld voor het configureren van een geo_selectie met een rechthoek, pas de pointset/X en pointset/Y attributen aan voor een nieuwe rechthoek
+ 		parameter<string>         Label           := 'NLRechthoek';
+ 		attribute<geometries/rdc> geometry (poly) := points2sequence(pointset/point, pointset/sequence, pointset/ordinal);
+
+ 		unit<uint32> pointset: nrofrows = 5
+ 		{
+ 			parameter<eenheden/m>     X_min    := 0[eenheden/m];
+ 			parameter<eenheden/m>     X_max    := 300000[eenheden/m];
+ 			parameter<eenheden/m>     Y_min    := 300000[eenheden/m];
+ 			parameter<eenheden/m>     Y_max    := 630000[eenheden/m];
+
+ 			attribute<eenheden/m>     X        := union_data(., X_min, X_max, X_max, X_min, X_min);
+ 			attribute<eenheden/m>     Y        := union_data(., Y_min, Y_min, Y_max, Y_max, Y_min);
+ 			attribute<geometries/rdc> point    := point(Y, X, geometries/rdc);
+ 			attribute<geo_selectie>   sequence := const(0[geo_selectie],.);
+ 			attribute<.>              ordinal  := id(.);
+ 		}
+ 	}
+
+	// Voorbeeld voor het lezen van een geo_selectie uit een shape file
+//	:	StorageName     = "%ProjDir%/data/geo_sel.shp"
+//	:	StorageName     = "%SourceDataDir%/regressionTests/CBS/utrecht.shp"
+//    :	StorageName     = "D:/SourceData/Waardenland/SG.shp"
+//      :	StorageName     = "D:/SourceData/Nieuwegein/nwg.shp"
+//    :	StorageName     = "C:/SourceData/Hoorn/CBS/wpl_hoorn_sel.shp"
+//    :	StorageName     = "E:/SourceData/KL/KL.shp"
+//	:   StorageName     = "D:/SourceData/Leiden/gemeente.shp"
+//:   StorageName     = "D:/SourceData/Lansingerland/gemeente.shp"
+//	:   StorageName     = "D:/SourceData/Schiedam/Schiedam.shp"
+//	:   StorageName     = "D:/SourceData/HoekscheWaard/HW.shp"
+//	:   StorageName     = "D:/SourceData/demo/ameland.shp"	
+//	,	StorageType     = "gdal.vect"
+//	,	StorageReadOnly = "True"
+//	{
+//		parameter<string>         Label := 'HoekscheWaard';
+//		parameter<string>         Label := 'Ameland';
+//		attribute<geometries/rdc> geometry (poly);
+//	}
+
+	container typeringen
+	{
+		unit<uint8> objecttypes: nrofrows = 7
+		{
+			attribute<string> name:
+			[
+				'ligplaats','standplaats','pand','vbo','nummeraanduiding','openbareruimte','woonplaats'
+			];
+		}
+
+		unit<uint8> gebruiksdoel_vbo: nrofrows = 11
+		{
+			attribute<string> label:
+			[
+				'bijeenkomstfunctie','celfunctie','gezondheidszorgfunctie','industriefunctie','kantoorfunctie','logiesfunctie'
+				,'onderwijsfunctie','overige gebruiksfunctie','sportfunctie','winkelfunctie','woonfunctie'
+			];
+			attribute<string> name := replace(replace(label,' ','_'), 'functie','');
+		}
+
+		#include<status.dms>
+	}
+
+	#include<MakeSnapshot.dms>
+	#include<MakeSnapshot_gpkg.dms>
+
+	template meta_src_template // Voor het inlezen van de generieke BAG attributen
+	{
+		// begin case parameters
+		unit<uint32> domain;
+		unit<uint8>  statustype;
+		// end case parameters
+
+		attribute<string>     STATUS                 (domain);
+		attribute<statustype> status_rel             (domain) := rlookup(lowercase(STATUS), statustype/label);
+		attribute<bool>       status_sel             (domain) := statustype/Selected[status_rel];
+
+		attribute<int32>      BEGINDATUM             (domain);
+		attribute<int32>      EINDDATUM              (domain);
+		attribute<uint32>     VOORKOMENIDENTIFICATIE (domain);
+
+		attribute<string>     TIJDSTIPREGISTRATIE    (domain);
+		attribute<string>     EINDREGISTRATIE        (domain);
+
+		attribute<int32>      DOCUMENTDATUM          (domain);
+		attribute<string>     DOCUMENTNUMMER         (domain);
+
+		attribute<bool>       IS_GECONSTATEERD       (domain);
+	}
+
+	template meta_template // Voor het aggregeren van de generieke BAG attributen
+	{
+		// begin case parameters
+		unit<uint32> src_domain;
+		unit<uint32> target_domain;
+		// end case parameters
+
+		attribute<string>         Status                 (target_domain) := rjoin(key, impl/selectie/key, src_domain/meta/Status);
+		attribute<eenheden/datum> BEGINDATUM             (target_domain) := rjoin(key, impl/selectie/key, src_domain/meta/BEGINDATUM);
+		attribute<eenheden/datum> EINDDATUM              (target_domain) := rjoin(key, impl/selectie/key, src_domain/meta/EINDDATUM);
+		attribute<uint32>         VOORKOMENIDENTIFICATIE (target_domain) := rjoin(key, impl/selectie/key, src_domain/meta/VOORKOMENIDENTIFICATIE);
+		attribute<string>         TIJDSTIPREGISTRATIE    (target_domain) := rjoin(key, impl/selectie/key, src_domain/meta/TIJDSTIPREGISTRATIE);
+		attribute<string>         EINDREGISTRATIE        (target_domain) := rjoin(key, impl/selectie/key, src_domain/meta/EINDREGISTRATIE);
+		attribute<eenheden/datum> DOCUMENTDATUM          (target_domain) := rjoin(key, impl/selectie/key, src_domain/meta/DOCUMENTDATUM);
+		attribute<string>         DOCUMENTNUMMER         (target_domain) := rjoin(key, impl/selectie/key, src_domain/meta/DOCUMENTNUMMER);
+		attribute<bool>           IS_GECONSTATEERD       (target_domain) := rjoin(key, impl/selectie/key, src_domain/meta/IS_GECONSTATEERD);
+	}
+
+	template meta_write_template // Voor het aggregeren van de generieke BAG attributen
+	{
+		// begin case parameters
+		unit<uint32> domain: DisableStorage = "True";
+		container meta_src;
+		// end case parameters
+
+		attribute<string>         Status                 (domain) := meta_src/status, DisableStorage = "True";
+		attribute<eenheden/datum> BEGINDATUM             (domain) := meta_src/BEGINDATUM ;
+		attribute<eenheden/datum> EINDDATUM              (domain) := meta_src/EINDDATUM ;
+		attribute<uint32>         VOORKOMENIDENTIFICATIE (domain) := meta_src/VOORKOMENIDENTIFICATIE;
+		attribute<string>         TIJDSTIPREGISTRATIE    (domain) := meta_src/TIJDSTIPREGISTRATIE;
+		attribute<string>         EINDREGISTRATIE        (domain) := meta_src/EINDREGISTRATIE;
+		attribute<eenheden/datum> DOCUMENTDATUM          (domain) := meta_src/DOCUMENTDATUM;
+		attribute<string>         DOCUMENTNUMMER         (domain) := meta_src/DOCUMENTNUMMER;
+		attribute<bool>           IS_GECONSTATEERD       (domain) := meta_src/IS_GECONSTATEERD, DisableStorage = "True";
+	}
+
+	template datum_selectie
+	{
+		// begin case parameters
+		unit<uint32>              domain;
+		parameter<eenheden/datum> prik_datum;
+		parameter<bool>           overig_filter_actief;
+		attribute<bool>           overig_filter (domain) := const(true, domain);
+		// einde case parameters
+
+		attribute<bool> WasGestart   (domain) := domain/meta/BEGINDATUM <= prik_datum;
+		attribute<bool> WasBeeindigd (domain) := domain/meta/EINDDATUM  <= prik_datum && domain/meta/EINDDATUM > 0i;
+
+		unit<uint32> selectie :=
+			= 'Subset(WasGestart && not(WasBeeindigd) ' + 
+				(met_status_sel 
+					? '&& domain/Meta/status_sel ' 
+					: '') +
+				(overig_filter_actief 
+					? '&& overig_filter' 
+					: '') 
+			+ ')'
+		,	DialogType = "Map"
+		,	DialogData = "geometry_mm"
+		{
+			container meta
+			{
+				attribute<string>         STATUS                 (selectie) := domain/meta/STATUS[nr_OrgEntity];
+				attribute<eenheden/datum> BEGINDATUM             (selectie) := domain/meta/BEGINDATUM[nr_OrgEntity];
+				attribute<eenheden/datum> EINDDATUM              (selectie) := domain/meta/EINDDATUM[nr_OrgEntity];
+				attribute<eenheden/datum> DOCUMENTDATUM          (selectie) := domain/meta/DOCUMENTDATUM[nr_OrgEntity];
+				attribute<string>         DOCUMENTNUMMER         (selectie) := domain/meta/DOCUMENTNUMMER[nr_OrgEntity];
+				attribute<uint32>         VOORKOMENIDENTIFICATIE (selectie) := domain/meta/VOORKOMENIDENTIFICATIE[nr_OrgEntity];
+
+				attribute<string>         TIJDSTIPREGISTRATIE    (selectie) := domain/meta/TIJDSTIPREGISTRATIE[nr_OrgEntity];
+				attribute<string>         EINDREGISTRATIE        (selectie) := domain/meta/EINDREGISTRATIE[nr_OrgEntity];
+				attribute<bool>           IS_GECONSTATEERD       (selectie) := domain/meta/IS_GECONSTATEERD[nr_OrgEntity];
+			}
+		}
+	}
+
+	Template polygon_selectie
+	{
+		// begin case parameters
+		unit<uint32> domain;
+		attribute<geometries/rdc_mm> geometry_mm (polygon, domain);
+		// end case parameters
+
+		container bbox := bbox_min_max(domain,geometry_mm);
+
+		attribute<geometries/rdc> x_min_y_min (domain) := point(bbox/y_min[eenheden/m], bbox/x_min[eenheden/m], geometries/rdc);
+		attribute<geometries/rdc> x_min_y_max (domain) := point(bbox/y_max[eenheden/m], bbox/x_min[eenheden/m], geometries/rdc);
+		attribute<geometries/rdc> x_max_y_max (domain) := point(bbox/y_max[eenheden/m], bbox/x_max[eenheden/m], geometries/rdc);
+		attribute<geometries/rdc> x_max_y_min (domain) := point(bbox/y_min[eenheden/m], bbox/x_max[eenheden/m], geometries/rdc);
+		attribute<geometries/rdc> centroid    (domain) := centroid(geometry_mm)[geometries/rdc];
+
+		attribute<bool> result (domain) :=
+			   isDefined(point_in_polygon(x_min_y_min, /geo_selectie/geometry))
+			|| isDefined(point_in_polygon(x_min_y_max, /geo_selectie/geometry))
+			|| isDefined(point_in_polygon(x_max_y_max, /geo_selectie/geometry))
+			|| isDefined(point_in_polygon(x_max_y_min, /geo_selectie/geometry))
+			|| isDefined(point_in_polygon(   centroid, /geo_selectie/geometry));
+	}
+
+	Template nl_selectie
+	{
+		// begin case parameters
+		unit<uint32> domain;
+		// end case parameters
+
+		attribute<bool> result (domain) := const(true, domain);
+	}
+
+	Template bbox_min_max
+	{
+		// begin case parameters
+		unit<uint32> domain;
+		attribute<geometries/rdc_mm> geometry_mm (polygon, domain);
+		// end case parameters
+
+		attribute<geometries/rdc_mm> lowerbound (domain) := lower_bound(geometry_mm);
+		attribute<geometries/rdc_mm> upperbound (domain) := upper_bound(geometry_mm);
+
+		attribute<eenheden/mm>       x_min      (domain) := PointCol(lowerbound)[eenheden/mm];
+		attribute<eenheden/mm>       x_max      (domain) := PointCol(upperbound)[eenheden/mm];
+		attribute<eenheden/mm>       y_min      (domain) := PointRow(lowerbound)[eenheden/mm];
+		attribute<eenheden/mm>       y_max      (domain) := PointRow(upperbound)[eenheden/mm];
+	}
+}

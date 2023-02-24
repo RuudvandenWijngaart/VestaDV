@@ -1,0 +1,479 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//                   Configuratie voor project: GeoParaat                             //
+//                                                                                    //
+//                              Object Vision 2020                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+// Aanvulling op de BAG Tools om van een in fss weggeschreven snapshot een set van    //
+// shape files te maken, die dan met ogr2ogr kunnen wordnen omgezet in een geopackage //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container SnapshotFSS2ShapeFiles
+{
+	parameter<string> SnapshotFSSDir     := '%SourceDataDir%/BAG/snapshots.ext/20200701';
+	parameter<string> ResultShapeFileDir := '%LocalDataDir%/BAG_shapes/' + right(SnapshotFSSDir, 8);
+
+	container eenheden
+	{
+		unit<int32>   datum;
+		unit<int16>   jaar;
+		unit<int32>   mm        := int32(0.001 * m);
+		unit<uint16>  cm_uint16 := uint16(0.01 * m);
+		unit<float32> m         := baseunit('m', float32);
+	}
+	container geometries
+	{
+		unit<fpoint> rdc_base
+		: format     = "EPSG:28992"
+		, DialogData = "ngr_layer";
+		unit<fpoint> rdc    := range(rdc_base, point(300000f,0f), point(625000f,280000f));
+		unit<ipoint> rdc_mm := gridset(rdc, point(0.001,0.001), point(0.0, 0.0), ipoint);
+	}
+
+	parameter<string> SuppliersExpr := 
+		'ligplaats/status;ligplaats/shp;'
+		'standplaats/status;standplaats/shp;'
+		'pand/status;pand/WoningType;pand/shp;'
+		'vbo/status;vbo/shp;vbo/shp_gerelateerdPand;'
+		'nummeraanduiding/status;nummeraanduiding/dbf;'
+		'openbareruimte/status;openbareruimte/dbf;'
+		'woonplaats/status;woonplaats/shp;'
+		'adres/shp';
+
+	parameter<string> ExporteerAlleShapeFiles := 'ready', ExplicitSuppliers = "= SuppliersExpr";
+
+	container ligplaats
+	{
+		unit<uint32> fss
+		:	StorageName     = "= SnapshotFSSDir + '/ligplaats.fss'"
+		,	StorageReadOnly = "True"
+		{
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<string>            nummeraanduiding_id;
+
+			unit<uint32> meta := .
+			{
+				attribute<string>         STATUS;
+				attribute<eenheden/datum> BEGINDATUM;
+				attribute<eenheden/datum> EINDDATUM;
+// 				attribute<eenheden/datum> DOCUMENTDATUM;
+// 				attribute<string>         DOCUMENTNUMMER;
+				attribute<bool>           IS_GECONSTATEERD;
+			}
+		}
+
+		unit<uint32> status := unique(fss/meta/status), StorageName= "= ResultShapeFileDir + '/ligplaats_status_code.dbf'"
+		{
+			attribute<uint8>  code   := uint8(id(.));
+			attribute<string> label  := values;
+			attribute<string> values : DisableStorage = "True";
+		}
+
+		unit<uint32> shp:= fss, StorageName= "= ResultShapeFileDir + '/ligplaats.dbf'"
+		{
+			attribute<geometries/rdc> geometry (polygon) := fss/geometry_mm[geometries/rdc]
+			,	StorageName= "= ResultShapeFileDir + '/ligplaats.shp'";
+
+			attribute<string>         id         := fss/identificatie;
+			attribute<string>         num_id     := fss/nummeraanduiding_id;
+
+			attribute<uint8>          STATUS_rel := uint8(rlookup(fss/meta/STATUS, status/values));
+			attribute<eenheden/datum> BEGINDAT   := fss/meta/BEGINDATUM;
+			attribute<eenheden/datum> EINDDAT    := fss/meta/EINDDATUM;
+// 			attribute<eenheden/datum> DOCDAT     := fss/meta/DOCUMENTDATUM;
+// 			attribute<string>         DOCNR      := fss/meta/DOCUMENTNUMMER;
+			attribute<bool>           IS_CON     := fss/meta/IS_GECONSTATEERD;
+		}
+	}
+
+	container standplaats
+	{
+		unit<uint32> fss
+		:	StorageName     = "= SnapshotFSSDir + '/standplaats.fss'"
+		,	StorageReadOnly = "True"
+		{
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<string>            nummeraanduiding_id;
+
+			unit<uint32> meta := .
+			{
+				attribute<string>         STATUS;
+				attribute<eenheden/datum> BEGINDATUM;
+				attribute<eenheden/datum> EINDDATUM;
+// 				attribute<eenheden/datum> DOCUMENTDATUM;
+// 				attribute<string>         DOCUMENTNUMMER;
+				attribute<bool>           IS_GECONSTATEERD;
+			}
+		}
+
+		unit<uint32> status := unique(fss/meta/status), StorageName= "= ResultShapeFileDir + '/standplaats_status_code.dbf'"
+		{
+			attribute<uint8>  code   := uint8(id(.));
+			attribute<string> label  := values;
+			attribute<string> values : DisableStorage = "True";
+		}
+
+		unit<uint32> shp:= fss, StorageName= "= ResultShapeFileDir + '/standplaats.dbf'"
+		{
+			attribute<geometries/rdc> geometry (polygon) := fss/geometry_mm[geometries/rdc]
+			,	StorageName= "= ResultShapeFileDir + '/standplaats.shp'";
+
+			attribute<string>         id         := fss/identificatie;
+			attribute<string>         num_id     := fss/nummeraanduiding_id;
+
+			attribute<uint8>          STATUS_rel := uint8(rlookup(fss/meta/STATUS, status/values));
+			attribute<eenheden/datum> BEGINDAT   := fss/meta/BEGINDATUM;
+			attribute<eenheden/datum> EINDDAT    := fss/meta/EINDDATUM;
+// 			attribute<eenheden/datum> DOCDAT     := fss/meta/DOCUMENTDATUM;
+// 			attribute<string>         DOCNR      := fss/meta/DOCUMENTNUMMER;
+			attribute<bool>           IS_CON     := fss/meta/IS_GECONSTATEERD;
+		}
+	}
+
+	container pand
+	{
+		unit<uint32> fss
+		:	StorageName     = "= SnapshotFSSDir + '/pand.fss'"
+		,	StorageReadOnly = "True"
+		{
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<eenheden/jaar>     bouwjaar;
+			attribute<uint8>             WOONPAND_TYPE;
+
+			unit<uint32> meta := .
+			{
+				attribute<string>         STATUS;
+				attribute<eenheden/datum> BEGINDATUM;
+				attribute<eenheden/datum> EINDDATUM;
+// 				attribute<eenheden/datum> DOCUMENTDATUM;
+// 				attribute<string>         DOCUMENTNUMMER;
+				attribute<bool>           IS_GECONSTATEERD;
+			}
+
+			unit<uint32> gebruiksdoelen := .
+			{
+				attribute<uint32> nr_bijeenkomst;
+				attribute<uint32> nr_cel;
+				attribute<uint32> nr_gezondheidszorg;
+				attribute<uint32> nr_industrie;
+				attribute<uint32> nr_kantoor;
+				attribute<uint32> nr_logies;
+				attribute<uint32> nr_onderwijs;
+				attribute<uint32> nr_overige_gebruiks;
+				attribute<uint32> nr_sport;
+				attribute<uint32> nr_winkel;
+				attribute<uint32> nr_woon;
+			}
+		}
+
+		unit<uint32> status := unique(fss/meta/status), StorageName= "= ResultShapeFileDir + '/pand_status_code.dbf'"
+		{
+			attribute<uint8>  code   := uint8(id(.));
+			attribute<string> label  := values;
+			attribute<string> values : DisableStorage = "True";
+		}
+
+		unit<uint8> WoningType : nrofrows = 6 , StorageName= "= ResultShapeFileDir + '/pand_woningtype.dbf'"
+		{
+			attribute<uint8>  code      := uint8(id(.));
+			attribute<string> label_org : ['geen woonpand','vrijstaand','twee onder 1 kap','hoekwoning','tussenwoning','meergezinspand'];
+			attribute<string> label     : = label_org;
+		}
+
+		unit<uint32> shp:= fss, StorageName= "= ResultShapeFileDir + '/pand.dbf'"
+		{
+			attribute<geometries/rdc> geometry (polygon) := fss/geometry_mm[geometries/rdc]
+			,	StorageName= "= ResultShapeFileDir + '/pand.shp'";
+
+			attribute<string>         id         := fss/identificatie;
+			attribute<eenheden/jaar>  bouwjaar   := fss/bouwjaar;
+			attribute<uint8>          woontype   := fss/WOONPAND_TYPE;
+			
+			attribute<uint8>          STATUS_rel := uint8(rlookup(fss/meta/STATUS, status/values));
+			attribute<eenheden/datum> BEGINDAT   := fss/meta/BEGINDATUM;
+			attribute<eenheden/datum> EINDDAT    := fss/meta/EINDDATUM;
+// 			attribute<eenheden/datum> DOCDAT     := fss/meta/DOCUMENTDATUM;
+// 			attribute<string>         DOCNR      := fss/meta/DOCUMENTNUMMER;
+			attribute<bool>           IS_CON     := fss/meta/IS_GECONSTATEERD;
+
+			attribute<uint32>         NR_BIJEEN  := fss/gebruiksdoelen/nr_bijeenkomst;
+			attribute<uint32>         NR_CEL     := fss/gebruiksdoelen/nr_cel;
+			attribute<uint32>         NR_GEZOND  := fss/gebruiksdoelen/nr_gezondheidszorg;
+			attribute<uint32>         NR_INDUST  := fss/gebruiksdoelen/nr_industrie;
+			attribute<uint32>         NR_KANTOOR := fss/gebruiksdoelen/nr_kantoor;
+			attribute<uint32>         NR_LOGIES  := fss/gebruiksdoelen/nr_logies;
+			attribute<uint32>         NR_ONDERW  := fss/gebruiksdoelen/nr_onderwijs;
+			attribute<uint32>         NR_OVERIG  := fss/gebruiksdoelen/nr_overige_gebruiks;
+			attribute<uint32>         NR_SPORT   := fss/gebruiksdoelen/nr_sport;
+			attribute<uint32>         NR_WINKEL  := fss/gebruiksdoelen/nr_winkel;
+			attribute<uint32>         NR_WOON    := fss/gebruiksdoelen/nr_woon;
+		}
+	}
+
+	container vbo
+	{
+		unit<uint32> fss
+		:	StorageName     = "= SnapshotFSSDir + '/vbo.fss'"
+		,	StorageReadOnly = "True"
+		{
+			attribute<geometries/rdc_mm> geometry_mm;
+			attribute<string>            identificatie;
+			attribute<string>            nummeraanduiding_id;
+			attribute<int32>             oppervlakte;
+			attribute<string>            pand_id_geom;
+
+			unit<uint32> meta := .
+			{
+				attribute<string>         STATUS;
+				attribute<eenheden/datum> BEGINDATUM;
+				attribute<eenheden/datum> EINDDATUM;
+// 				attribute<eenheden/datum> DOCUMENTDATUM;
+// 				attribute<string>         DOCUMENTNUMMER;
+				attribute<bool>           IS_GECONSTATEERD;
+			}
+
+			unit<uint32> gebruiksdoelen := .
+			{
+				attribute<bool> bijeenkomst;
+				attribute<bool> cel;
+				attribute<bool> gezondheidszorg;
+				attribute<bool> industrie;
+				attribute<bool> kantoor;
+				attribute<bool> logies;
+				attribute<bool> onderwijs;
+				attribute<bool> overige_gebruiks;
+				attribute<bool> sport;
+				attribute<bool> winkel;
+				attribute<bool> woon;
+			}
+		}
+
+		unit<uint32> gerelateerdPand: StorageName     = "= SnapshotFSSDir + '/gerelateerdPand/vbo.fss'"
+		,	StorageReadOnly = "True"
+		{
+			attribute<string> identificatie;
+			attribute<string> pand_id;
+		}
+
+		unit<uint32> status := unique(fss/meta/status), StorageName= "= ResultShapeFileDir + '/vbo_status_code.dbf'"
+		{
+			attribute<uint8>  code   := uint8(id(.));
+			attribute<string> label  := values;
+			attribute<string> values : DisableStorage = "True";
+		}
+
+		unit<uint32> shp:= fss, StorageName= "= ResultShapeFileDir + '/vbo.dbf'"
+		{
+			attribute<geometries/rdc> geometry := fss/geometry_mm[geometries/rdc]
+			,	StorageName= "= ResultShapeFileDir + '/vbo.shp'";
+
+			attribute<string>         id          := fss/identificatie;
+			attribute<string>         nummer_id   := fss/nummeraanduiding_id;
+			attribute<int32>          oppervl     := fss/oppervlakte;
+			attribute<string>         pand_id     := fss/pand_id_geom;
+			
+			attribute<bool>           bijeen      := fss/gebruiksdoelen/bijeenkomst;
+			attribute<bool>           cel         := fss/gebruiksdoelen/cel;
+			attribute<bool>           gezondheid  := fss/gebruiksdoelen/gezondheidszorg;
+			attribute<bool>           industrie   := fss/gebruiksdoelen/industrie;
+			attribute<bool>           kantoor     := fss/gebruiksdoelen/kantoor;
+			attribute<bool>           logies      := fss/gebruiksdoelen/logies;
+			attribute<bool>           onderwijs   := fss/gebruiksdoelen/onderwijs;
+			attribute<bool>           overig      := fss/gebruiksdoelen/overige_gebruiks;
+			attribute<bool>           sport       := fss/gebruiksdoelen/sport;
+			attribute<bool>           winkel      := fss/gebruiksdoelen/winkel;
+			attribute<bool>           woon        := fss/gebruiksdoelen/woon;
+
+			attribute<uint8>          STATUS_rel  := uint8(rlookup(fss/meta/STATUS, status/values));
+			attribute<eenheden/datum> BEGINDAT    := fss/meta/BEGINDATUM;
+			attribute<eenheden/datum> EINDDAT     := fss/meta/EINDDATUM;
+// 			attribute<eenheden/datum> DOCDAT      := fss/meta/DOCUMENTDATUM;
+// 			attribute<string>         DOCNR       := fss/meta/DOCUMENTNUMMER;
+			attribute<bool>           IS_CON      := fss/meta/IS_GECONSTATEERD;
+		}
+
+		unit<uint32> shp_gerelateerdPand := fss, StorageName= "= ResultShapeFileDir + '/vbo_pand_rel.dbf'"
+		{
+			attribute<string> id      := gerelateerdPand/identificatie;
+			attribute<string> pand_id := gerelateerdPand/pand_id;
+		}
+	}
+
+	container nummeraanduiding
+	{
+		unit<uint32> fss
+		:	StorageName     = "= SnapshotFSSDir + '/nummeraanduiding.fss'"
+		,	StorageReadOnly = "True"
+		{
+			attribute<string> identificatie;
+			attribute<int32>  huisnummer;
+			attribute<string> huisletter;
+			attribute<string> toevoeging;
+			attribute<string> postcode;
+			attribute<string> typeAdresseerbaarObject;
+			attribute<string> openbareruimte_id;
+
+			unit<uint32> meta := .
+			{
+				attribute<string>         STATUS;
+				attribute<eenheden/datum> BEGINDATUM;
+				attribute<eenheden/datum> EINDDATUM;
+// 				attribute<eenheden/datum> DOCUMENTDATUM;
+// 				attribute<string>         DOCUMENTNUMMER;
+				attribute<bool>           IS_GECONSTATEERD;
+			}
+		}
+
+		unit<uint32> status := unique(fss/meta/status), StorageName= "= ResultShapeFileDir + '/nummeraanduiding_status_code.dbf'"
+		{
+			attribute<uint8>  code   := uint8(id(.));
+			attribute<string> label  := values;
+			attribute<string> values : DisableStorage = "True";
+		}
+
+		unit<uint32> dbf := fss, StorageName= "= ResultShapeFileDir + '/nummeraanduiding.dbf'"
+		{
+			attribute<string>         id         := fss/identificatie;
+			attribute<int32>          huisnummer := fss/huisnummer;
+			attribute<string>         huisletter := fss/huisletter;
+			attribute<string>         toevoeging := fss/toevoeging; 
+			attribute<string>         postcode   := fss/postcode;
+			attribute<string>         typeAO     := fss/typeAdresseerbaarObject;
+			attribute<string>         openbar_id := fss/openbareruimte_id;
+
+			attribute<uint8>          STATUS_rel := uint8(rlookup(fss/meta/STATUS, status/values));
+			attribute<eenheden/datum> BEGINDAT   := fss/meta/BEGINDATUM;
+			attribute<eenheden/datum> EINDDAT    := fss/meta/EINDDATUM;
+// 			attribute<eenheden/datum> DOCDAT     := fss/meta/DOCUMENTDATUM;
+// 			attribute<string>         DOCNR      := fss/meta/DOCUMENTNUMMER;
+			attribute<bool>           IS_CON     := fss/meta/IS_GECONSTATEERD;
+		}
+	}
+
+	container openbareruimte
+	{
+		unit<uint32> fss
+		:	StorageName     = "= SnapshotFSSDir + '/openbareruimte.fss'"
+		,	StorageReadOnly = "True"
+		{
+			attribute<string> identificatie;
+			attribute<string> naam;
+			attribute<string> type;
+			attribute<string> woonplaats_id;
+
+			unit<uint32> meta := .
+			{
+				attribute<string>         STATUS;
+				attribute<eenheden/datum> BEGINDATUM;
+				attribute<eenheden/datum> EINDDATUM;
+// 				attribute<eenheden/datum> DOCUMENTDATUM;
+// 				attribute<string>         DOCUMENTNUMMER;
+				attribute<bool>           IS_GECONSTATEERD;
+			}
+		}
+
+		unit<uint32> status := unique(fss/meta/status), StorageName= "= ResultShapeFileDir + '/openbareruimte_status_code.dbf'"
+		{
+			attribute<uint8>  code   := uint8(id(.));
+			attribute<string> label  := values;
+			attribute<string> values : DisableStorage = "True";
+		}
+
+		unit<uint32> dbf := fss, StorageName= "= ResultShapeFileDir + '/openbareruimte.dbf'"
+		{
+			attribute<string>         id         := fss/identificatie;
+			attribute<string>         naam       := fss/naam;
+			attribute<string>         type       := fss/type;
+			attribute<string>         woonpl_id  := fss/woonplaats_id;
+
+			attribute<uint8>          STATUS_rel := uint8(rlookup(fss/meta/STATUS, status/values));
+			attribute<eenheden/datum> BEGINDAT   := fss/meta/BEGINDATUM;
+			attribute<eenheden/datum> EINDDAT    := fss/meta/EINDDATUM;
+// 			attribute<eenheden/datum> DOCDAT     := fss/meta/DOCUMENTDATUM;
+// 			attribute<string>         DOCNR      := fss/meta/DOCUMENTNUMMER;
+			attribute<bool>           IS_CON     := fss/meta/IS_GECONSTATEERD;
+		}
+	}
+
+	container woonplaats
+	{
+		unit<uint32> fss
+		:	StorageName     = "= SnapshotFSSDir + '/woonplaats.fss'"
+		,	StorageReadOnly = "True"
+		{
+			attribute<geometries/rdc_mm> geometry_mm (polygon);
+			attribute<string>            identificatie;
+			attribute<string>            woonplaatsNaam;
+
+			unit<uint32> meta := .
+			{
+				attribute<string>         STATUS;
+				attribute<eenheden/datum> BEGINDATUM;
+				attribute<eenheden/datum> EINDDATUM;
+// 				attribute<eenheden/datum> DOCUMENTDATUM;
+// 				attribute<string>         DOCUMENTNUMMER;
+				attribute<bool>           IS_GECONSTATEERD;
+			}
+		}
+
+		unit<uint32> status := unique(fss/meta/status), StorageName= "= ResultShapeFileDir + '/woonplaats_status_code.dbf'"
+		{
+			attribute<uint8>  code   := uint8(id(.));
+			attribute<string> label  := values;
+			attribute<string> values : DisableStorage = "True";
+		}
+
+		unit<uint32> shp:= fss, StorageName= "= ResultShapeFileDir + '/woonplaats.dbf'"
+		{
+			attribute<geometries/rdc> geometry (polygon) := fss/geometry_mm[geometries/rdc]
+			,	StorageName= "= ResultShapeFileDir + '/woonplaats.shp'";
+
+			attribute<string>         id         := fss/identificatie;
+			attribute<string>         naam       := fss/woonplaatsNaam;
+
+			attribute<uint8>          STATUS_rel := uint8(rlookup(fss/meta/STATUS, status/values));
+			attribute<eenheden/datum> BEGINDAT   := fss/meta/BEGINDATUM;
+			attribute<eenheden/datum> EINDDAT    := fss/meta/EINDDATUM;
+// 			attribute<eenheden/datum> DOCDAT     := fss/meta/DOCUMENTDATUM;
+// 			attribute<string>         DOCNR      := fss/meta/DOCUMENTNUMMER;
+			attribute<bool>           IS_CON     := fss/meta/IS_GECONSTATEERD;
+		}
+	}
+	container adres
+	{
+		unit<uint32> fss
+		:	StorageName     = "= SnapshotFSSDir + '/adres.fss'"
+		,	StorageReadOnly = "True"
+		{
+			attribute<geometries/rdc> geometry;
+			
+			attribute<string> nummeraanduiding_id;
+			attribute<string> straatnaam;
+			attribute<int32>  huisnummer;
+			attribute<string> huisletter;
+			attribute<string> toevoeging;
+			attribute<string> postcode;
+			attribute<string> woonplaatsNaam;
+		}
+
+		unit<uint32> shp := fss, StorageName= "= ResultShapeFileDir + '/adres.dbf'"
+		{
+			attribute<geometries/rdc> geometry   := fss/geometry, StorageName= "= ResultShapeFileDir + '/adres.shp'";
+
+			attribute<string>         id         := fss/nummeraanduiding_id;
+			attribute<int32>          huisnummer := fss/huisnummer;
+			attribute<string>         huisletter := fss/huisletter;
+			attribute<string>         toevoeging := fss/toevoeging; 
+			attribute<string>         postcode   := fss/postcode;
+			attribute<string>         straatnaam := fss/straatnaam;
+			attribute<string>         woonplaats := fss/woonplaatsNaam;
+		}
+	}
+}
