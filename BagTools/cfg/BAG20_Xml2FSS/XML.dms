@@ -1,0 +1,954 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//              Configuratie voor project: BAG 2.0 XML bronfiles > FSS                //
+//                                                                                    //
+//                              Object Vision 2022                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                 Configuratie van XML Files en het parsen ervan                     //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container XML
+{
+	container folderinfo
+	{
+		container impl
+		{
+			parameter<string> ComSpec         := Expand(., '%env:ComSpec%');
+			parameter<string> FileNameDirInfo := '%LocalDataProjDir%/dirinfo_' + date +'.str';
+
+			parameter<string> DirCmdOrg       := Expand(., 'MD "%LocalDataProjDir%" & Dir '+ XmlDir +'/*.xml > ' + FileNameDirInfo);
+			parameter<string> DirCmd          := Replace(DirCmdOrg, '/', '\\') + ' /B';
+			
+			parameter<string> NewLine         : [ '\n' ];
+		}
+
+		parameter<uint32>   writeObjectenlijst := exec_ec(impl/ComSpec, '/c ' + impl/DirCmd, Expand(., '%LocalDataProjDir%'));
+		parameter<bool>     CheckIsBAG2data    := strcount(xml/ligplaats/XmlData[0], '<Objecten:Ligplaats>') > 0;
+		parameter<uint8>    CanGenerate        := writeObjectenlijst > 0 
+			?	2b
+			:	!CheckIsBAG2data 
+				? 1b
+				: 0b;
+		
+		
+		parameter<string> Objectenlijst: Storagename = "=impl/FileNameDirInfo";	
+
+		container bestand_selectie
+		{
+			parameter<uint32> nr_lines := strcount(Objectenlijst,impl/NewLine);
+			unit<uint32> alle_regels := range(uint32, 0, nr_lines)
+			{
+				attribute<string> inhoud    := uppercase(readLines(Objectenlijst, ., 0));
+				attribute<bool>   isxmlfile := strcount(inhoud,'.XML') > 0;
+			}
+
+			unit<uint32> xml_regels := Subset(alle_regels/isxmlfile)
+			{
+				attribute<string> inhoud := alle_regels/inhoud[nr_OrgEntity];	
+			}
+			
+			container xml_bestanden
+			{
+				unit<uint32> ligplaats := Subset(strcount(xml_regels/inhoud,'LIG') > 0)
+				{
+					attribute<string> naam := xml_regels/inhoud[nr_OrgEntity];
+				}
+
+				unit<uint32> standplaats := Subset(strcount(xml_regels/inhoud,'STA') > 0)
+				{
+					attribute<string> naam := xml_regels/inhoud[nr_OrgEntity];
+				}
+				
+				unit<uint32> pand := Subset(strcount(xml_regels/inhoud,'PND') > 0)
+				{
+					attribute<string> naam := xml_regels/inhoud[nr_OrgEntity];
+				}
+				
+				unit<uint32> vbo := Subset(strcount(xml_regels/inhoud,'VBO') > 0)
+				{
+					attribute<string> naam := xml_regels/inhoud[nr_OrgEntity];
+				}
+				
+				unit<uint32> nummeraanduiding := Subset(strcount(xml_regels/inhoud,'NUM') > 0)
+				{
+					attribute<string> naam := xml_regels/inhoud[nr_OrgEntity];
+				}
+				
+				unit<uint32> openbareruimte := Subset(strcount(xml_regels/inhoud,'OPR') > 0)
+				{
+					attribute<string> naam := xml_regels/inhoud[nr_OrgEntity];
+				}
+				
+				unit<uint32> woonplaats := Subset(strcount(xml_regels/inhoud,'WPL') > 0 && strcount(xml_regels/inhoud,'GEM-WPL-RELATIE') == 0)
+				{
+					attribute<string> naam := xml_regels/inhoud[nr_OrgEntity];
+				}
+			}
+		}
+	}
+
+	container ligplaats
+	{
+		unit<uint32> File := folderinfo/bestand_selectie/xml_bestanden/ligplaats;
+		attribute<string> FileName(File) := File/naam;
+		attribute<string> XmlData(File)
+		:	StorageType = "strfiles"
+		,	StorageName = "=XmlDir";
+
+		//container nr_srsDimension := Templates/determine_nr_srsDimension(File, XmlData);
+
+		/* XML code 1 liplaats object, BAG 2.0
+			<sl:stand>
+				<sl-bag-extract:bagObject>
+					<Objecten:Ligplaats>
+						<Objecten:heeftAlsHoofdadres>
+							<Objecten-ref:NummeraanduidingRef domein="NL.IMBAG.Nummeraanduiding">0003200000140497</Objecten-ref:NummeraanduidingRef>
+						</Objecten:heeftAlsHoofdadres>
+						<Objecten:voorkomen>
+							<Historie:Voorkomen>
+								<Historie:voorkomenidentificatie>1</Historie:voorkomenidentificatie>
+								<Historie:beginGeldigheid>2010-07-20</Historie:beginGeldigheid>
+								<Historie:tijdstipRegistratie>2010-10-20T08:59:19.000</Historie:tijdstipRegistratie>
+								<Historie:BeschikbaarLV>
+									<Historie:tijdstipRegistratieLV>2010-10-25T09:36:21.004</Historie:tijdstipRegistratieLV>
+								</Historie:BeschikbaarLV>
+							</Historie:Voorkomen>
+						</Objecten:voorkomen>
+						<Objecten:identificatie domein="NL.IMBAG.Ligplaats">0003020000000002</Objecten:identificatie>
+						<Objecten:status>Plaats aangewezen</Objecten:status>
+						<Objecten:geometrie>
+							<gml:Polygon srsName="urn:ogc:def:crs:EPSG::28992" srsDimension="2">
+								<gml:exterior>
+									<gml:LinearRing>
+										<gml:posList count="8">252451.865 593746.633 252450.808 593748.894 252431.9 593740.053 252432.842 593737.739 252433.901 593735.474 252435.595 593731.85 252454.618 593740.745 252451.865 593746.633</gml:posList>
+									</gml:LinearRing>
+								</gml:exterior>
+							</gml:Polygon>
+						</Objecten:geometrie>
+						<Objecten:geconstateerd>N</Objecten:geconstateerd>
+						<Objecten:documentdatum>2010-07-20</Objecten:documentdatum>
+						<Objecten:documentnummer>FB 2010/LIG001</Objecten:documentnummer>
+					</Objecten:Ligplaats>
+				</sl-bag-extract:bagObject>
+			</sl:stand>
+		*/
+
+		container schema// xml attributes are here modelled as sub units of the entity related unit.
+		{
+			unit<uint32> Objecten_ligplaats
+			{
+				attribute<string> Objecten_identificatie;
+				unit<uint32> Objecten_heeftAlsHoofdadres
+				{
+					attribute<string> Objectenref_NummeraanduidingRef;
+				}
+				unit<uint32> Objecten_heeftAlsNevenadres
+				{
+					unit<uint32> Objectenref_NummeraanduidingRef;
+				}
+				unit<uint32> Objecten_voorkomen
+				{
+					attribute<string> Historie_voorkomenidentificatie;
+					attribute<string> Historie_beginGeldigheid;
+					attribute<string> Historie_eindGeldigheid;
+
+					attribute<string> Historie_tijdstipRegistratie;
+					attribute<string> Historie_eindRegistratie;
+					attribute<string> Historie_tijdstipRegistratieLV;
+				}
+				unit<uint32> gml_Polygon // 1-1 relationship is assumed/likely
+				{
+					attribute<string> srsDimension; // must only have the value missing, 2 or 3
+
+					unit<uint32> gml_posList // 1-1 relationship is assumed/likely
+					{
+						attribute<string> srsDimension; // attribute, must only have the value missing, 2 or 3
+						attribute<string> count;
+					}
+
+					unit<uint32> gml_Interior
+					{
+						unit<uint32> gml_posList // 1-1 relationship is assumed/likely
+						{
+							attribute<string> srsDimension; // must only have the value missing, 2 or 3
+							attribute<string> count;
+						}
+					}
+				}
+
+				// Meta velden
+				attribute<string> Objecten_Status;
+				attribute<string> Objecten_geconstateerd;
+				attribute<string> Objecten_documentdatum;
+				attribute<string> Objecten_documentnummer;
+			}
+		}
+		container ParsedXML  := parse_xml(XmlData, schema);
+		container geoBuilder := Templates/ProcessGmlPolygon(ParsedXML/Objecten_ligplaats, false);
+	}
+
+	container standplaats
+	{
+		unit<uint32> File := folderinfo/bestand_selectie/xml_bestanden/standplaats;
+		attribute<string> FileName(File) := File/naam;
+		attribute<string> XmlData(File)
+		:	StorageType = "strfiles"
+		,	StorageName = "=XmlDir";
+
+
+		/* XML code 1 standplaats object, BAG 2.0
+			<sl:stand>
+				<sl-bag-extract:bagObject>
+					<Objecten:Standplaats>
+						<Objecten:heeftAlsHoofdadres>
+							<Objecten-ref:NummeraanduidingRef domein="NL.IMBAG.Nummeraanduiding">0009200007684892</Objecten-ref:NummeraanduidingRef>
+						</Objecten:heeftAlsHoofdadres>
+						<Objecten:voorkomen>
+							<Historie:Voorkomen>
+								<Historie:voorkomenidentificatie>2</Historie:voorkomenidentificatie>
+								<Historie:beginGeldigheid>2020-03-03</Historie:beginGeldigheid>
+								<Historie:tijdstipRegistratie>2020-03-09T15:23:49.144</Historie:tijdstipRegistratie>
+								<Historie:BeschikbaarLV>
+									<Historie:tijdstipRegistratieLV>2020-03-09T15:29:06.789</Historie:tijdstipRegistratieLV>
+								</Historie:BeschikbaarLV>
+							</Historie:Voorkomen>
+						</Objecten:voorkomen>
+						<Objecten:identificatie domein="NL.IMBAG.Standplaats">0009030000000001</Objecten:identificatie>
+						<Objecten:status>Plaats aangewezen</Objecten:status>
+						<Objecten:geometrie>
+							<gml:Polygon srsName="urn:ogc:def:crs:EPSG::28992" srsDimension="2">
+								<gml:exterior>
+									<gml:LinearRing>
+										<gml:posList count="51">242772.192 589786.78 242772.545 589787.874 242772.758 589789.004 242772.828 589790.152 242772.753 589791.3 242772.535 589792.429 242772.177 589793.521 242771.685 589794.561 242771.067 589795.53 242770.332 589796.415 242769.492 589797.2 242768.56 589797.874 242767.552 589798.425 242766.482 589798.846 242765.367 589799.13 242764.226 589799.271 242763.076 589799.269 242761.936 589799.122 242760.823 589798.834 242759.754 589798.408 242758.748 589797.852 242757.819 589797.174 242756.983 589796.385 242756.252 589795.497 242755.638 589794.525 242755.151 589793.483 242754.798 589792.389 242754.585 589791.259 242754.515 589790.111 242754.59 589788.964 242754.808 589787.835 242755.166 589786.742 242755.658 589785.703 242756.276 589784.733 242757.011 589783.849 242757.851 589783.064 242758.783 589782.39 242759.791 589781.838 242760.861 589781.417 242761.976 589781.134 242763.117 589780.992 242764.267 589780.995 242765.407 589781.141 242766.52 589781.43 242767.589 589781.856 242768.595 589782.412 242769.524 589783.09 242770.36 589783.879 242771.091 589784.766 242771.705 589785.739 242772.192 589786.78</gml:posList>
+									</gml:LinearRing>
+								</gml:exterior>
+							</gml:Polygon>
+						</Objecten:geometrie>
+						<Objecten:geconstateerd>N</Objecten:geconstateerd>
+						<Objecten:documentdatum>2020-03-03</Objecten:documentdatum>
+						<Objecten:documentnummer>73571-2020</Objecten:documentnummer>
+					</Objecten:Standplaats>
+				</sl-bag-extract:bagObject>
+			</sl:stand>
+		*/
+
+		container schema// xml attributes are here modelled as sub units of the entity related unit.
+		{
+			unit<uint32> Objecten_standplaats
+			{
+				attribute<string> Objecten_identificatie;
+				unit<uint32> Objecten_heeftAlsHoofdadres
+				{
+					attribute<string> Objectenref_NummeraanduidingRef;
+				}
+				unit<uint32> Objecten_heeftAlsNevenadres
+				{
+					unit<uint32> Objectenref_NummeraanduidingRef;
+				}
+				unit<uint32> Objecten_voorkomen
+				{
+					attribute<string> Historie_voorkomenidentificatie;
+					attribute<string> Historie_beginGeldigheid;
+					attribute<string> Historie_eindGeldigheid;
+
+					attribute<string> Historie_tijdstipRegistratie;
+					attribute<string> Historie_eindRegistratie;
+					attribute<string> Historie_tijdstipRegistratieLV;
+				}
+				unit<uint32> gml_Polygon // 1-1 relationship is assumed/likely
+				{
+					attribute<string> srsDimension; // must only have the value missing, 2 or 3
+
+					unit<uint32> gml_posList // 1-1 relationship is assumed/likely
+					{
+						attribute<string> srsDimension; // must only have the value missing, 2 or 3
+						attribute<string> count;
+					}
+					unit<uint32> gml_Interior 
+					{
+						unit<uint32> gml_posList // 1-1 relationship is assumed/likely
+						{
+							attribute<string> srsDimension; // must only have the value missing, 2 or 3
+							attribute<string> count;
+						}
+					}
+				}
+
+				// Meta velden
+				attribute<string> Objecten_Status;
+				attribute<string> Objecten_geconstateerd;
+				attribute<string> Objecten_documentdatum;
+				attribute<string> Objecten_documentnummer;
+			}
+		}
+		container ParsedXML  := parse_xml(XmlData, schema);
+		container geoBuilder := Templates/ProcessGmlPolygon(ParsedXML/Objecten_standplaats,false);
+	}
+
+	container pand
+	{
+		unit<uint32> FilesAll := folderinfo/bestand_selectie/xml_bestanden/pand
+		{
+			attribute<uint32> fileset_rel   := uint32(roundUp(float32(id(.) + 1) / 50f));
+
+			attribute<string> FileNumberStr := string(id(.) + 1);
+			attribute<string> FileName      := FilesAll/naam;
+		}
+
+		unit<uint32> fileset := unique(FilesAll/fileset_rel);
+
+		container PerFileSet :=
+			for_each_ne(
+				'fs_' + string(fileset/values)
+				,'VerwerkFileSet('+ string(fileset/values) + ')'
+			);
+
+		Template VerwerkFileSet
+		{
+			// begin case parameters
+			parameter<uint32> fileset_rel;
+			// end case parameters
+
+			unit<uint32>      File := Subset(FilesAll/fileset_rel = fileset_rel);
+
+			attribute<string> FileName (File) := FilesAll/FileName[File/nr_OrgEntity];
+			attribute<string> XmlData  (File)
+			:	StorageType = "strfiles"
+			,	StorageName = "=XmlDir";
+
+			container ParsedXML  := parse_xml(XmlData, schema);
+			container geoBuilder := Templates/ProcessGmlPolygon(ParsedXML/Objecten_pand,false);
+
+			unit<uint32> pand := ParsedXML/Objecten_Pand, StorageName= "= FSSDir + '/pand/fs_' + string(fileset_rel) + '.fss'"
+			{
+				attribute<rdc_mm> geometry_mm (polygon)  := geoBuilder/result;
+				attribute<string> identificatie          := Objecten_identificatie;
+				attribute<int16>  oorspronkelijkBouwjaar := Objecten_oorspronkelijkBouwjaar[int16];
+
+				container meta:= Templates/meta(., Objecten_Status);
+			}
+
+			/* XML code 1 pand object, BAG 2.0
+				<sl:stand>
+					<sl-bag-extract:bagObject>
+						<Objecten:Pand>
+							<Objecten:identificatie domein="NL.IMBAG.Pand">0037100000009201</Objecten:identificatie>
+							<Objecten:geometrie>
+								<gml:Polygon srsName="urn:ogc:def:crs:EPSG::28992" srsDimension="3">
+									<gml:exterior>
+										<gml:LinearRing>
+											<gml:posList count="9">264215.681 550515.864 0.0 264213.357 550519.028 0.0 264214.154 550519.613 0.0 264208.837 550526.851 0.0 264203.624 550523.022 0.0 264208.862 550515.892 0.0 264210.343 550516.98 0.0 264212.746 550513.708 0.0 264215.681 550515.864 0.0</gml:posList>
+										</gml:LinearRing>
+									</gml:exterior>
+								</gml:Polygon>
+							</Objecten:geometrie>
+							<Objecten:oorspronkelijkBouwjaar>1937</Objecten:oorspronkelijkBouwjaar>
+							<Objecten:status>Pand in gebruik</Objecten:status>
+							<Objecten:geconstateerd>N</Objecten:geconstateerd>
+							<Objecten:documentdatum>2010-06-14</Objecten:documentdatum>
+							<Objecten:documentnummer>2010.2845</Objecten:documentnummer>
+							<Objecten:voorkomen>
+								<Historie:Voorkomen>
+									<Historie:voorkomenidentificatie>1</Historie:voorkomenidentificatie>
+									<Historie:beginGeldigheid>2010-06-14</Historie:beginGeldigheid>
+									<Historie:eindGeldigheid>2014-06-27</Historie:eindGeldigheid>
+									<Historie:tijdstipRegistratie>2010-09-28T14:47:00.000</Historie:tijdstipRegistratie>
+									<Historie:eindRegistratie>2014-07-03T13:39:48.000</Historie:eindRegistratie>
+									<Historie:BeschikbaarLV>
+										<Historie:tijdstipRegistratieLV>2010-09-28T15:01:40.615</Historie:tijdstipRegistratieLV>
+										<Historie:tijdstipEindRegistratieLV>2014-07-03T14:02:39.623</Historie:tijdstipEindRegistratieLV>
+									</Historie:BeschikbaarLV>
+								</Historie:Voorkomen>
+							</Objecten:voorkomen>
+						</Objecten:Pand>
+					</sl-bag-extract:bagObject>
+				</sl:stand>
+			*/
+		}
+
+		container schema
+		{
+			unit<uint32> Objecten_pand
+			{
+				attribute<string> Objecten_identificatie;
+
+				unit<uint32> Objecten_voorkomen
+				{
+					attribute<string> Historie_voorkomenidentificatie;
+					attribute<string> Historie_beginGeldigheid;
+					attribute<string> Historie_eindGeldigheid;
+
+					attribute<string> Historie_tijdstipRegistratie;
+					attribute<string> Historie_eindRegistratie;
+					attribute<string> Historie_tijdstipRegistratieLV;
+				}
+				unit<uint32> gml_Polygon // 1-1 relationship is assumed/likely
+				{
+					attribute<string> srsDimension; // must only have the value missing, 2 or 3
+
+					unit<uint32> gml_posList // 1-1 relationship is assumed/likely
+					{
+						attribute<string> srsDimension; // must only have the value missing, 2 or 3
+						attribute<string> count;
+					}
+
+					unit<uint32> gml_Interior 
+					{
+						unit<uint32> gml_posList // 1-1 relationship is assumed/likely
+						{
+							attribute<string> srsDimension; // must only have the value missing, 2 or 3
+							attribute<string> count;
+						}
+					}
+				}
+				attribute<string> Objecten_oorspronkelijkBouwjaar;
+
+				// Meta velden
+				attribute<string> Objecten_Status;
+				attribute<string> Objecten_geconstateerd;
+				attribute<string> Objecten_documentdatum;
+				attribute<string> Objecten_documentnummer;
+			}
+		}
+	}
+
+	container vbo
+	{
+		unit<uint32> FilesAll:= folderinfo/bestand_selectie/xml_bestanden/vbo
+		{
+			attribute<uint32> fileset_rel   := uint32(roundUp(float32(id(.) + 1) / 50f));
+
+			attribute<string> FileNumberStr := string(id(.) + 1);
+			attribute<string> FileName      := FilesAll/naam;
+		}
+
+		unit<uint32> fileset:= unique(FilesAll/fileset_rel);
+
+		container PerFileSet:= 
+			for_each_ne(
+				'fs_' + string(fileset/values)
+				,'VerwerkFileSet('+ string(fileset/values)+ ')'
+			);
+
+		Template VerwerkFileSet
+		{
+			// begin case parameters
+			parameter<fileset> fileset_rel;
+			// end case parameters
+
+			unit<uint32> File := Subset(FilesAll/fileset_rel = fileset_rel);
+
+			attribute<string> FileName(File) := FilesAll/FileName[File/nr_OrgEntity];
+			attribute<string> XmlData (File)
+			:	StorageType = "strfiles"
+			,	StorageName = "=XmlDir";
+
+			/* XML code 1 verblijfsobject object, BAG 2.0
+				<sl:stand>
+					<sl-bag-extract:bagObject>
+						<Objecten:Verblijfsobject>
+							<Objecten:heeftAlsHoofdadres>
+								<Objecten-ref:NummeraanduidingRef domein="NL.IMBAG.Nummeraanduiding">0416200000222815</Objecten-ref:NummeraanduidingRef>
+							</Objecten:heeftAlsHoofdadres>
+							<Objecten:voorkomen>
+								<Historie:Voorkomen>
+									<Historie:voorkomenidentificatie>1</Historie:voorkomenidentificatie>
+									<Historie:beginGeldigheid>2009-07-28</Historie:beginGeldigheid>
+									<Historie:tijdstipRegistratie>2010-10-14T13:28:06.000</Historie:tijdstipRegistratie>
+									<Historie:BeschikbaarLV>
+										<Historie:tijdstipRegistratieLV>2010-10-14T13:32:52.254</Historie:tijdstipRegistratieLV>
+									</Historie:BeschikbaarLV>
+								</Historie:Voorkomen>
+							</Objecten:voorkomen>
+							<Objecten:identificatie domein="NL.IMBAG.Verblijfsobject">0416010000222816</Objecten:identificatie>
+							<Objecten:geometrie>
+								<Objecten:punt>
+									<gml:Point srsName="urn:ogc:def:crs:EPSG::28992" srsDimension="3">
+										<gml:pos>115514.0 523534.0 0.0</gml:pos>
+									</gml:Point>
+								</Objecten:punt>
+							</Objecten:geometrie>
+							<Objecten:gebruiksdoel>woonfunctie</Objecten:gebruiksdoel>
+							<Objecten:oppervlakte>156</Objecten:oppervlakte>
+							<Objecten:status>Verblijfsobject in gebruik</Objecten:status>
+							<Objecten:geconstateerd>N</Objecten:geconstateerd>
+							<Objecten:documentdatum>2009-07-28</Objecten:documentdatum>
+							<Objecten:documentnummer>2009-2252</Objecten:documentnummer>
+							<Objecten:maaktDeelUitVan>
+								<Objecten-ref:PandRef domein="NL.IMBAG.Pand">0416100000205735</Objecten-ref:PandRef>
+							</Objecten:maaktDeelUitVan>
+						</Objecten:Verblijfsobject>
+					</sl-bag-extract:bagObject>
+				</sl:stand>
+			*/
+
+			container ParsedXML  := parse_xml(XmlData, schema);
+			container geoBuilder := Templates/ProcessGmlPolygonImpl(ParsedXML/Objecten_Verblijfsobject/gml_Polygon);
+
+			unit<uint32> vbo_impl := ParsedXML/Objecten_Verblijfsobject
+			{
+				attribute<string> nummeraanduiding_id := 
+					vbo/Objecten_heeftAlsHoofdadres/Objectenref_NummeraanduidingRef
+						[invert(value(vbo_impl/Objecten_heeftAlsHoofdadres/Parent_rel, vbo_impl))];
+
+// 				unit<uint32> nevenadres := vbo_impl/Objecten_heeftAlsNevenadres // 1->0..n relatie
+// 				{
+// 					attribute<string> identificatie       :=  vbo_impl/Objecten_identificatie[value(nevenadres/Parent_rel, vbo_impl)];
+// 					attribute<string> nummeraanduiding_id := 
+// 						Objectenref_NummeraanduidingRef/nummeraanduiding_id
+// 							[invert(nevenadres/Objectenref_NummeraanduidingRef/Parent_rel[nevenadres])];
+
+// 					unit<uint32> Objectenref_NummeraanduidingRef := vbo_impl/Objecten_heeftAlsNevenadres/Objectenref_NummeraanduidingRef
+// 					{
+// 						attribute<string> nummeraanduiding_id := Objectenref_NummeraanduidingRef/_ValuesTable/Values[nevenadres/Objectenref_NummeraanduidingRef/value_rel];
+// 					}
+// 				}
+				
+				unit<uint32> nevenadres := vbo_impl/Objecten_heeftAlsNevenadres/Objectenref_NummeraanduidingRef  // 1->0..n relatie
+				{
+					attribute<uint32> mutatie_rel         := vbo_impl/Objecten_heeftAlsNevenadres/Parent_rel[nevenadres/Parent_rel];
+					attribute<string> nummeraanduiding_id := nevenadres/_ValuesTable/Values[nevenadres/value_rel];
+				}
+
+				attribute<string> gml_pos := ParsedXML/Objecten_Verblijfsobject/gml_pos;
+
+				attribute<float64> x := ReadElems(gml_pos, float64, const(0,.))
+				{
+					attribute<uint32> ReadPos (vbo); // expliciete configuratie is noodzakelijk, anders wordt domain unit vbo niet gevonden
+				}
+				attribute<float64> y := ReadElems(gml_pos, float64, x/ReadPos)
+				{
+					attribute<uint32> ReadPos (vbo); // expliciete configuratie is noodzakelijk, anders wordt domain unit vbo niet gevonden
+				}
+				attribute<rdc_mm> geometry_mm := point(Round(y * 1000.0), Round(x * 1000.0), rdc_mm);
+
+				unit<uint32> polygon := vbo/gml_Polygon
+				{
+					attribute<string> identificatie      := vbo/Objecten_identificatie[value(vbo_impl/gml_Polygon/Parent_rel, vbo_impl)];
+					attribute<rdc_mm> geometry_mm (poly) := geoBuilder/polygon/result;
+				}
+
+				attribute<int32> oppervlakte := vbo/Objecten_oppervlakte[int32];
+
+				unit<uint32> gerelateerdPand := vbo/Objecten_maaktDeelUitVan/Objectenref_PandRef // 1->0..n relatie
+				{
+// 					attribute<string> identificatie := vbo_impl/Objecten_identificatie[value(gerelateerdPand/Parent_rel, vbo_impl)];
+// 					attribute<string> pand_id := 
+// 						Objectenref_PandRef/nummeraanduiding_id
+// 							[invert(gerelateerdPand/Objectenref_PandRef/Parent_rel[gerelateerdPand])];
+
+// 					unit<uint32> Objectenref_PandRef := vbo_impl/Objecten_maaktDeelUitVan/Objectenref_PandRef
+// 					{
+// 						attribute<string> nummeraanduiding_id := Objectenref_PandRef/_ValuesTable/Values[gerelateerdPand/Objectenref_PandRef/value_rel];
+// 					}
+					attribute<uint32> mutatie_rel := vbo_impl/Objecten_maaktDeelUitVan/Parent_rel[gerelateerdPand/Parent_rel];
+					attribute<string> pand_id     := gerelateerdPand/_ValuesTable/Values[gerelateerdPand/value_rel];
+				}
+				// sectie gebruiksdoel
+				parameter<uint32> type_factor := 10000000;
+				unit<uint32> vbo_doel_domain  := vbo/Objecten_gebruiksdoel
+				{
+					attribute<uint32> key := parent_rel + type_factor * uint32(rlookup(_ValuesTable/values[value_rel], typeringen/gebruiksdoel_vbo/label));
+				}
+
+				container gebruiksdoelen:=
+					for_each_nedv(
+						typeringen/gebruiksdoel_vbo/name
+						,'isDefined(rlookup(type_factor * ' + string(id(typeringen/gebruiksdoel_vbo)) + '+ id(vbo),vbo_doel_domain/key))' 
+						,vbo
+						,bool
+					);
+			}
+
+			unit<uint32> vbo := ParsedXML/Objecten_Verblijfsobject, StorageName = "= FSSDir + '/vbo/fs_' + string(fileset_rel) + '.fss'"
+			{
+				attribute<string> identificatie       := vbo/Objecten_identificatie;
+				attribute<string> nummeraanduiding_id := vbo_impl/nummeraanduiding_id;
+				attribute<rdc_mm> geometry_mm         := vbo_impl/geometry_mm;
+				attribute<int32>  oppervlakte         := vbo_impl/Objecten_oppervlakte[int32];
+
+				unit<uint32> nevenadres := vbo_impl/nevenadres // 1->0..n relatie
+				{
+					attribute<string> nummeraanduiding_id := vbo_impl/nevenadres/nummeraanduiding_id;
+					attribute<uint32> mutatie_rel         := vbo_impl/nevenadres/mutatie_rel;
+				}
+
+				unit<uint32> polygon := vbo_impl/gml_Polygon
+				{
+					attribute<string> identificatie      := vbo_impl/polygon/identificatie;
+					attribute<rdc_mm> geometry_mm (poly) := vbo_impl/polygon/geometry_mm;
+				}
+
+				unit<uint32> gerelateerdPand := vbo_impl/gerelateerdPand
+				{
+					attribute<string> pand_id     := vbo_impl/gerelateerdPand/pand_id;
+					attribute<uint32> mutatie_rel := vbo_impl/gerelateerdPand/mutatie_rel;
+				}
+
+				// sectie gebruiksdoel
+				container gebruiksdoelen :=
+					for_each_nedv(
+						typeringen/gebruiksdoel_vbo/name_kort
+						,'vbo_impl/gebruiksdoelen/' + typeringen/gebruiksdoel_vbo/name
+						,vbo
+						,bool
+					);
+
+				container meta:= Templates/meta(., Objecten_Status);
+			}
+		}
+		template schema // xml attributes are here modelled as sub units of the entity related unit.
+		{
+			unit<uint32> Objecten_Verblijfsobject
+			{
+				attribute<string> Objecten_identificatie;
+
+				unit<uint32> Objecten_voorkomen
+				{
+					attribute<string> Historie_voorkomenidentificatie;
+					attribute<string> Historie_beginGeldigheid;
+					attribute<string> Historie_eindGeldigheid;
+
+					attribute<string> Historie_tijdstipRegistratie;
+					attribute<string> Historie_eindRegistratie;
+					attribute<string> Historie_tijdstipRegistratieLV;
+				}
+				unit<uint32> Objecten_heeftAlsHoofdadres
+				{
+					attribute<string> Objectenref_NummeraanduidingRef;
+				}
+				unit<uint32> Objecten_heeftAlsNevenadres
+				{
+					unit<uint32> Objectenref_NummeraanduidingRef;
+				}
+
+				attribute<string> gml_pos;
+
+				unit<uint32> gml_Polygon
+				{
+					attribute<string> srsDimension; // must only have the value missing, 2 or 3
+
+					unit<uint32> gml_posList // 1-1 relationship is assumed/likely
+					{
+						attribute<string> srsDimension; // must only have the value missing, 2 or 3
+						attribute<string> count;
+					}
+					unit<uint32> gml_Interior 
+					{
+						unit<uint32> gml_posList // 1-1 relationship is assumed/likely
+						{
+							attribute<string> srsDimension; // must only have the value missing, 2 or 3
+							attribute<string> count;
+						}
+					}
+				}
+
+				unit<uint32> Objecten_gebruiksdoel;
+				attribute<string> Objecten_oppervlakte;
+
+				unit<uint32> Objecten_maaktDeelUitVan
+				{
+					unit<uint32> Objectenref_PandRef;
+				}
+
+				// Meta velden
+				attribute<string> Objecten_Status;
+				attribute<string> Objecten_geconstateerd;
+				attribute<string> Objecten_documentdatum;
+				attribute<string> Objecten_documentnummer;
+			}
+		}
+	}
+
+	container nummeraanduiding
+	{
+		unit<uint32> FilesAll:= folderinfo/bestand_selectie/xml_bestanden/nummeraanduiding
+		{
+			attribute<uint32> fileset_rel   := uint32(roundUp(float32(id(.) + 1) / 50f));
+
+			attribute<string> FileNumberStr := string(id(.) + 1);
+			attribute<string> FileName      := FilesAll/naam;
+		}
+
+		unit<uint32> fileset := unique(FilesAll/fileset_rel);
+
+		container PerFileSet :=
+			for_each_ne(
+				'fs_' + string(fileset/values)
+				,'VerwerkFileSet('+ string(fileset/values) + ')'
+			);
+
+		Template VerwerkFileSet
+		{
+			// begin case parameters
+			parameter<fileset> fileset_rel;
+			// end case parameters
+
+			unit<uint32> File := Subset(FilesAll/fileset_rel == fileset_rel);
+
+			attribute<string> FileName(File) := FilesAll/FileName[File/nr_OrgEntity];
+			attribute<string> XmlData (File)
+			:	StorageType = "strfiles"
+			,	StorageName = "=XmlDir";
+
+			/* XML code 1 nummeraanduiding object, BAG 2.0
+				<sl:stand>
+					<sl-bag-extract:bagObject>
+						<Objecten:Nummeraanduiding>
+							<Objecten:identificatie domein="NL.IMBAG.Nummeraanduiding">0003200000133985</Objecten:identificatie>
+							<Objecten:huisnummer>3</Objecten:huisnummer>
+							<Objecten:huisnummertoevoeging>I</Objecten:huisnummertoevoeging>
+							<Objecten:postcode>9901AA</Objecten:postcode>
+							<Objecten:typeAdresseerbaarObject>Verblijfsobject</Objecten:typeAdresseerbaarObject>
+							<Objecten:status>Naamgeving uitgegeven</Objecten:status>
+							<Objecten:geconstateerd>N</Objecten:geconstateerd>
+							<Objecten:documentdatum>2010-07-20</Objecten:documentdatum>
+							<Objecten:documentnummer>FB 2010/NUM001</Objecten:documentnummer>
+							<Objecten:voorkomen>
+								<Historie:Voorkomen>
+									<Historie:voorkomenidentificatie>1</Historie:voorkomenidentificatie>
+									<Historie:beginGeldigheid>2010-07-20</Historie:beginGeldigheid>
+									<Historie:eindGeldigheid>2016-04-26</Historie:eindGeldigheid>
+									<Historie:tijdstipRegistratie>2010-10-20T08:43:48.000</Historie:tijdstipRegistratie>
+									<Historie:eindRegistratie>2016-04-26T14:36:17.000</Historie:eindRegistratie>
+									<Historie:BeschikbaarLV>
+										<Historie:tijdstipRegistratieLV>2010-10-25T09:35:10.951</Historie:tijdstipRegistratieLV>
+										<Historie:tijdstipEindRegistratieLV>2016-04-26T15:00:04.878</Historie:tijdstipEindRegistratieLV>
+									</Historie:BeschikbaarLV>
+								</Historie:Voorkomen>
+							</Objecten:voorkomen>
+							<Objecten:ligtAan>
+								<Objecten-ref:OpenbareRuimteRef domein="NL.IMBAG.Openbareruimte">0003300000117203</Objecten-ref:OpenbareRuimteRef>
+							</Objecten:ligtAan>
+						</Objecten:Nummeraanduiding>
+					</sl-bag-extract:bagObject>
+				</sl:stand>
+			*/
+
+			container ParsedXML := parse_xml(XmlData, schema);
+
+			unit<uint32> nummeraanduiding := ParsedXML/Objecten_Nummeraanduiding
+			{
+				attribute<string> OpenbareRuimte_id := nummeraanduiding/Objecten_ligtAan/Objectenref_OpenbareRuimteRef
+					[invert(value(nummeraanduiding/Objecten_ligtAan/Parent_rel, nummeraanduiding))];
+				attribute<string> Woonplaats_id     := nummeraanduiding/Objecten_ligtIn/Objectenref_WoonplaatsRef
+					[invert(value(nummeraanduiding/Objecten_ligtIn/Parent_rel, nummeraanduiding))];
+
+				container meta := Templates/meta(.,Objecten_Status);
+			}
+		}
+
+		template schema // xml attributes are here modelled as sub units of the entity related unit.
+		{
+			unit<uint32> Objecten_Nummeraanduiding
+			{
+				attribute<string> Objecten_identificatie;
+				attribute<string> Objecten_huisnummer;
+				attribute<string> Objecten_huisletter;
+				attribute<string> Objecten_huisnummertoevoeging;
+				attribute<string> Objecten_postcode;
+				attribute<string> Objecten_typeAdresseerbaarObject;
+
+				unit<uint32> Objecten_ligtAan
+				{
+					attribute<string> Objectenref_OpenbareRuimteRef;
+				}
+
+				unit<uint32> Objecten_ligtIn
+				{
+					attribute<string> Objectenref_WoonplaatsRef;
+				}
+
+				attribute<string> Objecten_Status;
+				attribute<string> Objecten_geconstateerd;
+				attribute<string> Objecten_documentdatum;
+				attribute<string> Objecten_documentnummer;
+
+				unit<uint32> Objecten_voorkomen
+				{
+					attribute<string> Historie_voorkomenidentificatie;
+					attribute<string> Historie_beginGeldigheid;
+					attribute<string> Historie_eindGeldigheid;
+
+					attribute<string> Historie_tijdstipRegistratie;
+					attribute<string> Historie_eindRegistratie;
+					attribute<string> Historie_tijdstipRegistratieLV;
+				}
+			}
+		}
+	}
+
+	container openbareruimte
+	{
+		unit<uint32> File := folderinfo/bestand_selectie/xml_bestanden/openbareruimte;
+		attribute<string> FileName(File) := File/naam;
+		attribute<string> XmlData(File)
+		:	StorageType = "strfiles"
+		,	StorageName = "=XmlDir";
+
+		/* XML code 1 openbareruimte object, BAG 2.0
+			<sl:stand>
+				<sl-bag-extract:bagObject>
+					<Objecten:OpenbareRuimte>
+						<Objecten:identificatie domein="NL.IMBAG.Openbareruimte">1525300000000021</Objecten:identificatie>
+						<Objecten:naam>Leidsevaart</Objecten:naam>
+						<Objecten:type>Weg</Objecten:type>
+						<Objecten:status>Naamgeving uitgegeven</Objecten:status>
+						<Objecten:geconstateerd>N</Objecten:geconstateerd>
+						<Objecten:documentdatum>1988-05-31</Objecten:documentdatum>
+						<Objecten:documentnummer>RB-1988/49</Objecten:documentnummer>
+						<Objecten:ligtIn>
+							<Objecten-ref:WoonplaatsRef domein="NL.IMBAG.Woonplaats">2003</Objecten-ref:WoonplaatsRef>
+						</Objecten:ligtIn>
+						<Objecten:voorkomen>
+							<Historie:Voorkomen>
+								<Historie:voorkomenidentificatie>1</Historie:voorkomenidentificatie>
+								<Historie:beginGeldigheid>1988-05-31</Historie:beginGeldigheid>
+								<Historie:tijdstipRegistratie>2009-12-16T13:45:16.000</Historie:tijdstipRegistratie>
+								<Historie:BeschikbaarLV>
+									<Historie:tijdstipRegistratieLV>2009-12-16T14:01:33.355</Historie:tijdstipRegistratieLV>
+								</Historie:BeschikbaarLV>
+							</Historie:Voorkomen>
+						</Objecten:voorkomen>
+					</Objecten:OpenbareRuimte>
+				</sl-bag-extract:bagObject>
+			</sl:stand>
+			<sl:stand>
+		*/
+
+		template schema // xml attributes are here modelled as sub units of the entity related unit.
+		{
+			unit<uint32> Objecten_OpenbareRuimte 
+			{
+				attribute<string> Objecten_identificatie;
+				attribute<string> Objecten_Naam;
+				attribute<string> Objecten_Type;
+
+				attribute<string> Objecten_Status;
+				attribute<string> Objecten_geconstateerd;
+				attribute<string> Objecten_documentdatum;
+				attribute<string> Objecten_documentnummer;
+
+				unit<uint32> Objecten_ligtIn
+				{
+					attribute<string> Objectenref_WoonplaatsRef;
+				}
+
+				unit<uint32> Objecten_voorkomen
+				{
+					attribute<string> Historie_voorkomenidentificatie;
+					attribute<string> Historie_beginGeldigheid;
+					attribute<string> Historie_eindGeldigheid;
+
+					attribute<string> Historie_tijdstipRegistratie;
+					attribute<string> Historie_eindRegistratie;
+					attribute<string> Historie_tijdstipRegistratieLV;
+				}
+			}
+		}
+		container ParsedXML := parse_xml(XmlData, schema);
+
+		attribute<string> gerelateerdeWoonplaats_id (ParsedXML/Objecten_OpenbareRuimte) := 
+			ParsedXML/Objecten_OpenbareRuimte/Objecten_ligtIn/Objectenref_WoonplaatsRef
+				[invert(value(ParsedXML/Objecten_OpenbareRuimte/Objecten_ligtIn/Parent_rel, ParsedXML/Objecten_OpenbareRuimte))];
+	}
+
+	container woonplaats
+	{
+		unit<uint32> File := folderinfo/bestand_selectie/xml_bestanden/woonplaats;
+		attribute<string> FileName(File) := File/naam;
+		attribute<string> XmlData(File)
+		:	StorageType = "strfiles"
+		,	StorageName = "=XmlDir";
+		attribute<uint32> nr_srsDimension  (File):= strcount(XmlData, 'srsDimension') ;
+		attribute<uint32> nr_srsDimension2 (File):= strcount(XmlData, 'srsDimension="2"');
+		parameter<bool>   allnr_srsDimensionis2  := all(nr_srsDimension == nr_srsDimension2);
+
+		/* XML code 1 woonplaats object, BAG 2.0
+		<sl:stand>
+			<sl-bag-extract:bagObject>
+				<Objecten:Woonplaats>
+					<Objecten:identificatie domein="NL.IMBAG.Woonplaats">1622</Objecten:identificatie>
+					<Objecten:naam>Voorburg</Objecten:naam>
+					<Objecten:geometrie>
+						<Objecten:vlak>
+							<gml:Polygon srsName="urn:ogc:def:crs:EPSG::28992" srsDimension="2">
+								<gml:exterior>
+									<gml:LinearRing>
+										<gml:posList count="825">84025.702 452849.477 84031.588 452856.431 84041.622 452868.719 84051.801 452880.773 84055.615 452885.421 84059.161 452890.053 84067.267 452901.58 84084.052 452925.909 84088.42 452932.065 84098.127 452945.825 84108.977 452961.226 84111.214 452964.438 84112.685 452966.387 84114.485 452968.646 84116.296 452970.85 84118.425 452973.293 84120.082 452975.037 84122.326 452977.037 84126.063 452980.002 84130.458 452983.46 84133.208 452985.496 84148.105 452996.381 84153.24 453000.0 84159.457 453004.382 84173.562 453014.078 84179.021 453017.744 84190.098 453025.071 84198.141 453030.367 84215.475 453041.835 84226.867 453049.24 84240.638 453058.217 84276.209 453081.862 84284.901 453087.627 84295.655 453094.759 84301.742 453098.835 84306.139 453101.671 84306.647 453102.036 84308.958 453103.696 84330.695 453119.567 84341.992 453127.682 84344.88 453129.697 84358.453 453138.149 84364.46 453141.916 84383.208 453153.914 84397.053 453162.657 84410.037 453171.307 84442.493 453192.817 84458.74 453203.45 84468.96 453209.912 84500.0 453229.799 84513.256 453238.292 84518.916 453242.087 84529.063 453248.866 84530.801 453250.0 84589.092 453288.031 84602.647 453296.405 84613.201 453302.889 84625.369 453310.593 84637.636 453318.652 84645.838 453324.083 84666.526 453338.442 84679.347 453347.602 84697.331 453360.55 84705.97 453366.5 84721.086 453377.083 84726.057 453380.85 84730.958 453384.583 84736.589 453389.313 84745.816 453397.511 84758.455 453408.523 84763.956 453413.834 84769.001 453418.786 84773.379 453423.342 84778.42 453428.613 84782.747 453433.08 84789.884 453440.424 84807.522 453458.666 84810.488 453461.668 84813.248 453464.315 84813.811 453465.126 84816.952 453469.896 84817.534 453470.636 84841.507 453500.0 84869.566 453534.369 84902.599 453567.394 84942.06 453591.611 84955.192 453599.67 84974.898 453612.994 84980.286 453617.167 84988.737 453621.779 84999.824 453631.395 85000.0 453631.574 85015.734 453647.579 85030.532 453662.868 85053.726 453685.136 85100.642 453729.393 85115.279 453741.711 85120.046 453745.691 85124.409 453750.0 85135.207 453760.664 85165.725 453790.538 85210.259 453830.845 85225.718 453844.297 85239.419 453855.892 85260.558 453874.779 85335.844 453944.547 85347.818 453957.236 85354.038 453963.828 85356.373 453966.097 85391.01 454000.0 85408.86 454017.472 85457.082 454063.244 85500.0 454102.746 85511.037 454112.904 85553.734 454153.284 85585.669 454184.077 85612.885 454210.144 85639.11 454234.645 85655.462 454250.0 85665.361 454259.296 85684.283 454277.799 85693.868 454287.024 85709.995 454305.586 85719.17 454316.168 85723.618 454321.123 85732.2 454330.01 85744.658 454341.78 85749.658 454345.551 85753.996 454348.79 85760.17 454353.281 85763.043 454355.775 85776.206 454368.179 85790.656 454381.751 85801.222 454391.714 85803.121 454393.526 85817.477 454407.217 85842.661 454431.458 85873.243 454460.28 85898.135 454483.791 85915.794 454500.0 85921.126 454504.894 85940.831 454522.571 85949.942 454530.56 85956.053 454533.871 85970.983 454541.833 85981.043 454547.326 85989.42 454551.217 85999.264 454555.754 86000.0 454556.041 86008.094 454559.2 86019.092 454563.249 86047.335 454574.065 86049.443 454574.864 86095.813 454600.062 86116.504 454612.826 86124.912 454617.427 86155.777 454633.929 86198.951 454656.829 86266.67 454691.89 86277.518 454697.506 86279.015 454698.281 86313.729 454716.381 86364.342 454743.584 86378.208 454750.0 86421.369 454769.972 86459.254 454787.741 86500.0 454806.692 86506.213 454809.582 86540.641 454825.528 86569.608 454839.078 86600.446 454853.997 86643.885 454874.956 86648.717 454877.335 86680.262 454892.865 86717.467 454912.058 86746.739 454924.808 86738.859 454933.931 86737.043 454936.034 86699.716 454979.568 86688.494 454993.161 86684.577 454998.36 86683.342 455000.0 86664.384 455025.165 86641.342 455059.343 86626.846 455075.001 86606.008 455097.688 86603.504 455100.415 86582.684 455131.728 86563.07 455156.492 86555.48 455166.568 86549.894 455173.982 86538.484 455190.802 86536.626 455193.541 86543.492 455198.159 86567.173 455218.54 86572.94 455223.346 86567.522 455231.295 86566.602 455232.644 86555.756 455248.494 86554.798 455250.0 86544.427 455266.311 86535.791 455278.184 86532.131 455283.216 86515.494 455307.58 86500.0 455330.995 86487.994 455349.138 86461.646 455390.168 86460.28 455392.296 86461.118 455394.715 86461.65 455396.389 86454.115 455406.733 86449.596 455412.963 86449.589 455412.973 86439.839 455426.415 86436.983 455430.353 86436.961 455430.383 86434.043 455434.406 86434.023 455434.434 86431.039 455438.53 86430.931 455438.678 86428.031 455442.65 86427.914 455442.81 86423.634 455448.674 86423.616 455448.699 86412.279 455464.23 86411.889 455464.764 86406.729 455472.113 86406.056 455473.072 86403.467 455476.761 86402.742 455477.793 86400.496 455480.994 86399.559 455482.328 86397.361 455485.458 86396.481 455486.712 86396.106 455487.246 86394.058 455490.106 86393.365 455491.074 86390.898 455494.521 86390.13 455495.594 86387.743 455498.928 86386.987 455499.984 86386.976 455500.0 86384.481 455503.485 86383.867 455504.342 86383.617 455504.692 86375.926 455515.434 86370.865 455522.503 86370.782 455522.62 86367.714 455526.966 86367.568 455527.172 86364.551 455531.444 86364.304 455531.794 86361.353 455535.971 86361.063 455536.382 86358.12 455540.55 86357.957 455540.78 86354.844 455545.188 86351.127 455550.451 86350.836 455550.864 86347.558 455555.505 86347.2 455556.013 86344.98 455559.155 86340.173 455565.997 86339.684 455566.693 86338.007 455569.08 86337.905 455569.225 86333.03 455576.468 86332.79 455576.824 86322.292 455592.424 86319.891 455596.722 86319.744 455596.986 86318.125 455601.841 86315.134 455610.812 86310.783 455620.004 86305.826 455626.132 86304.292 455627.88 86297.891 455635.131 86291.162 455642.86 86282.554 455651.523 86275.718 455658.922 86263.554 455671.814 86253.413 455681.887 86253.014 455681.522 86227.125 455657.871 86196.747 455630.253 86176.691 455655.539 86155.631 455680.596 86119.625 455727.564 86108.777 455741.269 86101.181 455750.0 86101.071 455750.126 86100.726 455750.523 86092.297 455759.639 86087.294 455765.05 86074.933 455780.173 86063.086 455794.159 86062.021 455795.417 86048.86 455810.953 86036.302 455824.992 86027.116 455835.614 86023.689 455838.808 86007.341 455857.815 86000.824 455865.866 86000.0 455866.805 85982.153 455887.139 85972.605 455894.133 85966.129 455900.762 85929.809 455944.882 85919.742 455959.062 85913.978 455966.456 85901.235 455981.132 85891.461 455992.438 85884.817 456000.0 85883.147 456001.901 85876.266 456010.028 85847.806 456043.523 85832.263 456062.187 85811.436 456088.563 85837.11 456123.096 85839.857 456126.791 85840.105 456127.125 85840.816 456128.082 85840.442 456130.342 85838.752 456133.097 85834.828 456137.318 85824.17 456147.459 85819.146 456152.086 85809.569 456158.567 85807.7 456161.208 85807.307 456161.764 85797.494 456175.628 85790.818 456185.06 85787.727 456189.412 85780.62 456199.421 85780.134 456199.985 85776.157 456204.606 85772.178 456209.227 85769.629 456212.19 85768.033 456213.788 85763.585 456218.245 85762.069 456219.763 85758.21 456223.39 85753.635 456227.689 85750.06 456230.977 85746.773 456233.999 85745.754 456234.937 85735.227 456244.444 85734.815 456244.816 85729.075 456250.0 85728.753 456250.291 85722.033 456256.96 85711.114 456269.503 85705.108 456277.332 85700.951 456282.75 85695.359 456291.1 85685.689 456306.649 85681.512 456313.342 85677.823 456319.153 85671.957 456328.038 85671.705 456328.953 85670.366 456333.702 85668.997 456338.442 85667.599 456343.174 85666.432 456347.044 85666.172 456347.897 85664.715 456352.611 85663.231 456357.306 85663.228 456357.316 85661.713 456362.012 85660.168 456366.698 85658.594 456371.375 85656.99 456376.042 85655.358 456380.699 85653.697 456385.346 85652.936 456387.434 85652.007 456389.982 85650.287 456394.608 85648.763 456398.639 85648.54 456399.223 85646.763 456403.827 85644.958 456408.42 85643.124 456413.002 85641.262 456417.572 85639.371 456422.131 85639.192 456422.556 85637.451 456426.677 85635.504 456431.212 85633.528 456435.735 85631.524 456440.245 85629.492 456444.742 85627.583 456448.901 85627.432 456449.227 85625.531 456453.3 85625.345 456453.699 85623.228 456458.158 85623.143 456458.337 85618.912 456467.176 85614.594 456476.195 85611.513 456482.63 85610.845 456482.311 85601.955 456478.068 85597.443 456475.914 85565.024 456453.444 85559.147 456460.27 85552.813 456467.344 85545.762 456475.192 85539.284 456482.592 85532.891 456489.406 85500.0 456462.755 85474.724 456442.274 85454.098 456425.561 85406.234 456386.587 85373.649 456363.323 85325.765 456329.055 85246.13 456272.162 85240.513 456268.139 85236.964 456265.597 85215.187 456250.0 85170.634 456218.09 85133.85 456191.744 85133.279 456191.353 85122.39 456183.898 85113.31 456177.36 85084.56 456156.714 85044.682 456128.191 85025.885 456114.802 85000.0 456096.145 84999.968 456096.122 84971.614 456075.654 84964.397 456070.478 84936.744 456050.646 84891.831 456018.471 84866.115 456000.0 84860.609 455996.045 84807.935 455958.233 84777.949 455936.742 84739.721 455909.256 84697.612 455878.996 84653.959 455848.075 84610.329 455816.988 84573.254 455790.592 84521.361 455754.444 84514.982 455750.0 84504.719 455742.851 84504.168 455743.541 84500.0 455740.611 84466.103 455716.782 84439.468 455698.138 84409.888 455677.3 84401.25 455671.207 84399.082 455669.269 84398.199 455668.561 84391.693 455663.64 84389.61 455662.004 84376.641 455651.808 84376.163 455651.465 84374.794 455650.48 84367.181 455645.008 84361.995 455641.28 84348.865 455631.843 84341.271 455626.013 84308.928 455602.703 84280.083 455582.735 84242.757 455556.683 84195.682 455523.906 84161.462 455500.0 84141.58 455486.11 84127.865 455476.57 84096.666 455454.869 84037.453 455413.502 84037.105 455413.996 84000.0 455387.779 83984.387 455376.747 83933.313 455341.1 83920.995 455332.483 83919.799 455331.646 83906.464 455322.318 83905.7 455321.783 83899.562 455317.489 83844.105 455278.764 83845.765 455276.538 83817.938 455257.243 83807.539 455250.0 83772.985 455225.934 83737.806 455201.272 83714.976 455185.308 83704.769 455178.171 83704.935 455153.9 83704.98 455147.269 83704.607 455147.927 83700.633 455144.881 83699.666 455144.14 83686.284 455162.226 83683.438 455166.073 83679.062 455163.023 83647.038 455140.701 83604.944 455111.106 83596.87 455105.429 83591.815 455112.924 83591.674 455113.133 83574.992 455102.025 83577.167 455098.873 83575.209 455097.569 83570.809 455094.638 83565.52 455091.179 83591.082 455054.089 83571.359 455040.395 83552.771 455027.489 83520.207 455004.903 83513.149 455000.0 83500.0 454990.866 83482.327 454978.59 83436.473 454946.884 83395.657 454918.445 83360.257 454893.603 83335.952 454876.841 83325.23 454869.359 83307.765 454861.777 83275.948 454848.22 83265.118 454840.633 83212.058 454803.704 83168.457 454773.209 83152.648 454782.077 83147.657 454789.047 83130.796 454777.281 83093.668 454751.483 83091.547 454750.0 83085.409 454745.707 83057.906 454726.469 83056.735 454725.65 83049.003 454720.243 83018.225 454698.634 83014.072 454695.718 83013.205 454695.115 83000.0 454685.92 82999.799 454685.78 82956.168 454655.288 82903.369 454618.585 82880.383 454602.509 82899.151 454591.629 82898.691 454590.913 82926.761 454574.698 82925.586 454573.86 82937.689 454566.929 82957.416 454555.558 82959.523 454556.683 83000.0 454533.41 83002.275 454532.102 83023.583 454519.867 83023.462 454519.619 83051.147 454503.781 83051.989 454504.209 83059.326 454500.0 83091.708 454481.423 83156.934 454444.024 83204.367 454416.803 83210.361 454413.373 83217.249 454416.402 83243.233 454427.828 83245.827 454428.969 83249.687 454424.245 83252.578 454420.706 83258.618 454410.83 83259.347 454407.971 83261.779 454399.418 83263.608 454400.273 83267.168 454387.759 83269.507 454379.54 83298.798 454362.797 83345.131 454336.121 83398.71 454305.494 83419.801 454293.411 83442.456 454280.433 83495.844 454250.0 83500.563 454247.31 83527.193 454232.051 83531.468 454229.725 83528.11 454228.048 83576.589 454200.094 83618.657 454176.067 83657.971 454153.45 83734.974 454109.329 83753.987 454098.344 83754.215 454097.125 83800.309 454070.765 83810.165 454065.076 83824.109 454057.028 83834.334 454051.126 83862.092 454035.299 83865.644 454033.274 83890.782 454018.78 83891.742 454017.253 83894.577 454015.631 83921.893 454000.0 83967.133 453974.112 83984.946 453963.831 83986.601 453965.195 84000.0 453957.526 84050.185 453928.804 84056.127 453925.405 84097.548 453901.712 84098.576 453902.28 84147.011 453874.758 84171.982 453860.406 84187.921 453851.245 84254.67 453813.29 84253.591 453812.496 84261.366 453808.16 84248.452 453802.523 84245.392 453801.322 84243.163 453800.146 84240.631 453798.646 84232.062 453793.568 84228.184 453791.279 84231.066 453789.655 84229.969 453789.889 84229.354 453789.616 84229.005 453789.188 84228.784 453788.567 84228.772 453788.02 84228.956 453787.386 84216.614 453781.118 84209.223 453777.259 84201.709 453773.355 84195.232 453769.869 84191.46 453767.723 84190.651 453768.896 84189.617 453768.231 84190.371 453767.18 84189.093 453766.264 84185.873 453763.824 84180.831 453759.914 84176.319 453756.257 84168.729 453750.0 84160.367 453743.107 84145.247 453730.923 84134.019 453721.845 84130.047 453718.765 84124.814 453714.706 84097.458 453693.7 84091.263 453688.928 84088.077 453686.488 84086.065 453684.892 84084.316 453683.317 84083.217 453682.263 84081.648 453680.548 84080.101 453678.498 84078.519 453676.343 84076.69 453674.221 84074.266 453671.525 84071.719 453668.88 84068.56 453665.717 84067.359 453664.342 84066.404 453662.936 84064.269 453659.854 84063.138 453658.375 84062.25 453657.359 84060.993 453656.108 84059.194 453654.338 84056.737 453651.571 84053.482 453647.665 84052.284 453645.973 84051.692 453645.118 84051.174 453644.194 84050.712 453642.969 84050.462 453641.713 84050.495 453640.564 84043.891 453634.411 84042.424 453633.087 84038.767 453630.094 84023.794 453617.906 84019.838 453614.857 84015.951 453611.915 84011.873 453608.881 84011.486 453608.664 84011.203 453608.697 84010.848 453608.869 84009.155 453609.996 84006.568 453607.846 84007.054 453607.057 84007.51 453605.915 84007.698 453604.893 84007.511 453604.343 84003.889 453601.422 84000.0 453598.273 83990.874 453590.882 83987.516 453588.087 83981.129 453582.223 83980.316 453581.517 83979.004 453580.438 83978.251 453579.916 83974.753 453577.492 83952.171 453562.081 83945.654 453557.745 83931.24 453548.503 83927.224 453545.703 83923.138 453542.664 83917.401 453538.289 83911.903 453533.72 83904.645 453527.545 83887.185 453512.175 83872.88 453500.0 83861.129 453489.999 83852.465 453482.332 83827.647 453460.836 83777.37 453417.456 83776.626 453416.866 83776.357 453416.85 83773.44 453417.531 83771.545 453415.732 83771.728 453412.997 83771.544 453412.452 83771.139 453411.992 83742.755 453387.597 83739.372 453384.618 83738.725 453383.819 83738.281 453382.83 83738.042 453381.901 83737.963 453380.967 83737.99 453380.143 83738.179 453379.225 83740.454 453372.004 83740.69 453370.526 83740.716 453369.202 83740.573 453367.939 83740.22 453366.581 83739.731 453365.401 83738.845 453364.049 83737.848 453362.799 83724.758 453351.336 83695.66 453326.062 83687.435 453318.975 83679.003 453311.826 83662.385 453298.368 83656.264 453293.299 83644.652 453283.571 83635.711 453275.977 83632.58 453273.497 83629.321 453271.018 83601.3 453250.0 83584.304 453237.252 83529.558 453196.053 83523.872 453191.747 83522.788 453190.926 83518.412 453187.611 83510.391 453184.093 83500.86 453176.32 83500.0 453175.632 83499.281 453175.057 83497.686 453173.781 83491.925 453169.173 83461.373 453145.147 83453.882 453139.32 83445.329 453132.954 83429.891 453121.706 83411.583 453108.332 83394.585 453096.21 83392.42 453094.729 83391.944 453094.532 83390.972 453095.676 83387.951 453093.315 83365.033 453075.408 83336.848 453053.011 83348.568 453039.117 83359.3 453026.539 83372.251 453010.849 83380.154 453001.289 83380.927 453000.0 83381.92 452998.346 83386.761 452994.389 83394.69 452983.773 83401.11 452976.133 83410.278 452964.893 83416.133 452957.501 83423.7 452947.475 83430.919 452937.616 83439.029 452926.519 83442.907 452921.401 83450.885 452911.732 83459.458 452901.669 83467.046 452893.799 83468.333 452894.701 83474.566 452899.069 83500.0 452872.62 83503.62 452868.855 83533.166 452814.587 83550.488 452788.934 83576.652 452750.0 83578.706 452746.943 83590.956 452728.828 83605.617 452707.136 83622.231 452682.692 83640.73 452655.836 83664.13 452621.503 83683.397 452593.279 83688.601 452585.546 83690.057 452585.134 83711.141 452554.968 83712.975 452552.344 83727.731 452531.487 83732.771 452539.195 83738.067 452543.834 83745.189 452549.823 83745.512 452550.172 83748.572 452553.477 83757.742 452563.624 83765.675 452572.544 83769.304 452576.412 83785.58 452591.604 83810.807 452614.637 83833.269 452635.279 83856.476 452657.097 83859.63 452660.178 83861.788 452662.676 83870.401 452672.442 83887.963 452692.19 83912.38 452719.251 83933.362 452742.185 83940.489 452750.0 83950.473 452760.947 83967.874 452780.452 83977.374 452791.62 84000.0 452818.947 84006.303 452826.559 84025.702 452849.477</gml:posList>
+									</gml:LinearRing>
+								</gml:exterior>
+							</gml:Polygon>
+						</Objecten:vlak>
+					</Objecten:geometrie>
+					<Objecten:status>Woonplaats aangewezen</Objecten:status>
+					<Objecten:geconstateerd>N</Objecten:geconstateerd>
+					<Objecten:documentdatum>2007-07-10</Objecten:documentdatum>
+					<Objecten:documentnummer>2007/16778_53773</Objecten:documentnummer>
+					<Objecten:voorkomen>
+						<Historie:Voorkomen>
+							<Historie:voorkomenidentificatie>1</Historie:voorkomenidentificatie>
+							<Historie:beginGeldigheid>2007-11-01</Historie:beginGeldigheid>
+							<Historie:tijdstipRegistratie>2009-12-29T13:18:25.000</Historie:tijdstipRegistratie>
+							<Historie:BeschikbaarLV>
+								<Historie:tijdstipRegistratieLV>2009-12-29T13:30:17.001</Historie:tijdstipRegistratieLV>
+							</Historie:BeschikbaarLV>
+						</Historie:Voorkomen>
+					</Objecten:voorkomen>
+				</Objecten:Woonplaats>
+			</sl-bag-extract:bagObject>
+		</sl:stand>
+		*/
+
+		container schema// xml attributes are here modelled as sub units of the entity related unit.
+		{
+			unit<uint32> Objecten_woonplaats
+			{
+				attribute<string> Objecten_identificatie;
+				attribute<string> Objecten_naam;
+
+				unit<uint32> gml_Polygon // 1-1 relationship is assumed/likely
+				{
+					attribute<string> srsDimension; // must only have the value missing, 2 or 3
+
+					unit<uint32> gml_posList // 1-1 relationship is assumed/likely
+					{
+						attribute<string> srsDimension; // must only have the value missing, 2 or 3
+						attribute<string> count;
+					}
+					unit<uint32> gml_Interior 
+					{
+						unit<uint32> gml_posList // 1-1 relationship is assumed/likely
+						{
+							attribute<string> srsDimension; // must only have the value missing, 2 or 3
+							attribute<string> count;
+						}
+					}
+				}
+
+				// Meta velden
+				attribute<string> Objecten_Status;
+				attribute<string> Objecten_geconstateerd;
+				attribute<string> Objecten_documentdatum;
+				attribute<string> Objecten_documentnummer;
+
+				unit<uint32> Objecten_voorkomen
+				{
+					attribute<string> Historie_voorkomenidentificatie;
+					attribute<string> Historie_beginGeldigheid;
+					attribute<string> Historie_eindGeldigheid;
+
+					attribute<string> Historie_tijdstipRegistratie;
+					attribute<string> Historie_eindRegistratie;
+					attribute<string> Historie_tijdstipRegistratieLV;
+				}
+			}
+		}
+		container ParsedXML  := parse_xml(XmlData, schema);
+		container geoBuilder := Templates/ProcessGmlPolygon(ParsedXML/Objecten_Woonplaats, true); // voor woonplaatsen wordt gecheckt of coordinaten altijd 
+	}
+}

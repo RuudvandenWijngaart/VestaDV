@@ -1,0 +1,105 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//              Configuratie voor project: BAG 2.0 XML bronfiles > FSS                //
+//                                                                                    //
+//                              Object Vision 2022                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                 Configuratie van resulterende FSS Files                            //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container FSS // Resultaten wegschrijven naar FSS files per BAG object
+{
+	unit<uint32> ligplaats := xml/ligplaats/ParsedXML/Objecten_ligplaats
+	,	StorageName= "= FSSDir + '/ligplaats.fss'"
+	{
+		attribute<rdc_mm> geometry_mm (polygon) := xml/ligplaats/geoBuilder/result;
+		attribute<string> identificatie         := ligplaats/Objecten_identificatie;
+		attribute<string> nummeraanduiding_id   := 
+			ligplaats/Objecten_heeftAlsHoofdadres/Objectenref_NummeraanduidingRef
+				[invert(ligplaats/Objecten_heeftAlsHoofdadres/parent_rel[ligplaats])];
+
+		container meta := Templates/meta(., Objecten_Status);
+
+		unit<uint32> nevenadres := ligplaats/Objecten_heeftAlsNevenadres/Objectenref_NummeraanduidingRef  // 1->0..n relatie
+		{
+			attribute<FSS/ligplaats> mutatie_rel         := ligplaats/Objecten_heeftAlsNevenadres/Parent_rel[nevenadres/Parent_rel];
+			attribute<string>        nummeraanduiding_id := nevenadres/_ValuesTable/Values[nevenadres/value_rel];
+		}
+	}
+
+	unit<uint32> standplaats := xml/standplaats/ParsedXML/Objecten_standplaats
+	,	StorageName= "= FSSDir + '/standplaats.fss'"
+	{
+		attribute<rdc_mm> geometry_mm (polygon) := xml/standplaats/geoBuilder/result;
+		attribute<string> identificatie         := standplaats/Objecten_identificatie;
+		attribute<string> nummeraanduiding_id   := 
+			standplaats/Objecten_heeftAlsHoofdadres/Objectenref_NummeraanduidingRef
+				[invert(standplaats/Objecten_heeftAlsHoofdadres/parent_rel[standplaats])];
+
+		container meta := Templates/meta(., Objecten_Status);
+
+		unit<uint32> nevenadres := standplaats/Objecten_heeftAlsNevenadres/Objectenref_NummeraanduidingRef  // 1->0..n relatie
+		{
+			attribute<FSS/standplaats> mutatie_rel         := standplaats/Objecten_heeftAlsNevenadres/Parent_rel[nevenadres/Parent_rel];
+			attribute<string>          nummeraanduiding_id := nevenadres/_ValuesTable/Values[nevenadres/value_rel];
+		}
+	}
+
+	container pand
+	{
+		parameter<string> generate_all_expr := AsList('xml/pand/PerFileSet/fs_' + string(xml/pand/fileset/Values) + '/pand', ';') + ';nr_fss';
+		parameter<string> nr_fss            := string(#xml/pand/fileset) + ';',  StorageName = "= FSSDir + '/pand/nr_fss.csv'", StorageType = "str";
+		
+		parameter<string> generate_all      := 'OK', ExplicitSuppliers = "= generate_all_expr";
+	}
+
+	unit<uint32> vbo
+	{
+		parameter<string> generate_all_expr := AsList('xml/vbo/PerFileSet/fs_' + string(xml/vbo/fileset/Values) + '/vbo', ';') + ';nr_fss';
+		parameter<string> nr_fss            := string(#xml/vbo/fileset) + ';',  StorageName = "= FSSDir + '/vbo/nr_fss.csv'", StorageType = "str";
+
+		parameter<string> generate_all      := 'OK', ExplicitSuppliers = "= generate_all_expr ";
+	}
+
+
+	unit<uint32> nummeraanduiding := ='union_unit(' + AsItemList('XML/nummeraanduiding/PerFileSet/fs_' + string(XML/nummeraanduiding/fileset/values) + '/ParsedXML/Objecten_Nummeraanduiding') + ')'
+	,	StorageName= "= FSSDir + '/nummeraanduiding.fss'"
+	{
+		attribute<string> identificatie           := ='union_data(.,' + AsItemList('XML/nummeraanduiding/PerFileSet/fs_' + string(XML/nummeraanduiding/fileset/values) + '/ParsedXML/Objecten_Nummeraanduiding/Objecten_identificatie ') + ')';
+		attribute<int32>  huisnummer              := ='union_data(.,' + AsItemList('XML/nummeraanduiding/PerFileSet/fs_' + string(XML/nummeraanduiding/fileset/values) + '/ParsedXML/Objecten_Nummeraanduiding/Objecten_huisnummer[int32]') + ')';
+		attribute<string> huisletter              := ='union_data(.,' + AsItemList('XML/nummeraanduiding/PerFileSet/fs_' + string(XML/nummeraanduiding/fileset/values) + '/ParsedXML/Objecten_Nummeraanduiding/Objecten_huisletter') + ')';
+		attribute<string> toevoeging              := ='union_data(.,' + AsItemList('XML/nummeraanduiding/PerFileSet/fs_' + string(XML/nummeraanduiding/fileset/values) + '/ParsedXML/Objecten_Nummeraanduiding/Objecten_huisnummertoevoeging') + ')';
+		attribute<string> postcode                := ='union_data(.,' + AsItemList('XML/nummeraanduiding/PerFileSet/fs_' + string(XML/nummeraanduiding/fileset/values) + '/ParsedXML/Objecten_Nummeraanduiding/Objecten_postcode') + ')';
+		attribute<string> typeAdresseerbaarObject := ='union_data(.,' + AsItemList('XML/nummeraanduiding/PerFileSet/fs_' + string(XML/nummeraanduiding/fileset/values) + '/ParsedXML/Objecten_Nummeraanduiding/Objecten_typeAdresseerbaarObject') + ')';
+		attribute<string> openbareruimte_id       := ='union_data(.,' + AsItemList('XML/nummeraanduiding/PerFileSet/fs_' + string(XML/nummeraanduiding/fileset/values) + '/nummeraanduiding/openbareruimte_id ') + ')';
+		attribute<string> woonplaats_id           := ='union_data(.,' + AsItemList('XML/nummeraanduiding/PerFileSet/fs_' + string(XML/nummeraanduiding/fileset/values) + '/nummeraanduiding/woonplaats_id ') + ')';
+
+		container meta := Templates/meta_union('nummeraanduiding',nummeraanduiding, XML/nummeraanduiding/fileset);
+	}
+
+	unit<uint32> openbareruimte := XML/openbareruimte/ParsedXML/Objecten_openbareruimte
+	,	StorageName= "= FSSDir + '/openbareruimte.fss'"
+	{
+		attribute<string> identificatie := openbareruimte/Objecten_identificatie;
+		attribute<string> naam          := openbareruimte/Objecten_Naam;
+		attribute<string> type          := openbareruimte/Objecten_Type;
+		attribute<string> woonplaats_id := XML/openbareruimte/gerelateerdeWoonplaats_id;
+
+		container meta := Templates/meta ( . , Objecten_Status ) ;
+	}
+
+	unit<uint32> woonplaats := XML/woonplaats/ParsedXML/Objecten_Woonplaats
+	,	StorageName= "= FSSDir + '/woonplaats.fss'"
+	{
+		attribute<rdc_mm> geometry_mm (polygon) := XML/woonplaats/geoBuilder/result;
+		attribute<string> identificatie         := woonplaats/Objecten_identificatie;
+		attribute<string> woonplaatsNaam        := woonplaats/Objecten_Naam;
+
+		container meta := Templates/meta(., Objecten_Status);
+	}
+	parameter<string> overzicht := overzichten/impl/genereer_rapport;
+}

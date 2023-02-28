@@ -1,0 +1,138 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//              Configuratie voor project: BAG Read and Process Snapshot              //
+//                                                                                    //
+//                              Object Vision 2021                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+// Deze configuatie gebruikt een BAG Snapshot, gemaakt met de BAG Tools               //
+//                                                                                    //
+// De configuratie is voorbeeldgevend om                                              //
+//                                                                                    //
+// 1) attributen van BAG objecten aan elkaar te relateren                             //
+//   , denk aan VBO oppervlaktes per pand                                             //
+// 2) attributen uit de BAG te vergridden                                             //
+//   , denk aan het maken van kaarten met bouwjaren per gebied                        //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container BAG20_ReadAndProcessSnapshot
+{
+//	parameter<string> SnapshotBaseDir := '%ProjDir%/data/nwg_20210401';
+	parameter<string> SnapshotBaseDir := 'D:SourceData/BAG20/snapshots.ext/20220401';
+
+	container eenheden
+	{
+		unit<int32>   datum;
+		unit<int16>   jaar       : cdf ="klassificaties/bouwjaar_5K/ClassBreak";
+		unit<int32>   mm         := int32(0.001 * m);
+		unit<uint16>  cm_uint16  := uint16(0.01 * m);
+		unit<float32> m          := baseunit('m', float32);
+		unit<float32> m2         := m * m; 
+		unit<int32>   m2_int32   := int32(m2), cdf ="klassificaties/oppervlakte_11K/ClassBreak";
+		unit<float32> percentage := 100 * m / m;
+	}
+
+	#include <geografie.dms>
+
+	container klassificaties // klassificatie units om (continue) data te klassificeren
+	{
+		unit<uint8> oppervlakte_11K: nrofrows = 10
+		{
+			attribute<eenheden/m2_int32> ClassBreak: DialogType = "Classification",
+				[ 0
+				 , 50 ,  75, 100, 125
+				 ,150 , 200, 300, 450
+				 ,750];
+
+			attribute<eenheden/m2_int32> ClassBreak_250m: DialogType = "Classification",
+				[ 0
+				 , 100 ,  250,  400,   600
+				 , 1000, 2000, 5000 ,10000
+				 ,20000];
+
+			attribute<eenheden/m2_int32> ClassBreak_100m: DialogType = "Classification",
+				[ 0
+				 ,  50 , 100,  200,   350
+				 , 650, 1100, 1750 , 2500
+				 ,4000];
+
+			attribute<uint32> BrushColor: DialogType = "BrushColor",
+				[ rgb(255,255,255)
+				,rgb(254,255,204),rgb(253,240,161),rgb(252,221,120),rgb(251,182, 79)
+				,rgb(250,145, 64),rgb(249, 82, 48),rgb(224, 33, 34),rgb(187,  8, 41)
+				,rgb(127,  1, 39)
+				];
+
+			attribute<uint32> PenColor:   = BrushColor, DialogType = "PenColor";
+			attribute<uint32> SymbolColor:= BrushColor, DialogType = "SymbolColor";
+		}
+
+		unit<uint8> bouwjaar_5K: nrofrows = 5
+		{
+			attribute<eenheden/jaar> ClassBreak: DialogType = "Classification",
+				[-1,0,1946,1971,1991];
+			attribute<uint32> PenColor  := BrushColor, DialogType = "PenColor";
+			attribute<uint32> BrushColor:              DialogType = "BrushColor",
+				[ rgb(255,255, 255),rgb(37,56, 160),rgb(50, 164,70),rgb(254,255,188),rgb(210,52,42)];
+			attribute<string> Label: DialogType = "LabelText",
+				['onbekend','voor 1946','1946 - 1970','1971 - 1990','1991 en later'];
+			attribute<string> name:= 'jaar_'+ replace(label, ' ','', '-','_');
+		}
+	}
+
+	container typeringen
+	{
+		unit<uint8> objecttypes: nrofrows = 7
+		{
+			attribute<string> name:
+			[
+				'ligplaats','standplaats','pand','vbo','nummeraanduiding','openbareruimte','woonplaats'
+			];
+		}
+
+		unit<uint8> gebruiksdoel_vbo: nrofrows = 11
+		{
+			attribute<string> label:
+			[
+				 'bijeenkomstfunctie','celfunctie'             ,'gezondheidszorgfunctie','industriefunctie','kantoorfunctie','logiesfunctie'
+				,'onderwijsfunctie'  ,'overige gebruiksfunctie','sportfunctie'          ,'winkelfunctie'   ,'woonfunctie'
+			];
+			attribute<string> name := replace(replace(label,' ','_'), 'functie','');
+		}
+
+		unit<uint8> type_woonpand: nrofrows = 6
+		{
+			attribute<string> label     : ['geen woonpand','vrijstaand','twee onder 1 kap','hoekwoning','tussenwoning','meergezinspand'], DialogType = "LabelText";
+			attribute<string> name      := replace(label, ' ', '_');
+			attribute<uint32> PenColor  := BrushColor, DialogType = "PenColor";
+			attribute<uint32> BrushColor:              DialogType = "BrushColor",
+			[
+				4294967295 // missing value used for transparant visualisation
+				,rgb(26 ,150,  80)
+				,rgb(166,217, 106)
+				,rgb(100,100, 255)
+				,rgb(255,255,  62)
+				,rgb(255, 60,  60)
+			];
+			container V := for_each_nedv(name, String(ID(.))+'[..]', void, .);
+		}
+	}
+
+	#include<ReadSnapshot.dms>
+
+	container ReadSnapShotFromGeoPackage
+	{
+		container GeoParaat 
+		: StorageName     = "%LocalDataDir%/BAG_shapes/20211001/bag_snapshot.gpkg"
+		, StorageType     = "gdal.vect"
+		, StorageReadOnly = "True"
+		, SyncMode        = "AllTables"
+		, DialogData      = "geografie/rdc";
+	}
+
+	#include<RelateerAttributen.dms>
+	#include<VergridAttributen.dms>
+}

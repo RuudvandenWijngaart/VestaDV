@@ -1,0 +1,110 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//              Configuratie voor project: BAG 2.0 Read And Process Snapshot          //
+//                                                                                    //
+//                              Object Vision 2021                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+// Configuratiebestand voor het relateren van BAG attributen aan Grid domeinen        //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container AttributenNaarGrid
+{
+	unit<spoint> m250 := Geografie/gridcel_250m/domain
+	{
+		attribute<eenheden/jaar>     bouwjaar       := modus(ReadSnapshot/pand/bouwjaar_cleaned, Geografie/gridcel_250m/domain/domain_rel);
+		attribute<eenheden/m2_int32> woon_oppervlak :=   sum(RelateerAttributen/pand/sum_oppervlakte_vbo_per_gebruiksdoel/woon, Geografie/gridcel_250m/domain/domain_rel), cdf = "Klassificaties/oppervlakte_11K/ClassBreak_250m";
+		attribute<uint32>            nrpanden       := pcount(Geografie/gridcel_250m/domain/domain_rel);
+
+		container oppervlak_omgeving := templates/oppervlakte_omgeving(., woon_oppervlak, Klassificaties/oppervlakte_11K/ClassBreak_250m );
+		container bouwjaar_omgeving  := templates/bouwjaar_omgeving(., bouwjaar, nrpanden);
+	}
+
+	unit<spoint> m100 := Geografie/gridcel_100m/domain
+	{
+		attribute<eenheden/jaar>     bouwjaar       := modus(ReadSnapshot/pand/bouwjaar_cleaned, Geografie/gridcel_100m/domain/domain_rel);
+		attribute<eenheden/m2_int32> woon_oppervlak :=   sum(RelateerAttributen/pand/sum_oppervlakte_vbo_per_gebruiksdoel/woon, Geografie/gridcel_100m/domain/domain_rel), cdf = "Klassificaties/oppervlakte_11K/ClassBreak_100m";
+		attribute<uint32>            nrpanden       := pcount(Geografie/gridcel_100m/domain/domain_rel);
+
+		container oppervlak_omgeving := templates/oppervlakte_omgeving(., woon_oppervlak, Klassificaties/oppervlakte_11K/ClassBreak_100m );
+		container bouwjaar_omgeving  := templates/bouwjaar_omgeving(., bouwjaar, nrpanden);
+	}
+
+	unit<spoint> m25 := Geografie/gridcel_25m/domain
+	{
+		attribute<eenheden/jaar>     bouwjaar       := ReadSnapshot/pand/bouwjaar_cleaned[pand_rel];
+		attribute<eenheden/m2_int32> woon_oppervlak :=   sum(RelateerAttributen/pand/sum_oppervlakte_vbo_per_gebruiksdoel/woon, Geografie/gridcel_25m/domain/domain_rel);
+		attribute<uint32>            nrpanden       := pcount(Geografie/gridcel_25m/domain/domain_rel);
+
+		container oppervlak_omgeving := templates/oppervlakte_omgeving(., woon_oppervlak, Klassificaties/oppervlakte_11K/ClassBreak );
+		container bouwjaar_omgeving  := templates/bouwjaar_omgeving(., bouwjaar, nrpanden);
+	}
+
+	container templates
+	{
+		template bouwjaar_omgeving
+		{
+			// begin case parameters
+			unit<spoint> griddomain;
+			attribute<eenheden/jaar> bouwjaar (griddomain);
+			attribute<uint32>        nrpanden (griddomain);
+			// end case parameters
+
+			attribute<klassificaties/bouwjaar_5K> bouwjaar_5K_rel (griddomain) := classify(bouwjaar, klassificaties/bouwjaar_5K/ClassBreak);
+
+			container klassen := for_each_ne(
+				klassificaties/bouwjaar_5K/name
+				,'templates/bouwjaarsklasse_omgeving(
+					  griddomain
+					, bouwjaar_5K_rel ==  ' + string(id(klassificaties/bouwjaar_5K)) + '[klassificaties/bouwjaar_5K] 
+						? nrpanden 
+						: 0 / 0
+					)'
+				);
+	
+			// We bepalen de hoogste 'omgevingsscore' per klasse, de ArgMax selecteert vervolgens de klasse met het hoogste nummer
+			attribute<klassificaties/bouwjaar_5K> cel_3_3   (griddomain):= = 'ArgMax(' + AsItemList('klassen/' + klassificaties/bouwjaar_5K/name + '/cel_3_3') + ')[klassificaties/bouwjaar_5K]';
+			attribute<klassificaties/bouwjaar_5K> cel_5_5   (griddomain):= = 'ArgMax(' + AsItemList('klassen/' + klassificaties/bouwjaar_5K/name + '/cel_5_5') + ')[klassificaties/bouwjaar_5K]';
+			attribute<klassificaties/bouwjaar_5K> cel_25_25 (griddomain):= = 'ArgMax(' + AsItemList('klassen/' + klassificaties/bouwjaar_5K/name + '/cel_25_25') + ')[klassificaties/bouwjaar_5K]';
+		}
+
+		template bouwjaarsklasse_omgeving
+		{
+			// begin case parameters
+			unit<spoint> griddomain;
+			attribute<uint32> nrpanden (griddomain);
+			// end case parameters
+
+			attribute<float32> cel_3_3   (griddomain) := potential(float32(nrpanden), Geografie/kernel_3_3_cells/absWeight);   // sommeer aantal panden
+			attribute<float32> cel_5_5   (griddomain) := potential(float32(nrpanden), Geografie/kernel_5_5_cells/absWeight);   // sommeer aantal panden
+			attribute<float32> cel_25_25 (griddomain) := potential(float32(nrpanden), Geografie/kernel_25_25_cells/absWeight); // sommeer aantal panden
+		}
+
+		template oppervlakte_omgeving
+		{
+			// begin case parameters
+			unit<spoint> griddomain;
+			attribute<eenheden/m2_int32> woon_oppervlak (griddomain);
+			attribute<eenheden/m2_int32> ClassBreaks    (Klassificaties/oppervlakte_11K);
+			// end case parameters
+
+			attribute<eenheden/m2_int32> cel_3_3   (griddomain):= 
+				(  potential(   float32(woon_oppervlak)           , Geografie/kernel_3_3_cells/absWeight)   // sommeer bouwjaar * gewicht (aantal panden)
+				 / potential((IsDefined(woon_oppervlak) ? 1f : 0f), Geografie/kernel_3_3_cells/absWeight)   // deel door som van de gewichten
+				)[eenheden/m2_int32], cdf = "ClassBreaks";
+
+			attribute<eenheden/m2_int32> cel_5_5   (griddomain):= 
+				(  potential(   float32(woon_oppervlak)           , Geografie/kernel_5_5_cells/absWeight)   // sommeer bouwjaar * gewicht (aantal panden)
+				 / potential((IsDefined(woon_oppervlak) ? 1f : 0f), Geografie/kernel_5_5_cells/absWeight)   // deel door som van de gewichten
+				)[eenheden/m2_int32], cdf = "ClassBreaks";
+
+			attribute<eenheden/m2_int32> cel_25_25 (griddomain) := 
+				(  potential(   float32(woon_oppervlak)           , Geografie/kernel_25_25_cells/absWeight)   // sommeer bouwjaar * gewicht (aantal panden)
+				 / potential((IsDefined(woon_oppervlak) ? 1f : 0f), Geografie/kernel_25_25_cells/absWeight)   // deel door som van de gewichten
+				)[eenheden/m2_int32], cdf = "ClassBreaks";
+		}
+	}
+}
