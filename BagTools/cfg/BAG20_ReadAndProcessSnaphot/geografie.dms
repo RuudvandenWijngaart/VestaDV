@@ -1,0 +1,100 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//              Configuratie voor project: BAG 2.0 Read And Process Snapshot          //
+//                                                                                    //
+//                              Object Vision 2021                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//             Configuratiebestand met geografische units en grid domeinen            //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container Geografie: Using = "Eenheden"
+{
+	// geografische eenheden voor ruimtelijke data
+	#include<wmts_layer.dms>
+
+	unit<fpoint> rdc_base
+	: format     = "EPSG:28992"
+	, DialogData = "wmts_layer";
+
+	unit<fpoint> rdc    := range(rdc_base, point(300000f,0f), point(625000f,280000f));
+	unit<ipoint> rdc_mm := gridset(rdc, point(0.001,0.001), point(0.0, 0.0), ipoint);
+
+	// %% grid afmetingen
+	container Studiegebied
+	{
+		parameter<m> left   := min(pointCol(ReadSnapshot/adres/Geometry))[m] - 250[m];
+		parameter<m> right  := max(pointCol(ReadSnapshot/adres/Geometry))[m] + 250[m];
+		parameter<m> bottom := min(pointRow(ReadSnapshot/adres/Geometry))[m] - 250[m]; 
+		parameter<m> top    := max(pointRow(ReadSnapshot/adres/Geometry))[m] + 250[m]; 
+	}// /%%
+
+	container gridcel_250m:= DefineGrid(250[m], Studiegebied);
+	container gridcel_100m:= DefineGrid(100[m], Studiegebied);
+	container gridcel_25m: = DefineGrid( 25[m], Studiegebied);
+
+	container DefineGrid: isTemplate = "True"
+	{
+		// begin case parameters
+		parameter<m> gridsize;
+		container bbox;
+		// einde case parameters
+
+		parameter<int16> nr_cols := int16((bbox/right - bbox/left)   / gridsize);
+		parameter<int16> nr_rows := int16((bbox/top   - bbox/bottom) / gridsize);
+
+		unit<spoint> untiled_domain :=
+			range(
+				 gridset(
+					 rdc
+					,point(float32(gridsize), float32(-gridsize), rdc)
+					,point(bbox/left, bbox/top,rdc)
+					,spoint
+				)
+				,point(     0s,      0s)
+				,point(nr_cols, nr_rows)
+			)
+		,	DialogData = "rdc";
+
+		unit<spoint> domain := TiledUnit(point(int16(1024),int16(1024), untiled_domain))
+		{
+			parameter<m>                 size                                    := gridsize;
+			attribute<.>                 id                                      := id(.);
+			attribute<int16>             row                                     := PointRow(id);
+			attribute<int16>             col                                     := PointCol(id);
+			attribute<ReadSnapshot/pand> pand_rel_via_centroid_cell              := poly2grid(ReadSnapshot/pand/Geometry, domain);
+
+			attribute<rdc>               pand_centroid       (ReadSnapshot/pand) := centroid(ReadSnapshot/pand/Geometry);
+			attribute<domain>            domain_rel_centroid (ReadSnapshot/pand) := pand_centroid[domain];
+
+			attribute<ReadSnapshot/pand> pand_rel_via_centroid_pand              := invert(domain_rel_centroid);
+
+			attribute<ReadSnapshot/pand> pand_rel                                := MakeDefined(pand_rel_via_centroid_cell, pand_rel_via_centroid_pand);
+			attribute<domain>            domain_rel          (ReadSnapshot/pand) := pand_centroid[domain];
+		}
+	}
+
+	unit<spoint> kernel_25_25_cells := range(spoint, point(-12s, -12s), point(13s, 13s))
+	{
+		attribute<uint32>  distMatr    := dist2(point(0s, 0s, .), uint32);
+		attribute<float32> absWeight   := distMatr < 145 ? 1f : 0f;
+		attribute<float32> relWeight   := absWeight / sum(absWeight);
+	}
+
+	unit<spoint> kernel_5_5_cells := range(spoint, point(-2s, -2s), point(3s, 3s))
+	{
+		attribute<uint32>  distMatr    := dist2(point(0s, 0s, .), uint32);
+		attribute<float32> absWeight   := distMatr < 5 ? 1f : 0f;
+		attribute<float32> relWeight   := absWeight / sum(absWeight);
+	}
+	
+	unit<spoint> kernel_3_3_cells := range(spoint, point(-1s, -1s), point(2s, 2s))
+	{
+		attribute<uint32>  distMatr    := dist2(point(0s, 0s, .), uint32);
+		attribute<float32> absWeight   := distMatr < 3 ? 1f : 0f;
+		attribute<float32> relWeight   := absWeight / sum(absWeight);
+	}
+}

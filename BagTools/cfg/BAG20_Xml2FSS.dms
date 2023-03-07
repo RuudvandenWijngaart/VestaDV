@@ -1,0 +1,88 @@
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+//                                                                                    //
+//              Configuratie voor project: BAG 2.0 XML bronfiles > FSS                //
+//                                                                                    //
+//                              Object Vision 2022                                    //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                    //
+// Hoe een nieuwe BAG te verkrijgen en tot FSS Files om te zetten:                    //
+// 1. Download je  BAG via:                                                           //
+// https://www.kadaster.nl/-/kosteloze-download-bag-2.0-extract                       //
+//                                                                                    //
+// 2. Pak de zip bestanden:                                                           //
+// - 9999LIGdatum                                                                     //
+// - 9999NUMdatum                                                                     //
+// - 9999OPRdatum                                                                     //
+// - 9999PNDdatum                                                                     //
+// - 9999STAdatum                                                                     //
+// - 9999VBOdatum                                                                     //
+// - 9999WPLdatum                                                                     //
+// uit in een subfolder en configureer deze als XmlDir                                //
+//                                                                                    //
+// 3. Configureer de date parameter met als conventie: yyyymmdd                       //
+//                                                                                    //
+// 4. Open deze configuratie en activeer de optie: MaakFSSBestanden                   //
+//                                                                                    //
+//  De BAG inclusief historie wordt nu weggeschreven naar een set van FSS Files in    //
+//  de FSSDir.                                                                        //
+//                                                                                    //
+////////////////////////////////////////////////////////////////////////////////////////
+
+container BAG20_Xml2FSS
+{
+	// te configureren
+	parameter<string> date     := '20230208';
+	//
+
+	parameter<string> date_dir := '%SourceDataDir%/BAG/' + date;
+	//parameter<string> date_dir := 'D:/SourceData/BAG20/' + date;
+	
+	parameter<string> XmlDir   := date_dir + '/NGR';
+	parameter<string> FSSDir   := date_dir + '/fss.new';
+
+	parameter<string> MaakFSSBestanden := xml/folderinfo/CanGenerate == 2b
+		? 'Cannot make list of files'  
+		:  xml/folderinfo/CanGenerate == 1b
+			? 'Data is probably not BAG 2.0'
+			: 'Ready'
+	,	ExplicitSuppliers = "= SupplierList";
+	
+	parameter<string> SupplierList     := xml/folderinfo/CanGenerate == 0b
+		?	'FSS/ligplaats;FSS/standplaats;FSS/pand;FSS/vbo;FSS/nummeraanduiding;FSS/openbareruimte;FSS/woonplaats;FSS/overzicht'
+		:	'';
+
+	unit<dpoint> rdc_base;
+	unit<dpoint> rdc_meter := range(rdc_base, point(300000d,0d), point(625000d,280000d));
+	unit<ipoint> rdc_mm    := gridset(rdc_meter, point(0.001, 0.001), point(0.0,0.0), ipoint);
+
+	parameter<uint32> srsDimensionDefaultValue: = 2;
+
+	container typeringen
+	{
+		unit<uint8> gebruiksdoel_vbo: nrofrows = 11
+		{
+			attribute<string> label:
+			[
+				'bijeenkomstfunctie','celfunctie','gezondheidszorgfunctie','industriefunctie','kantoorfunctie','logiesfunctie'
+				,'onderwijsfunctie','overige gebruiksfunctie','sportfunctie','winkelfunctie','woonfunctie'
+			];
+			attribute<string> name      := replace(label,' ','_');
+			attribute<string> name_kort := replace(name, 'functie','');
+		}
+	}
+
+	#include<FSS.dms>
+	#include<XML.dms>
+	#include<Templates.dms>
+	#include<overzichten.dms>
+
+	container opvallend: IsHidden = "True"
+	{
+		unit<uint32> vbo_polygon:= ='union_unit(' + AsItemList('XML/vbo/PerFileSet/fs_' + string(XML/vbo/fileset/values) + '/geoBuilder/gmlPolygon') + ')'
+		{
+			attribute<rdc_mm> geometry_mm (polygon):= ='union_data(.,' + AsItemList('XML/vbo/PerFileSet/fs_' + string(XML/vbo/fileset/values) + '/geoBuilder/polygon/result') + ')';
+		}
+	}
+}
