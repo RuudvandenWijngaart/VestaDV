@@ -149,7 +149,8 @@ container TVW
 
 			unit<uint32> PL_Bedrijventerrein  := select_afew(PL, isDefined(PL/geometry))
 			{
-				attribute<ratio>  RatioUBouw  (PL_Bedrijventerrein) := UBouw/Matching/RatioUBouw_plan[org_rel];
+				attribute<ratio>  RatioUBouw_vbo  (PL_Bedrijventerrein) := UBouw/Matching/RatioUBouw_plan_vbo[org_rel];
+				attribute<ratio>  RatioUBouw_area (PL_Bedrijventerrein) := UBouw/Matching/RatioUBouw_plan_area[org_rel];
 				attribute<nrAsl>  VBO_count   (PL_Bedrijventerrein) := UBouw/Matching/VBO_count[org_rel];
 				attribute<nrAsl>  UBouw_count (PL_Bedrijventerrein) := UBouw/Matching/UBouw_count[org_rel];
 				attribute<bool>   BedrijventerreinInNaam (PL_Bedrijventerrein) := UBouw/Matching/BedrijventerreinInNaam[org_rel];
@@ -159,18 +160,22 @@ container TVW
 				attribute<uint32> AantalBedrijventerreinen (PL_Bedrijventerrein) := count(BedrijventerreinenKruistabel/second_rel, BedrijventerreinenKruistabel/first_rel);
 			}
 			
-			unit<uint32> PL_Bedrijventerrein_Ratio_80  := select_afew(PL_Bedrijventerrein, PL_Bedrijventerrein/RatioUBouw >= 0.80);
+			unit<uint32> PL_Bedrijventerrein_Ratio_80  := select_afew(PL_Bedrijventerrein, PL_Bedrijventerrein/RatioUBouw_area >= 0.80);
 			unit<uint32> PL_Bedrijventerrein_naam      := select_afew(PL_Bedrijventerrein, PL_Bedrijventerrein/BedrijventerreinInNaam);
 			unit<uint32> PL_Bedrijventerrein_doel      := select_afew(PL_Bedrijventerrein, PL_Bedrijventerrein/BedrijventerreinInDoel);
 			unit<uint32> PL_Bedrijventerrein_naam_doel := select_afew(PL_Bedrijventerrein, PL_Bedrijventerrein/BedrijventerreinInDoel || PL_Bedrijventerrein/BedrijventerreinInNaam);
 		
 			unit<uint32> PL_OpBedrijventerrein 							  := select_afew(PL_Bedrijventerrein, PL_Bedrijventerrein/AantalBedrijventerreinen > 0);
+			unit<uint32> PL_OpBedrijventerreinen_ratioArea_50			  := select_afew(PL_Bedrijventerrein, PL_Bedrijventerrein/AantalBedrijventerreinen > 0 && PL_Bedrijventerrein/RatioUBouw_area >= 0.50);
+
 			unit<uint32> PL_Bedrijventerrein_naam_doel_OpBedrijventerrein := select_afew(PL_Bedrijventerrein_naam_doel, PL_Bedrijventerrein_naam_doel/AantalBedrijventerreinen > 0);
 		}
 
 		unit<uint32> VBO := /Invoer/RuimtelijkeData/BAG/import/VBO
 		{
 			attribute<nrAsl> nr_Asl := const(1.0[nrAsl],.);
+
+			attribute<m2>    oppervlak := /Invoer/RuimtelijkeData/BAG/import/VBO/oppervlakte[m2];
 
 			container Matching
 			{
@@ -195,6 +200,7 @@ container TVW
 				
 				attribute<uint32> P_count   (PL) := pcount(kruistabel/second_rel);
 				attribute<nrAsl>  VBO_count (PL) := sum(nr_Asl[kruistabel/first_rel], kruistabel/second_rel);
+				attribute<m2>     VBO_area  (PL) := sum(oppervlak[kruistabel/first_rel], kruistabel/second_rel);
 			
 				
 				attribute<Geography/RegioIndelingen/gemeente> Gemeente(p) := VBO/Gemeente_rel;
@@ -231,7 +237,8 @@ container TVW
 		
 		unit<uint32> UBouw := /Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied 
 		{
-			attribute<nrAsl> nr_Asl := const(1.0[nrAsl],.);
+			attribute<nrAsl> nr_Asl    := const(1.0[nrAsl],.);
+			attribute<m2>    oppervlak := /Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/oppervlakte;
 			
 			container Matching
 			{
@@ -254,9 +261,13 @@ container TVW
 				attribute<uint32> PL_count    (p)  := pcount(kruistabel/first_rel);
 				attribute<uint32> P_count     (PL) := pcount(kruistabel/second_rel);
 				attribute<nrAsl>  VBO_count   (PL) := Invoer/TVW/plan/VBO/Matching/VBO_count;
+				attribute<m2>     VBO_area    (PL) := Invoer/TVW/plan/VBO/Matching/VBO_area;
 				attribute<nrAsl>  UBouw_count (PL) := sum(nr_Asl[kruistabel/first_rel], kruistabel/second_rel);
-				
-				attribute<ratio> RatioUBouw_plan        (PL) := UBouw_count / VBO_count;
+				attribute<m2>     UBouw_area  (PL) := sum(oppervlak[kruistabel/first_rel], kruistabel/second_rel);
+
+
+				attribute<ratio> RatioUBouw_plan_vbo    (PL) := UBouw_count / VBO_count;
+				attribute<ratio> RatioUBouw_plan_area   (PL) := UBouw_area  / VBO_area;
 				attribute<bool>  BedrijventerreinInNaam (PL) := strcount(lowercase(PL/Plan_naam), 'bedrijventerrein')   > 0;
 				attribute<bool>  BedrijventerreinInDoel (PL) := strcount(lowercase(PL/Plan_doel), 'bedrijventerrein')   > 0;
 			}
