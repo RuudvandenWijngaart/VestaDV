@@ -17,8 +17,7 @@ container Vastgoed
 		attribute<string> name     : [ 'rijtjeswoning', 'appartement', 'twee_onder_1_kap', 'vrijstaand'];
 	}
 	parameter<string> Scenario := Invoer/DefaultInstellingen/Basis/RuimtelijkeOntwikkelingScenario, IsHidden = "True"; //Keuze uit:
-		//WLO_hoog_DichtBij, WLO_hoog_EnZoVoort, WLO_hoog_Ruim, WLO_hoog_Verbonden
-		//WLO_laag_DichtBij, WLO_laag_EnZoVoort, WLO_laag_Ruim, WLO_laag_Verbonden
+		//Hoog, Laag
 		
 	unit<uint8> Periode := subset(Classifications/Periode/HasNieuwbouw)
 	{
@@ -46,49 +45,58 @@ container Vastgoed
 		parameter<Periode>          Periode_rel;
 		//end case parameters
 		
-		container Nieuwbouw :=
+		container Nieuwbouw25 :=
 			for_each_ndva(
 				 NieuwbouwWoningType/name
-				,Geography/rdc_grids/m100
+				,Geography/rdc_grids/m25
 				,float32
-				,'%HestiaDataDir%/RO/' + '20210906_RO_' + Scenario + '/Bouw_' + Periode/name[Periode_rel] + '/' + NieuwbouwWoningType/name + '.tif'
+				,'%HestiaDataDir%/RO/' + '20230420_RO_WLO_Hoog_Laag' +'/Nieuwbouw' + Periode/RO_directory[Periode_rel]  + Scenario + '/' + NieuwbouwWoningType/name + '.tif'
 			);
+			
+		container Nieuwbouw100 :=
+			for_each_ind('nedv'
+				,NieuwbouwWoningType/name
+				,'sum(Nieuwbouw25/' + NieuwbouwWoningType/name + ',Geography/rdc_grids/m25/m100_rel)'
+				,Geography/rdc_grids/m100
+				,Float32
+			);
+		
 		container NieuwbouwPerJaar
 		{
-			unit<uint32> BO_tussenwoning := subset(Nieuwbouw/rijtjeswoning > 0f && isdefined(Geography/rdc_grids/m100/Buurt_rel))
+			unit<uint32> BO_tussenwoning := subset(Nieuwbouw100/rijtjeswoning > 0f && isdefined(Geography/rdc_grids/m100/Buurt_rel))
 			{
 				attribute<rdc_meter>                  geometry       := Geography/rdc_grids/m100/Point[nr_OrgEntity];
-				attribute<nrAsl>                      nr_aansl       := float64(Nieuwbouw/rijtjeswoning[nr_OrgEntity] * 0.70f) * 1.0[nrAsl]; //Gemiddeld 70% tussenwoningen op aandeel rijwoningen in BAG 2021-01-01
+				attribute<nrAsl>                      nr_aansl       := float64(Nieuwbouw100/rijtjeswoning[nr_OrgEntity] * 0.70f) * 1.0[nrAsl]; //Gemiddeld 70% tussenwoningen op aandeel rijwoningen in BAG 2021-01-01
 				attribute<Classifications/WoningType> Woningtype_rel := const(Classifications/WoningType/V/tussenwoning,.);
 			}
-			unit<uint32> BO_hoekwoning := subset(Nieuwbouw/rijtjeswoning > 0f && isdefined(Geography/rdc_grids/m100/Buurt_rel))
+			unit<uint32> BO_hoekwoning := subset(Nieuwbouw100/rijtjeswoning > 0f && isdefined(Geography/rdc_grids/m100/Buurt_rel))
 			{
 				attribute<rdc_meter>                  geometry       := Geography/rdc_grids/m100/Point[nr_OrgEntity];
-				attribute<nrAsl>                      nr_aansl       := float64(Nieuwbouw/rijtjeswoning[nr_OrgEntity] * 0.30f) * 1.0[nrAsl]; //Gemiddeld 30% hoekwoningen op aandeel rijwoningen in BAG 2021-01-01
+				attribute<nrAsl>                      nr_aansl       := float64(Nieuwbouw100/rijtjeswoning[nr_OrgEntity] * 0.30f) * 1.0[nrAsl]; //Gemiddeld 30% hoekwoningen op aandeel rijwoningen in BAG 2021-01-01
 				attribute<Classifications/WoningType> Woningtype_rel := const(Classifications/WoningType/V/hoekwoning,.);
 			}
-			unit<uint32> BO_meergezinspand_laag_midden := subset(Nieuwbouw/appartement > 0f && isdefined(Geography/rdc_grids/m100/Buurt_rel))
+			unit<uint32> BO_meergezinspand_laag_midden := subset(Nieuwbouw100/appartement > 0f && isdefined(Geography/rdc_grids/m100/Buurt_rel))
 			{
 				attribute<rdc_meter>                  geometry       := Geography/rdc_grids/m100/Point[nr_OrgEntity];
-				attribute<nrAsl>                      nr_aansl       := float64(Nieuwbouw/appartement[nr_OrgEntity] * 0.52f) * 1.0[nrAsl]; //Gemiddeld 52% appartement laag/midden op aandeel appartementen in BAG 2021-01-01
+				attribute<nrAsl>                      nr_aansl       := float64(Nieuwbouw100/appartement[nr_OrgEntity] * 0.52f) * 1.0[nrAsl]; //Gemiddeld 52% appartement laag/midden op aandeel appartementen in BAG 2021-01-01
 				attribute<Classifications/WoningType> Woningtype_rel := const(Classifications/WoningType/V/meergezinspand_laag_midden,.);
 			}
-			unit<uint32> BO_meergezinspand_hoog := subset(Nieuwbouw/appartement > 0f && isdefined(Geography/rdc_grids/m100/Buurt_rel))
+			unit<uint32> BO_meergezinspand_hoog := subset(Nieuwbouw100/appartement > 0f && isdefined(Geography/rdc_grids/m100/Buurt_rel))
 			{
 				attribute<rdc_meter>                  geometry       := Geography/rdc_grids/m100/Point[nr_OrgEntity];
-				attribute<nrAsl>                      nr_aansl       := float64(Nieuwbouw/appartement[nr_OrgEntity] * 0.48f) * 1.0[nrAsl]; //Gemiddeld 48% appartemen hoog op aandeel appartementen in BAG 2021-01-01
+				attribute<nrAsl>                      nr_aansl       := float64(Nieuwbouw100/appartement[nr_OrgEntity] * 0.48f) * 1.0[nrAsl]; //Gemiddeld 48% appartemen hoog op aandeel appartementen in BAG 2021-01-01
 				attribute<Classifications/WoningType> Woningtype_rel := const(Classifications/WoningType/V/meergezinspand_hoog,.);
 			}
-			unit<uint32> BO_vrijstaand := subset(Nieuwbouw/vrijstaand > 0f && isdefined(Geography/rdc_grids/m100/Buurt_rel))
+			unit<uint32> BO_vrijstaand := subset(Nieuwbouw100/vrijstaand > 0f && isdefined(Geography/rdc_grids/m100/Buurt_rel))
 			{
 				attribute<rdc_meter>                  geometry       := Geography/rdc_grids/m100/Point[nr_OrgEntity];
-				attribute<nrAsl>                      nr_aansl       := float64(Nieuwbouw/vrijstaand[nr_OrgEntity]) * 1.0[nrAsl];
+				attribute<nrAsl>                      nr_aansl       := float64(Nieuwbouw100/vrijstaand[nr_OrgEntity]) * 1.0[nrAsl];
 				attribute<Classifications/WoningType> Woningtype_rel := const(Classifications/WoningType/V/vrijstaand,.);
 			}
-			unit<uint32> BO_twee_onder_1_kap := subset(Nieuwbouw/twee_onder_1_kap > 0f && isdefined(Geography/rdc_grids/m100/Buurt_rel))
+			unit<uint32> BO_twee_onder_1_kap := subset(Nieuwbouw100/twee_onder_1_kap > 0f && isdefined(Geography/rdc_grids/m100/Buurt_rel))
 			{
 				attribute<rdc_meter>                  geometry       := Geography/rdc_grids/m100/Point[nr_OrgEntity];
-				attribute<nrAsl>                      nr_aansl       := float64(Nieuwbouw/twee_onder_1_kap[nr_OrgEntity]) * 1.0[nrAsl];
+				attribute<nrAsl>                      nr_aansl       := float64(Nieuwbouw100/twee_onder_1_kap[nr_OrgEntity]) * 1.0[nrAsl];
 				attribute<Classifications/WoningType> Woningtype_rel := const(Classifications/WoningType/V/twee_onder_1_kap,.);
 			}
 
@@ -130,16 +138,16 @@ container Vastgoed
 				 'Data_'+NieuwbouwWoningType/name
 				,Geography/rdc_grids/m100
 				,float32
-				,'%HestiaDataDir%/RO/' + '20210906_RO_' + Scenario + '/Sloop_' + Periode/name[Periode_rel] + '/' + NieuwbouwWoningType/name + '.tif'
+				,'%HestiaDataDir%/RO/' + '20230420_RO_WLO_Hoog_Laag' +'/Sloop' + Periode/RO_directory[Periode_rel]  + Scenario + '/' + NieuwbouwWoningType/name + '.tif'
 			)
 		{
-			attribute<ratio> vrijstaand                 (Geography/rdc_grids/m100) := float64(Data_vrijstaand);
-			attribute<ratio> twee_onder_1_kap           (Geography/rdc_grids/m100) := float64(Data_twee_onder_1_kap);
+			attribute<ratio> vrijstaand                 (Geography/rdc_grids/m100) := Data_vrijstaand > 0.0[float32] ? 0.0[ratio] : 1.0[ratio];
+			attribute<ratio> twee_onder_1_kap           (Geography/rdc_grids/m100) := Data_twee_onder_1_kap > 0.0[float32] ? 0.0[ratio] : 1.0[ratio];
 			attribute<ratio> geen_woonpand              (Geography/rdc_grids/m100) := const(0.0[ratio],Geography/rdc_grids/m100);
-			attribute<ratio> hoekwoning                 (Geography/rdc_grids/m100) := float64(Data_rijtjeswoning);
-			attribute<ratio> tussenwoning               (Geography/rdc_grids/m100) := float64(Data_rijtjeswoning);
-			attribute<ratio> meergezinspand_laag_midden (Geography/rdc_grids/m100) := float64(Data_appartement);
-			attribute<ratio> meergezinspand_hoog        (Geography/rdc_grids/m100) := float64(Data_appartement);				
+			attribute<ratio> hoekwoning                 (Geography/rdc_grids/m100) := Data_rijtjeswoning > 0.0[float32] ? 0.0[ratio] : 1.0[ratio];
+			attribute<ratio> tussenwoning               (Geography/rdc_grids/m100) := Data_rijtjeswoning > 0.0[float32] ? 0.0[ratio] : 1.0[ratio];
+			attribute<ratio> meergezinspand_laag_midden (Geography/rdc_grids/m100) := Data_appartement > 0.0[float32] ? 0.0[ratio] : 1.0[ratio];
+			attribute<ratio> meergezinspand_hoog        (Geography/rdc_grids/m100) := Data_appartement > 0.0[float32] ? 0.0[ratio] : 1.0[ratio];		
 		}
 	}
 
