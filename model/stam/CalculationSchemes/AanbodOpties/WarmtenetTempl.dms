@@ -420,6 +420,7 @@ template WarmtenetTempl
 			attribute<kW>        P_wd      := nr_orgEntity->P_wd;
 			attribute<Celsius>   DT        := nr_orgEntity->DT;
 			attribute<uint32>    SGP_count := const(1[uint32],.);
+			attribute<Vertex>    Vertex_rel:= rlookup(Point, Vertex/Point);
 		}
 
 		parameter<Float64> Ki_Buis_kW := 10[EUR / m / kW];
@@ -452,11 +453,12 @@ template WarmtenetTempl
 		attribute<Vertex> PuntBron_Vertex_rel  (WarmteBronnen/Puntbronnen)             := rlookup(WarmteBronnen/Puntbronnen/Geometry, Vertex/Point);
 		attribute<Vertex> LijnBron_Vertex_rel  (WarmteBronnen/Lijnbron_aansluitpunten) := rlookup(WarmteBronnen/Lijnbron_aansluitpunten/Point, Vertex/Point);
 		
-		unit<uint32>      Vlakbron_Vertex_xrel := point_in_all_polygons(Vertex0/Values, WarmteBronnen/VlakBronnen/geometry)
+		unit<uint32> Vlakbron_Vertex_xrel := point_in_all_polygons(Vertex0/Values, WarmteBronnen/VlakBronnen/geometry)
 		{
 			attribute<WarmteBronnen/bron> bron_rel := WarmteBronnen/VlakBronnen/bron_rel[second_rel];
 		}
 		
+		// Voeg extra directionele edges toe voor de bron-toevoer teneinde stroomrichting vast te leggen
 		unit<uint32> Edge := union_unit(Edge0, WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten, Vlakbron_Vertex_xrel)
 		{
 			attribute<rdc_meter> geometry(arc) := union_data(., Edge0/UnionData
@@ -515,8 +517,8 @@ template WarmtenetTempl
 			attribute<m> bron_dist(ContributiePand) := dijkstra_s('bidirectional(link_flag);startPoint(Node_rel,impedance);endPoint(Node_rel);cut(OrgZone_max_imp);node:TraceBack'
 				,	Edge/dist, Edge/from, Edge/to, Edge/bothDirs
 				,	bron_Vertex_rel, bron_handicap
-				,	rlookup(ContributiePand/Point, Vertex/Point)
-				,	max(initialAugmentation) + 20[km] * 1000[m / km]
+				,	ContributiePand/Vertex_rel
+				,	120[km] * 1000[m / km]
 				);
 				
 			attribute<Vertex>              Vertex_Vertex_rel (Vertex)             := service_area(Edge/from, Edge/to, bron_dist/TraceBack);
