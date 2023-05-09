@@ -562,7 +562,25 @@ template WarmtenetTempl
 		attribute<EUR> bron_Ki_buis (WarmteBronnen/bron) := sum(edge_cost, Vertex_bron_rel[Edge/From]);
 }	
 	// Prospects: potentiele businesscases voor warmtenetten
-	unit<uint32> Prospect := subset(BronAllocatie/SGP_count > 0[uint32])
+	parameter<bool> per_Gemeente := false; // TODO_MTA: move to Invoer/SpecifiekeInstellingen
+	unit<uint32> Gemeente := /Invoer/RuimtelijkeData/StudieGebied/Gemeente;
+	unit<uint32> ProspectBron := select_with_org_rel(BronAllocatie/SGP_count > 0[uint32])
+	{
+		attribute<WarmteBronnen/bron> bron_rel := org_rel;
+		attribute<rdc_meter> geometry := org_rel->Geometry;
+		attribute<Gemeente> Gemeente_rel := point_in_polygon(geometry, Gemeente/geometry);
+		
+		attribute<ProspectBron> per_ProspectBron := ID(.);
+	}
+	
+	unit<uint32> DoelGemeente := select_with_org_rel(has_any(ProspectBron/Gemeente_rel))
+	{
+		attribute<rdc_meter> geometry(., poly) := org_rel->geometry;
+		
+		attribute<.> per_ProspectBron(ProspectBron) := point_in_polygon(ProspectBron/geometry, geometry);
+	}
+	
+	unit<uint32> Prospect := =per_Gemeente ? 'ProspectBron' : 'DoelGemeente'
 	{
 		attribute<BronAllocatie/ContributiePand> ContributiePand_rel (AllCandidate/StudieGebiedPand) := invert(BronAllocatie/ContributiePand/nr_orgentity);
 		attribute<WarmteBronnen/bron>            Bron_rel_SGP        (AllCandidate/StudieGebiedPand) := BronAllocatie/Best_bron_rel[ContributiePand_rel];
@@ -571,7 +589,7 @@ template WarmtenetTempl
 		unit<uint32> Afnemer := subset(IsDefined(Bron_rel_SGP[AllCandidate/StudieGebiedPand_rel]))
 		{
 			attribute<rdc_meter>          Geometry     := nr_orgEntity->AllCandidate/Geometry;
-			attribute<Prospect>           Prospect_rel := rlookup( Prospect/Bron_rel_SGP[AllCandidate/StudieGebiedPand_rel][nr_orgentity] , Prospect/nr_orgentity);
+			attribute<Prospect>           Prospect_rel := rlookup( Prospect/Bron_rel_SGP[AllCandidate/StudieGebiedPand_rel][nr_orgentity] , Prospect/org_rel);
 			attribute<WarmteBronnen/bron> Bron_rel     := nr_orgEntity->Prospect/Bron_rel_candidate;
 			attribute<BO>                 BO_rel       := nr_orgEntity->AllCandidate/BO_rel;
 			attribute<Celsius>            T_bron       := Warmtebronnen/bron/T_bron[bron_rel];
@@ -657,7 +675,9 @@ template WarmtenetTempl
 		}
 
 		//kosten te berekenen op prospectniveau
-		attribute<Eur>    Ki_wd_dist    (Prospect) := BronAllocatie/bron_Ki_buis[nr_orgentity] - Ki_wd_asl , Descr = "kosten van distributienet niet gebouw incurred";
+		attribute<Eur>    Ki_wd_buis    (Prospect) := sum(BronAllocatie/bron_Ki_buis[ProspectBron/bron_rel], per_ProspectBron)    , Descr = "kosten van distributienet prospect buizen";
+		
+		attribute<Eur>    Ki_wd_dist    (Prospect) := Ki_wd_buis - Ki_wd_asl , Descr = "kosten van distributienet niet gebouw incurred";
 		attribute<Eur>    Ki_wd_afnemer (Prospect) := sum(Afnemer/kosten/Ki_wd, Afnemer/Prospect_rel)      , Descr = "gebouw incurred kosten distributienet";
 		attribute<Eur>    Ki_wd_asl     (Prospect) := sum(Afnemer/kosten/Ki_wd_asl, Afnemer/Prospect_rel)  , Descr = "redundant deel aansluitleiding, niet dubbel tellen.";
 		attribute<Eur>    Ki_wd         (Prospect) := Ki_wd_afnemer + Ki_wd_dist                           , Descr = "totale investeringskosten distributienet";
