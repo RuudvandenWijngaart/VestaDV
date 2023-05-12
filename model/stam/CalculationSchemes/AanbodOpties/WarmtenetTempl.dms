@@ -23,7 +23,7 @@ template WarmtenetTempl
 	// stap 7
 	parameter<Float64> MinimaleRentabiliteitLeverancier := 1.1, Descr = "minimale ratio tussen CW van de verwachtte opbrengsten per hoeveelheid investeringen.";
 	
-	parameter<EUR_kW> Ki_distr_max := 200000[EUR_kW]; // TODO: reconsider and move naar kentallen
+	parameter<EUR_kW> Ki_distr_max := 2000[EUR_kW]; // TODO: reconsider and move naar kentallen
 	parameter<ratio>  LeerCurve    := LeerCurves/Warmtenet/curve;
 
 	container WarmteBronnen
@@ -384,10 +384,12 @@ template WarmtenetTempl
 			{
 				//case parameters
 				unit<uint32> ObjectDomain;
-				attribute<kw> P (ObjectDomain);
+				attribute<kw> P_kW (ObjectDomain);
 				attribute<Celsius> DT (ObjectDomain);
 				//end parameters
 
+				attribute<mw> P    (ObjectDomain) := P_kW * 0.001[mW / kW];
+				
 				//====== berekening ondergrens en bovengrens investeringskosten o.b.v. formule per niveau van delta-T
 				attribute<eur_m> Ki_max_DT10 (ObjectDomain) := (1585.4 * P ^ 0.36)[eur_m], Descr = "bovengrens leidingkosten delta-T 10C", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.34 formule 1 ";
 				attribute<eur_m> Ki_min_DT10 (ObjectDomain) := (1069.2 * P ^ 0.41)[eur_m], Descr = "ondergrens leidingkosten delta-T 10C", Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.34 formule 2 ";
@@ -714,12 +716,14 @@ template WarmtenetTempl
 
 		container KostenOptelling
 		{
+			parameter<_yr> AF_StartDiscount := NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
+
 			//kapitaallasten
-			attribute<Eur_yr> Kji_pt           (Prospect) := Ki_pt     * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
-			attribute<Eur_yr> Kji_ge           (Prospect) := Ki_ge     * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
-			attribute<Eur_yr> Kji_ow           (Prospect) := Ki_ow     * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
-			attribute<Eur_yr> Kji_wd           (Prospect) := Ki_wd     * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
-			attribute<Eur_yr> Kji_id           (Prospect) := Ki_id     * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
+			attribute<Eur_yr> Kji_pt           (Prospect) := Ki_pt * AF_StartDiscount;
+			attribute<Eur_yr> Kji_ge           (Prospect) := Ki_ge * AF_StartDiscount;
+			attribute<Eur_yr> Kji_ow           (Prospect) := Ki_ow * AF_StartDiscount;
+			attribute<Eur_yr> Kji_wd           (Prospect) := Ki_wd * AF_StartDiscount;
+			attribute<Eur_yr> Kji_id           (Prospect) := Ki_id * AF_StartDiscount;
 			attribute<Eur_yr> Totaal_kapitaal  (Prospect) := add(Kji_pt, Kji_ge, Kji_ow, Kji_wd, Kji_id);
 
 			//o&b kosten
@@ -741,31 +745,69 @@ template WarmtenetTempl
 			attribute<Eur_yr> Totaal_variabel  (Prospect) := add(Kj_id_elek, Kj_wd_elek, Kj_wd_gas, Kj_ow_productie) - Oj_lv_SDE;
 		}
 
-		container Tarieven
+		container TariefAanbod
 		{
-			attribute<GJ_yr>      WarmteVraag    (Prospect) := sum(Afnemer/vraag/V_Wd_warmte, Afnemer/Prospect_rel);
-			attribute<Eur_GJ>     WarmtePrijs    (Prospect) := KostenOptelling/Totaal_variabel / WarmteVraag;
-			attribute<nrAsl>      nrAfnemers     (Prospect) := sum(BO/nrAansluitingen[Afnemer/BO_rel], Afnemer/Prospect_rel);
-			attribute<eur_yr_asl> Vastrecht      (Prospect) := KostenOptelling/Totaal_jaarlijks / nrAfnemers;
-			attribute<Eur_asl>    AansluitKosten (Prospect) := add(Ki_pt, Ki_ge, Ki_ow, Ki_wd, Ki_id) / nrAfnemers;
-		}
+			//parameters prijsrange bepalen door warmtebedrijf als aanbod naar afnemers
+			parameter<ratio> Bod_deelname_min := 0.75[ratio];
+			parameter<ratio> Bod_deelname_max := 1.00[ratio];
 
-		container OpbrengstenOptelling
-		{
-			attribute<Eur>    Oi_lv_Aansl     (Prospect) := Tarieven/nrAfnemers  * Tarieven/AansluitKosten;
-			attribute<Eur_yr> Oji_lv_Aansl    (Prospect) := Oi_lv_Aansl * NCW/wb28/StartDiscountFactor * NCW/wb28/AnnualisationFactor;
-			attribute<Eur_yr> Oj_lv_verbruik  (Prospect) := Tarieven/WarmteVraag * Tarieven/WarmtePrijs;
-			attribute<Eur_yr> Oj_lv_vastrecht (Prospect) := Tarieven/nrAfnemers  * Tarieven/Vastrecht;
+			//parameters verschuiven tariefcomponenten, 0.5=helft van tarief wordt omgezet in ander tarief WP=warmteprijs, VR=vastrecht, AK=aansluitkosten
+			parameter<ratio> WP_VR := 0.5[ratio], descr = "aandeel te verschuiven variabele jaarlijkse kosten naar vastrecht";
+			parameter<ratio> WP_AK := 0.0[ratio], descr = "aandeel te verschuiven variabele jaarlijkse kosten naar aansluitkosten";
+			parameter<ratio> VR_WP := 0.0[ratio], descr = "aandeel te verschuiven vaste jaarlijkse kosten naar warmteprijs";
+			parameter<ratio> VR_AK := 0.0[ratio], descr = "aandeel te verschuiven vaste jaarlijkse kosten naar aansluitkosten";
+			parameter<ratio> AK_WP := 0.0[ratio], descr = "aandeel te verschuiven investeringskosten naar warmteprijs";
+			parameter<ratio> AK_VR := 0.0[ratio], descr = "aandeel te verschuiven investeringskosten naar vastrecht";
+			parameter<bool>  use_schuif := add(WP_VR,WP_AK,VR_WP,VR_AK,AK_WP,AK_VR) > 0.0[ratio];
+
+			container Tarieven_min_deelname := TariefSamenstelling(Bod_deelname_min);
+			container Tarieven_max_deelname := TariefSamenstelling(Bod_deelname_max);
+
+			template TariefSamenstelling
+			{
+				//parameters case
+				parameter<ratio> Bod_deelname;
+				//end
+
+				attribute<GJ_yr>      WarmteVraag    (Prospect) := Bod_deelname * sum(Afnemer/vraag/V_Wd_warmte, Afnemer/Prospect_rel)         , Descr = "Totale potentiele warmtevraag per prospect bij aangenomen deelname";
+				attribute<nrAsl>      nrAfnemers     (Prospect) := Bod_deelname * sum(BO/nrAansluitingen[Afnemer/BO_rel], Afnemer/Prospect_rel), Descr = "Aantal potentiele afnemers per prospect bij aangenomen deelname";
+				attribute<Eur>        Ki_tot         (Prospect) := add(Ki_pt, Bod_deelname * Ki_ge, Ki_ow, Ki_wd_dist, Bod_deelname * Ki_wd_afnemer, Bod_deelname * Ki_id), Descr = "Totale eenmalige investeringskosten per prospect bij aangenomen deelname";
+				attribute<Eur_yr>     Kj_variabel    (Prospect) := Bod_deelname * KostenOptelling/Totaal_variabel                              , Descr = "Totale jaarlijkse variabele kosten per prospect bij aangenomen deelname";
+				attribute<Eur_yr>     Kj_vast        (Prospect) := KostenOptelling/Totaal_jaarlijks - (1.0[ratio]-Bod_deelname) * add(KostenOptelling/Kj_id_oh, KostenOptelling/Kj_id_adm, KostenOptelling/Kj_lv_adm);
+
+				//Warmteprijs_naar_vastrecht & Warmteprijs_naar_aansluitkosten
+				attribute<Eur_GJ>     WP_rest        (Prospect) := (Kj_variabel - (WP_VR + WP_AK) * Kj_variabel) / WarmteVraag                 , Descr = "warmteprijs resterend na verschuivingen naar vastrecht en aansluitkosten";
+				attribute<eur_yr_asl> VR_ext_WP      (Prospect) := (WP_VR * Kj_variabel) / nrAfnemers                                          , Descr = "extra vastrecht doorgeschoven uit variabele jaarlijkse kosten";
+				attribute<Eur_asl>    AK_ext_WP      (Prospect) := ((WP_AK * Kj_variabel) / nrAfnemers) / KostenOptelling/AF_StartDiscount     , Descr = "extra aansluitkosten doorgeschoven uit variabele jaarlijkse kosten";
+
+				//vastrecht_naar_warmteprijs & vastrecht_naar_aansluitkosten
+				attribute<eur_yr_asl> VR_rest        (Prospect) := (Kj_vast - (VR_WP + VR_AK) * Kj_vast ) / nrAfnemers                         , Descr = "vastrecht resterend na verschuivingen naar warmteprijs en aansluitkosten";
+				attribute<Eur_GJ>     WP_ext_VR      (Prospect) := (VR_WP * Kj_vast) / WarmteVraag                                             , Descr = "extra warmteprijs doorgeschoven uit vaste jaarlijkse kosten";
+				attribute<Eur_asl>    AK_ext_VR      (Prospect) := ((VR_AK * Kj_vast) / nrAfnemers) / KostenOptelling/AF_StartDiscount         , Descr = "extra aansluitkosten doorgeschoven uit vaste jaarlijkse kosten";
+
+				//aansluitkosten_naar_warmteprijs & aansluitkosten_naar_vastrecht
+				attribute<Eur_asl>    AK_rest        (Prospect) := (Ki_tot - (AK_WP + AK_VR) * Ki_tot) / nrAfnemers                            , Descr = "aansluitkosten resterend na verschuivingen naar vastrecht en warmteprijs";
+				attribute<eur_yr_asl> VR_ext_AK      (Prospect) := (AK_VR * Ki_tot * KostenOptelling/AF_StartDiscount) / nrAfnemers            , Descr = "extra vastrecht doorgeschoven uit investeringskosten";
+				attribute<Eur_GJ>     WP_ext_AK      (Prospect) := (AK_WP * Ki_tot * KostenOptelling/AF_StartDiscount) / WarmteVraag           , Descr = "extra warmteprijs doorgeschoven uit investeringskosten";
+
+				//Tarieven
+				attribute<Eur_GJ>     Warmteprijs    (Prospect) := =use_schuif ? 'WP_rest + WP_ext_VR + WP_ext_AK' : 'Kj_variabel / WarmteVraag';
+				attribute<eur_yr_asl> Vastrecht      (Prospect) := =use_schuif ? 'VR_rest + VR_ext_AK + VR_ext_WP' : 'Kj_vast     / nrAfnemers';
+				attribute<Eur_asl>    AansluitKosten (Prospect) := =use_schuif ? 'AK_rest + AK_ext_WP + AK_ext_VR' : 'Ki_tot      / nrAfnemers';
+			}
 		}
 
 		unit<uint32> DesAggregatie := Afnemer
 		{
-			attribute<ratio>  ProspectAandeel (Afnemer) := Bo/nrAansluitingen[BO_rel] / Tarieven/nrAfnemers[Prospect_rel];
+			parameter<ratio> R_max := 0.5[ratio], Descr = "Hanteert afnemer bij afweging tot aansluiten de bovenwaarde van het aanbod of ondergrens of er tussenin? 1.0=bovengrens deelname (hoogste deelname)";
+			parameter<ratio> R_min := 1.0[ratio] - R_max;
+
+			attribute<ratio>  ProspectAandeel (Afnemer) := Bo/nrAansluitingen[BO_rel] / (R_max * TariefAanbod/Tarieven_max_deelname/nrAfnemers[Prospect_rel] + R_min * TariefAanbod/Tarieven_min_deelname/nrAfnemers[Prospect_rel]);
 			attribute<Eur>    Ki_wd           (Afnemer) := ProspectAandeel * Prospect/Ki_wd[Prospect_rel];
 			attribute<Eur>    Ki_ow           (Afnemer) := ProspectAandeel * Prospect/Ki_ow[Prospect_rel];
-			attribute<Eur>    Oi_lv_Aansl     (Afnemer) := Tarieven/AansluitKosten[Prospect_rel] * Bo/nrAansluitingen[BO_rel] ;
-			attribute<Eur_yr> Oj_lv_verbruik  (Afnemer) := Tarieven/WarmtePrijs[Prospect_rel]    * vraag/V_Wd_warmte ;
-			attribute<Eur_yr> Oj_lv_Vastrecht (Afnemer) := Tarieven/Vastrecht[Prospect_rel]      * Bo/nrAansluitingen[BO_rel] ;
+			attribute<Eur>    Oi_lv_Aansl     (Afnemer) := (R_max * TariefAanbod/Tarieven_max_deelname/AansluitKosten[Prospect_rel] + R_min * TariefAanbod/Tarieven_min_deelname/AansluitKosten[Prospect_rel]) * Bo/nrAansluitingen[BO_rel] ;
+			attribute<Eur_yr> Oj_lv_verbruik  (Afnemer) := (R_max * TariefAanbod/Tarieven_max_deelname/WarmtePrijs[Prospect_rel]    + R_min * TariefAanbod/Tarieven_min_deelname/WarmtePrijs[Prospect_rel]   ) * vraag/V_Wd_warmte ;
+			attribute<Eur_yr> Oj_lv_Vastrecht (Afnemer) := (R_max * TariefAanbod/Tarieven_max_deelname/Vastrecht[Prospect_rel]      + R_min * TariefAanbod/Tarieven_min_deelname/Vastrecht[Prospect_rel]     ) * Bo/nrAansluitingen[BO_rel] ;
 		}
 	}
 	
@@ -1011,3 +1053,4 @@ template WarmtenetTempl
 		}
 	}
 }
+
