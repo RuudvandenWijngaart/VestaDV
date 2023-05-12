@@ -185,7 +185,7 @@ template WarmtenetTempl
 			attribute<Celsius>             DT              := nr_orgentity->DT; 
 			attribute<Eur_yr>              Contributie     := nr_orgentity->Contributie;
 		}
-		attribute<StudieGebiedPand> StudieGebiedPand_rel := rlookup(pand_rel, StudieGebiedPand_candidate/nr_orgentity[StudieGebiedPand/nr_orgentity]);
+		attribute<StudieGebiedPand> StudieGebiedPand_rel := rlookup(pand_rel, StudieGebiedPand/pand_rel);
 
 		attribute<rdc_meter> Geometry      := BO/geometry[BO_rel];
 		attribute<BO>        BO_rel        := nr_orgentity;	
@@ -562,8 +562,6 @@ template WarmtenetTempl
 		attribute<EUR> bron_Ki_buis (WarmteBronnen/bron) := sum(edge_cost, Vertex_bron_rel[Edge/From]);
 }	
 	// Prospects: potentiele businesscases voor warmtenetten
-	parameter<bool> per_Gemeente := false; // TODO_MTA: move to Invoer/SpecifiekeInstellingen
-	unit<uint32> Gemeente := /Invoer/RuimtelijkeData/StudieGebied/Gemeente;
 	unit<uint32> ProspectBron := select_with_org_rel(BronAllocatie/SGP_count > 0[uint32])
 	{
 		attribute<WarmteBronnen/bron> bron_rel := org_rel;
@@ -573,14 +571,16 @@ template WarmtenetTempl
 		attribute<ProspectBron> per_ProspectBron := ID(.);
 	}
 	
+	unit<uint32> Gemeente := /Invoer/RuimtelijkeData/StudieGebied/Gemeente;
 	unit<uint32> DoelGemeente := select_with_org_rel(has_any(ProspectBron/Gemeente_rel))
 	{
-		attribute<rdc_meter> geometry(., poly) := org_rel->geometry;
+		attribute<Gemeente> gemeente_rel := org_rel;
+		attribute<rdc_meter> geometry(., poly) := gemeente_rel->geometry;
 		
-		attribute<.> per_ProspectBron(ProspectBron) := point_in_polygon(ProspectBron/geometry, geometry);
+		attribute<.> per_ProspectBron(ProspectBron) := rlookup(ProsPectBron/Gemeente_rel,  gemeente_rel);
 	}
 	
-	unit<uint32> Prospect := =per_Gemeente ? 'DoelGemeente' : 'ProspectBron'
+	unit<uint32> Prospect := =/Invoer/DefaultInstellingen/rekenstap/Specifiek/Voorkeuren/GebiedsOpties/ProspectPerGemeente ? 'DoelGemeente' : 'ProspectBron'
 	{
 		attribute<BronAllocatie/ContributiePand> ContributiePand_rel (AllCandidate/StudieGebiedPand) := invert(BronAllocatie/ContributiePand/nr_orgentity);
 		attribute<WarmteBronnen/bron>            Bron_rel_SGP        (AllCandidate/StudieGebiedPand) := BronAllocatie/Best_bron_rel[ContributiePand_rel];
@@ -589,8 +589,17 @@ template WarmtenetTempl
 		unit<uint32> Afnemer := subset(IsDefined(Bron_rel_SGP[AllCandidate/StudieGebiedPand_rel]))
 		{
 			attribute<rdc_meter>          Geometry     := nr_orgEntity->AllCandidate/Geometry;
-			attribute<Prospect>           Prospect_rel := rlookup( Prospect/Bron_rel_SGP[AllCandidate/StudieGebiedPand_rel][nr_orgentity] , Prospect/org_rel);
-			attribute<WarmteBronnen/bron> Bron_rel     := nr_orgEntity->Prospect/Bron_rel_candidate;
+			
+			
+			// TODO: Waarom geen categorische value foutmelding ?
+			// TODO: zorg dat er evenveel afnemers komen als bij bronnen als afzonderlijke prospects.
+
+			attribute<AllCandidate> AllCandidate_rel := nr_OrgEntity;
+			attribute<uint32> StudieGebiedPand_rel := AllCandidate/StudieGebiedPand_rel[AllCandidate_rel];
+			attribute<WarmteBronnen/bron> bron_rel := Prospect/Bron_rel_SGP[StudieGebiedPand_rel];
+			
+			attribute<Prospect>           Prospect_rel := per_ProspectBron[ rlookup( bron_rel, ProspectBron/bron_rel) ]; 
+			
 			attribute<BO>                 BO_rel       := nr_orgEntity->AllCandidate/BO_rel;
 			attribute<Celsius>            T_bron       := Warmtebronnen/bron/T_bron[bron_rel];
 			attribute<bool>               CollWP       := T_bron < T_sec;
