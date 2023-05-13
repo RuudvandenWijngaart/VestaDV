@@ -417,10 +417,11 @@ template WarmtenetTempl
 	{
 		unit<uint32> ContributiePand := subset(AllCandidate/StudieGebiedPand/Contributie > 0.0[Eur_yr])
 		{
+			attribute<AllCandidate/StudieGebiedPand> SGP_rel := nr_orgEntity;
 			attribute<rdc_meter> Geometry  := Point;
-			attribute<rdc_meter> Point     := nr_orgEntity->point;
-			attribute<kW>        P_wd      := nr_orgEntity->P_wd;
-			attribute<Celsius>   DT        := nr_orgEntity->DT;
+			attribute<rdc_meter> Point     := SGP_rel->point;
+			attribute<kW>        P_wd      := SGP_rel->P_wd;
+			attribute<Celsius>   DT        := SGP_rel->DT;
 			attribute<uint32>    SGP_count := const(1[uint32],.);
 			attribute<Vertex>    Vertex_rel:= rlookup(Point, Vertex/Point);
 		}
@@ -831,7 +832,38 @@ template WarmtenetTempl
 		{
 			container DefinitieveBuiskosten
 			{
-				attribute<EUR> bron_Ki_buis   (WarmteBronnen/bron) := BronAllocatie/bron_Ki_buis; //TODO Maarten: nieuwe berekening lengte netwerk en buiskosten o.b.v. vermogen overgebleden afnemers
+				unit<uint32> Vertex := BronAllocatie/Vertex;
+				unit<uint32> Edge   := BronAllocatie/Edge;
+				unit<uint32> StudieGebiedPand := AllCandidate/StudieGebiedPand
+				{
+					attribute<uint32> deelnemer_count                                     := sum_uint32(and(AfnemersAfweging/afweging, AfnemersAfweging/bron_rel!=0), AfnemersAfweging/StudieGebiedPand_rel)                             , Descr = "aantal deelnemers per SPG";
+					attribute<kW>     P_wd                                                := sum(AllCandidate/PartialContributie/P_wd[AfnemersAfweging/AllCandidate_rel] * float64(AfnemersAfweging/afweging), AfnemersAfweging/StudieGebiedPand_rel);      // of verwijs naar ContributiePand/P_dw 
+				}
+				unit<uint32> DeelNemendPand := select_with_org_rel(StudieGebiedPand/deelnemer_count > 0)
+				{
+					attribute<StudieGebiedPand> SGP_rel                                   := org_rel;
+					attribute<BronAllocatie/ContributiePand> ContributiePand_rel          := rlookup(SGP_rel, BronAllocatie/ContributiePand/SGP_rel);
+					attribute<WarmteBronnen/bron> bron_rel                                := BronAllocatie/Best_bron_rel[ContributiePand_rel];
+					attribute<kW>     P_wd                                                := SGP_rel->P_wd;
+					attribute<Vertex> Vertex_rel                                          := BronAllocatie/ContributiePand/Vertex_rel[ContributiePand_rel];
+				}
+				
+				attribute<uint32>             DNP_count              (WarmteBronnen/bron) := pcount(DeelNemendPand/bron_rel), Descr = "aantal panden met deelnemers per bron";
+				attribute<kW>                 NodeDemand             (Vertex)             := MakeDefined(DeelNemendPand/P_wd[invert(DeelNemendPand/Vertex_rel)], 0[kW])     , Descr = "Vermogenvraag van aangesloten pand";
+				attribute<Celsius>            NodeDT                 (Vertex)             := BronAllocatie/NodeDT, Descr = "Verchil aanlever/retour temp aangesloten pand";
+				attribute<uint32>             Node_DNP_count         (Vertex)             := pcount(DeelNemendPand/Vertex_rel);
+				attribute<Edge>               TraceBack              (Vertex)             := BronAllocatie/LastIter/bron_dist/TraceBack;
+				attribute<kW>                 edge_flow              (Edge)               := trace_back(Edge/From, Edge/To, TraceBack, NodeDemand)                                 , Descr = "optelling van vermogensvraag per buisleidingelement";
+				attribute<Celsius>            edge_DT_sum            (Edge)               := BronAllocatie/edge_DT_sum;
+				attribute<uint32>             edge_DNP_count         (Edge)               := trace_back(Edge/From, Edge/To, TraceBack, Node_DNP_count);
+				attribute<Celsius>            edge_DT                (Edge)               := edge_DT_sum / float64(edge_DNP_count);
+				attribute<Vertex>             Vertex_bron_Vertex_rel (Vertex)             := service_area(Edge/From, Edge/To, TraceBack); 
+				attribute<WarmteBronnen/bron> Vertex_bron_rel        (Vertex)             := invert(BronAllocatie/bron_Vertex_rel)[Vertex_bron_Vertex_rel];
+				
+				container edge_cost_calc := AllCandidate/PartialContributie/LeidingKosten_T(Edge, edge_flow, edge_DT);
+				
+				attribute<EUR> edge_cost    (Edge)               := edge_cost_calc/Ki * Edge/dist;
+				attribute<EUR> bron_Ki_buis (WarmteBronnen/bron) := sum(edge_cost, Vertex_bron_rel[Edge/From]);
 			}
 
 			attribute<Eur>    Ki_wd_buis      (Prospect) := sum( DefinitieveBuiskosten/bron_Ki_buis [ ProspectBron/bron_rel ], per_ProspectBron ) ;
