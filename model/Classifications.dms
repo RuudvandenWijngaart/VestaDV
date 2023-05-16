@@ -493,17 +493,24 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			'ModelObjectKey'
 		];
 	}
-	unit<uint32> Scurve_isolatie := combine(Eigendom,IsolatieMaatregel), StorageName = "%projDir%/Scurve/Scurves_isolatie.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
+	unit<uint32> Scurve_isolatie_data: StorageName = "%projDir%/Scurve/Scurves_isolatie.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
 	{
-		attribute<IsolatieMaatregel> IsolatieMaatregel_rel := nr_2;
-		attribute<Eigendom>          Eigendom_rel          := nr_1;
-		attribute<string>            IsolatieMaatregelName := IsolatieMaatregel/name[nr_2];
-		attribute<string>            EigendomName          := Eigendom/name[nr_1];
+		attribute<string> key := field_1+'_'+field_2;
+	}
+	
+	unit<uint32> Scurve_isolatie := combine(Eigendom,IsolatieMaatregel)
+	{
+		attribute<Eigendom>          Eigendom_rel          := first_rel;
+		attribute<IsolatieMaatregel> IsolatieMaatregel_rel := second_rel;		
+		attribute<string>            EigendomName          := Eigendom/name[Eigendom_rel];
+		attribute<string>            IsolatieMaatregelName := IsolatieMaatregel/name[IsolatieMaatregel_rel];
 		attribute<string>            name                  := IsolatieMaatregelName + '_' +EigendomName;
-		attribute<string>            label                 := IsolatieMaatregel/label[nr_2] + '.' + Eigendom/label[nr_1], DialogType = "LabelText";
-
-		attribute<string> BETA_C := replace(BETA, ',', '.');
-		attribute<string> P50P_C := replace(P50P, ',', '.');
+		attribute<string>            label                 := IsolatieMaatregel/label[IsolatieMaatregel_rel] + '.' + Eigendom/label[Eigendom_rel], DialogType = "LabelText";
+		
+		attribute<Scurve_isolatie_data> data_rel := rlookup(uppercase(name), uppercase(Scurve_isolatie_data/key));
+		
+		attribute<string> BETA_C := replace(data_rel->BETA, ',', '.');
+		attribute<string> P50P_C := replace(data_rel->P50P, ',', '.');
 
 		attribute<bool> Validity := IsDefined(float64(BETA_C)) && IsDefined(float64(P50P_C));
 
@@ -514,12 +521,12 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	}
 	unit<uint32> Scurve_gebouwoptie := combine(Eigendom,GebouwOptie), StorageName = "%projDir%/Scurve/Scurves_gebouwoptie.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
 	{
-		attribute<GebouwOptie> GebouwOptie_rel := nr_2;
-		attribute<Eigendom>    Eigendom_rel    := nr_1;
-		attribute<string>      GebouwOptieName := GebouwOptie/name[nr_2];
-		attribute<string>      EigendomName    := Eigendom/name[nr_1];
+		attribute<GebouwOptie> GebouwOptie_rel := second_rel;
+		attribute<Eigendom>    Eigendom_rel    := first_rel;
+		attribute<string>      GebouwOptieName := GebouwOptie/name[GebouwOptie_rel];
+		attribute<string>      EigendomName    := Eigendom/name[Eigendom_rel];
 		attribute<string>      name            := GebouwOptieName + '_' +EigendomName;
-		attribute<string>      label           := GebouwOptie/label[nr_2] + '.' + Eigendom/label[nr_1], DialogType = "LabelText";
+		attribute<string>      label           := GebouwOptie/label[GebouwOptie_rel] + '.' + Eigendom/label[Eigendom_rel], DialogType = "LabelText";
 
 		attribute<string> BETA_C := replace(BETA, ',', '.');
 		attribute<string> P50P_C := replace(P50P, ',', '.');
@@ -531,7 +538,12 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
-	unit<uint32> Scurve_investering := combine(Eigendom,IsolatieAmbitie,GebouwOptieCategorie), StorageName = "%projDir%/Scurve/Scurves_investering.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
+	unit<uint32> Scurve_investering_data : StorageName = "%projDir%/Scurve/Scurves_investering.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"
+	{
+		attribute<string> key := field_1 + '_'+ field_2 + '_' + field_3;
+	}
+	
+	unit<uint32> Scurve_investering := combine(Eigendom,IsolatieAmbitie,GebouwOptieCategorie)
 	{
 		attribute<Eigendom>             Eigendom_rel             := nr_1;
 		attribute<IsolatieAmbitie>      IsolatieAmbitie_rel      := nr_2;
@@ -541,9 +553,11 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<string>               GebouwOptieCategorieName := GebouwOptieCategorie/name[nr_3];
 		attribute<string>               name                     := IsolatieAmbitieName+'_'+ GebouwOptieCategorieName+'_'+EigendomName;
 		attribute<string>               label                    := IsolatieAmbitie/label[nr_2]+'.'+GebouwOptieCategorie/label[nr_3]+'.'+Eigendom/label[nr_1], DialogType = "LabelText";
+		
+		attribute<Scurve_investering_data> data_rel  := rlookup(uppercase(name), uppercase(Scurve_investering_data/key));
 
-		attribute<string> BETA_C := replace(BETA, ',', '.');
-		attribute<string> P50P_C := replace(P50P, ',', '.');
+		attribute<string> BETA_C := replace(data_rel->BETA, ',', '.');
+		attribute<string> P50P_C := replace(data_rel->P50P, ',', '.');
 
 		attribute<bool> Validity := IsDefined(float64(BETA_C)) && IsDefined(float64(P50P_C));
 
