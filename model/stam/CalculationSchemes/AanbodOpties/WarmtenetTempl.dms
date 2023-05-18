@@ -57,6 +57,7 @@ template WarmtenetTempl
 			
 			attribute<Bron>      Bron_rel        := convert(ID(.)+1, bron);
 			attribute<m>         max_dist        := 20[km] * 1000[m / km] * sqrt(min_elem(MWth_max, 25[MW]) / 1[MW]);
+			attribute<BronAllocatie/Vertex>    Vertex_rel      := rlookup(geometry, BronAllocatie/Vertex/Point);
 		}
 
 		unit<uint32> VlakBronnen_zichtjaar := = 'Invoer/RuimtelijkeData/WarmteBronnen/Contourbronnen/BronSelecties/'+Classifications/Rekenjaar/name[Classifications/ZichtJaar/RekenJaar_rel[Zichtjaar_rel]]+'/BronElementen';
@@ -126,6 +127,7 @@ template WarmtenetTempl
 			attribute<lijnbronnen> Lijnbron_rel := nr_OrgEntity->Lijnbron_rel;
 			attribute<bron> bron_rel := nr_OrgEntity->bron_rel;
 			attribute<rdc_meter> point := nr_OrgEntity->point;
+			attribute<BronAllocatie/Vertex>    Vertex_rel      := rlookup(point, BronAllocatie/Vertex/Point);
 		}
 		
 		unit<uint32> Bron := union_unit(Void, Puntbronnen, VlakBronnen, Lijnbronnen)
@@ -428,6 +430,7 @@ template WarmtenetTempl
 
 		parameter<Float64> Ki_Buis_kW := 10[EUR / m / kW];
 		
+		// TODO: cluster co-located and nearby bronnen.
 		unit<uint32> AansluitPunten := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten, ContributiePand)
 		{
 			attribute<rdc_meter> Point := union_data(., WarmteBronnen/Puntbronnen/Geometry, WarmteBronnen/Lijnbron_aansluitpunten/Point, ContributiePand/Point);
@@ -435,71 +438,46 @@ template WarmtenetTempl
 		
 		unit<uint32>  network       := /Invoer/RuimtelijkeData/OSM/Read_Final_Network;
 		
-		unit<uint32> Edge0 := connect(network/Geometry, AansluitPunten/point),	DialogType = "Map",	DialogData = "UnionData"
+		unit<uint32> Edge := connect(network/Geometry, AansluitPunten/point),	DialogType = "Map",	DialogData = "UnionData"
 		{
 			attribute<rdc_meter> Point     := first_point(UnionData);
 			attribute<rdc_meter> NextPoint := last_point(UnionData);
-			attribute<Vertex0>   from      := rlookup(Point,     Vertex0/Values);
-			attribute<Vertex0>   to        := rlookup(NextPoint, Vertex0/Values);
+			attribute<Vertex>    from      := rlookup(Point,     Vertex/Point);
+			attribute<Vertex>    to        := rlookup(NextPoint, Vertex/Point);
 			attribute<m>         dist      := arc_length(UnionData, m);
 		}
-		unit<uint32>  PointSet := union_unit(Edge0, Edge0) { attribute<rdc_meter> Point := union_data(., Edge0/Point, Edge0/NextPoint); }
-		unit<uint32>  Vertex0  := unique(PointSet/Point);
-		
-		// add an edge from each bron to network in order to identify each bron as different source; TODO: cluster co-located and nearby bronnen.
-		unit<uint32>  Vertex := union_unit(Vertex0, WarmteBronnen/bron)
+		unit<uint32>  PointSet := union_unit(Edge, Edge) { attribute<rdc_meter> Point := union_data(., Edge/Point, Edge/NextPoint); }
+		unit<uint32>  Vertex  := unique(PointSet/Point), DialogType = "Map", DialogData = "Point"
 		{
-			attribute<rdc_meter> Point  := union_data(., Vertex0/Values, WarmteBronnen/bron/geometry);
-			attribute<.>         Per_Pand (ContributiePand) := convert(rlookup(ContributiePand/Point, Vertex0/Values), Vertex);
-			
+			attribute<rdc_meter> Point  := Values;
+			attribute<.>         Per_Pand (ContributiePand) := rlookup(ContributiePand/Point, Values);
 		}
+		
 		attribute<Vertex> PuntBron_Vertex_rel  (WarmteBronnen/Puntbronnen)             := rlookup(WarmteBronnen/Puntbronnen/Geometry, Vertex/Point);
 		attribute<Vertex> LijnBron_Vertex_rel  (WarmteBronnen/Lijnbron_aansluitpunten) := rlookup(WarmteBronnen/Lijnbron_aansluitpunten/Point, Vertex/Point);
 		
-		unit<uint32> Vlakbron_Vertex_xrel := point_in_all_polygons(Vertex0/Values, WarmteBronnen/VlakBronnen/geometry)
+		unit<uint32> Vlakbron_Vertex_xrel := point_in_all_polygons(Vertex/Values, WarmteBronnen/VlakBronnen/geometry)
 		{
-			attribute<WarmteBronnen/bron> bron_rel := WarmteBronnen/VlakBronnen/bron_rel[second_rel];
+			attribute<Vertex>                    Vertex_rel   := first_rel;
+			attribute<WarmteBronnen/VlakBronnen> Vlakbron_rel := second_rel;
+			attribute<WarmteBronnen/bron> bron_rel := WarmteBronnen/VlakBronnen/bron_rel[Vlakbron_rel];
 		}
 		
-		// Voeg extra directionele edges toe voor de bron-toevoer teneinde stroomrichting vast te leggen
-		unit<uint32> Edge := union_unit(Edge0, WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten, Vlakbron_Vertex_xrel)
+		attribute<Vertex> StudieGebiedPand_Vertex_rel(ContributiePand) := rlookup(ContributiePand/Point, Vertex/Point);
+		
+		
+//		attribute<Vertex> bron_Vertex_rel(WarmteBronnen/bron) := convert(#Vertex0 + ID(WarmteBronnen/bron), Vertex);
+	
+		// startpoints maken met alle aansluitpunten van alle bronnen, ook vlakbronnen
+		unit<uint32> startPoint := union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Lijnbron_aansluitpunten, Vlakbron_Vertex_xrel)
 		{
-			attribute<rdc_meter> geometry(arc) := union_data(., Edge0/UnionData
-			,	points2sequence(
-					union_data(union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Puntbronnen), WarmteBronnen/Puntbronnen/geometry, Vertex/Point[PuntBron_Vertex_rel])
-				,	union_data(union_unit(WarmteBronnen/Puntbronnen, WarmteBronnen/Puntbronnen), ID(WarmteBronnen/Puntbronnen), ID(WarmteBronnen/Puntbronnen))
-				)
-			,	points2sequence(
-					union_data(union_unit(WarmteBronnen/Lijnbron_aansluitpunten, WarmteBronnen/Lijnbron_aansluitpunten), WarmteBronnen/Lijnbron_aansluitpunten/Point, Vertex/Point[LijnBron_Vertex_rel])
-				,	union_data(union_unit(WarmteBronnen/Lijnbron_aansluitpunten, WarmteBronnen/Lijnbron_aansluitpunten), ID(WarmteBronnen/Lijnbron_aansluitpunten), ID(WarmteBronnen/Lijnbron_aansluitpunten))
-				)
-			,	points2sequence(
-					union_data(union_unit(Vlakbron_Vertex_xrel, Vlakbron_Vertex_xrel), centroid_or_mid(WarmteBronnen/VlakBronnen/geometry)[Vlakbron_Vertex_xrel/second_rel], Vertex0/Values[Vlakbron_Vertex_xrel/first_rel])
-				,	union_data(union_unit(Vlakbron_Vertex_xrel, Vlakbron_Vertex_xrel), ID(Vlakbron_Vertex_xrel), ID(Vlakbron_Vertex_xrel))
-				)
-			);
-			attribute<bool> bothDirs:= union_data(., const(true, Edge0), const(false, WarmteBronnen/Puntbronnen), const(false, WarmteBronnen/Lijnbron_aansluitpunten), const(false, Vlakbron_Vertex_xrel));
-			attribute<Vertex> from  := convert(union_data(., Edge0/from, nrofrows(Vertex0) + WarmteBronnen/Puntbronnen/bron_rel, #Vertex0 + WarmteBronnen/Lijnbron_aansluitpunten/bron_rel, #Vertex0 + Vlakbron_Vertex_xrel/bron_rel), Vertex);
-			attribute<Vertex> to    := convert(union_data(., Edge0/to,   PuntBron_Vertex_rel, LijnBron_Vertex_rel, Vlakbron_Vertex_xrel/second_rel), vertex);
-			attribute<m>      dist  := union_data(., Edge0/dist, const(0m, WarmteBronnen/Puntbronnen), const(0m, WarmteBronnen/Lijnbron_aansluitpunten), const(0m, Vlakbron_Vertex_xrel));
-		}
-		
-		attribute<Vertex> StudieGebiedPand_Vertex_rel(ContributiePand) := convert(rlookup(ContributiePand/Point, Vertex0/Values), Vertex);
-		
-		
-		// startpoints maken met alle aansluitpunten van alle bronnen (ook vlakbronnen ? )
-		attribute<Vertex> bron_Vertex_rel(WarmteBronnen/bron) := convert(#Vertex0 + ID(WarmteBronnen/bron), Vertex);
-/*		
-		unit<uint32> startPoint := 
-		{
-			attribute<Vertex> Vertex_rel := #Vertex0 + ID(.);
+			attribute<Vertex> Vertex_rel := union_data(., WarmteBronnen/Puntbronnen/Vertex_rel, WarmteBronnen/Lijnbron_aansluitpunten/Vertex_rel, Vlakbron_Vertex_xrel/Vertex_rel);
 			attribute<.> per_Vertex(Vertex) := invert(Vertex_rel), IntegrityCheck = "per_Vertex[Vertex_rel] == ID(.)";
 			attribute<uint32> count(Vertex) := pcount(Vertex_rel);
-//			attribute<WarmteBronnen/bron> bron_rel := union_data(.,	WarmteBronnen/Puntbronnen/bron_rel,	WarmteBronnen/Lijnbron_aansluitpunten/bron_rel, Vlakbron_Vertex_xrel/second_rel->bron_rel);
+			attribute<WarmteBronnen/bron> bron_rel := union_data(.,	WarmteBronnen/Puntbronnen/bron_rel,	WarmteBronnen/Lijnbron_aansluitpunten/bron_rel, Vlakbron_Vertex_xrel/second_rel->bron_rel);
 			// 20km max voor typische connectie van 1 bron op 100 afnemers van ieder 10kW, maar minder bij veel startPoints
 		}
 		// endpoints zijn alle AllCandidate/StudieGebiedPand(en)
-*/				
 			
 		parameter<uint32> nrBronAllocatieIteraties := 40; // TODO: reconsider and move to kentallen
 		unit<uint32> allocIter := range(uint32, 0, nrBronAllocatieIteraties)
@@ -516,16 +494,19 @@ template WarmtenetTempl
 			attribute<m> currAugmentation(WarmteBronnen/bron);
 			attribute<m> bron_handicap   (WarmteBronnen/bron) := currAugmentation + (max(WarmteBronnen/bron/max_dist)- WarmteBronnen/bron/max_dist);
 			
+			attribute<StartPoint> BestStartPoint_rel(Vertex) := min_index(bron_handicap[startPoint/bron_rel], startPoint/Vertex_rel);
+			attribute<WarmteBronnen/bron> BestBron_rel(Vertex) := BestStartPoint_rel->bron_rel;
+			
 			// afstandentabel via dijkstra
-			attribute<m> bron_dist(ContributiePand) := dijkstra_s('bidirectional(link_flag);startPoint(Node_rel,impedance);endPoint(Node_rel);cut(OrgZone_max_imp);node:TraceBack'
-				,	Edge/dist, Edge/from, Edge/to, Edge/bothDirs
-				,	bron_Vertex_rel, bron_handicap
+			attribute<m> bron_dist(ContributiePand) := dijkstra_s('bidirectional;startPoint(Node_rel,impedance);endPoint(Node_rel);cut(OrgZone_max_imp);node:TraceBack'
+				,	Edge/dist, Edge/from, Edge/to
+				,	startPoint/Vertex_rel, bron_handicap[startPoint/bron_rel]
 				,	ContributiePand/Vertex_rel
 				,	120[km] * 1000[m / km]
 				);
 				
-			attribute<Vertex>              Vertex_Vertex_rel (Vertex)             := service_area(Edge/from, Edge/to, bron_dist/TraceBack);
-			attribute<WarmteBronnen/bron>  Vertex_bron_rel   (Vertex)             := rlookup(Vertex_Vertex_rel, bron_Vertex_rel);
+			attribute<Vertex>              Vertex_BronVertex_rel(Vertex)          := service_area(Edge/from, Edge/to, bron_dist/TraceBack);
+			attribute<WarmteBronnen/bron>  Vertex_bron_rel      (Vertex)          := BestBron_rel[Vertex_BronVertex_rel];
 			attribute<WarmteBronnen/bron>  Dest_bron_rel     (ContributiePand)    := Vertex_bron_rel[Vertex/Per_Pand];
 			attribute<kW>                  bron_P_wd         (Warmtebronnen/bron) := sum(ContributiePand/P_wd, dest_bron_rel);
 			attribute<ratio>               bron_cap_ratio    (Warmtebronnen/bron) := bron_P_wd / Warmtebronnen/bron/kWth_max;
@@ -556,8 +537,7 @@ template WarmtenetTempl
 		attribute<Celsius>            edge_DT_sum            (Edge)               := trace_back(Edge/From, Edge/To, LastIter/bron_dist/TraceBack, NodeDT);
 		attribute<uint32>             edge_SGP_count         (Edge)               := trace_back(Edge/From, Edge/To, LastIter/bron_dist/TraceBack, Node_SGP_count);
 		attribute<Celsius>            edge_DT                (Edge)               := edge_DT_sum / float64(edge_SGP_count);
-		attribute<Vertex>             Vertex_bron_Vertex_rel (Vertex)             := service_area(Edge/From, Edge/To, LastIter/bron_dist/TraceBack); 
-		attribute<WarmteBronnen/bron> Vertex_bron_rel        (Vertex)             := invert(bron_Vertex_rel)[Vertex_bron_Vertex_rel];
+		attribute<WarmteBronnen/bron> Vertex_bron_rel        (Vertex)             := LastIter/Vertex_bron_rel;
 		
 		container edge_cost_calc := AllCandidate/PartialContributie/LeidingKosten_T(Edge, edge_flow, edge_DT);
 		
@@ -841,6 +821,7 @@ template WarmtenetTempl
 				}
 				unit<uint32> DeelNemendPand := select_with_org_rel(StudieGebiedPand/deelnemer_count > 0)
 				{
+					attribute<rdc_meter>        geometry(poly)                            := SGP_rel->geometry;
 					attribute<StudieGebiedPand> SGP_rel                                   := org_rel;
 					attribute<BronAllocatie/ContributiePand> ContributiePand_rel          := rlookup(SGP_rel, BronAllocatie/ContributiePand/SGP_rel);
 					attribute<WarmteBronnen/bron> bron_rel                                := BronAllocatie/Best_bron_rel[ContributiePand_rel];
@@ -857,8 +838,7 @@ template WarmtenetTempl
 				attribute<Celsius>            edge_DT_sum            (Edge)               := BronAllocatie/edge_DT_sum;
 				attribute<uint32>             edge_DNP_count         (Edge)               := trace_back(Edge/From, Edge/To, TraceBack, Node_DNP_count);
 				attribute<Celsius>            edge_DT                (Edge)               := edge_DT_sum / float64(edge_DNP_count);
-				attribute<Vertex>             Vertex_bron_Vertex_rel (Vertex)             := service_area(Edge/From, Edge/To, TraceBack); 
-				attribute<WarmteBronnen/bron> Vertex_bron_rel        (Vertex)             := invert(BronAllocatie/bron_Vertex_rel)[Vertex_bron_Vertex_rel];
+				attribute<WarmteBronnen/bron> Vertex_bron_rel        (Vertex)             := BronAllocatie/LastIter/Vertex_bron_rel;
 				
 				container edge_cost_calc := AllCandidate/PartialContributie/LeidingKosten_T(Edge, edge_flow, edge_DT);
 				
