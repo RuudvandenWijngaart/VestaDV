@@ -17,34 +17,34 @@ Voor ieder jaar (van 2000 tot 2050) modelleert Hestia de energetische kwaliteit 
 <details>
 <summary><b>HESTIA</b></summary>
 <p>
-Het HESTIA model staat onder Github versiebeheer op de PBL repository. Om het model lokaal binnen te halen raden wij twee mogelijkheden aan:
+Het Hestia model staat onder Github versiebeheer op de PBL repository. Om het model lokaal binnen te halen raden wij twee mogelijkheden aan:
 
 <b>1. git client</b>
 - (optioneel) mocht uw systeem geen git client hebben, installeer deze bijvoorbeeld via https://gitforwindows.org/ voor een Windows command promt programma of https://tortoisegit.org/ voor een grafische git client. De volgende stappen zijn voor git via de command promt.
-- navigeer via de command prompt naar de folder waar u HESTIA lokaal wilt binnen halen
-- clone HESTIA lokaal: <code>git clone https://github.com/RuudvandenWijngaart/VestaDV.git</code>
-- stap in de HESTIA model folder: <code>cd HESTIA</code>
+- navigeer via de command prompt naar de folder waar u Hestia lokaal wilt binnen halen
+- clone Hestia lokaal: <code>git clone https://github.com/RuudvandenWijngaart/VestaDV.git</code>
+- stap in de Hestia model folder: <code>cd Hestia</code>
 - verander de huidige branch naar de gewenste branch <code>git switch HESTIA-v1.0.0</code>
   
 <b>2. Directe Download</b>
-- open de Github HESTIA [hoofdpagina](https://github.com/RuudvandenWijngaart/VestaDV)
+- open de Github Hestia [hoofdpagina](https://github.com/RuudvandenWijngaart/VestaDV)
 - verander de huidige branch naar de gewenste branch
 - klik op de "Code" dropdown en kies "Download Zip"
 - Pak het zip uit in de gewenste folder en (optioneel) pas de hoofdfoldernaam aan
-- verander de huidige branch naar de gewenste branch <code>git switch HESTIA-v1.0.0</code>
+- verander de huidige branch naar de gewenste branch <code>git switch Hestia-v1.0.0</code>
   </details>
   </p>
 </details>
 
 ## Eerste gebruik
-Als gebruiker heeft u, na het volgen van bovenstaande installatie stappen, lokaal beschikking over GeoDMS en zowel de broncode als de brondata van het HESTIA model. De volgende stappen helpen u om een eerste modelrun aan te zetten:
+Als gebruiker heeft u, na het volgen van bovenstaande installatie stappen, lokaal beschikking over GeoDMS en zowel de broncode als de brondata van het Hestia model. De volgende stappen helpen u om een eerste modelrun aan te zetten:
 
 <details>
-<summary><b>GeoDMS en HESTIA brondata</b></summary>
+<summary><b>GeoDMS en Hestia brondata</b></summary>
 <p>
   
 - Open de grafische interface van GeoDMS, <b>GeoDMSGui.exe</b>. 
-- Open het HESTIA model via: :open_file_folder: File :arrow_right: Open :arrow_right: [pad/naar/HESTIA/]/Runs/HestiaRun.dms.
+- Open het Hestia model via: :open_file_folder: File :arrow_right: Open :arrow_right: [pad/naar/HESTIA/]/Runs/HestiaRun.dms.
 - Zorg dat in Tools :arrow_right: Options :arrow_right: GUI de "Show Hidden Items" optie aan staat.
 - Ga vervolgens naar Tools :arrow_right: Options :arrow_right: Configuration en voeg na %sourceDataDir%/ de uiteindelijke root van de HESTIA brondata folder toe, dus bijvoorbeeld %sourceDataDir%/SD51, of alternatief het volledige pad zonder placeholder.
 </p>
@@ -64,19 +64,19 @@ Na installatie kunt u controleren dat de installatie goed is gegaan door in de H
 <summary><b>Studiegebied instellen</b></summary>
 <p>
   
-- Het studiegebied is een van de invoer paremeters van het HESTIA model. Deze parameter kan worden aangepast in de file [pad/naar/HESTIA/]/Runs/HestiaRun.dms.
+- Het studiegebied is een van de invoer paremeters van het Hestia model. Deze parameter kan worden aangepast in de file [pad/naar/Hestia/]/Runs/HestiaRun.dms.
 - U kunt naar deze file navigeren zoals beschreven onder het kopje <b>(optioneel) Een tekst editor instellen</b> of alternatief via de Windows OS file browser.
-- HESTIA is in staat heel Nederland door te rekenen met de juiste hardware. Voor een eerste run kunnen we het studiegebied het beste instellen op een aantal gemeenten
+- Hestia is in staat heel Nederland door te rekenen met de juiste hardware. Voor een eerste run kunnen we het studiegebied het beste instellen op een aantal gemeenten
 - Om dit te doen, comment de regel met parameter<string>   StudieGebied : ['NL']; door twee forward-slashes: //parameter<string>   StudieGebied : ['NL'];
 - En haal de twee forward-slashes weg van de regel met 9 gemeenten als studiegebied parameter<string>   StudieGebied : ['GM0402,GM0344,GM1581,GM0439,GM0153,GM0599,GM0034,GM0050,GM0321'];
-- (optioneel) U kunt ook uw eigen gemeente als studiegebied invoeren, voor een overzicht van gemeente codes gebruikt door HESTIA raadpleeg het volgende bestand in de brondata van HESTIA: [pad/naar/brondata/HESTIA]/hulpbestanden/buurt/20220728_CBS_buurt_2020.dbf, of alternatief open item /Geography/RegioIndelingen/Gemeente/GM_code in de GeoDMSGui en kies uit het rechter-muisknop context menu 'Tableview' of ctrl-d. 
+- (optioneel) U kunt ook uw eigen gemeente als studiegebied invoeren, voor een overzicht van gemeente codes gebruikt door HESTIA raadpleeg het volgende bestand in de brondata van Hestia: [pad/naar/brondata/Hestia]/hulpbestanden/buurt/20220728_CBS_buurt_2020.dbf, of alternatief open item /Geography/RegioIndelingen/Gemeente/GM_code in de GeoDMSGui en kies uit het rechter-muisknop context menu 'Tableview' of ctrl-d. 
 - sla de file op en ga terug naar de GeoDMSGui.
 - als het goed is geeft GeoDMS aan dat de configuratie aangepast is, klik op 'Yes'.
 - bij het opvragen van het item /Invoer/StudieGebied (rechter-muisknop TableView of ctrl-d) zal het nieuwe studiegebied nu zichtbaar moeten zijn.
 </p>
 </details>
 
-### Een eerste HESTIA simulatie aanzetten
+### Een eerste Hestia simulatie aanzetten
 Nu GeoDMS bij de brondata kan en het studiegebied is geconfigureerd is het tijd voor een eerste modelrun. Navigeer in GeoDMSGui naar het item  /Resultaten/R1_2021/Generate/all en kies uit het rechter-muisknop context menu 'Tableview' of ctrl-d. GeoDMS gaat als het goed is rekenen. Onderin tellen de items af die nog moeten worden uitgerekend. Wanneer de resultaten klaar zijn, zal er 'Ready' staan in de TableView.
   
 De resultaten worden onder het pad: Tools :arrow_right: Options :arrow_right: Advanced :arrow_right: LocalDataDir /HESTIA/Results/R1_2021/NL/... 
@@ -90,6 +90,6 @@ Naast het studiegebied zijn er ook andere parameters die aangepast kunnen worden
 <details>
 <summary><b>Te weinig geheugen</b></summary>
 <p>
-HESTIA kan, zeker als het studiegebied op heel Nederland staat ingesteld, veel geheugen vragen van uw machine. Dit kan leiden tot een crash van GeoDMS tijdens een model run. Het is mogelijk dit op te lossen door het virtueel geheugen dat ter beschikking van het Windows OS uit te breiden. Volg hiervoor de instructies op de GeoDMS Wiki over het<a href="https://github.com/ObjectVision/GeoDMS/wiki/Virtual-memory"> virtueel geheugen uitbreiden</a>.
+Hestia kan, zeker als het studiegebied op heel Nederland staat ingesteld, veel geheugen vragen van uw machine. Dit kan leiden tot een crash van GeoDMS tijdens een model run. Het is mogelijk dit op te lossen door het virtueel geheugen dat ter beschikking van het Windows OS uit te breiden. Volg hiervoor de instructies op de GeoDMS Wiki over het<a href="https://github.com/ObjectVision/GeoDMS/wiki/Virtual-memory"> virtueel geheugen uitbreiden</a>.
 </p>
 </details>
