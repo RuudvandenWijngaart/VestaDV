@@ -12,10 +12,10 @@ Voor ieder jaar (van 2000 tot 2050) modelleert Hestia de energetische kwaliteit 
 </details>
 <details>
 <summary><b>Brondata</b></summary>
-<p>De brondata folder, SD51, voor HESTIA staat onder versiebeheer van PBL, download informatie kan worden opgevraagt via medewerker@pbl.nl.</p>
+<p>De brondata folder, SD51, voor Hestia staat onder versiebeheer van PBL, download informatie kan worden opgevraagt via medewerker@pbl.nl.</p>
 </details>
 <details>
-<summary><b>HESTIA</b></summary>
+<summary><b>Hestia</b></summary>
 <p>
 Het Hestia model staat onder Github versiebeheer op de PBL repository. Om het model lokaal binnen te halen raden wij twee mogelijkheden aan:
 
