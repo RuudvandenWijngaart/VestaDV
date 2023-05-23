@@ -161,9 +161,8 @@ container BAG: url="%HestiaDataDir%/BAG/20230223_actualisatie_BAG_WP.txt"
 			attribute<units/m2>                      footprint         := area(geometry, m2);
 			attribute<units/m2>                      vbo_oppervlak     := sum(vbo/Oppervlakte, vbo/pand_rel)[units/m2];
 			attribute<float32>                       bouwlagen_fictief := float32(vbo_oppervlak / footprint);
-			attribute<uint32>                        nr_woningen       := pcount(vbo_woonfunctie_studiegebied/pand_rel);
+			attribute<uint32>                        nr_woningen       := pcount(vbo/pand_rel);
 			attribute<Gasnetten/Gasnetbeheervlak>    Netbeheer_rel     := point_in_polygon(centroid(geometry), Gasnetten/Gasnetbeheervlak/geometry);
-			attribute<Classifications/SchilLabel>    Schillabel_mode   := modus(BeginSituatie/StartingStateComponenten/Woning/Results/schillabel_rel, BeginSituatie/StartingStateComponenten/Woning/Results/pand_rel);
 		}
 		
 		unit<uint32> nummeraanduiding
@@ -203,36 +202,27 @@ container BAG: url="%HestiaDataDir%/BAG/20230223_actualisatie_BAG_WP.txt"
 	,	FreeData   = "False"
 	,	KeepData   = "True"
 	{
-		attribute<string>                                 identificatie              := select_data(., import/vbo/identificatie);
-		attribute<string>                                 label                      := rjoin(select_data(., import/vbo/nummeraanduiding_id), import/nummeraanduiding/identificatie, import/nummeraanduiding/adres_key);
-
-		attribute<rdc_meter>                              geometry                   := select_data(., import/vbo/geometry);
-
-		attribute<RegioIndelingen/gemeente>    			  gemeente_rel               := select_data(., import/vbo/gemeente_rel);
-
-		attribute<import/nummeraanduiding>                nummeraanduiding_rel       := rlookup(select_data(., import/vbo/nummeraanduiding_id), import/nummeraanduiding/identificatie);
-		
+		attribute<string>                                 identificatie              := org_rel -> import/vbo/identificatie;
+		attribute<string>                                 label                      := rjoin(org_rel -> import/vbo/nummeraanduiding_id, import/nummeraanduiding/identificatie, import/nummeraanduiding/adres_key);
+		attribute<rdc_meter>                              geometry                   := org_rel -> import/vbo/geometry;
+		attribute<RegioIndelingen/gemeente>    			  gemeente_rel               := org_rel -> import/vbo/gemeente_rel;
+		attribute<import/nummeraanduiding>                nummeraanduiding_rel       := rlookup(org_rel -> import/vbo/nummeraanduiding_id, import/nummeraanduiding/identificatie);
 		attribute<string>                                 postcode                   := import/nummeraanduiding/postcode[nummeraanduiding_rel];
-
-		attribute<Units/m2>                               oppervlakte                := select_data(., import/vbo/oppervlak_filters/wonen);
-		attribute<string>                                 pand_id                    := select_data(., import/vbo/pand_id );
-		attribute<import/pand>                            pand_rel                   := select_data(., import/vbo/pand_rel);
+		attribute<Units/m2>                               oppervlakte                := org_rel -> import/vbo/oppervlak_filters/wonen;
+		attribute<string>                                 pand_id                    := org_rel -> import/vbo/pand_id ;
+		attribute<import/pand>                            pand_rel                   := org_rel -> import/vbo/pand_rel;
 		attribute<units/pand_asl>                         pand_aandeel               := 1.0 / value(import/pand/nr_woningen[pand_rel],units/asl_pand);
- 
-		attribute<Studiegebied/buurt>                       buurt_rel                  := point_in_polygon(geometry, Studiegebied/buurt/geometry);
-		attribute<BestaandeWarmtenetten/Aflevergebied_data> Aflevergebied_rel          := point_in_polygon(geometry, BestaandeWarmtenetten/Aflevergebied_data/geometry);
-
+		attribute<Studiegebied/buurt>                       buurt_rel                := point_in_polygon(geometry, Studiegebied/buurt/geometry);
+		attribute<BestaandeWarmtenetten/Aflevergebied_data> Aflevergebied_rel        := point_in_polygon(geometry, BestaandeWarmtenetten/Aflevergebied_data/geometry);
 		attribute<Units/yr_uint16>                        bouwjaar                   := pand_rel->bouwjaar_gecorrigeerd;
 		attribute<Units/yr_uint16>                        sloopjaar                  := pand_rel->sloopjaar_gecorrigeerd;
-		attribute<Classifications/BouwjaarWoning>         BouwjaarWoning_rel         := select_data(., import/vbo/BouwjaarWoning_rel);
-		attribute<Classifications/Eigendom>               Eigendom_rel               := select_data(., import/vbo/Eigendom_rel);
+		attribute<Classifications/BouwjaarWoning>         BouwjaarWoning_rel         := org_rel -> import/vbo/BouwjaarWoning_rel;
+		attribute<Classifications/Eigendom>               Eigendom_rel               := org_rel -> import/vbo/Eigendom_rel;
 		attribute<bool>                                   Gasloos                    := Gasnetten/Gasloos[pand_rel];
 		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := pand_rel->woonpand_type;
 		attribute<Classifications/SchilLabel>             Default_Energielabel_rel   := pand_rel->Default_Energielabel_Bouwjaar;
-
-		attribute<classifications/WoningType>             Woningtype_rel             := select_data(., import/vbo/Woningtype_rel);
+		attribute<classifications/WoningType>             Woningtype_rel             := org_rel -> import/vbo/Woningtype_rel;
 		attribute<uint8>                                  nr_verdiepingen            := pand_rel->nr_verdiepingen;
-		
 		attribute<typeringen/gebruiksdoel>                gebruiksdoel               := const(Invoer/RuimtelijkeData/BAG/typeringen/gebruiksdoel/V/woon,.);
 		
 		attribute<units/m2> Gem_opp (classifications/WoningType) := mean(oppervlakte, Woningtype_rel);
