@@ -8,7 +8,7 @@ Voor ieder jaar (van 2000 tot 2050) modelleert Hestia de energetische kwaliteit 
 ## Installatie
 <details>
 <summary><b>GeoDMS software</b></summary>
-<p>Open source Geographic Data & Model Software (GeoDMS) wordt actief ontwikkeld voor het maken van (geografisch expliciete) plannings ondersteunings systemen. Navigeer voor de installatie van GeoDMS naar de <a href="https://github.com/ObjectVision/GeoDMS/releases">releases</a> pagina van de open source software <a href="https://github.com/ObjectVision/GeoDMS">GeoDMS</a> en volg de installatie stappen.</p>
+<p>Open source Geographic Data & Model Software (GeoDMS) wordt actief ontwikkeld voor het maken van (geografisch expliciete) plannings ondersteunings systemen. Navigeer voor de installatie van GeoDMS naar de <a href="https://github.com/ObjectVision/GeoDMS/releases">releases</a> pagina van <a href="https://github.com/ObjectVision/GeoDMS">GeoDMS</a> en volg de installatie stappen.</p>
 </details>
 <details>
 <summary><b>Brondata</b></summary>
