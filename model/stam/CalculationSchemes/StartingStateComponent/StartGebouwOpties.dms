@@ -172,9 +172,21 @@ container StartGebouwOpties
 		}
 	}
 
+	container WPnormering
+	{
+		attribute<bool> WPnormering_geldig  (results) := 
+			  Bouwjaar  < 2020[yr_uint16] ? false
+			: Bouwjaar == 2020[yr_uint16] ? rnd_uniform(/Invoer/TechnischeInstellingen/RandomSeed * 441[uint32], results, range(float64, 0d, 1d)) < 0.86[float64]
+			: Bouwjaar == 2021[yr_uint16] ? rnd_uniform(/Invoer/TechnischeInstellingen/RandomSeed * 442[uint32], results, range(float64, 0d, 1d)) < 0.91[float64]
+			: true;
+
+		attribute<bool> BWP_normering (results) := WPnormering_geldig && rnd_uniform(/Invoer/TechnischeInstellingen/RandomSeed * 443[uint32], results, range(float64, 0d, 1d)) < par/R_Bodem;
+		attribute<bool> LWP_normering (results) := WPnormering_geldig && not(BWP_normering);
+	}
+
 	attribute<bool> AllocHWP  (results) := WPallocatie/ObjectKlassen/hWP/Allocated;
-	attribute<bool> AllocLWP  (results) := or(WPallocatie/AllocLWP_i && not(WPallocatie/ObjectKlassen/LWP_remove/Remove), WPallocatie/ObjectKlassen/LWP/Allocated );
-	attribute<bool> AllocBWP  (results) := or(WPallocatie/AllocBWP_i && not(WPallocatie/ObjectKlassen/BWP_remove/Remove), WPallocatie/ObjectKlassen/BWP/Allocated );
+	attribute<bool> AllocLWP  (results) := or(WPallocatie/AllocLWP_i && not(WPallocatie/ObjectKlassen/LWP_remove/Remove), WPallocatie/ObjectKlassen/LWP/Allocated, WPnormering/LWP_normering );
+	attribute<bool> AllocBWP  (results) := or(WPallocatie/AllocBWP_i && not(WPallocatie/ObjectKlassen/BWP_remove/Remove), WPallocatie/ObjectKlassen/BWP/Allocated, WPnormering/BWP_normering );
 
 	//heeft gebouw een bioketel? initiele check o.b.v. ligging gasnetten en warmtenetten (overige gasloze gebouwen gebouwen)
 	attribute<bool> AllocBioketel   (results) := gasloos && not(AllocWarmtenet) && not(WPallocatie/AllocWarmtepomp_i);
