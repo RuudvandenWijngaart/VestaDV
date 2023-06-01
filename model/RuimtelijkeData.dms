@@ -276,7 +276,22 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			}
 		}
 		//======= Allocatie gebouwdeelkwaliteit per VBO ======
-
+		
+		unit<uint32> MinimaleBouwdeelKwaliteit_src
+		:	StorageName     = "%ProjDir%/isolatie/minimale_bouwdeelkwaliteit_na_1992.csv"
+		,	StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True"
+		{
+			attribute<Classifications/BouwjaarWoningMinimaleBouwdeelkwaliteit>   bouwjaarklasse_rel   := rlookup(Bouwjaar, Classifications/BouwjaarWoningMinimaleBouwdeelkwaliteit/excel_code)  , IntegrityCheck = "strlen(Bouwjaar) == 0 || IsDefined(this)";
+			
+			container V := for_each_ind(
+			'nedv'
+			,classifications/bouwdeel/name
+			,'rlookup(MinimaleBouwdeelKwaliteit_src/' + classifications/bouwdeel/name + ', Classifications/IsolatieNiveau/name)'
+			,MinimaleBouwdeelKwaliteit_src
+			,Classifications/IsolatieNiveau
+			);
+		}
 		container BouwdeelKwaliteit_2000_1 := BouwdeelKwaliteitAllocatieT1('niveau_combinatie_label_frequentietabel_KWR_2000_FM.csv');
 		container BouwdeelKwaliteit_2000_2 := BouwdeelKwaliteitAllocatieT2('niveau_combinatie_label_frequentietabel_KWR_2000_FM.csv');
 
@@ -367,15 +382,15 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 				attribute<Classifications/Schillabel> Schillabel_rel  := =Invoer/StartgegevensAan ? 'makedefined(Energielabel/data/SchilLabel_rel[rlookup(BAG/import/VBO/identificatie, Energielabel/data/vbo_id)], DefaultLabel_rel)' : 'DefaultLabel_rel';
 
 				unit<uint32> Alabels := subset(Schillabel_rel == Classifications/SchilLabel/V/A)
-			{
+				{
 				attribute<Classifications/Isolatieniveau> NiveauMG := /Invoer/RuimtelijkeData/EnergieLabel/BouwdeelKwaliteit/VBO/Isolatie_writer/MG[nr_OrgEntity];
 				attribute<Classifications/Isolatieniveau> NiveauMS := /Invoer/RuimtelijkeData/EnergieLabel/BouwdeelKwaliteit/VBO/Isolatie_writer/MS[nr_OrgEntity];
-			}
+				}
 				
 
 				parameter<uint32>                     seed            := Invoer/TechnischeInstellingen/RandomSeed + 101;
 				attribute<float64>                    RndNr           := rnd_uniform(seed, vbo, range(float64, 0d, 1d));
-				attribute<BouwdeelSrc>                BouwdeelSrc_rel := ='makedefined('+AsItemList(replace('not(bouwdelen/unique_combi_label_rel == bouwdelen/unique_combi_label/V/@SL@) ? (0/0)[src] : ClassBreak_p_Label/@SL@/sub/nr_OrgEntity[Classify(RndNr, ClassBreak_p_Label/@SL@/sub/ClassBreaks)]','@SL@',bouwdelen/unique_combi_label/label))+')';
+				attribute<BouwdeelSrc>                BouwdeelSrc_rel := ='makedefined('+AsItemList(replace('not(bouwdelen/unique_combi_label_rel == bouwdelen/unique_combi_label/V/@SL@) ? (0/0)[BouwdeelSrc] : ClassBreak_p_Label/@SL@/sub/nr_OrgEntity[Classify(RndNr, ClassBreak_p_Label/@SL@/sub/ClassBreaks)]','@SL@',bouwdelen/unique_combi_label/label))+')';
 			
 				container Isolatie_vbo := for_each_nedv(
 					  Classifications/Bouwdeel/Name
@@ -383,6 +398,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 						, vbo
 						, Classifications/Isolatieniveau
 					);
+				
 			}
 		}
 
@@ -462,6 +478,57 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 				parameter<string> Isolatie_vbo_path_1 := Invoer/StartgegevensAan ? 'BouwdeelKwaliteit_2020_1/vbo/' : 'BouwdeelKwaliteit_2000_1/vbo/';
 				parameter<string> Isolatie_vbo_path_2 := Invoer/StartgegevensAan ? 'BouwdeelKwaliteit_2020_2/vbo/' : 'BouwdeelKwaliteit_2000_2/vbo/';
 
+				unit<uint32> Isolatie_temp := Isolatie_writer;
+				
+				container MinimaleIsolatieNiveausNa1991
+				{
+					attribute<uint16> bouwjaar_rel (vbo) := BAG/import/pand/bouwjaar_gecorrigeerd[VBO/pand_rel];
+					attribute<string> vbo_id (vbo) := /Invoer/RuimtelijkeData/BAG/import/VBO/identificatie;
+					unit<uint32> BouwjaarNa1991 := select_with_org_rel(bouwjaar_rel > 1991[uint16])
+					{
+						attribute<Classifications/BouwjaarWoningMinimaleBouwdeelkwaliteit> bouwjaarklasse (BouwjaarNa1991) := classify(bouwjaar_rel[org_rel], Classifications/BouwjaarWoningMinimaleBouwdeelkwaliteit/ClassBreak);
+						
+						container NieuweBouwdeelKwaliteit := for_each_ind(
+						'nedv'
+						, Classifications/Bouwdeel/Name
+						, replace('(Isolatie_temp/@BD@[org_rel] <  MinimaleBouwdeelKwaliteit_src/V/@BD@[invert(MinimaleBouwdeelKwaliteit_src/Bouwjaarklasse_rel)][bouwjaarklasse]) 
+							&& (RuimtelijkeData/Dimensies/Bouwdelen/@BD@[org_rel] > 0.0[m2] || isnull(RuimtelijkeData/Dimensies/Bouwdelen/@BD@[org_rel]))
+							? MinimaleBouwdeelKwaliteit_src/V/@BD@[invert(MinimaleBouwdeelKwaliteit_src/Bouwjaarklasse_rel)][bouwjaarklasse]
+							: Isolatie_temp/@BD@[org_rel]',
+							'@BD@',Classifications/Bouwdeel/Name)
+						, BouwjaarNa1991
+						, Classifications/Isolatieniveau
+						);
+						
+						container IsolatieNiveauNieuw := for_each_nt(
+						 Classifications/Bouwdeel/Name
+						, ToebedelingIsolatieniveau
+						);
+						
+						Template ToebedelingIsolatieniveau
+						{
+							// begin case parameters
+							parameter<string> BouwdeelNaam := PropValue(., 'name');
+							// end case parameters
+							parameter<Classifications/bouwdeel> Bouwdeel_rel := ='Classifications/Bouwdeel/V/' + BouwdeelNaam;
+
+							attribute<bool> HeeftBouwdeel (BouwjaarNa1991) := =replace('isnull(RuimtelijkeData/Dimensies/Bouwdelen/@BD@)[org_rel] || RuimtelijkeData/Dimensies/Bouwdelen/@BD@[org_rel] > 0.0[m2]', '@BD@', BouwdeelNaam);
+							attribute<bool> IsolatieNiveauOnderNorm (BouwjaarNa1991) := =replace('(Isolatie_temp/@BD@[org_rel] <  MinimaleBouwdeelKwaliteit_src/V/@BD@[invert(MinimaleBouwdeelKwaliteit_src/Bouwjaarklasse_rel)][bouwjaarklasse])', '@BD@', BouwdeelNaam);
+							attribute<Classifications/Isolatieniveau> IsolatieNiveau (BouwjaarNa1991) := = replace('HeeftBouwdeel && IsolatieNiveauOnderNorm 
+								? MinimaleBouwdeelKwaliteit_src/V/@BD@[invert(MinimaleBouwdeelKwaliteit_src/Bouwjaarklasse_rel)][bouwjaarklasse]
+								: Isolatie_temp/@BD@[org_rel]', '@BD@', BouwdeelNaam);
+						}
+					}
+				}
+
+				unit<uint32> IsolatieMetMinimaleIsolatieNiveaus := for_each_ind(
+				'nedv'
+				,Classifications/Bouwdeel/Name
+				,replace('recollect_by_cond(MinimaleIsolatieNiveausNa1991/bouwjaar_rel > 1991[uint16], MinimaleIsolatieNiveausNa1991/BouwjaarNa1991/IsolatieNiveauNieuw/@BD@/IsolatieNiveau, Isolatie_temp/@BD@)', '@BD@',Classifications/Bouwdeel/Name)
+				,vbo
+				,Classifications/Isolatieniveau
+				);
+
 				unit<uint32> Isolatie_writer := vbo, Storagename = "%HestiaDataDir%/vraag/Wonen/Isolatie.fss"
 				{
 					attribute<Classifications/Isolatieniveau> RB := ='makedefined('+Isolatie_vbo_path_1 + 'Isolatie_vbo/RB,' + Isolatie_vbo_path_2 + 'Isolatie_vbo/RB)';
@@ -475,6 +542,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 					attribute<Classifications/Isolatieniveau> DS := ='makedefined('+Isolatie_vbo_path_1 + 'Isolatie_vbo/DS,' + Isolatie_vbo_path_2 + 'Isolatie_vbo/DS)';
 					attribute<Classifications/Isolatieniveau> KR := ='makedefined('+Isolatie_vbo_path_1 + 'Isolatie_vbo/KR,' + Isolatie_vbo_path_2 + 'Isolatie_vbo/KR)';
 				}
+				
 				unit<uint32> Isolatie_reader := vbo, StorageName = "%HestiaDataDir%/vraag/Wonen/Isolatie.fss", StorageReadOnly = "true"
 				{
 					attribute<Classifications/Isolatieniveau> RB;
@@ -488,8 +556,11 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 					attribute<Classifications/Isolatieniveau> DS;
 					attribute<Classifications/Isolatieniveau> KR;
 				}
-				parameter<bool> recalculate := false;
-				unit<uint32>    Isolatie_src    := = recalculate ?  'Isolatie_writer' : 'Isolatie_reader';
+				
+				
+				
+				parameter<bool> recalculate := True;
+				unit<uint32>    Isolatie_src    := = recalculate ?  'IsolatieMetMinimaleIsolatieNiveaus' : 'Isolatie_reader';
 
 				container Isolatie := for_each_nedv(Classifications/Bouwdeel/name, 'Isolatie_src/' + Classifications/Bouwdeel/name + '[BAG/vbo_woonfunctie_studiegebied/org_rel]',BAG/vbo_woonfunctie_studiegebied , Classifications/Isolatieniveau);
 			}
@@ -548,12 +619,12 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 
 			container BC := TussenResultaten/StartJaar/BebouwingsComponenten;
 
-			attribute<nrAsl> input_aant_g_aansl      := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/aant_g_aansl)[nrAsl]             , Descr = "invoer aantal gasaansluitingen per buurt";
-			attribute<m>     lengte_grogel_LD_net    := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/lengte_grogel_LD_net__meters_)[m], Descr = "invoer lengte grondroeringsgevoelige LD-gasleidingen per buurt";
-			attribute<m>     lengte_LD_net           := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/lengte_LD_net__meters_)[m]       , Descr = "invoer lengte LD-gasnet per buurt";
-			attribute<m>     lengte_LS_net           := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/lengte_LS_buurt__meters_)[m]     , Descr = "invoer lengte LS-Enet per buurt";
-			attribute<ratio> fractie_3x25_aansl      := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/fractie_3x25_aansl_ratio)        , Descr = "invoer aandeel van aansluitingen per buurt dat momenteel al 3x25 of groter is";
-			attribute<kw>    input_capaciteit_buurt  := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/capaciteit_buurt__kva_)[kw]      , Descr = "invoer huidige opgestelde capaciteit aan MS-ruimtes ";
+			attribute<nrAsl> input_aant_g_aansl      := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/aant_g_aansl)[nrAsl]            , Descr = "invoer aantal gasaansluitingen per buurt";
+			attribute<m>     lengte_grogel_LD_net    := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/lengte_grogel_LD_net_meters_)[m], Descr = "invoer lengte grondroeringsgevoelige LD-gasleidingen per buurt";
+			attribute<m>     lengte_LD_net           := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/lengte_LD_net_meters_)[m]       , Descr = "invoer lengte LD-gasnet per buurt";
+			attribute<m>     lengte_LS_net           := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/lengte_LS_buurt_meters_)[m]     , Descr = "invoer lengte LS-Enet per buurt";
+			attribute<ratio> fractie_3x25_aansl      := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/fractie_3x25_aansl_ratio)       , Descr = "invoer aandeel van aansluitingen per buurt dat momenteel al 3x25 of groter is";
+			attribute<kw>    input_capaciteit_buurt  := rjoin(BU_CODE, netwerk_input/BU_CODE, netwerk_input/capaciteit_buurt_kva_)[kw]      , Descr = "invoer huidige opgestelde capaciteit aan MS-ruimtes ";
 			attribute<kw>    capaciteit_buurt        := input_capaciteit_buurt;
 		}
 	}
