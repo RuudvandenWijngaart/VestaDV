@@ -50,13 +50,13 @@ container Payments
 		// end case parameters
 
 		unit<uint32> mutatie_elem := impl/mutatie_elem;
-		unit<uint32> mut          := subset(mutatie_elem/Actor_rel == Actor_rel)
+		unit<uint32> mut          := select_with_org_rel(mutatie_elem/Actor_rel == Actor_rel)
 		{
-			attribute<mutatie_elem> mutatie_elem_rel := nr_OrgEntity;
+			attribute<mutatie_elem> mutatie_elem_rel := org_rel;
 			attribute<Actor>        other_rel        := mutatie_elem/other_rel[mutatie_elem_rel];
-			attribute<string>       name             := mutatie_elem/name[nr_OrgEntity];
-			attribute<string>       Actor_name       := Actor/name[mutatie_elem/other_rel[nr_OrgEntity]];
-			attribute<string>       expr             := mutatie_elem/expr[nr_OrgEntity];
+			attribute<string>       name             := mutatie_elem/name[org_rel];
+			attribute<string>       Actor_name       := Actor/name[mutatie_elem/other_rel[org_rel]];
+			attribute<string>       expr             := mutatie_elem/expr[org_rel];
 			attribute<Actor_rels>   Actor_rels_rel   := rlookup(other_rel, Actor_rels/values);
 			attribute<string>       full_name        := replace(Actor/name[other_rel], '/', '_')+'_'+ name;
 			attribute<string>       label            := full_name;
@@ -114,20 +114,20 @@ container Payments
 		{
 			unit<uint32> src := Accounting1/mutatie;
 
-			unit<uint8> Accounting2Subset := subset(Accounting2/leverancier != '')
+			unit<uint8> Accounting2select_with_org_rel := select_with_org_rel(Accounting2/leverancier != '')
 			{
-				attribute<string> name         := Accounting2/descr      [nr_OrgEntity];
-				attribute<string> leverancier  := Accounting2/leverancier[nr_OrgEntity];
-				attribute<string> afnemer      := Accounting2/afnemer    [nr_OrgEntity];
-				attribute<string> full_name    := Accounting2/full_name  [nr_OrgEntity];
+				attribute<string> name         := Accounting2/descr      [org_rel];
+				attribute<string> leverancier  := Accounting2/leverancier[org_rel];
+				attribute<string> afnemer      := Accounting2/afnemer    [org_rel];
+				attribute<string> full_name    := Accounting2/full_name  [org_rel];
 			}
 
-			unit<uint32> Accounting := union_unit(src, Accounting2Subset) {
-				attribute<string> name         := union_data(., src/name        , Accounting2Subset/name);
-				attribute<string> leverancier  := union_data(., src/leverancier , Accounting2Subset/leverancier);
-				attribute<string> afnemer      := union_data(., src/afnemer     , Accounting2Subset/afnemer);
-				attribute<string> Expr         := union_data(., src/Expr        , 'StateNaAllocatie/Cumulaties/@RO@/'+(is_flow?'jaarlijks':'eenmalig')+'/'+Accounting2Subset/full_name);
-				attribute<string> PlanRegioRel := union_data(., src/PlanRegioRel, const('', Accounting2Subset));
+			unit<uint32> Accounting := union_unit(src, Accounting2select_with_org_rel) {
+				attribute<string> name         := union_data(., src/name        , Accounting2select_with_org_rel/name);
+				attribute<string> leverancier  := union_data(., src/leverancier , Accounting2select_with_org_rel/leverancier);
+				attribute<string> afnemer      := union_data(., src/afnemer     , Accounting2select_with_org_rel/afnemer);
+				attribute<string> Expr         := union_data(., src/Expr        , 'StateNaAllocatie/Cumulaties/@RO@/'+(is_flow?'jaarlijks':'eenmalig')+'/'+Accounting2select_with_org_rel/full_name);
+				attribute<string> PlanRegioRel := union_data(., src/PlanRegioRel, const('', Accounting2select_with_org_rel));
 			}
 
 			unit<uint8> WKOC := BC
@@ -158,9 +158,9 @@ container Payments
 				attribute<string> Expr      := ExprSum +' * fraction';
 			}
 
-			unit<uint32> active_Actor := subset(pcount(mutatie_elem/Actor_rel) > 0)
+			unit<uint32> active_Actor := select_with_org_rel(pcount(mutatie_elem/Actor_rel) > 0)
 			{
-				attribute<Actor>  Actor_rel                := nr_OrgEntity;
+				attribute<Actor>  Actor_rel                := org_rel;
 				attribute<string> name                     := Actor/full_name[Actor_rel];
 				attribute<string> label                    := name;
 				attribute<bool>   IsMaatschappelijkeKosten := Actor/IsMaatschappelijkeKosten[Actor_rel];
@@ -168,7 +168,7 @@ container Payments
 			}
 		}
 
-		container Actor_mut_tables := for_each_ne(impl/active_Actor/name, 'Payments/Actor_mut_table(Actor,'+string(impl/active_Actor/nr_OrgEntity)+'[Actor], Quantity)'), IsHidden = "True";
+		container Actor_mut_tables := for_each_ne(impl/active_Actor/name, 'Payments/Actor_mut_table(Actor,'+string(impl/active_Actor/org_rel)+'[Actor], Quantity)'), IsHidden = "True";
 
 		container matrix
 		{

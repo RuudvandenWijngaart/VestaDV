@@ -36,8 +36,8 @@ container afleidingen: Using = "eenheden"
 		{
 			container results
 			{
-				attribute<uint32>        nr_buurpanden     (pand/result) := functioneel_pand/NeighbourCount[invert(functioneel_pand/nr_OrgEntity)]; 
-				attribute<type_woonpand> type_woonpand_rel (pand/result) := functioneel_pand/type_woonpand_rel[invert(functioneel_pand/nr_OrgEntity)];
+				attribute<uint32>        nr_buurpanden     (pand/result) := functioneel_pand/NeighbourCount[invert(functioneel_pand/org_rel)]; 
+				attribute<type_woonpand> type_woonpand_rel (pand/result) := functioneel_pand/type_woonpand_rel[invert(functioneel_pand/org_rel)];
 			}
 
 			unit<uint8> type_woonpand: nrofrows = 6
@@ -55,9 +55,9 @@ container afleidingen: Using = "eenheden"
 				attribute<int32> Y_ext          (pand/result) := PointRow(SE) - PointRow(NW);
 			}
 
-			unit<uint32> functioneel_pand := subset(pand/result/vbo_count > 0 && extents/X_ext < 10000000i && extents/Y_ext < 10000000i), DialogType = "Map", DialogData = "geometry_mm"
+			unit<uint32> functioneel_pand := select_with_org_rel(pand/result/vbo_count > 0 && extents/X_ext < 10000000i && extents/Y_ext < 10000000i), DialogType = "Map", DialogData = "geometry_mm"
 			{
-				attribute<geometries/rdc_mm> geometry_mm (poly) := pand/result/geometry_mm[nr_OrgEntity];
+				attribute<geometries/rdc_mm> geometry_mm (poly) := pand/result/geometry_mm[org_rel];
 				attribute<geometries/rdc_mm> NW                 := lower_bound(geometry_mm);
 				attribute<geometries/rdc_mm> SE                 := upper_bound(geometry_mm);
 
@@ -72,7 +72,7 @@ container afleidingen: Using = "eenheden"
 						)
 					];
 
-				attribute<uint32> nr_woning := sum(uint32(vbo/result/gebruiksdoelen/woon), vbo/result/pand_rel)[nr_OrgEntity];
+				attribute<uint32> nr_woning := sum(uint32(vbo/result/gebruiksdoelen/woon), vbo/result/pand_rel)[org_rel];
 
 				attribute<type_woonpand> type_woonpand_rel :=
 					  nr_woning == 0      ? type_woonpand/V/geen_woonpand
@@ -113,7 +113,7 @@ container afleidingen: Using = "eenheden"
 				// end case parameters
 
 				unit<uint32> domain :=
-					subset(
+					select_with_org_rel(
 						uint32(PointCol(functioneel_pand/NW)) <= rectangle/max_x[rectangle_sel]
 					&&	uint32(PointRow(functioneel_pand/NW)) <= rectangle/max_y[rectangle_sel]
 					&&	uint32(PointCol(functioneel_pand/SE)) >= rectangle/min_x[rectangle_sel]
@@ -121,13 +121,13 @@ container afleidingen: Using = "eenheden"
 					)
 					,	DialogType = "Map", DialogData = "geometry"
 				{
-					attribute<geometries/rdc_mm> geometry_mm (poly) := functioneel_pand/geometry_mm[nr_OrgEntity];
+					attribute<geometries/rdc_mm> geometry_mm (poly) := functioneel_pand/geometry_mm[org_rel];
 				}
 				attribute<geometries/rdc_mm> i4HV_mm (domain, polygon) := polygon_I4HV(domain/geometry_mm, inflate_size);
 
 				unit<uint32> neighbours := polygon_connectivity(i4HV_mm)
 				{
-					attribute<upoint> coded_pair := point(domain/nr_OrgEntity[F1], domain/nr_OrgEntity[F2]);
+					attribute<upoint> coded_pair := point(domain/org_rel[F1], domain/org_rel[F2]);
 
 					// nice to see
 					attribute<geometries/rdc_mm> joint(., arc):=
@@ -151,7 +151,7 @@ container afleidingen: Using = "eenheden"
 						);
 				}
 				// Additional info for one rectangle, should not be used for final derivations
-				attribute<uint32> NeighbourCount (domain) := (pcount(unique_neighbour_pair/F1) + pcount(unique_neighbour_pair/F2))[domain/nr_OrgEntity];
+				attribute<uint32> NeighbourCount (domain) := (pcount(unique_neighbour_pair/F1) + pcount(unique_neighbour_pair/F2))[domain/org_rel];
 				/*
 				attribute<bool>   HasOneNeighbour(domain) := NeighbourCount == 1;
 				attribute<bool>   IsSemiAttached (domain) := HasOneNeighbour &&
@@ -159,9 +159,9 @@ container afleidingen: Using = "eenheden"
 						MakeDefined(
 							unique_neighbour_pair/F2[invert(unique_neighbour_pair/F1)], 
 							unique_neighbour_pair/F1[invert(unique_neighbour_pair/F2)]
-						)[domain/nr_OrgEntity]
+						)[domain/org_rel]
 					];
-				attribute<uint32> nr_woning(domain) := sum(uint32(vbo/result/gebruiksdoelen/woon), vbo/result/pand_rel)[functioneel_pand/nr_OrgEntity][domain/nr_OrgEntity];
+				attribute<uint32> nr_woning(domain) := sum(uint32(vbo/result/gebruiksdoelen/woon), vbo/result/pand_rel)[functioneel_pand/org_rel][domain/org_rel];
 				
 				attribute<woonpand_type> woontype_rel(domain) :=
 				
