@@ -190,7 +190,7 @@ container BAG: url="%HestiaDataDir%/BAG/20230223_actualisatie_BAG_WP.txt"
 		}
 	}
 
-	unit<uint32> vbo_woonfunctie_studiegebied := select_orgrel(
+	unit<uint32> vbo_woonfunctie_studiegebied := select_with_org_rel(
 			import/vbo/gebruiksdoelen/woon
 		&& Studiegebied/GeselecteerdeGemeente[import/vbo/gemeente_rel]
 		&& IsDefined(import/vbo/pand_rel)
@@ -203,34 +203,35 @@ container BAG: url="%HestiaDataDir%/BAG/20230223_actualisatie_BAG_WP.txt"
 	,	FreeData   = "False"
 	,	KeepData   = "True"
 	{
-		attribute<string>                                 identificatie              := select_data(., import/vbo/identificatie);
-		attribute<string>                                 label                      := rjoin(select_data(., import/vbo/nummeraanduiding_id), import/nummeraanduiding/identificatie, import/nummeraanduiding/adres_key);
+		attribute<string>                                 identificatie              := lookup(org_rel, import/vbo/identificatie);
+		attribute<string>                                 label                      := rjoin(lookup(org_rel, import/vbo/nummeraanduiding_id), import/nummeraanduiding/identificatie, import/nummeraanduiding/adres_key);
 
-		attribute<rdc_meter>                              geometry                   := select_data(., import/vbo/geometry);
+		attribute<rdc_meter>                              geometry                   := lookup(org_rel, import/vbo/geometry);
 
-		attribute<RegioIndelingen/gemeente>    			  gemeente_rel               := select_data(., import/vbo/gemeente_rel);
+		attribute<RegioIndelingen/gemeente>    			  gemeente_rel               := lookup(org_rel, import/vbo/gemeente_rel);
 
-		attribute<import/nummeraanduiding>                nummeraanduiding_rel       := rlookup(select_data(., import/vbo/nummeraanduiding_id), import/nummeraanduiding/identificatie);
+		attribute<import/nummeraanduiding>                nummeraanduiding_rel       := rlookup(lookup(org_rel, import/vbo/nummeraanduiding_id), import/nummeraanduiding/identificatie);
 		
 		attribute<string>                                 postcode                   := import/nummeraanduiding/postcode[nummeraanduiding_rel];
 
-		attribute<Units/m2>                               oppervlakte                := select_data(., import/vbo/oppervlak_filters/wonen);
-		attribute<string>                                 pand_id                    := select_data(., import/vbo/pand_id );
-		attribute<import/pand>                            pand_rel                   := select_data(., import/vbo/pand_rel);
+		attribute<Units/m2>                               oppervlakte                := lookup(org_rel, import/vbo/oppervlak_filters/wonen);
+		attribute<string>                                 pand_id                    := lookup(org_rel, import/vbo/pand_id );
+		attribute<import/pand>                            pand_rel                   := lookup(org_rel, import/vbo/pand_rel);
 		attribute<units/pand_asl>                         pand_aandeel               := 1.0 / value(import/pand/nr_woningen[pand_rel],units/asl_pand);
+		attribute<units/nrAsl>							  nr_Asl 					 := const(1[units/nrAsl],.);
  
 		attribute<Studiegebied/buurt>                       buurt_rel                  := point_in_polygon(geometry, Studiegebied/buurt/geometry);
 		attribute<BestaandeWarmtenetten/Aflevergebied_data> Aflevergebied_rel          := point_in_polygon(geometry, BestaandeWarmtenetten/Aflevergebied_data/geometry);
 
 		attribute<Units/yr_uint16>                        bouwjaar                   := pand_rel->bouwjaar_gecorrigeerd;
 		attribute<Units/yr_uint16>                        sloopjaar                  := pand_rel->sloopjaar_gecorrigeerd;
-		attribute<Classifications/BouwjaarWoning>         BouwjaarWoning_rel         := select_data(., import/vbo/BouwjaarWoning_rel);
-		attribute<Classifications/Eigendom>               Eigendom_rel               := select_data(., import/vbo/Eigendom_rel);
+		attribute<Classifications/BouwjaarWoning>         BouwjaarWoning_rel         := lookup(org_rel, import/vbo/BouwjaarWoning_rel);
+		attribute<Classifications/Eigendom>               Eigendom_rel               := lookup(org_rel, import/vbo/Eigendom_rel);
 		attribute<bool>                                   Gasloos                    := Gasnetten/Gasloos[pand_rel];
 		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := pand_rel->woonpand_type;
 		attribute<Classifications/SchilLabel>             Default_Energielabel_rel   := pand_rel->Default_Energielabel_Bouwjaar;
 
-		attribute<classifications/WoningType>             Woningtype_rel             := select_data(., import/vbo/Woningtype_rel);
+		attribute<classifications/WoningType>             Woningtype_rel             := lookup(org_rel, import/vbo/Woningtype_rel);
 		attribute<uint8>                                  nr_verdiepingen            := pand_rel->nr_verdiepingen;
 		
 		attribute<typeringen/gebruiksdoel>                gebruiksdoel               := const(Invoer/RuimtelijkeData/BAG/typeringen/gebruiksdoel/V/woon,.);
@@ -287,7 +288,7 @@ container BAG: url="%HestiaDataDir%/BAG/20230223_actualisatie_BAG_WP.txt"
 		: SpecifiekeInstellingen/BAG/IndustrieDoetMee == 2b ? 'true' 
 		: 'unknown_IndustrieDoetMee_code', IsHidden = "True";
 
-	unit<uint32> vbo_utiliteit_studiegebied:= ='Subset ('
+	unit<uint32> vbo_utiliteit_studiegebied:= ='select_with_org_rel ('
 			'!import/vbo/gebruiksdoelen/woon '
 		' && Studiegebied/GeselecteerdeGemeente[import/vbo/gemeente_rel]'
 		' && IsDefined(import/vbo/pand_rel)'
@@ -297,16 +298,17 @@ container BAG: url="%HestiaDataDir%/BAG/20230223_actualisatie_BAG_WP.txt"
 	,	DialogType = "Map"
 	,	DialogData = "locatie", IsHidden = "True"
 	{
-		attribute<string>                               identificatie            := import/vbo/identificatie[nr_OrgEntity];
-		attribute<string>                               label                    := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/adres_key);
+		attribute<string>                               identificatie            := import/vbo/identificatie[org_rel];
+		attribute<string>                               label                    := rjoin(import/vbo/nummeraanduiding_id[org_rel], import/nummeraanduiding/identificatie, import/nummeraanduiding/adres_key);
 
-		attribute<rdc_meter>                            locatie                  := value(import/vbo/geometry[nr_OrgEntity],rdc_meter);
+		attribute<rdc_meter>                            locatie                  := value(import/vbo/geometry[org_rel],rdc_meter);
 		attribute<rdc_meter>                            geometry                 := locatie;
-		attribute<string>                               postcode                 := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/postcode);
+		attribute<string>                               postcode                 := rjoin(import/vbo/nummeraanduiding_id[org_rel], import/nummeraanduiding/identificatie, import/nummeraanduiding/postcode);
 
-		attribute<Units/m2>                             oppervlakte              := import/vbo/oppervlak_filters/utiliteit[nr_OrgEntity];
-		attribute<string>                               pand_id                  := import/vbo/pand_id[nr_OrgEntity];
-		attribute<import/pand>                          pand_rel                 := import/vbo/pand_rel[nr_OrgEntity];
+		attribute<Units/m2>                             oppervlakte              := import/vbo/oppervlak_filters/utiliteit[org_rel];
+		attribute<Units/nrAsl>                          weq                  	 := oppervlakte / 130[Units/m2_asl];
+		attribute<string>                               pand_id                  := import/vbo/pand_id[org_rel];
+		attribute<import/pand>                          pand_rel                 := import/vbo/pand_rel[org_rel];
 		attribute<units/pand_asl>                       pand_aandeel             := 1.0 / value( import/pand/nr_woningen [ pand_rel ], units/asl_pand ) ;
 
 		attribute<Studiegebied/buurt>                   buurt_rel                := point_in_polygon(geometry, Studiegebied/buurt/geometry);
@@ -319,7 +321,7 @@ container BAG: url="%HestiaDataDir%/BAG/20230223_actualisatie_BAG_WP.txt"
 		container gebruiksdoelen :=
 			for_each_nedv(
 				Classifications/UtilTypeBestaand/name
-				,'import/vbo/gebruiksdoelen/' + Classifications/UtilTypeBestaand/name + '[Nr_OrgEntity]'
+				,'import/vbo/gebruiksdoelen/' + Classifications/UtilTypeBestaand/name + '[org_rel]'
 				, vbo_utiliteit_studiegebied
 				, bool
 			);
@@ -370,7 +372,7 @@ container BAG: url="%HestiaDataDir%/BAG/20230223_actualisatie_BAG_WP.txt"
 		,	Units/m2
 	), IsHidden = "True";
 
-	unit<uint32> vbo_utiliteit_studiegebied_export:= Subset
+	unit<uint32> vbo_utiliteit_studiegebied_export:= select_with_org_rel
 		(
 			!import/vbo/gebruiksdoelen/woon 
 		&&	Studiegebied/GeselecteerdeGemeente[import/vbo/gemeente_rel]
@@ -383,9 +385,9 @@ container BAG: url="%HestiaDataDir%/BAG/20230223_actualisatie_BAG_WP.txt"
 	,	DialogData = "locatie"
 	,	IsHidden   = "True"
 	{
-		attribute<string>                                identificatie           := import/vbo/identificatie[nr_OrgEntity];
-		attribute<string>                                id                      := import/vbo/identificatie[nr_OrgEntity];
-		attribute<rdc_meter>                             locatie                 := value(import/vbo/geometry[nr_OrgEntity],rdc_meter);
+		attribute<string>                                identificatie           := import/vbo/identificatie[org_rel];
+		attribute<string>                                id                      := import/vbo/identificatie[org_rel];
+		attribute<rdc_meter>                             locatie                 := value(import/vbo/geometry[org_rel],rdc_meter);
 	}
 
 	unit<uint32> gebruiksdoelcombinatie := unique(import/vbo/gebruiksdoelcombinatie), IsHidden = "True"

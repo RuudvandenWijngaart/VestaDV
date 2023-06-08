@@ -72,26 +72,26 @@ container BebouwingsOperaties
 				unit<uint32> Corop := src/Class/corop, ishidden = "True";
 
 				//====== Overhevelingdata ABF voor huidige jaar
-				unit<uint32> Overheveling_data := subset(src/data/Muttype_rel == src/Class/muttype/V/Overheveling && src/data/Jaar == Zichtjaar_jaar)
+				unit<uint32> Overheveling_data := select_with_org_rel(src/data/Muttype_rel == src/Class/muttype/V/Overheveling && src/data/Jaar == Zichtjaar_jaar)
 				{
 					//========= invoerdata
-					attribute<corop>   Corop_rel := src/data/Corop_rel[nr_orgentity];
-					attribute<float32> nrAansl   := src/data/nrAansl[nr_orgentity];
+					attribute<corop>   Corop_rel := src/data/Corop_rel[org_rel];
+					attribute<float32> nrAansl   := src/data/nrAansl[org_rel];
 
 					//========= huidige overheveling per COROP regio
 					attribute<nrAsl> nrAansl_Corop (Corop) := sum(float64(nrAansl) * 1[nrAsl], Corop_rel);
 				}
 
 				//====== Potentiele kandidaten voor overheveling
-				unit<uint32> OverhevelKandidaten := subset(result/Eigendom_rel_org == Classifications/Eigendom/V/wooncorp && not(result/isNuNieuw))
+				unit<uint32> OverhevelKandidaten := select_with_org_rel(result/Eigendom_rel_org == Classifications/Eigendom/V/wooncorp && not(result/isNuNieuw))
 				{
-					attribute<nrAsl>   nrAansluitingen_i := result/nrAansluitingen_i[nr_orgentity];
+					attribute<nrAsl>   nrAansluitingen_i := result/nrAansluitingen_i[org_rel];
 
 					//====== random nummer tussen 0 en 1 per kandidaat
 					attribute<float64> randomnr          := rnd_uniform(JaarSeed * 18u, ., range(float64, 0d, 1d));
 
 					//====== indelen kandidaten per corop regio
-					attribute<Corop>   Corop_rel         := point_in_polygon(result/point[nr_orgentity], corop/geometry);
+					attribute<Corop>   Corop_rel         := point_in_polygon(result/point[org_rel], corop/geometry);
 
 					//====== bepalen grenswaarde op basis van aantal over te hevelen woningen per COROP regio
 					attribute<float64> Limits (Corop) := nth_element_weighted(randomnr, Overheveling_data/nrAansl_Corop, nrAansluitingen_i , Corop_rel);
@@ -99,7 +99,7 @@ container BebouwingsOperaties
 					//====== selectie kandidaten met randomnr onder grenswaarde
 					attribute<bool> Overhevelen := randomnr < Limits[Corop_rel];
 				}
-				attribute<bool> overhevelen (result) := OverhevelKandidaten/Overhevelen[invert(OverhevelKandidaten/nr_orgentity)];
+				attribute<bool> overhevelen (result) := OverhevelKandidaten/Overhevelen[invert(OverhevelKandidaten/org_rel)];
 			}
 
 			attribute<Classifications/Eigendom>                  Eigendom_rel      := Overheveling/Overhevelen ? Classifications/Eigendom/V/koop : Eigendom_rel_org;
