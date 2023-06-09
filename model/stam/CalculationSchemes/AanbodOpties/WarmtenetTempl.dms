@@ -792,17 +792,36 @@ template WarmtenetTempl
 	
 	unit<uint32> AfnemersAfweging := Prospect/Afnemer
 	{
-		
-		attribute<Eur_yr> Kosten_alt := AllCandidate/PartialContributie/alternatief/kosten[nr_orgentity];
-
-		attribute<Eur_yr> Kosten_w   :=
+		parameter<bool>   Afweging_curve := true;
+		attribute<Eur_yr> Kosten_alt     := AllCandidate/PartialContributie/alternatief/kosten[nr_orgentity];
+		attribute<Eur_yr> Kosten_w       :=
 			  Prospect/DesAggregatie/Oj_lv_verbruik
 			+ Prospect/DesAggregatie/Oj_lv_vastrecht
 			+ Prospect/DesAggregatie/Oi_lv_Aansl * BebouwingsComponenten/Woning/NCWrefs/AF_28[BO_rel];
+		attribute<Eur_yr> subsidie       := 6000[Eur] * BebouwingsComponenten/Woning/NCWrefs/AF_28[BO_rel];
 
-		attribute<Eur_yr> subsidie   := 10000[Eur] * BebouwingsComponenten/Woning/NCWrefs/AF_28[BO_rel];
+		attribute<bool>   Afweging_eco   := Kosten_alt > Kosten_w - subsidie;
 
-		attribute<bool>   Afweging   := Kosten_alt > Kosten_w - subsidie;
+		container Curve_Impl
+		{
+			parameter<float64> P50P_w   := 0.005[float64];
+			parameter<float64> P50P_alt := 0.005[float64];
+			parameter<float64> BETA_w   := 1.0[float64];
+			parameter<float64> BETA_alt := 1.0[float64];
+
+			parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(xInvesteringsOptie/ActieveWoning_rel) )
+
+			attribute<float64> Geschiktheid_w   (..) := max_elem(Kosten_alt * P50P_alt - (Kosten_w - subsidie) * P50P_w, 0.0[float64]);
+			attribute<float64> Geschiktheid_alt (..) := max_elem((Kosten_w - subsidie) * P50P_w - Kosten_alt * P50P_alt, 0.0[float64]);
+			attribute<float64> Odds_w           (..) := exp(min_elem(Geschiktheid_w   * BETA_w  , LOG_MAX_FLOAT64 ));
+			attribute<float64> Odds_alt         (..) := exp(min_elem(Geschiktheid_alt * BETA_alt, LOG_MAX_FLOAT64 ));
+			attribute<float64> TotalOdds        (..) := Odds_alt + Odds_w;
+			attribute<float64> Probability_w    (..) := Odds_w / TotalOdds;
+			attribute<float64> rnd              (..) := rnd_uniform(JaarSeed * 241u, .., range(float64, 0d, 1d));
+			attribute<bool>    Afweging         (..) := rnd <= Probability_w;
+		}
+
+		attribute<bool>   Afweging       := =Afweging_curve ? 'Curve_Impl/Afweging' : 'Afweging_eco';
 		
 	}
 
@@ -910,7 +929,20 @@ template WarmtenetTempl
 				attribute<eur_yr_asl> Vastrecht      (Prospect) := =Prospect/TariefAanbod/use_schuif ? 'VR_rest + VR_ext_AK + VR_ext_WP' : 'Totaal_jaarlijks / nrAfnemers';
 				attribute<Eur_asl>    AansluitKosten (Prospect) := =Prospect/TariefAanbod/use_schuif ? 'AK_rest + AK_ext_WP + AK_ext_VR' : 'Ki_tot           / nrAfnemers';
 			}
+			unit<uint32> DesAggregatie := Afnemer
+			{
+				attribute<ratio>  ProspectAandeel (Afnemer) := float64(AfnemersAfweging/Afweging) * (Bo/nrAansluitingen[BO_rel] / Tarieven/nrAfnemers[Prospect_rel]);
+				attribute<Eur>    Ki_wd           (Afnemer) := float64(AfnemersAfweging/Afweging) * (ProspectAandeel * DefinitieveKosten/Ki_wd[Prospect_rel]);
+				attribute<Eur>    Ki_ow           (Afnemer) := float64(AfnemersAfweging/Afweging) * (ProspectAandeel * DefinitieveKosten/Ki_ow[Prospect_rel]);
+				attribute<Eur>    Oi_lv_Aansl     (Afnemer) := float64(AfnemersAfweging/Afweging) * (Tarieven/AansluitKosten[Prospect_rel] * Bo/nrAansluitingen[BO_rel]);
+				attribute<Eur_yr> Oj_lv_verbruik  (Afnemer) := float64(AfnemersAfweging/Afweging) * (Tarieven/WarmtePrijs[Prospect_rel]    * vraag/V_Wd_warmte);
+				attribute<Eur_yr> Oj_lv_Vastrecht (Afnemer) := float64(AfnemersAfweging/Afweging) * (Tarieven/Vastrecht[Prospect_rel]      * Bo/nrAansluitingen[BO_rel]);
+			}
 		}
+		attribute<bool> WarmtePrijs_OK    (Prospect) := DefinitieveKosten/Tarieven/Warmteprijs    <= max_elem(Prospect/TariefAanbod/Tarieven_min_deelname/WarmtePrijs   , Prospect/TariefAanbod/Tarieven_max_deelname/WarmtePrijs   );
+		attribute<bool> Vastrecht_OK      (Prospect) := DefinitieveKosten/Tarieven/Vastrecht      <= max_elem(Prospect/TariefAanbod/Tarieven_min_deelname/Vastrecht     , Prospect/TariefAanbod/Tarieven_max_deelname/Vastrecht     );
+		attribute<bool> AansluitKosten_OK (Prospect) := DefinitieveKosten/Tarieven/AansluitKosten <= max_elem(Prospect/TariefAanbod/Tarieven_min_deelname/AansluitKosten, Prospect/TariefAanbod/Tarieven_max_deelname/AansluitKosten);
+		attribute<bool> FID               (Prospect) := WarmtePrijs_OK && Vastrecht_OK && AansluitKosten_OK;
 	}
 
 	unit<uint32> Candidate := subset(AllCandidate/PartialContributie/Contributie > 0.0[Eur_yr])
