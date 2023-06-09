@@ -24,7 +24,7 @@ template WarmtenetTempl
 
 		//parameters prijsrange bepalen door warmtebedrijf als aanbod naar afnemers
 		parameter<ratio>   Bod_deelname_min := 0.75[ratio];
-		parameter<ratio>   Bod_deelname_max := 1.00[ratio];
+		parameter<ratio>   Bod_deelname_max := 0.95[ratio];
 
 		//parameters verschuiven tariefcomponenten, 0.5=helft van tarief wordt omgezet in ander tarief WP=warmteprijs, VR=vastrecht, AK=aansluitkosten
 		parameter<ratio>   WP_VR            := 0.0[ratio], descr = "aandeel te verschuiven variabele jaarlijkse kosten naar vastrecht";
@@ -36,7 +36,7 @@ template WarmtenetTempl
 
 		//parameters afnemersafwegingsafweging
 		parameter<bool>    Afweging_curve   := true;
-		parameter<float64> P50P_w           := 0.005[float64];
+		parameter<float64> P50P_w           := 0.005[float64]; //range 1.0-0,001, mid=0.005
 		parameter<float64> P50P_alt         := 0.005[float64];
 		parameter<float64> BETA_w           := 1.0[float64];
 		parameter<float64> BETA_alt         := 1.0[float64];
@@ -46,8 +46,8 @@ template WarmtenetTempl
 		//parameters bepalen kavels
 		parameter<bool>    KavelPerGemeente := false; // TODO: nog enumeratie toevoegen aan classifications
 
-		//parameters vereiste rentabiliteit leverancies
-		parameter<Float64> MinimaleRentabiliteitLeverancier := 1.0, Descr = "minimale ratio tussen CW van de verwachtte opbrengsten per hoeveelheid investeringen.";
+		//parameters vereiste rentabiliteit leverancies (1.046 of 1.030 of 1.068)
+		parameter<Float64> MinimaleRentabiliteitLeverancier := 1.046, Descr = "minimale ratio tussen CW van de verwachtte opbrengsten per hoeveelheid investeringen.";
 	}
 	
 	
@@ -715,13 +715,21 @@ template WarmtenetTempl
 			, Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.41 Tabel 17"
 			, Descr = "vaste component TEO en WKO warmtebronnen";
 		
-		attribute<Eur> Ki_ow         (Prospect) := 
+		attribute<Eur> Ki_ow_i      (Prospect) := 
 				(any(WarmteBronnen/bron/BronType_rel[Afnemer/bron_rel] == Invoer/Kengetallen/WarmteBronnen/MetaData/Brontype/V/WKO, Afnemer/Prospect_rel) ? 1.1 : 1.0) * (  //1.1 = extra kosten regeneratiemechanisme
 				  Ki_ow_vast
 				+ sum(Afnemer/kosten/Ki_ow_bron, Afnemer/Prospect_rel))
 				+ min_elem(sum(Afnemer/kosten/Ki_ow_buffer, Afnemer/Prospect_rel), 100000[Eur])
 			, Descr = "totale investeringskosten bron"
 			, Source = "CE Delft 210347 Eindconceptadvies Warmtenetten in Vesta MAIS (versie 2022-08-09) pp.41 Tabel 16";
+
+		attribute<Eur> Ki_ow        (Prospect) :=
+				any(WarmteBronnen/bron/BronType_rel[Afnemer/bron_rel] == Invoer/Kengetallen/WarmteBronnen/MetaData/Brontype/V/Geothermie, Afnemer/Prospect_rel) ? 
+				max_elem(3000[kW] *
+					(Schuiven/KostenMin * Invoer/Kengetallen/WarmteBronnen/MetaData/Brontype/Ki_cap_min[Invoer/Kengetallen/WarmteBronnen/MetaData/Brontype/V/GeoThermie] +
+					 Schuiven/KostenMax * Invoer/Kengetallen/WarmteBronnen/MetaData/Brontype/Ki_cap_max[Invoer/Kengetallen/WarmteBronnen/MetaData/Brontype/V/GeoThermie] )
+					, Ki_ow_i)
+				: Ki_ow_i;
 
 		container KostenOptelling
 		{
