@@ -129,7 +129,7 @@ container Vastgoed
 				attribute<rdc_meter>                  geometry       := union_data(.,BO_perjaar_koop/geometry      ,BO_perjaar_wooncorp/geometry      ,BO_perjaar_parthuur/geometry      );
 				attribute<Classifications/Eigendom>   Eigendom_rel   := union_data(.,BO_perjaar_koop/Eigendom_rel  ,BO_perjaar_wooncorp/Eigendom_rel  ,BO_perjaar_parthuur/Eigendom_rel  );
 				attribute<nrAsl>                      nr_aansl_frac  := union_data(.,BO_perjaar_koop/nr_aansl      ,BO_perjaar_wooncorp/nr_aansl      ,BO_perjaar_parthuur/nr_aansl      );
-				attribute<float64>                    nr_aansl       := float64(roundDown(nr_aansl_frac + rnd_uniform(0, BO_perjaar, range(float64,0d,1d))));
+				attribute<uint32>                     nr_aansl       := uint32(roundDown(nr_aansl_frac + rnd_uniform(0, BO_perjaar, range(float64,0d,1d))));
 				attribute<Classifications/WoningType> Woningtype_rel := union_data(.,BO_perjaar_koop/Woningtype_rel,BO_perjaar_wooncorp/Woningtype_rel,BO_perjaar_parthuur/Woningtype_rel);
 			}
 
@@ -172,17 +172,19 @@ container Vastgoed
 		}
 
 		unit<uint32> ModelObject := Invoer/Kengetallen/Bebouwing/Woning/Results;
-		
-		unit<uint32> BebouwingsObject := select_with_org_rel(isdefined(BebouwingsObject_buff/Buurt_rel))
+
+		unit<uint32> BebouwingsObject := range(uint32, 0, sum(NB/nr_aansl))
 		{
+			attribute<uint32> first_nbo(NB) := cumulate(NB/nr_aansl) - NB/nr_aansl;
+			attribute<NB> nbb_rel(BebouwingsObject) := classify(uint32(id(BebouwingsObject)[Units/nrAsl]), first_nbo);
 
 			attribute<string>                      Code              := TypeName +string( Periode/name[Periode_rel] )+string( Geometry ) ;
 			attribute<string>                      TypeName          := Classifications/WoningType/name[Woningtype_rel];
 			attribute<string>                      label             := Code, DialogType = "LabelText";
-			attribute<rdc_meter>                   Geometry          := NB/geometry[org_rel];
+			attribute<rdc_meter>                   Geometry          := NB/geometry[nbb_rel];
 			attribute<rdc_meter>                   Point             := geometry;
-			attribute<nrAsl>                       nrAansluitingen_i := NB/nr_aansl[org_rel];
-			attribute<Classifications/WoningType>  Woningtype_rel    := NB/Woningtype_rel[org_rel];
+			attribute<nrAsl>                       nrAansluitingen_i := float64(NB/nr_aansl[nbb_rel]);
+			attribute<Classifications/WoningType>  Woningtype_rel    := NB/Woningtype_rel[nbb_rel];
 			attribute<Classifications/WoningType>  BebouwingsType    := Woningtype_rel;
 			attribute<m2>                          Oppervlakte_i     := Classifications/WoningType/Default_oppervlak_Nieuwbouw[Woningtype_rel] * nrAansluitingen_i;
 			attribute<units/pand_asl>              Pand_aandeel      := Classifications/WoningType/Pand_aandeel[Woningtype_rel];
@@ -192,7 +194,7 @@ container Vastgoed
 			attribute<bool> ischeck := isdefined(Buurt_rel);
 
 			attribute<Geography/rdc_grids/m100>    gridm100_rel      := Geometry[Geography/rdc_grids/m100];
-			attribute<Classifications/Eigendom>    Eigendom_rel      := NB/Eigendom_rel[org_rel];
+			attribute<Classifications/Eigendom>    Eigendom_rel      := NB/Eigendom_rel[nbb_rel];
 
 			container NieuwbouwWarmtenet
 			{
