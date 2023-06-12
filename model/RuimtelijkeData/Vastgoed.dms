@@ -186,6 +186,7 @@ container Vastgoed
 			attribute<nrAsl>                       nrAansluitingen_i := float64(NB/nr_aansl[nbb_rel]);
 			attribute<Classifications/WoningType>  Woningtype_rel    := NB/Woningtype_rel[nbb_rel];
 			attribute<Classifications/WoningType>  BebouwingsType    := Woningtype_rel;
+			attribute<bool> 					   isMeergezins 	 := Classifications/Woningtype/IsMeergezins[BebouwingsType];
 			attribute<m2>                          Oppervlakte_i     := Classifications/WoningType/Default_oppervlak_Nieuwbouw[Woningtype_rel] * nrAansluitingen_i;
 			attribute<units/pand_asl>              Pand_aandeel      := Classifications/WoningType/Pand_aandeel[Woningtype_rel];
 			attribute<yr_uint16>                   Sloopjaar         := Const(2100[yr_uint16],.);
@@ -196,6 +197,26 @@ container Vastgoed
 			attribute<Geography/rdc_grids/m100>    gridm100_rel      := Geometry[Geography/rdc_grids/m100];
 			attribute<Classifications/Eigendom>    Eigendom_rel      := NB/Eigendom_rel[nbb_rel];
 
+			//parameter<string> StartjaarNieuwbouw := string(uint32(Periode/RO_directory[periode_rel])-uint32(10));
+			//container Vermogens := = replace('Invoer/Kengetallen/Vermogens(Tussenresultaten/%NP%/Schuiven/EfficiencySchuif)', '%NP%',StartjaarNieuwbouw);
+
+			container Vermogens := Invoer/Kengetallen/Vermogens(/Tussenresultaten/Startjaar/Schuiven/EfficiencySchuif);
+
+			container AansluitCapaciteit
+			{
+			attribute<kW> RV    (..) := functioneel/RV * 0.25[kW_GJ_yr];
+			attribute<kW> TW    (..) := ASW_TWmt;
+			attribute<kW> Warmte(..) := RV + TW;
+			attribute<kW> KD    (..) := ASW_K;
+
+ 			
+			attribute<kW>    ASW_TWmt (..) := 
+				  IsMeergezins ? Oppervlakte_i * Vermogens/ASW_TWmt_wl_opp + nrAansluitingen_i * Vermogens/ASW_TWmt_wl_asl : Oppervlakte_i * Vermogens/ASW_TWmt_wh_opp + nrAansluitingen_i * Vermogens/ASW_TWmt_wh_asl;
+
+			attribute<kW>    ASW_K    (..) := 
+				  IsMeergezins ? Oppervlakte_i * Vermogens/ASW_K_wl_opp + nrAansluitingen_i * Vermogens/ASW_K_wl_asl : Oppervlakte_i * Vermogens/ASW_K_wh_opp + nrAansluitingen_i * Vermogens/ASW_K_wh_asl;
+			}
+		
 			container NieuwbouwWarmtenet
 			{
 				attribute<float64> rnd (BebouwingsObject) := rnd_uniform(/Invoer/TechnischeInstellingen/RandomSeed * 316[uint32], BebouwingsObject, range(float64, 0d, 1d));
