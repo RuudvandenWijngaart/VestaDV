@@ -7,13 +7,75 @@ container voorbeeldwoningen
 {
 	unit<uint32> vbw_data: StorageName = "%projDir%/data/voorbeeldwoningen_NTA8800.csv", StorageType = "gdal2.vect", StorageReadOnly = "True";
 	
-	unit<uint32> vbw := select_with_attr_by_cond(vbw_data, IsPositive(uint32(vbw_data/Nr)))
+	unit<uint32> Bouwdelen_vbw_dataset:= select_with_attr_by_org_rel(Classifications/Bouwdeel,
+			or(strcount(Classifications/Bouwdeel/name, 'RB') > 0 ,
+			strcount(Classifications/Bouwdeel/name, 'RO') > 0 ,
+			strcount(Classifications/Bouwdeel/name, 'DR') > 0 ,
+			strcount(Classifications/Bouwdeel/name, 'VL') > 0 ,
+			strcount(Classifications/Bouwdeel/name, 'MG') > 0 ,
+			strcount(Classifications/Bouwdeel/name, 'DS') > 0 ,
+			strcount(Classifications/Bouwdeel/name, 'KR') > 0 )
+			)
 	{
-		container Variabelen
+		attribute<string>    label_vbw  : ['raam_slaap', 'raam_leef', 'deuren', 'vloeren', 'gevels', 'daken', 'kieren'];
+		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+	}
+	
+	unit<uint32> vbw := select_with_org_rel(IsPositive(uint32(vbw_data/Nr)))
+	{
+		attribute<uint32>						Nr 					(vbw) 	:= vbw_data/Nr[org_rel][uint32];
+		attribute<Classifications/EnergieLabel> EnergieLabel 		(vbw) 	:= rlookup(vbw_data/EnergieLabel,Classifications/EnergieLabel/label)[org_rel];
+		attribute<uint32> 						BouwJaar 			(vbw) 	:= vbw_data/bouwjaar[org_rel][uint32];
+		attribute<m2> 							Oppervlakte 		(vbw) 	:= vbw_data/gebruiksoppervlakte[org_rel][m2];
+		attribute<bool> 						IsMeergezins 		(vbw) 	:= strcount(vbw_data/gebouwtype_benamingen_[org_rel], 'meergezins') > 1;
+		attribute<kWh_yr_m2> 					PrimairFossiel 		(vbw) 	:= vbw_data/BENG2[org_rel][kWh_yr_m2];
+		attribute<m2> 							Verliesoppervlak 	(vbw) 	:= vbw_data/verliesoppervlak[org_rel][m2];
+		attribute<float64> 						qv10			 	(vbw) 	:= vbw_data/qv10waarde[org_rel][float64];
+		attribute<string> 						ventilatie_str		(vbw) 	:= vbw_data/empty281[org_rel];
+		attribute<uint32> 						VentilatieInstallatieJaar	(vbw) 	:= vbw_data/ventilatie_installatiejaar[org_rel][uint32];
+		attribute<Classifications/installatie> 	RuimteverwarmingsInstallatie 		(vbw)	:= const(/Classifications/Installatie/V/hr,.);
+		attribute<string> 						WarmTapwaterInstallatie_str		(vbw) 	:= vbw_data/empty527[org_rel];
+
+		
+		container Bouwdelen := for_each_ind(
+		'ne'
+		,Bouwdelen_vbw_dataset/name
+		,'BouwdeelInformatie(Bouwdelen_vbw_dataset/V/'+Bouwdelen_vbw_dataset/name+')'
+		);
+		
+		template BouwdeelInformatie
 		{
-			attribute<uint32>	Nr (vbw) := vbw/Nr[uint32];
-			attribute<Classifications/EnergieLabel> EnergieLabel (vbw) := rlookup(vbw/EnergieLabel,Classifications/EnergieLabel/label);
-			attribute<uint32> BouwJaar (vbw) := vbw/bouwjaar[uint32];
+			// inputs
+			parameter<uint32> Bouwdelen_vbw_dataset_rel;
+			// end inputs
+			
+			attribute<Classifications/Bouwdeel> Bouwdeel_rel (Bouwdelen_vbw_dataset):= Bouwdelen_vbw_dataset/org_rel;
+			
+			parameter<string> bouwdeel_name := Bouwdelen_vbw_dataset/name[Bouwdelen_vbw_dataset_rel];
+			parameter<string> label_vbw := /Invoer/voorbeeldwoningen/Bouwdelen_vbw_dataset/label_vbw[Bouwdelen_vbw_dataset_rel];
+			
+			parameter<string> oppervlak_str  := = 
+			"strcount(label_vbw, 'deur') > 0 
+				? replace('vbw_data/@BD@_1_oppervlakte[org_rel][m2] + vbw_data/@BD@_2_oppervlakte[org_rel][m2]','@BD@',label_vbw)
+			: strcount(label_vbw, 'kier') > 0
+				? 'Oppervlakte'
+			: replace('vbw_data/@BD@_1_oppervlakte[org_rel][m2] + vbw_data/@BD@_2_oppervlakte[org_rel][m2] + vbw_data/@BD@_3_oppervlakte[org_rel][m2] + vbw_data/@BD@_4_oppervlakte[org_rel][m2]','@BD@',label_vbw)
+			";
+			attribute<m2> Oppervlak (vbw) := =oppervlak_str;
+			
+			parameter<string> Isolatiewaarde_str := = 
+			"strcount(label_vbw, 'raam') > 0 
+				? replace('(vbw_data/@BD@_1_oppervlakte[org_rel][float64] * vbw_data/@BD@_1_u_waarde[org_rel][float64] + vbw_data/@BD@_2_oppervlakte[org_rel][float64] * vbw_data/@BD@_2_u_waarde[org_rel][float64] + vbw_data/@BD@_3_oppervlakte[org_rel][float64] * vbw_data/@BD@_3_u_waarde[org_rel][float64] + vbw_data/@BD@_4_oppervlakte[org_rel][float64] * vbw_data/@BD@_4_u_waarde[org_rel][float64]) / Oppervlak','@BD@',label_vbw)
+			: strcount(label_vbw, 'deur') > 0 
+				? replace('(vbw_data/@BD@_1_oppervlakte[org_rel][float64] * vbw_data/@BD@_1_u_waarde[org_rel][float64] + vbw_data/@BD@_2_oppervlakte[org_rel][float64] * vbw_data/@BD@_2_u_waarde[org_rel][float64]) / Oppervlak','@BD@',label_vbw)
+			: strcount(label_vbw, 'kier') > 0
+				? 'qv10'
+			: replace('(vbw_data/@BD@_1_oppervlakte[org_rel][float64] * vbw_data/@BD@_1_rc_waarde[org_rel][float64] + vbw_data/@BD@_2_oppervlakte[org_rel][float64] * vbw_data/@BD@_2_rc_waarde[org_rel][float64] + vbw_data/@BD@_3_oppervlakte[org_rel][float64] * vbw_data/@BD@_3_rc_waarde[org_rel][float64] + vbw_data/@BD@_4_oppervlakte[org_rel][float64] * vbw_data/@BD@_4_rc_waarde[org_rel][float64]) / Oppervlak','@BD@',label_vbw)
+			";
+			attribute<float64> Isolatiewaarde (vbw) := = Isolatiewaarde_str;
+			attribute<Classifications/IsolatieNiveau> IsolatieNiveau_rel (vbw) := =replace('classify(Isolatiewaarde, Classifications/BouwdeelIsolatie/Individueel/@BD@/Rc_U_Qv10)[Classifications/IsolatieNiveau]','@BD@',bouwdeel_name);
+
+			
 		}
 	}
 }
