@@ -15,25 +15,32 @@ container voorbeeldwoningen
 	
 	unit<uint32> vbw := select_with_org_rel(IsPositive(uint32(vbw_data/Nr)))
 	{
-		attribute<uint32>						Nr 					(vbw) 		:= vbw_data/Nr[org_rel][uint32];
-		attribute<nrAsl> 						Nr_asl				(vbw)		:= const(1[nrAsl],.);
-		attribute<uint32> 						gebouwtype_gecodeerd (vbw)		:= vbw_data/gebouwtype_validatietool[org_rel][uint32];
+		attribute<uint32>						Nr 						(vbw) 	:= vbw_data/Nr[org_rel][uint32];
+		attribute<nrAsl> 						Nr_asl					(vbw)	:= const(1[nrAsl],.);
+		attribute<uint32> 						gebouwtype_gecodeerd 	(vbw)	:= vbw_data/gebouwtype_validatietool[org_rel][uint32];
 		attribute<uint32> 						gebouwsubtype_gecodeerd (vbw)	:= vbw_data/gebouwsubtype_validatietool[org_rel][uint32];
 		attribute<string> 						samengevoegd_woningtype (vbw) 	:= vbw_data/samengevoegd_woningtype[org_rel];
-		attribute<Classifications/WoningType>	Woningtype			(vbw)  		:= const(Classifications/Woningtype/V/tussenwoning,.); // Dummywaarde. ToDO: mapping van gebouw(sub)type naar woningtype
-		attribute<Classifications/EnergieLabel> EnergieLabel 		(vbw) 		:= rlookup(vbw_data/EnergieLabel,Classifications/EnergieLabel/label)[org_rel];
-		attribute<Classifications/schillabel> 	schillabel			(vbw)		:= lookup(Energielabel, Classifications/Energielabel/schillabel_rel);
-		attribute<uint16> 						BouwJaar 			(vbw) 		:= vbw_data/bouwjaar[org_rel][uint16];
-		attribute<Classifications/BouwjaarWoning> BouwjaarKlasse 	(vbw)		:= classify(BouwJaar, Classifications/BouwjaarWoning/ClassBreak);
-		attribute<m2> 							Oppervlakte 		(vbw) 		:= vbw_data/gebruiksoppervlakte[org_rel][m2];
-		attribute<bool> 						IsMeergezins 		(vbw) 		:= strcount(vbw_data/gebouwtype_benamingen_[org_rel], 'meergezins') > 0; 
-		attribute<RuimtelijkeData/StudieGebied/Buurt> Buurt_rel 	(vbw)		:= rlookup(const('BU00500000',.), Invoer/RuimtelijkeData/StudieGebied/Buurt/BU_CODE); // Dummywaarde in Zeewolde voor tests.
-		attribute<Classifications/Eigendom>		Eigendom			(vbw)		:= const(Classifications/Eigendom/V/Koop,.); // Dummywaarde. Met Boris overlegegn wat een goede aanname is. 
-		attribute<Classifications/combines/WBE> ModelObjectKey   	(vbw)		:= combine_data( Classifications/combines/WBE , Woningtype , combine_data( Classifications/combines/BE , BouwjaarKlasse , Eigendom ));
+		attribute<Classifications/WoningType>	Woningtype				(vbw)  	:= strcount(samengevoegd_woningtype, 'vrijstaand') > 0 	  	? Classifications/WoningType/V/vrijstaand
+																				: strcount(samengevoegd_woningtype, '2 onder 1 kap') > 0  	? Classifications/WoningType/V/twee_onder_1_kap
+																				: strcount(samengevoegd_woningtype, 'galerij') > 0 		  	? Classifications/WoningType/V/meergezinspand_laag_midden
+																				: strcount(samengevoegd_woningtype, 'maisonnette') > 0 	  	? Classifications/WoningType/V/meergezinspand_laag_midden
+																				: strcount(samengevoegd_woningtype, 'portiek') > 0 		  	? Classifications/WoningType/V/meergezinspand_laag_midden // klopt dit?
+																				: strcount(samengevoegd_woningtype, 'rijwoning hoek') > 0 	? Classifications/WoningType/V/hoekwoning
+																				: strcount(samengevoegd_woningtype, 'rijwoning tussen') > 0 ? Classifications/WoningType/V/tussenwoning
+																				: Classifications/WoningType/V/tussenwoning; // wat te doen met overig?
+		attribute<Classifications/EnergieLabel> EnergieLabel 			(vbw) 	:= rlookup(vbw_data/EnergieLabel,Classifications/EnergieLabel/label)[org_rel];
+		attribute<Classifications/schillabel> 	schillabel				(vbw)	:= lookup(Energielabel, Classifications/Energielabel/schillabel_rel);
+		attribute<uint16> 						BouwJaar 				(vbw)	:= vbw_data/bouwjaar[org_rel][uint16];
+		attribute<Classifications/BouwjaarWoning> BouwjaarKlasse 		(vbw)	:= classify(BouwJaar, Classifications/BouwjaarWoning/ClassBreak);
+		attribute<m2> 							Oppervlakte 			(vbw)	:= vbw_data/gebruiksoppervlakte[org_rel][m2];
+		attribute<bool> 						IsMeergezins 			(vbw)	:= strcount(vbw_data/gebouwtype_benamingen_[org_rel], 'meergezins') > 0;
+		attribute<RuimtelijkeData/StudieGebied/Buurt> Buurt_rel 		(vbw)	:= rlookup(const('BU00500000',.), Invoer/RuimtelijkeData/StudieGebied/Buurt/BU_CODE); // Dummywaarde in Zeewolde voor tests.
+		attribute<Classifications/Eigendom>		Eigendom				(vbw)	:= const(Classifications/Eigendom/V/Koop,.); // Dummywaarde. Met Boris overlegegn wat een goede aanname is. 
+		attribute<Classifications/combines/WBE> ModelObjectKey   		(vbw)	:= combine_data( Classifications/combines/WBE , Woningtype , combine_data( Classifications/combines/BE , BouwjaarKlasse , Eigendom ));
 		
-		attribute<kWh_yr_m2> 					PrimairFossiel_NTA8800	(vbw) 		:= vbw_data/BENG2[org_rel][kWh_yr_m2];
-		attribute<m2> 							Verliesoppervlak 	(vbw) 		:= vbw_data/verliesoppervlak[org_rel][m2];
-		attribute<float64> 						qv10			 	(vbw) 		:= vbw_data/qv10waarde[org_rel][float64];
+		attribute<kWh_yr_m2> 					PrimairFossiel_NTA8800	(vbw) 	:= vbw_data/BENG2[org_rel][kWh_yr_m2];
+		attribute<m2> 							Verliesoppervlak 		(vbw) 	:= vbw_data/verliesoppervlak[org_rel][m2];
+		attribute<float64> 						qv10			 		(vbw) 	:= vbw_data/qv10waarde[org_rel][float64];
 
 		
 		container Bouwdelen := for_each_ind(
@@ -93,6 +100,8 @@ container voorbeeldwoningen
 		container Fvraag := Templates/functionele_vraag(vbw, /Invoer/Kengetallen/Bebouwing/Woning/results , Classifications/BebouwingsSector/V/Woning ); 
 
 		container Mvraag := Templates/FunctioneelToMetervraag(vbw, false);
+		
+		container Fvraag_Vivet := Templates/fvraag_VIVET(vbw);
 	}
 	#include <%projDir%/model/voorbeeldwoningen/templates.dms>
 }
