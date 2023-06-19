@@ -26,7 +26,8 @@ container voorbeeldwoningen
 		attribute<uint16> 						BouwJaar 			(vbw) 		:= vbw_data/bouwjaar[org_rel][uint16];
 		attribute<Classifications/BouwjaarWoning> BouwjaarKlasse 	(vbw)		:= classify(BouwJaar, Classifications/BouwjaarWoning/ClassBreak);
 		attribute<m2> 							Oppervlakte 		(vbw) 		:= vbw_data/gebruiksoppervlakte[org_rel][m2];
-		attribute<bool> 						IsMeergezins 		(vbw) 		:= strcount(vbw_data/gebouwtype_benamingen_[org_rel], 'meergezins') > 1;
+		attribute<bool> 						IsMeergezins 		(vbw) 		:= strcount(vbw_data/gebouwtype_benamingen_[org_rel], 'meergezins') > 0; 
+		attribute<RuimtelijkeData/StudieGebied/Buurt> Buurt_rel 	(vbw)		:= rlookup(const('BU00500000',.), Invoer/RuimtelijkeData/StudieGebied/Buurt/BU_CODE); // Dummywaarde in Zeewolde voor tests.
 		attribute<Classifications/Eigendom>		Eigendom			(vbw)		:= const(Classifications/Eigendom/V/Koop,.); // Dummywaarde. Met Boris overlegegn wat een goede aanname is. 
 		attribute<Classifications/combines/WBE> ModelObjectKey   	(vbw)		:= combine_data( Classifications/combines/WBE , Woningtype , combine_data( Classifications/combines/BE , BouwjaarKlasse , Eigendom ));
 
@@ -34,15 +35,30 @@ container voorbeeldwoningen
 		attribute<kWh_yr_m2> 					PrimairFossiel_NTA8800	(vbw) 		:= vbw_data/BENG2[org_rel][kWh_yr_m2];
 		attribute<m2> 							Verliesoppervlak 	(vbw) 		:= vbw_data/verliesoppervlak[org_rel][m2];
 		attribute<float64> 						qv10			 	(vbw) 		:= vbw_data/qv10waarde[org_rel][float64];
-		attribute<string> 						ventilatie_str		(vbw) 		:= vbw_data/empty281[org_rel];
-		attribute<uint32> 						VentilatieInstallatieJaar	(vbw) 	:= vbw_data/ventilatie_installatiejaar[org_rel][uint32];
 		attribute<Classifications/installatie> 	RuimteverwarmingsInstallatie 	(vbw)	:= const(/Classifications/Installatie/V/hr,.);
 		attribute<string> 						WarmTapwaterInstallatie_str		(vbw) 	:= vbw_data/empty527[org_rel];
 		
 		
 		container Fvraag := Templates/functionele_vraag(vbw, /Invoer/Kengetallen/Bebouwing/Woning/results , Classifications/BebouwingsSector/V/Woning ); 
 
+		container ventilatie
+		{ // https://www.joostdevree.nl/shtmls/mechanische_ventilatie.shtml voor uitleg ventilatiecodes
+			attribute<string> 						Ventilatie_str		(vbw) 		:= vbw_data/empty281[org_rel];
+			attribute<uint32> 						InstallatieJaar	(vbw) 	:= vbw_data/ventilatie_installatiejaar[org_rel][uint32];
 
+			
+			attribute<Kengetallen/OverigeInstallaties/VT/Installatietypes> Type (vbw) := =
+			"strcount(ventilatie_str, 'natuurlijk') > 0 ? Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Nat 
+			: strcount(ventilatie_str, 'D1') > 0 ? Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Bal_Wtw
+			: strcount(ventilatie_str, 'mechanisch') > 0 && strcount(ventilatie_str, 'gelijkstroom') > 0 && InstallatieJaar > 2006 ? Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Mec_Glk_new
+			: strcount(ventilatie_str, 'mechanisch') > 0 && strcount(ventilatie_str, 'gelijkstroom') > 0 && InstallatieJaar < 2007 ? Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Mec_Glk_oud
+			: strcount(ventilatie_str, 'mechanisch') > 0 && strcount(ventilatie_str, 'wisselstroom') > 0 ? Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Mec_Wis
+			: strcount(ventilatie_str, 'mechanisch') > 0 && strcount(ventilatie_str, 'C5a') > 0 ? Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Mec_Vst_Glk_new
+			: Kengetallen/OverigeInstallaties/VT/Installatietypes/V/nat";
+ 
+
+			
+		}
 
 		container Bouwdelen := for_each_ind(
 		'ne'
@@ -151,8 +167,8 @@ container voorbeeldwoningen
 			attribute<GJ_yr> warmtewinst_apparaten        (Obs) := Obs/Fvraag/Functioneel/EA * Invoer/Kengetallen/Warmtevraag/EA_winst_nuttig;
 
 			//============ warmtewist door zoninstralen door ramen boven (RB) en onder (RO) als functie van oppervlak bouwdeel en waarde horende bij isolatiegraad
-			attribute<GJ_yr> warmtewinst_zoninstraling_RB (Obs) := ='Obs/bouwdelen/RB * merge(uint8(Obs/bouwdelen/isolatie/RB), GJ_yr_m2,'+ AsItemList('Invoer/Kengetallen/Warmtevraag/Zoninstraling[Classifications/IsolatieNiveau/V/'+Classifications/IsolatieNiveau/name+']')+')', descr = "warmtewinst ramen boven";
-			attribute<GJ_yr> warmtewinst_zoninstraling_RO (Obs) := ='Obs/bouwdelen/RO * merge(uint8(Obs/bouwdelen/isolatie/RO), GJ_yr_m2,'+ AsItemList('Invoer/Kengetallen/Warmtevraag/Zoninstraling[Classifications/IsolatieNiveau/V/'+Classifications/IsolatieNiveau/name+']')+')', descr = "warmtewinst ramen onder";
+			attribute<GJ_yr> warmtewinst_zoninstraling_RB (Obs) := ='Obs/bouwdelen/RB/oppervlak * merge(uint8(Obs/bouwdelen/RB/IsolatieNiveau_rel), GJ_yr_m2,'+ AsItemList('Invoer/Kengetallen/Warmtevraag/Zoninstraling[Classifications/IsolatieNiveau/V/'+Classifications/IsolatieNiveau/name+']')+')', descr = "warmtewinst ramen boven";
+			attribute<GJ_yr> warmtewinst_zoninstraling_RO (Obs) := ='Obs/bouwdelen/RO/oppervlak * merge(uint8(Obs/bouwdelen/RO/IsolatieNiveau_rel), GJ_yr_m2,'+ AsItemList('Invoer/Kengetallen/Warmtevraag/Zoninstraling[Classifications/IsolatieNiveau/V/'+Classifications/IsolatieNiveau/name+']')+')', descr = "warmtewinst ramen onder";
 			attribute<GJ_yr> warmtewinst_zoninstraling    (Obs) := warmtewinst_zoninstraling_RO + warmtewinst_zoninstraling_RB;	
 
 			//============ totaal warmtewinsten
@@ -187,14 +203,14 @@ container voorbeeldwoningen
 				
 				container gemeten_correctie
 				{
-					attribute<Geography/RegioIndelingen/Wijk>                                WK_rel         (BebouwingsObjectSrc) := Invoer/RuimtelijkeData/StudieGebied/Buurt/Wijk_rel[Planregio_rel];
-					attribute<Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/W_E>    W_E_rel        (BebouwingsObjectSrc) := combine_data(Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/W_E, BebouwingsType, Eigendom_rel);
+					attribute<Geography/RegioIndelingen/Wijk>                                WK_rel         (BebouwingsObjectSrc) := Invoer/RuimtelijkeData/StudieGebied/Buurt/Wijk_rel[Buurt_rel];
+					attribute<Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/W_E>    W_E_rel        (BebouwingsObjectSrc) := combine_data(Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/W_E, WoningType, Eigendom);
 					attribute<Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/WK_W_E> WK_W_E_rel     (BebouwingsObjectSrc) := combine_data(Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/WK_W_E, WK_rel, W_E_rel);
 					attribute<ratio>                                                         Verschilfactor (BebouwingsObjectSrc) := Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/WK_W_E/Verschilfactor[WK_W_E_rel];
 				}
 
 				//========= warmteverlies ventilatie
-				attribute<GJ_yr> Vrv_VT_asl     (BebouwingsObjectSrc) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[InstallatiePerProduct/VT] * Nr_asl, descr = "warmteverlies ventilatie vast per aansluiting";
+				attribute<GJ_yr> Vrv_VT_asl     (BebouwingsObjectSrc) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[Ventilatie/Type] * Nr_asl, descr = "warmteverlies ventilatie vast per aansluiting";
 				
 				//========= theoretische verlies ruimteverwarming (excl warmtewinsten)
 				attribute<GJ_yr> Theoretisch_RV (BebouwingsObjectSrc) := VL + DP + DS + MG + MS + DR + PL + RO + RB + KR + Vrv_VT_asl;
@@ -209,7 +225,7 @@ container voorbeeldwoningen
 				//========= gefit verlies bij isolatiegraad N0 als referentiepunt voor berekeningen per zichtjaar
 				container RV_N0_per_Bouwdeel := for_each_nedv(
 					  Classifications/Bouwdeel/name
-					, 'bouwdelen/'+Classifications/Bouwdeel/name+' * Invoer/Kengetallen/WarmteVraag/Baselevel[Classifications/Bouwdeel/V/'+Classifications/Bouwdeel/name+'] * Fitfactor'
+					, 'bouwdelen/'+Classifications/Bouwdeel/name+'/oppervlak * Invoer/Kengetallen/WarmteVraag/Baselevel[Classifications/Bouwdeel/V/'+Classifications/Bouwdeel/name+'] * Fitfactor'
 					, BebouwingsObjectSrc
 					, GJ_yr
 					)
@@ -226,15 +242,9 @@ container voorbeeldwoningen
 				parameter<Classifications/BebouwingsSector> BCsector := BebouwingsSector_rel;
 				attribute<kW> RV (BebouwingsObjectSrc) := functioneel/RV * 0.25[kW_GJ_yr];
 				attribute<kW> TW (BebouwingsObjectSrc) :=  = 
-					  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
-						'IsMeergezins ? Oppervlakte * Vermogens/ASW_TWmt_wl_opp + Nr_asl * Vermogens/ASW_TWmt_wl_asl : Oppervlakte * Vermogens/ASW_TWmt_wh_opp + Nr_asl * Vermogens/ASW_TWmt_wh_asl'
-					: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte * Vermogens/ASW_TWmt_u_opp + Nr_asl * Vermogens/ASW_TWmt_u_asl'
-					: 'const(0.0[kW],BebouwingsObjectSrc)';
+						'IsMeergezins ? Oppervlakte * Vermogens/ASW_TWmt_wl_opp + Nr_asl * Vermogens/ASW_TWmt_wl_asl : Oppervlakte * Vermogens/ASW_TWmt_wh_opp + Nr_asl * Vermogens/ASW_TWmt_wh_asl';
 				attribute<kW> KD (BebouwingsObjectSrc) :=  = 
-					  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
-						'IsMeergezins ? Oppervlakte * Vermogens/ASW_K_wl_opp + Nr_asl * Vermogens/ASW_K_wl_asl : Oppervlakte * Vermogens/ASW_K_wh_opp + Nr_asl * Vermogens/ASW_K_wh_asl'
-					: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte * Vermogens/ASW_K_u_opp + Nr_asl * Vermogens/ASW_K_u_asl'
-					: 'const(0.0[kW],BebouwingsObjectSrc)';
+						'IsMeergezins ? Oppervlakte * Vermogens/ASW_K_wl_opp + Nr_asl * Vermogens/ASW_K_wl_asl : Oppervlakte * Vermogens/ASW_K_wh_opp + Nr_asl * Vermogens/ASW_K_wh_asl';
 			}
 
 			container Functioneel := for_each_nedv(
@@ -269,7 +279,7 @@ container voorbeeldwoningen
 						+ AsItemList('Invoer/Kengetallen/Bebouwing/Woning/Results/Opp/RV_'+Classifications/SchilLabel/name+'[ModelObject_rel]')+')'
 						:
 					Classifications/FunctioneleVraag/name == 'VT' ?
-						'Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_E_asl[InstallatiePerProduct/VT] * Nr_asl'
+						'Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_E_asl[Ventilatie/Type] * Nr_asl'
 						:
 					'Invoer/Kengetallen/Bebouwing/'+Classifications/BebouwingsSector/name[BebouwingsSector_rel]+'/Results/Asl/'+Classifications/FunctioneleVraag/name+'[ModelObject_rel]* Nr_asl +
 					 Invoer/Kengetallen/Bebouwing/'+Classifications/BebouwingsSector/name[BebouwingsSector_rel]+'/Results/Opp/'+Classifications/FunctioneleVraag/name+'[ModelObject_rel] * Oppervlakte',
