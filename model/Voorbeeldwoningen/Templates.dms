@@ -412,13 +412,15 @@ container Templates
 		}
 	}
 	
-	Template fvraag_VIVET{
+	Template fvraag_VIVET
+	{
 
 		
 		//begin case parameters
 		unit<uint32> Obs;
 		// end case parameters
 		
+		attribute<nrAsl> 						Nr_asl		(obs) := obs/Nr_asl;
 		attribute<Classifications/WoningType> 	WoningType	(Obs) := obs/WoningType;
 		attribute<uint16> 						Bouwjaar 	(Obs) := obs/Bouwjaar;
 		attribute<Classifications/schillabel>	schillabel 	(Obs) := obs/schillabel;
@@ -427,32 +429,27 @@ container Templates
 		
 		attribute<Classifications/OppervlakteKlasseTNO>	OppervlakteKlasseTNO	(obs)	:= classify(Oppervlakte[uint16], Classifications/OppervlakteKlasseTNO/Classbreak);
 		attribute<Classifications/BouwjaarWoningTNO>	BouwjaarWoningTNO		(obs)	:= classify(Bouwjaar, Classifications/BouwjaarWoningTNO/Classbreak);
-		attribute<uint8> 								huishoudGrootte 		(obs)	:= /Invoer/voorbeeldwoningen/vbw/Fvraag/HuishoudensGrootte/nrPersonen_rnd [uint8];
+		attribute<Classifications/BouwjaarWoning> 		BouwjaarKlasse 			(obs)	:= obs/BouwjaarKlasse;
+		attribute<uint16> 								huishoudGrootte 		(obs)	:= Invoer/voorbeeldwoningen/vbw/Fvraag/HuishoudensGrootte/nrPersonen_rnd[uint16];
+		attribute<Classifications/huishoudgrootte> 		huishoudGrootte_klasse 	(obs)	:= classify(huishoudGrootte, Classifications/huishoudgrootte/classbreak);
 		
-		attribute<Classifications/combines/BE> 	BE 	(obs) := combine_data(Classifications/combines/BE, Bouwjaar, Eigendom);
-		attribute<Classifications/combines/WBE> WBE (obs) := combine_data(Classifications/combines/WBE, WoningType, BE);
+		attribute<Classifications/combines/BE> 	BE 	  (obs) := combine_data(Classifications/combines/BE, BouwjaarKlasse, Eigendom);
+		attribute<Classifications/combines/WBE> WBE   (obs) := combine_data(Classifications/combines/WBE, WoningType, BE);
+		attribute<Classifications/combines/WBES> WBES (obs) := combine_data(Classifications/combines/WBES, WBE, schillabel);
+
+		attribute<Classifications/combines/TNO_OH>	OH	(obs) := combine_data(Classifications/combines/TNO_OH, OppervlakteKlasseTNO, huishoudGrootte_klasse);
+		attribute<Classifications/combines/TNO_OHB>	OHB	(obs) := combine_data(Classifications/combines/TNO_OHB, OH, BouwjaarWoningTNO);
 
 		attribute<string> Vivet_populatie	(obs)	:= schillabel == Classifications/schillabel/V/n 		 ? '2'
 													:  WoningType == Classifications/WoningType/V/vrijstaand ? '1a':
 													'1b';
 		
-		container Fuctioneel
+		container Functioneel
 		{
-			//attribute<GJ_yr> RV (obs) := 
+			attribute<GJ_yr> RV 	(obs) := = replace('rjoin(WBES, Classifications/Vivet_RV_@pop@/WBES, Classifications/Vivet_RV_@pop@/vraag_m2) * Oppervlakte + rjoin(WBES, Classifications/Vivet_RV_@pop@/WBES, Classifications/Vivet_RV_@pop@/vraag_asl) * Nr_asl','@pop@',Vivet_populatie);
+			attribute<GJ_yr> KK		(obs) := rjoin(OHB, Classifications/Vivet_KK/OHB, Classifications/Vivet_KK/vraag);
+			attribute<GJ_yr> TW		(obs) := rjoin(OH, Classifications/Vivet_TW/OH, Classifications/Vivet_TW/vraag);
 
 		}
-		
-														
-		
-		//functionele vraag RV
-			// vrijstaand met label -> datatabel 1a
-			// overig met label -> datatabel 1b
-			// zonder label -> datatabel 2
-			
-		// Functionele vraag TW
-		
-		// Functionele vraag KK 
-		
 	}
-	
 }		
