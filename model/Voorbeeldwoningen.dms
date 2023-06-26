@@ -5,7 +5,7 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 container voorbeeldwoningen
 {
-	unit<uint32> vbw_data: StorageName = "%projDir%/data/voorbeeldwoningen_NTA8800.csv", StorageType = "gdal2.vect", StorageReadOnly = "True";
+	unit<uint32> vbw_data: StorageName = "%projDir%/data/voorbeeldwoningen_NTA8800_v2.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"; 
 	
 	unit<uint32> Bouwdelen_vbw_dataset:= select_with_attr_by_org_rel(Classifications/Bouwdeel,const(True,Classifications/Bouwdeel))
 	{
@@ -17,8 +17,8 @@ container voorbeeldwoningen
 	{
 		attribute<uint32>						Nr 						(vbw) 	:= vbw_data/Nr[org_rel][uint32];
 		attribute<nrAsl> 						Nr_asl					(vbw)	:= const(1[nrAsl],.);
-		attribute<uint32> 						gebouwtype_gecodeerd 	(vbw)	:= vbw_data/gebouwtype_validatietool[org_rel][uint32];
-		attribute<uint32> 						gebouwsubtype_gecodeerd (vbw)	:= vbw_data/gebouwsubtype_validatietool[org_rel][uint32];
+		attribute<uint32> 						gebouwtype_gecodeerd 	(vbw)	:= vbw_data/gebouwtype_validatietool[org_rel][uint32]; // Kan gebruikt worden wanneer sleutel codering er is.
+		attribute<uint32> 						gebouwsubtype_gecodeerd (vbw)	:= vbw_data/gebouwsubtype_validatietool[org_rel][uint32]; // Kan gebruikt worden wanneer sleutel codering er is.
 		attribute<string> 						samengevoegd_woningtype (vbw) 	:= vbw_data/samengevoegd_woningtype[org_rel];
 		attribute<Classifications/WoningType>	Woningtype				(vbw)  	:= strcount(samengevoegd_woningtype, 'vrijstaand') > 0 	  	? Classifications/WoningType/V/vrijstaand
 																				: strcount(samengevoegd_woningtype, '2 onder 1 kap') > 0  	? Classifications/WoningType/V/twee_onder_1_kap
@@ -28,10 +28,27 @@ container voorbeeldwoningen
 																				: strcount(samengevoegd_woningtype, 'rijwoning hoek') > 0 	? Classifications/WoningType/V/hoekwoning
 																				: strcount(samengevoegd_woningtype, 'rijwoning tussen') > 0 ? Classifications/WoningType/V/tussenwoning
 																				: Classifications/WoningType/V/tussenwoning; // Bovenstaande classificatie omvat alle inputwaardes, dus deze waarde maakt niet uit. 
-		attribute<Classifications/EnergieLabel> EnergieLabel 			(vbw) 	:= rlookup(vbw_data/EnergieLabel,Classifications/EnergieLabel/label)[org_rel];
+		
+		attribute<Classifications/EnergieLabel> EnergieLabel_NTA		(vbw) 	:= rlookup(vbw_data/EnergieLabel,Classifications/EnergieLabel/label)[org_rel];
+		//attribute<Classifications/EnergieLabel> EnergieLabel_NEN		(vbw) 	:= rlookup(vbw_data/NEN_label,Classifications/EnergieLabel/label)[org_rel]; // Placeholder voor wanneer NEN energielabels toegevoegd worden
+		attribute<Classifications/EnergieLabel> EnergieLabel			(vbw) 	:= EnergieLabel_NTA; // Kies welk energielabel gebruikt wordt in de berekeningen en de output
+
 		attribute<Classifications/schillabel> 	schillabel				(vbw)	:= lookup(Energielabel, Classifications/Energielabel/schillabel_rel);
-		attribute<uint16> 						BouwJaar 				(vbw)	:= vbw_data/bouwjaar[org_rel][uint16];
-		attribute<Classifications/BouwjaarWoning> BouwjaarKlasse 		(vbw)	:= classify(BouwJaar, Classifications/BouwjaarWoning/ClassBreak);
+		
+		attribute<uint16> 						BouwJaar 				(vbw)	:= vbw_data/bouwjaar[org_rel][uint16]; // ToDo: midden van bouwperiode pakken, of meest voorkomende bij > en <
+		attribute<string> 						BouwjaarKlasseData		(vbw)	:= vbw_data/Bouwjaarklasse[org_rel];
+		attribute<uint16> 						BouwjaarUitBouwjaarKlasseData		(vbw)	:= strcount(BouwjaarKlasseData, '< 1946') > 0	? 1923[uint16]
+																				: strcount(BouwjaarKlasseData, '1946 - 1964') > 0 	  		? 1950[uint16]
+																				: strcount(BouwjaarKlasseData, '< 1965') > 0 	  			? 1928[uint16]
+																				: strcount(BouwjaarKlasseData, '1965 - 1974') > 0 	  		? 1970[uint16]
+																				: strcount(BouwjaarKlasseData, '1975 - 1991') > 0 	  		? 1983[uint16]
+																				: strcount(BouwjaarKlasseData, '1992 - 2005') > 0 	  		? 1999[uint16]
+																				: strcount(BouwjaarKlasseData, '2006 - 2014') > 0 	  		? 2010[uint16]
+																				: strcount(BouwjaarKlasseData, '> 2014') > 0 	  			? 2017[uint16]
+																				: 9999[uint16]; // Bovenstaande classificatie omvat alle inputwaardes, dus deze waarde maakt niet uit. 
+		attribute<Classifications/BouwjaarWoning> BouwjaarKlasseHestia	(vbw)	:= classify(BouwjaarUitBouwjaarKlasseData, Classifications/BouwjaarWoning/ClassBreak);
+		attribute<Classifications/BouwjaarWoning> BouwjaarKlasse	(vbw)		:= BouwjaarKlasseHestia; // Kies welk soort bouwjaar gebruikt moet worden in de berekeningen en de output
+		
 		attribute<m2> 							Oppervlakte 			(vbw)	:= vbw_data/gebruiksoppervlakte[org_rel][m2];
 		attribute<bool> 						IsMeergezins 			(vbw)	:= strcount(vbw_data/gebouwtype_benamingen_[org_rel], 'meergezins') > 0;
 		attribute<RuimtelijkeData/StudieGebied/Buurt> Buurt_rel 		(vbw)	:= rlookup(const('BU00500000',.), Invoer/RuimtelijkeData/StudieGebied/Buurt/BU_CODE); // Dummywaarde.
@@ -72,7 +89,7 @@ container voorbeeldwoningen
 			: strcount(WarmTapwaterInstallatie_str, 'HR/CW') 		 > 0 ? Classifications/Installatie/V/hr
 			: Classifications/Installatie/V/hr;
 
-			attribute<uint32> 						KoudeOpwekker_gecodeerd (vbw)		:= vbw_data/koeling_opwekking_1_type_koudeopwekker[org_rel][uint32];
+			attribute<uint32> 						KoudeOpwekker_gecodeerd (vbw)		:= vbw_data/koeling_opwekking_1_type_koudeopwekker[org_rel][uint32]; // Kan gebruikt worden wanneer sleutel codering er is.
 			attribute<Classifications/installatie> 	KDb 	(vbw)	:= const(Classifications/Installatie/V/geen,..); //dummywaarde
 			attribute<Classifications/installatie> 	KDp 	(vbw)	:= const(Classifications/Installatie/V/geen,..); //dummywaarde
 			
@@ -93,10 +110,13 @@ container voorbeeldwoningen
 			: strcount(ventilatie_str, 'mechanisch') > 0 && strcount(ventilatie_str, 'wisselstroom') > 0 ? Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Mec_Wis
 			: strcount(ventilatie_str, 'mechanisch') > 0 && strcount(ventilatie_str, 'C5a') > 0 ? Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Mec_Vst_Glk_new
 			: Kengetallen/OverigeInstallaties/VT/Installatietypes/V/nat;  // https://www.joostdevree.nl/shtmls/mechanische_ventilatie.shtml voor uitleg ventilatiecodes
-
 		}
+		
+		container Gedragfactor := SpecifiekeInstellingen/RuimtelijkeVraag/Gedrag;
 
-		container Fvraag_Hestia := Templates/functionele_vraag(vbw, /Invoer/Kengetallen/Bebouwing/Woning/results , Classifications/BebouwingsSector/V/Woning ); 
+		container Fvraag_Hestia_startsituatie := Templates/functionele_vraag(vbw, /Invoer/Kengetallen/Bebouwing/Woning/results , Classifications/BebouwingsSector/V/Woning ); 
+
+		container Fvraag_Hestia := Templates/BerekenFunctioneel(vbw, vbw, id(.)); 
 
 		container Mvraag_Hestia := Templates/FunctioneelToMetervraag(vbw, False , 'Fvraag_Hestia');
 		
@@ -104,6 +124,7 @@ container voorbeeldwoningen
 
 		container Mvraag_Vivet := Templates/FunctioneelToMetervraag(vbw, False , 'Fvraag_Vivet');
 	}
+	
 	#include <%projDir%/model/voorbeeldwoningen/templates.dms>
 	
 	container outputs
@@ -114,7 +135,6 @@ container voorbeeldwoningen
 			attribute<string> 	EnergieLabel			(vbw) := lookup(vbw/EnergieLabel, Classifications/EnergieLabel/name);
 			attribute<string> 	Schillabel				(vbw) := lookup(vbw/schillabel, Classifications/schillabel/name);
 			attribute<float64>	Oppervlakte				(vbw) := vbw/Oppervlakte;
-			attribute<float64>	FitFactor				(vbw) := vbw/Fvraag_Hestia/warmteverlies_theoretisch_startjaar/Fitfactor ;
 			
 			attribute<string> 	Installatie_RVb	(vbw) := lookup(vbw/Installaties/RVb, Classifications/installatie/name);
 			attribute<string> 	Installatie_RVp (vbw) := lookup(vbw/Installaties/RVp, Classifications/installatie/name);
@@ -134,14 +154,19 @@ container voorbeeldwoningen
 			attribute<string>	IsolatieNiveau_DS	(vbw) := lookup(vbw/Bouwdelen/DS/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
 			attribute<string>	IsolatieNiveau_KR	(vbw) := lookup(vbw/Bouwdelen/KR/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
 			
-			attribute<GJ_yr> 	Fvraag_RV_Hestia 		(vbw) := vbw/fvraag_Hestia/Functioneel/RV;
-			attribute<GJ_yr> 	Fvraag_TW_Hestia 		(vbw) := vbw/fvraag_Hestia/Functioneel/TW;
-			attribute<GJ_yr> 	Fvraag_KK_Hestia 		(vbw) := vbw/fvraag_Hestia/Functioneel/KK;
-			attribute<float64>	Fitfactor_Hestia_Vivet	(vbw) := vbw/fvraag_Hestia/warmteverlies_theoretisch_startjaar/Fitfactor;
-
-			attribute<GJ_yr> 	Fvraag_RV_Vivet	(vbw) := vbw/fvraag_vivet/Functioneel/RV;
-			attribute<GJ_yr> 	Fvraag_TW_Vivet (vbw) := vbw/fvraag_vivet/Functioneel/TW;
-			attribute<GJ_yr> 	Fvraag_KK_Vivet (vbw) := vbw/fvraag_vivet/Functioneel/KK;
+			attribute<GJ_yr> 	Fvraag_RV_Hestia	 				(vbw) := vbw/fvraag_Hestia/RV;
+			attribute<GJ_yr> 	Fvraag_TW_Hestia 			(vbw) := vbw/fvraag_Hestia/TW;
+			attribute<GJ_yr> 	Fvraag_KK_Hestia 			(vbw) := vbw/fvraag_Hestia/KK;
+			
+			attribute<GJ_yr> 	Fvraag_RV_Vivet						(vbw) := vbw/fvraag_Hestia_startsituatie/Functioneel/RV; // RV in startsituatie is gefit op vivet
+			attribute<GJ_yr> 	Fvraag_RV_Vivet_meerdere_populaties	(vbw) := vbw/fvraag_vivet/RV; // wijkt af van Fvraag_RV_Vivet voor vrijstaande woningen
+			attribute<GJ_yr> 	Fvraag_TW_Vivet 			(vbw) := vbw/fvraag_vivet/TW;
+			attribute<GJ_yr> 	Fvraag_KK_Vivet 			(vbw) := vbw/fvraag_vivet/KK;
+			
+			attribute<GJ_yr> 	Fvraag_RV_Hestia_ongefit	(vbw) := vbw/fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/Theoretisch_RV;
+			attribute<GJ_yr> 	Warmtewinst					(vbw) := vbw/fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/warmtewinst/totaal;
+			attribute<float64>	Fitfactor_RV				(vbw) := vbw/fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/Fitfactor;
+			attribute<ratio> 	Lokale_praktijkfactor 		(vbw) := vbw/fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/gemeten_correctie/Verschilfactor;
 			
 			attribute<GJ_yr> 	Mvraag_gas_Hestia 							(vbw) := vbw/Mvraag_Hestia/result/gas;
 			attribute<GJ_yr> 	Mvraag_elek_Hestia 							(vbw) := vbw/Mvraag_Hestia/result/e;

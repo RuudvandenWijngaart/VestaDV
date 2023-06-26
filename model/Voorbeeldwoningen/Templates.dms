@@ -97,7 +97,7 @@ container Templates
 		attribute<GJ_yr> warmtewinst_personen         (Obs) := HuishoudensGrootte/nrPersonen * Invoer/Kengetallen/WarmteVraag/warmtewinst_personen;
 
 		//============ warmtewinst door apparaten wordt gelijkgesteld aan de vraag naar elektriciteit voor elektrische apparatuur
-		attribute<GJ_yr> warmtewinst_apparaten        (Obs) := Obs/Fvraag_Hestia/Functioneel/EA * Invoer/Kengetallen/Warmtevraag/EA_winst_nuttig;
+		attribute<GJ_yr> warmtewinst_apparaten        (Obs) := Obs/Fvraag_Hestia_startsituatie/Functioneel/EA * Invoer/Kengetallen/Warmtevraag/EA_winst_nuttig;
 
 		//============ warmtewist door zoninstralen door ramen boven (RB) en onder (RO) als functie van oppervlak bouwdeel en waarde horende bij isolatiegraad
 		attribute<GJ_yr> warmtewinst_zoninstraling_RB (Obs) := ='Obs/bouwdelen/RB/oppervlak * merge(uint8(Obs/bouwdelen/RB/IsolatieNiveau_rel), GJ_yr_m2,'+ AsItemList('Invoer/Kengetallen/Warmtevraag/Zoninstraling[Classifications/IsolatieNiveau/V/'+Classifications/IsolatieNiveau/name+']')+')', descr = "warmtewinst ramen boven";
@@ -107,6 +107,68 @@ container Templates
 		//============ totaal warmtewinsten
 		attribute<GJ_yr> Totaal (Obs) := = 'min_elem(warmtewinst_personen + warmtewinst_apparaten + warmtewinst_zoninstraling, Invoer/Kengetallen/WarmteVraag/Max_warmtewinst * ' + warmteverlies_path + ')';
 	}
+	
+	Template BerekenFunctioneel
+		{
+			unit<uint32> BOdomain;
+			unit<uint32> PrevState;
+			attribute<PrevState> PrevState_rel (BOdomain);
+
+			attribute<GJ_yr> VT (BOdomain) :=
+				  Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_E_asl[vbw/installaties/VT]
+				* PrevState/Nr_asl[PrevState_rel]
+				* PrevState/Gedragfactor/VT;
+				
+			attribute<GJ_yr> KK (BOdomain) := PrevState/Fvraag_Hestia_startsituatie/Functioneel/KK[PrevState_rel];
+			attribute<GJ_yr> EA (BOdomain) := PrevState/Fvraag_Hestia_startsituatie/Functioneel/EA[PrevState_rel];
+			attribute<GJ_yr> TW (BOdomain) := PrevState/Fvraag_Hestia_startsituatie/Functioneel/TW[PrevState_rel];
+			attribute<GJ_yr> KD (BOdomain) := PrevState/Fvraag_Hestia_startsituatie/Functioneel/KD[PrevState_rel];
+			attribute<GJ_yr> RV (BOdomain) := (RV_per_Bouwdeel_now/Totaal  + Vrv_VT) * Correction_RV - warmtewinst/totaal;
+			
+			attribute<GJ_yr> Vrv_VT (BOdomain) :=
+				  Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[vbw/installaties/VT]
+				* PrevState/Nr_asl[PrevState_rel]
+				//* PrevState/Functioneel_base/Klimaateffect[PrevState_rel]
+				* PrevState/Gedragfactor/VT
+				* PrevState/Fvraag_Hestia_startsituatie/Functioneel/Fitfactor_VT[PrevState_rel];
+
+			attribute<Kwh_yr_m2>                  Kwh_m2_RV      (BOdomain) := makedefined(((RV_per_Bouwdeel_now/Totaal + Vrv_VT) / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / PrevState/Oppervlakte[PrevState_rel],0.0[Kwh_yr_m2]);
+			attribute<Kwh_yr_m2>                  Kwh_m2_tot     (BOdomain) := makedefined(((PrevState/Fvraag_Hestia_startsituatie/Functioneel/VT[PrevState_rel]+KK+ EA / Invoer/Kengetallen/Constanten/Efficiency_EA + TW/0.72+KD*0.0+RV/1.04) / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / PrevState/Oppervlakte[PrevState_rel],0.0[Kwh_yr_m2]);//, IntegrityCheck = "Kwh_m2_tot < 1000[Kwh_yr_m2]";
+			attribute<Classifications/Schillabel> Schillabel_rel (BOdomain) := classify(Kwh_m2_tot, classifications/Schillabel/classbreak);
+			attribute<ratio>                      Correction_RV  (BOdomain) := 1.0[ratio] + Invoer/Kengetallen/Constanten/BinnenTemp_A * Invoer/Kengetallen/Constanten/BinnenTemp_B ^ Kwh_m2_RV;
+
+			container IsolatieNiveau_rel := for_each_nedv(
+				classifications/Bouwdeel/name,
+				replace(
+					'/Invoer/voorbeeldwoningen/vbw/Bouwdelen/@BN@/IsolatieNiveau_rel'
+				,	'@BN@', classifications/Bouwdeel/name),
+				BOdomain,
+				Classifications/IsolatieNiveau);
+				
+			container BouwdeelIsolatie_rel := for_each_nedv(
+				classifications/Bouwdeel/name,
+				replace(
+					'combine_data(Classifications/BouwdeelIsolatie, classifications/Bouwdeel/V/@BN@, IsolatieNiveau_rel/@BN@)'
+				,	'@BN@', classifications/Bouwdeel/name),
+				BOdomain,
+				Classifications/BouwdeelIsolatie);
+
+			attribute<ratio> R_RV (Classifications/BouwdeelIsolatie):= Classifications/BouwdeelIsolatie/R_RV / 100[percent];
+			
+			container RV_per_Bouwdeel_now := for_each_nedv(
+				classifications/Bouwdeel/name,
+				replace(
+					'/Invoer/voorbeeldwoningen/vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/RV_N0_per_Bouwdeel/@BN@[PrevState_rel] * makedefined(1.0[ratio] - R_RV[BouwdeelIsolatie_rel/@BN@], 1.0[ratio])'
+				,	'@BN@', classifications/Bouwdeel/name),
+				BOdomain,
+				GJ_yr)
+			{
+				attribute<GJ_yr> Totaal (BOdomain):= ='add('+AsItemList(Classifications/bouwdeel/name)+')';
+			}
+
+			container warmtewinst := BerekenWarmtewinst(BOdomain, '((RV_per_Bouwdeel_now/totaal + Vrv_VT) * Correction_RV)');
+		}
+	
 	
 	template functionele_vraag
 	{
@@ -139,6 +201,7 @@ container Templates
 				attribute<Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/W_E>    W_E_rel        (BebouwingsObjectSrc) := combine_data(Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/W_E, WoningType, Eigendom);
 				attribute<Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/WK_W_E> WK_W_E_rel     (BebouwingsObjectSrc) := combine_data(Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/WK_W_E, WK_rel, W_E_rel);
 				attribute<ratio>                                                         Verschilfactor (BebouwingsObjectSrc) := Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/WK_W_E/Verschilfactor[WK_W_E_rel];
+				//attribute<ratio>                                                         Verschilfactor (BebouwingsObjectSrc) := const(1[ratio], BebouwingsObjectSrc;
 			}
 
 			//========= warmteverlies ventilatie
@@ -271,19 +334,19 @@ container Templates
 			attribute<GJ_yr> Oj_TW     (VraagBO) := ='
 			   Installatietype_rel == Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/zonb
 			|| Installatietype_rel == Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/V/optimaal_zonb ? 
-			   0.5 * VraagBO/'+FunctioneelPad+'/Functioneel/TW : 0.0[GJ_yr]';
+			   0.5 * VraagBO/'+FunctioneelPad+'/TW : 0.0[GJ_yr]';
 
 			attribute<m2>    area      (VraagBO) := makedefined(Oj_TW / Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Opbr_opp_tw[Installatietype_rel], 0.0[m2]);
 		}
 		
 		container Functioneel_per_product
 		{
-			attribute<float64> RVb (VraagBO) := ='VraagBO/'+FunctioneelPad+'/Functioneel/RV *        Classifications/Performance/P_Vol[SPF/PerformancePerProduct/RVb] ';
-			attribute<float64> RVp (VraagBO) := ='VraagBO/'+FunctioneelPad+'/Functioneel/RV * (1.0 - Classifications/Performance/P_Vol[SPF/PerformancePerProduct/RVb])';
-			attribute<float64> TWb (VraagBO) := ='(VraagBO/'+FunctioneelPad+'/Functioneel/TW - ZonB/Oj_TW) *        Classifications/Performance/P_Vol[SPF/PerformancePerProduct/TWb] ';
-			attribute<float64> TWp (VraagBO) := ='(VraagBO/'+FunctioneelPad+'/Functioneel/TW - ZonB/Oj_TW) * (1.0 - Classifications/Performance/P_Vol[SPF/PerformancePerProduct/TWb])';
-			attribute<float64> KDb (VraagBO) := ='VraagBO/'+FunctioneelPad+'/Functioneel/KD *        Classifications/Performance/P_Vol[SPF/PerformancePerProduct/KDb] ';
-			attribute<float64> KDp (VraagBO) := ='VraagBO/'+FunctioneelPad+'/Functioneel/KD * (1.0 - Classifications/Performance/P_Vol[SPF/PerformancePerProduct/KDb])';
+			attribute<float64> RVb (VraagBO) := ='VraagBO/'+FunctioneelPad+'/RV *        Classifications/Performance/P_Vol[SPF/PerformancePerProduct/RVb] ';
+			attribute<float64> RVp (VraagBO) := ='VraagBO/'+FunctioneelPad+'/RV * (1.0 - Classifications/Performance/P_Vol[SPF/PerformancePerProduct/RVb])';
+			attribute<float64> TWb (VraagBO) := ='(VraagBO/'+FunctioneelPad+'/TW - ZonB/Oj_TW) *        Classifications/Performance/P_Vol[SPF/PerformancePerProduct/TWb] ';
+			attribute<float64> TWp (VraagBO) := ='(VraagBO/'+FunctioneelPad+'/TW - ZonB/Oj_TW) * (1.0 - Classifications/Performance/P_Vol[SPF/PerformancePerProduct/TWb])';
+			attribute<float64> KDb (VraagBO) := ='VraagBO/'+FunctioneelPad+'/KD *        Classifications/Performance/P_Vol[SPF/PerformancePerProduct/KDb] ';
+			attribute<float64> KDp (VraagBO) := ='VraagBO/'+FunctioneelPad+'/KD * (1.0 - Classifications/Performance/P_Vol[SPF/PerformancePerProduct/KDb])';
 		}
 		
 		container metervraag_per_product := for_each_nedv(Classifications/Product/name
@@ -319,8 +382,8 @@ container Templates
 				
 			attribute<Classifications/BemeterdeGebouwInput> BemeterdeGebouwInput_rel (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/BemeterdeGebouwInput_rel [Installatietype_rel];
 			attribute<ratio> SPF     (VraagBO) := Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/SPF[Installatietype_rel];
-			attribute<GJ_yr> Vj_elek (VraagBO) := ='float64(BemeterdeGebouwInput_rel == Classifications/BemeterdeGebouwInput/V/e)  * (VraagBO/'+FunctioneelPad+'/Functioneel/KK / SPF)';
-			attribute<GJ_yr> Vj_gas  (VraagBO) := ='float64(BemeterdeGebouwInput_rel ==Classifications/BemeterdeGebouwInput/V/Gas) * (VraagBO/'+FunctioneelPad+'/Functioneel/KK / SPF)';
+			attribute<GJ_yr> Vj_elek (VraagBO) := ='float64(BemeterdeGebouwInput_rel == Classifications/BemeterdeGebouwInput/V/e)  * (VraagBO/'+FunctioneelPad+'/KK / SPF)';
+			attribute<GJ_yr> Vj_gas  (VraagBO) := ='float64(BemeterdeGebouwInput_rel ==Classifications/BemeterdeGebouwInput/V/Gas) * (VraagBO/'+FunctioneelPad+'/KK / SPF)';
 		}
 
 		container Omgeving := for_each_nedv(
@@ -348,12 +411,12 @@ container Templates
 			}
 			container CapaciteitPerProduct 
 			{				
-				attribute<kW> RVb (VraagBO) :== 'VraagBO/'+FunctioneelPad+'/AansluitCapaciteit/RV * Classifications/Performance/P_cap[SPF/PerformancePerProduct/RVb]';
-				attribute<kW> TWb (VraagBO) :== 'VraagBO/'+FunctioneelPad+'/AansluitCapaciteit/TW * Classifications/Performance/P_cap[SPF/PerformancePerProduct/TWb]';
-				attribute<kW> KDb (VraagBO) :== 'VraagBO/'+FunctioneelPad+'/AansluitCapaciteit/KD * Classifications/Performance/P_cap[SPF/PerformancePerProduct/KDb]';
-				attribute<kW> RVp (VraagBO) :== 'VraagBO/'+FunctioneelPad+'/AansluitCapaciteit/RV - RVb';
-				attribute<kW> TWp (VraagBO) :== 'VraagBO/'+FunctioneelPad+'/AansluitCapaciteit/TW - TWb';
-				attribute<kW> KDp (VraagBO) :== 'VraagBO/'+FunctioneelPad+'/AansluitCapaciteit/KD - KDb';
+				attribute<kW> RVb (VraagBO) :=VraagBO/Fvraag_hestia_startsituatie/AansluitCapaciteit/RV * Classifications/Performance/P_cap[SPF/PerformancePerProduct/RVb];
+				attribute<kW> TWb (VraagBO) :=VraagBO/Fvraag_hestia_startsituatie/AansluitCapaciteit/TW * Classifications/Performance/P_cap[SPF/PerformancePerProduct/TWb];
+				attribute<kW> KDb (VraagBO) :=VraagBO/Fvraag_hestia_startsituatie/AansluitCapaciteit/KD * Classifications/Performance/P_cap[SPF/PerformancePerProduct/KDb];
+				attribute<kW> RVp (VraagBO) :=VraagBO/Fvraag_hestia_startsituatie/AansluitCapaciteit/RV - RVb;
+				attribute<kW> TWp (VraagBO) :=VraagBO/Fvraag_hestia_startsituatie/AansluitCapaciteit/TW - TWb;
+				attribute<kW> KDp (VraagBO) :=VraagBO/Fvraag_hestia_startsituatie/AansluitCapaciteit/KD - KDb;
 			}
 			container CapaciteitPerInstallatie := for_each_nedv(Classifications/Installatie/name
 			, replace('max_elem('
@@ -384,7 +447,7 @@ container Templates
 			
 			container ventilatie
 			{
-				attribute<GJ_yr> Vj_elek (VraagBO) := ='VraagBO/'+FunctioneelPad+'/Functioneel/VT';
+				attribute<GJ_yr> Vj_elek (VraagBO) := ='VraagBO/'+FunctioneelPad+'/VT';
 			}
 			
 			container ZonPV
@@ -408,7 +471,7 @@ container Templates
 		
 		container result := metervraag_per_input
 		{
-			attribute<GJ_yr> e     (VraagBO) := ='metervraag_per_input/e + VraagBO/'+FunctioneelPad+'/Functioneel/EA + eEffect/Vj_elek + koken/Vj_elek';
+			attribute<GJ_yr> e     (VraagBO) := ='metervraag_per_input/e + VraagBO/'+FunctioneelPad+'/EA + eEffect/Vj_elek + koken/Vj_elek';
 			attribute<GJ_yr> E_zonder_ventilatie_EA     (VraagBO) := ='metervraag_per_input/e + eEffect/Vj_elek_zonder_ventilatie + koken/Vj_elek';
 			attribute<GJ_yr> gas   (VraagBO) := metervraag_per_input/gas + Koken/Vj_gas    ;
 			attribute<GJ_yr> Total (VraagBO) := ='add('+AsItemList(Classifications/BemeterdeGebouwInput/name)+')';
@@ -432,7 +495,7 @@ container Templates
 		attribute<Classifications/OppervlakteKlasseTNO>	OppervlakteKlasseTNO	(obs)	:= classify(Oppervlakte[uint16], Classifications/OppervlakteKlasseTNO/Classbreak);
 		attribute<Classifications/BouwjaarWoningTNO>	BouwjaarWoningTNO		(obs)	:= classify(Bouwjaar, Classifications/BouwjaarWoningTNO/Classbreak);
 		attribute<Classifications/BouwjaarWoning> 		BouwjaarKlasse 			(obs)	:= obs/BouwjaarKlasse;
-		attribute<uint16> 								huishoudGrootte 		(obs)	:= Invoer/voorbeeldwoningen/vbw/Fvraag_Hestia/HuishoudensGrootte/nrPersonen_rnd[uint16];
+		attribute<uint16> 								huishoudGrootte 		(obs)	:= Invoer/voorbeeldwoningen/vbw/Fvraag_Hestia_startsituatie/HuishoudensGrootte/nrPersonen_rnd[uint16];
 		attribute<Classifications/huishoudgrootte> 		huishoudGrootte_klasse 	(obs)	:= classify(huishoudGrootte, Classifications/huishoudgrootte/classbreak);
 		
 		attribute<Classifications/combines/BE> 	BE 	  (obs) := combine_data(Classifications/combines/BE, BouwjaarKlasse, Eigendom);
@@ -456,14 +519,13 @@ container Templates
 			attribute<kW> KD (obs) :=  = 
 					'IsMeergezins ? Oppervlakte * Vermogens/ASW_K_wl_opp + Nr_asl * Vermogens/ASW_K_wl_asl : Oppervlakte * Vermogens/ASW_K_wh_opp + Nr_asl * Vermogens/ASW_K_wh_asl';
 		}
-		container Functioneel
-		{
-			attribute<GJ_yr> RV 	(obs) := = replace('rjoin(WBES, Classifications/Vivet_RV_@pop@/WBES, Classifications/Vivet_RV_@pop@/vraag_m2) * Oppervlakte + rjoin(WBES, Classifications/Vivet_RV_@pop@/WBES, Classifications/Vivet_RV_@pop@/vraag_asl) * Nr_asl','@pop@',Vivet_populatie);
-			attribute<GJ_yr> KK		(obs) := rjoin(OHB, Classifications/Vivet_KK/OHB, Classifications/Vivet_KK/vraag);
-			attribute<GJ_yr> TW		(obs) := rjoin(OH, Classifications/Vivet_TW/OH, Classifications/Vivet_TW/vraag);
-			attribute<GJ_yr> KD		(obs) := const(0[GJ_yr], obs);
-			attribute<GJ_yr> VT		(obs) := const(0[GJ_yr], obs);
-			attribute<GJ_yr> EA		(obs) := const(0[GJ_yr], obs);
-		}
+	
+		attribute<GJ_yr> RV 	(obs) := = replace('rjoin(WBES, Classifications/Vivet_RV_@pop@/WBES, Classifications/Vivet_RV_@pop@/vraag_m2) * Oppervlakte + rjoin(WBES, Classifications/Vivet_RV_@pop@/WBES, Classifications/Vivet_RV_@pop@/vraag_asl) * Nr_asl','@pop@',Vivet_populatie);
+		attribute<GJ_yr> KK		(obs) := rjoin(OHB, Classifications/Vivet_KK/OHB, Classifications/Vivet_KK/vraag);
+		attribute<GJ_yr> TW		(obs) := rjoin(OH, Classifications/Vivet_TW/OH, Classifications/Vivet_TW/vraag);
+		attribute<GJ_yr> KD		(obs) := const(0[GJ_yr], obs);
+		attribute<GJ_yr> VT		(obs) := const(0[GJ_yr], obs);
+		attribute<GJ_yr> EA		(obs) := const(0[GJ_yr], obs);
+		
 	}
 }
