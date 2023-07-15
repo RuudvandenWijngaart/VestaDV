@@ -13,7 +13,7 @@ container HestiaRun
 
 	//====== Invoer: over welke periode moet er worden gerekend?
 	parameter<uint16> eerste_jaar := 2020[uint16], Descr = "Eerste zichtjaar";
-	parameter<uint8>  aantal_jaar := 21[uint8]   , Descr = "Aantal zichtjaren";
+	parameter<uint8>  aantal_jaar := 11[uint8]   , Descr = "Aantal zichtjaren";
 
 	//====== Opbouw lijst van zichtjaren en rekenstappen
 	unit<uint8> all_rekenstap: nrofrows = 51, IsHidden = "True";
@@ -92,7 +92,7 @@ container HestiaRun
 	#include <%projDir%/model/Resultaten.dms>
 	#include <%projDir%/model/ConfigSettings.dms>
 	#include <%projDir%/model/ExportSettings.dms>
-	unit<uint8> Tellingen := select_orgrel(ID(classifications/zichtjaar) < 51b) // voor telling testen niet altijd alle jaren nodig
+	unit<uint8> Tellingen := select_orgrel(ID(classifications/zichtjaar) < 41b) // voor telling testen niet altijd alle jaren nodig
 	{
 		attribute<string> name := org_rel->name;
 		attribute<uint32> BO                    := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/BO')+')';
@@ -115,6 +115,31 @@ container HestiaRun
 		
 		attribute<uint32> A_Zonder_xIO          := ='ActieveWoning        - union_data(., '+AsItemList('sum_uint32(pcount(/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/xInvesteringsOptie/ActieveWoning_rel )>0)')+')';
 		attribute<uint32> AxIO_Zonder_GO        := ='A_xInvesteringsOptie - union_data(., '+AsItemList('sum_uint32(pcount(/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/GeschikteOptie/xInvesteringsOptie_rel)>0)')+')';
+
+		container Subsidies
+		{
+			container SubsidieBudgetten := for_each_nedv(
+				  Tellingen/name
+				, 'TussenResultaten/'+Tellingen/name+'/AllocatieResultaten/Subsidiebudgetten/Maximaal_budget'
+				, /Invoer/Beleid/Subsidie/SubsidieBudget 
+				, units/Eur );
+			container SubsidieAanvraag := for_each_nedv(
+				  Tellingen/name
+				, 'TussenResultaten/'+Tellingen/name+'/AllocatieResultaten/Subsidiebudgetten/Aanvraag_per_budget'
+				, /Invoer/Beleid/Subsidie/SubsidieBudget 
+				, units/Eur );
+			container SubsidieResterend := for_each_nedv(
+				  Tellingen/name
+				, 'TussenResultaten/'+Tellingen/name+'/AllocatieResultaten/Subsidiebudgetten/Resterend_budget'
+				, /Invoer/Beleid/Subsidie/SubsidieBudget 
+				, units/Eur );
+			container SubsidieFactor := for_each_nedv(
+				  Tellingen/name
+				, 'SubsidieBudgetten/'+Tellingen/name+'/ SubsidieAanvraag/'+Tellingen/name
+				, /Invoer/Beleid/Subsidie/SubsidieBudget 
+				, units/ratio );
+		}
+
 
 		container SELPETellingen
 		{
