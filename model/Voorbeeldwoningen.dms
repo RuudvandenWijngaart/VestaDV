@@ -30,11 +30,14 @@ container voorbeeldwoningen
 																				: Classifications/WoningType/V/tussenwoning; // Bovenstaande classificatie omvat alle inputwaardes, dus deze waarde maakt niet uit. 
 		
 		attribute<Classifications/EnergieLabel> EnergieLabel_NTA		(vbw) 	:= rlookup(vbw_data/EnergieLabel,Classifications/EnergieLabel/label)[org_rel];
+		attribute<Classifications/schillabel> 	schillabel_NTA			(vbw)	:= lookup(EnergieLabel_NTA, Classifications/Energielabel/schillabel_rel); // Op basis van energielabel, want verondersteld dat alle vbw een Hr-ketel hebben
 		//attribute<Classifications/EnergieLabel> EnergieLabel_NEN		(vbw) 	:= rlookup(vbw_data/NEN_label,Classifications/EnergieLabel/label)[org_rel]; // Placeholder voor wanneer NEN energielabels toegevoegd worden
-		attribute<Classifications/EnergieLabel> EnergieLabel			(vbw) 	:= EnergieLabel_NTA; // Kies welk energielabel gebruikt wordt in de berekeningen en de output
-
-		attribute<Classifications/schillabel> 	schillabel				(vbw)	:= lookup(Energielabel, Classifications/Energielabel/schillabel_rel); // Op basis van energielabel, want verondersteld dat alle vbw een Hr-ketel hebben
+		//attribute<Classifications/schillabel> 	Schillabel_NEN			(vbw)	:= lookup(EnergieLabel_NEN, Classifications/Energielabel/schillabel_rel); // Op basis van energielabel, want verondersteld dat alle vbw een Hr-ketel hebben
 		
+		attribute<Classifications/EnergieLabel> EnergieLabel			(vbw) 	:= EnergieLabel_NTA; // Kies welk energielabel gebruikt wordt in de berekeningen en de output
+		attribute<Classifications/schillabel> 	schillabel				(vbw)	:= lookup(EnergieLabel, Classifications/Energielabel/schillabel_rel); // Op basis van energielabel, want verondersteld dat alle vbw een Hr-ketel hebben
+
+
 		attribute<uint16> 						BouwJaar 				(vbw)	:= vbw_data/bouwjaar[org_rel][uint16];
 		attribute<string> 						BouwjaarKlasseData		(vbw)	:= vbw_data/Bouwjaarklasse[org_rel];
 		attribute<uint16> 						BouwjaarUitBouwjaarKlasseData		(vbw)	:= strcount(BouwjaarKlasseData, '< 1946') > 0	? 1923[uint16]
@@ -111,6 +114,8 @@ container voorbeeldwoningen
 			: Kengetallen/OverigeInstallaties/VT/Installatietypes/V/nat;  // https://www.joostdevree.nl/shtmls/mechanische_ventilatie.shtml voor uitleg ventilatiecodes
 		}
 		
+		attribute<vbw> vbw_rel (vbw) := id(.), ishidden = "True";
+
 		container Gedragfactor := SpecifiekeInstellingen/RuimtelijkeVraag/Gedrag;
 
 		container Fvraag_Hestia_startsituatie := Templates/functionele_vraag(vbw, /Invoer/Kengetallen/Bebouwing/Woning/results , Classifications/BebouwingsSector/V/Woning ); 
@@ -119,9 +124,11 @@ container voorbeeldwoningen
 
 		container Mvraag_Hestia := Templates/FunctioneelToMetervraag(vbw, False , 'Fvraag_Hestia');
 		
-		container Fvraag_Vivet := Templates/fvraag_VIVET(vbw);
+		container Fvraag_Vivet := Templates/functionelevraag_VIVET(vbw);
 
 		container Mvraag_Vivet := Templates/FunctioneelToMetervraag(vbw, False , 'Fvraag_Vivet');
+		
+		container Elabels := Templates/NTA8800(vbw);	
 	}
 	
 	#include <%projDir%/model/voorbeeldwoningen/templates.dms>
@@ -132,7 +139,9 @@ container voorbeeldwoningen
 			attribute<string> 	WoningType 				(vbw) := lookup(vbw/WoningType,Classifications/WoningType/name);
 			attribute<uint16> 	BouwJaar				(vbw) := vbw/BouwJaar;
 			attribute<string> 	EnergieLabel			(vbw) := lookup(vbw/EnergieLabel, Classifications/EnergieLabel/name);
-			attribute<string> 	Schillabel				(vbw) := lookup(vbw/schillabel, Classifications/schillabel/name);
+			attribute<string> 	Schillabel_NTA			(vbw) := lookup(vbw/schillabel_NTA, Classifications/schillabel/name);
+			//attribute<string> 	Schillabel_NEN			(vbw) := lookup(vbw/schillabel_NEN, Classifications/schillabel/name);
+			attribute<string> 	Schillabel_Hestia		(vbw) := lookup(vbw/Elabels/Energielabel_rel, Classifications/schillabel/name);
 			attribute<float64>	Oppervlakte				(vbw) := vbw/Oppervlakte;
 			
 			attribute<string> 	Installatie_RVb	(vbw) := lookup(vbw/Installaties/RVb, Classifications/installatie/name);

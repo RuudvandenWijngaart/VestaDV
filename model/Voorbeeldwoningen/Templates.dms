@@ -479,7 +479,7 @@ container Templates
 		}
 	}
 	
-	Template fvraag_VIVET
+	Template functionelevraag_VIVET
 	{
 		//begin case parameters
 		unit<uint32> Obs;
@@ -513,7 +513,7 @@ container Templates
 		{
 			container Vermogens := Invoer/Kengetallen/Vermogens ( /Tussenresultaten/Startjaar/Schuiven/EfficiencySchuif ) ;
 			attribute<nrAsl> Nr_asl (obs) := obs/Nr_asl;
-			attribute<kW> RV (obs) := functioneel/RV * 0.25[kW_GJ_yr];
+			attribute<kW> RV (obs) := Fvraag_Vivet/RV  * 0.25[kW_GJ_yr];
 			attribute<kW> TW (obs) :=  = 
 					'IsMeergezins ? Oppervlakte * Vermogens/ASW_TWmt_wl_opp + Nr_asl * Vermogens/ASW_TWmt_wl_asl : Oppervlakte * Vermogens/ASW_TWmt_wh_opp + Nr_asl * Vermogens/ASW_TWmt_wh_asl';
 			attribute<kW> KD (obs) :=  = 
@@ -528,4 +528,68 @@ container Templates
 		attribute<GJ_yr> EA		(obs) := const(0[GJ_yr], obs);
 		
 	}
+
+	Template NTA8800
+	{
+		//begin parameters
+		unit<uint32> ObjectDomain;
+		//end parameters
+
+		parameter<Celsius> DT_SetPointTemp_def := 18[Celsius] - 6[Celsius], Source = "Energiebesparingsmethode TNO v3 binnentemperatuur";
+		parameter<Celsius> DT_SetPointTemp_NTA := 20[Celsius] - 6[Celsius], Source = "NTA8800 Tabel 7.11 woonfuncties";
+
+		parameter<ratio>   SetPointTemp_correctie := DT_SetPointTemp_NTA / DT_SetPointTemp_def;
+
+		attribute<ratio> Emissiefactor (Classifications/BemeterdeGebouwInput) : [
+			  1.450	//elek
+			, 1.000	//gas
+			, 0.000	//H2
+			, 0.000	//biomass
+			, 1.000	//olie
+			, 0.000	//pellets
+			], Source = "NTA8800 2020+A1 5.5.5 Tabel 5.2";
+		parameter<ratio> Emissiefactor_warmte : [0.9];
+
+		//========= warmteverlies per bouwdeel als functie van oppervlak van bouwdeel en waarde horende bij isolatiegraad
+		container warmteverlies := for_each_nedv(
+			Classifications/Bouwdeel/name
+			,replace('ObjectDomain/bouwdelen/@BD@/oppervlak * merge(uint8(ObjectDomain/bouwdelen/@BD@/IsolatieNiveau_rel), GJ_yr_m2,' + AsItemList('Invoer/Kengetallen/WarmteVraag/Vrv_opp_'+Classifications/IsolatieNiveau/name+'[Classifications/Bouwdeel/V/@BD@]')+')','@BD@',Classifications/Bouwdeel/name)
+			,ObjectDomain
+			,GJ_yr)
+	
+				
+		{
+
+			attribute<GJ_yr> Vrv_VT (ObjectDomain) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[Installaties/VT] * Nr_asl, descr = "warmteverlies ventilatie vast per aansluiting";
+			attribute<GJ_yr> Totaal (ObjectDomain) := ='SetPointTemp_correctie * (add('+AsItemList(Classifications/Bouwdeel/name)+') + Vrv_VT)';
+		}
+
+		container warmtewinst        := BerekenWarmtewinst(ObjectDomain, 'warmteverlies/totaal');
+		container HuishoudensGrootte :=	HuishoudensGrootteSchatting(ObjectDomain);
+		container TWprofiel          := TWprofiel_selectie(ObjectDomain);
+		container Func2meter_NTA     := FunctioneelToMetervraag(Obs, false,'Elabels/Obs/Functioneel');
+
+		unit<uint32> Obs := ObjectDomain
+		{
+			container Functioneel := ObjectDomain/Fvraag_Hestia
+			{
+				attribute<gj_yr> RV (ObjectDomain) := warmteverlies/Totaal - warmtewinst/Totaal;
+				attribute<gj_yr> TW (ObjectDomain) := ((Mvraag_Hestia/metervraag_per_product/TWb + Mvraag_Hestia/metervraag_per_product/TWp) / SpecifiekeInstellingen/RuimtelijkeVraag/Gedrag/TW) * Invoer/Kengetallen/Bebouwing/Woning/TWprofiel/NTA_correctiefactor[TWprofiel/TWprofiel_rel];
+				attribute<gj_yr> KD (ObjectDomain) := (Mvraag_Hestia/metervraag_per_product/KDb + Mvraag_Hestia/metervraag_per_product/KDp) / SpecifiekeInstellingen/RuimtelijkeVraag/Gedrag/KD / ( 1.0 + 3.66 );
+				attribute<gj_yr> EA (ObjectDomain) := Mvraag_Hestia/eEffect/Vj_elek + ObjectDomain/Fvraag_Hestia/EA / Invoer/Kengetallen/Constanten/Efficiency_EA / SpecifiekeInstellingen/RuimtelijkeVraag/Gedrag/EA;
+			}
+		}
+		container Primair_kWh := for_each_nedv(
+			Classifications/BemeterdeGebouwInput/name
+			, 'Func2meter_NTA/result/'+Classifications/BemeterdeGebouwInput/name+' * 277.78 [kWh / GJ] * Emissiefactor[Classifications/BemeterdeGebouwInput/V/'+Classifications/BemeterdeGebouwInput/name+']'
+			, ObjectDomain
+			, kWh_yr
+			)
+		{
+			attribute<kWh_yr>    Warmte (ObjectDomain) := const(0[kWh_yr], obs); 			// op 0 gezet want aanname is gasketels
+			attribute<kWh_yr>    Total  (ObjectDomain) := ='add('+AsItemList(Classifications/BemeterdeGebouwInput/name)+', Warmte )';
+			attribute<kwh_yr_m2> Kwh_m2 (ObjectDomain) := vbw/oppervlakte[ObjectDomain/vbw_rel] == 0[m2] ? 0.0[kwh_yr_m2] : Total / vbw/oppervlakte[ObjectDomain/vbw_rel];
+		}
+		attribute<Classifications/Schillabel> Energielabel_rel (ObjectDomain) := Primair_kWh/Kwh_m2 <= 0.0[kwh_yr_m2] ? Classifications/Schillabel/V/A : classify(Primair_kWh/Kwh_m2, classifications/Schillabel/classbreak);
+		}
 }
