@@ -556,7 +556,8 @@ template WarmtenetTempl
 		container LastIter := ='Iterations/'+last(allocIter/name);
 		
 		attribute<m>                  best_augmentation      (WarmteBronnen/bron) := LastIter/currAugmentation                                                                                , Descr = "verwijzing naar iteratie met beste uitkomst, wordt verder gebruikt";
-		attribute<Warmtebronnen/bron> best_bron_rel          (ContributiePand)    := lastIter/dest_bron_rel                                                                                   , Descr = "bron waarbij een pand is ingedeeld";
+		attribute<Warmtebronnen/bron> best_bron_rel          (ContributiePand)    := lastIter/dest_bron_rel     , Descr = "bron waarbij een pand is ingedeeld";
+		attribute<WarmteBronnen/bron> Best_bron_rel_pand     (AllCandidate/StudieGebiedPand)   := modus(best_bron_rel, ContributiePand/SGP_rel);
 		attribute<uint32>             SGP_count              (WarmteBronnen/bron) := count(best_bron_rel, Best_bron_rel)                                                                      , Descr = "aantal panden geselecteerd per bron";
 		attribute<kW>                 NodeDemand             (Vertex)             := MakeDefined((ContributiePand/P_wd      * Float64(best_bron_rel!=0))[invert(Vertex/Per_pand)], 0[kW])     , Descr = "Vermogenvraag van aangesloten pand";
 		attribute<Celsius>            NodeDT                 (Vertex)             := MakeDefined((ContributiePand/DT        * Float64(best_bron_rel!=0))[invert(Vertex/Per_pand)], 0[Celsius]), Descr = "Verchil aanlever/retour temp aangesloten pand";
@@ -570,6 +571,13 @@ template WarmtenetTempl
 		container edge_cost_calc := AllCandidate/PartialContributie/LeidingKosten_T(Edge, edge_flow, edge_DT);
 		
 		attribute<EUR> edge_cost    (Edge)               := edge_cost_calc/Ki * Edge/dist;
+
+		unit<uint32> edge_cost_subset := subset(edge_cost > 0[eur])
+		{
+			attribute</Geography/rdc_meter > geometry (arc) := edge/geometry[nr_orgentity];
+			attribute<kw> Edge_flow_subset := edge_flow[nr_orgentity];
+		}
+
 		attribute<EUR> bron_Ki_buis (WarmteBronnen/bron) := sum(edge_cost, Vertex_bron_rel[Edge/From]);
 }	
 	// Prospects: potentiele businesscases voor warmtenetten
@@ -839,6 +847,8 @@ template WarmtenetTempl
 		}
 
 		attribute<bool>   Afweging       := =Aannames/Afweging_curve ? 'Curve_Impl/Afweging' : 'Afweging_eco';
+
+		attribute<bool>   Afweging_pand (AllCandidate/StudieGebiedPand) := any(Afweging, Prospect/Afnemer/StudiegebiedPand_rel);
 		
 	}
 
@@ -879,6 +889,11 @@ template WarmtenetTempl
 				container edge_cost_calc := AllCandidate/PartialContributie/LeidingKosten_T(Edge, edge_flow, edge_DT);
 				
 				attribute<EUR> edge_cost    (Edge)               := edge_cost_calc/Ki * Edge/dist;
+				unit<uint32> edge_cost_subset := subset(edge_cost > 0[eur])
+				{
+					attribute</Geography/rdc_meter > geometry (arc) := edge/geometry[nr_orgentity];
+					attribute<kw> Edge_flow_subset := edge_flow[nr_orgentity];
+				}
 				attribute<EUR> bron_Ki_buis (WarmteBronnen/bron) := sum(edge_cost, Vertex_bron_rel[Edge/From]);
 			}
 
@@ -967,6 +982,7 @@ template WarmtenetTempl
 		attribute<rdc_meter>        Geometry      := AllCandidate/geometry[nr_orgentity];
 		attribute<PlanRegio>        PlanRegio_rel := AllCandidate/PlanRegio_rel[nr_orgentity];
 		attribute<Prospect/Afnemer> Afnemer_rel   := rlookup(BO_rel, Prospect/Afnemer/BO_rel);
+		attribute<AllCandidate/StudieGebiedPand> StudiegebiedPand_rel := AllCandidate/StudieGebiedPand_rel[nr_orgentity];
 	}
 	
 	//====== berekening van jaarlijke vraag en verlies energiedragers -> naar rapportage
@@ -1015,6 +1031,8 @@ template WarmtenetTempl
 	attribute<bool>               Connect  (Candidate) := AfnemersAfweging/Afweging[Candidate/afnemer_rel] && InvesteringsBesluit/FID[Prospect/afnemer/Prospect_rel[Candidate/Afnemer_rel]];
 	attribute<WarmteBronnen/bron> Bron_rel (Candidate) := Connect ? Prospect/afnemer/Bron_rel[Candidate/afnemer_rel] : (0/0)[WarmteBronnen/bron];
 
+
+	attribute<bool>   connect_pand (AllCandidate/StudieGebiedPand) := any(connect, Candidate/StudiegebiedPand_rel);
 
 	//====== resultaten van warmteoptie voor verder gebruik
 	unit<uint32> PlanRegio := /Invoer/RuimtelijkeData/StudieGebied/Buurt;
