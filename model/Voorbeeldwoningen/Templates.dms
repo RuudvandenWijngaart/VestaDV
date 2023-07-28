@@ -125,18 +125,22 @@ container Templates
 			attribute<GJ_yr> TW (BOdomain) := PrevState/Fvraag_Hestia_startsituatie/Functioneel/TW[PrevState_rel];
 			attribute<GJ_yr> KD (BOdomain) := PrevState/Fvraag_Hestia_startsituatie/Functioneel/KD[PrevState_rel];
 			attribute<GJ_yr> RV (BOdomain) := (RV_per_Bouwdeel_now/Totaal  + Vrv_VT) * Correction_RV - warmtewinst/totaal;
+			attribute<GJ_yr> RV_gefit (BOdomain) := (RV_per_Bouwdeel_now/Totaal  + Vrv_VT)- warmtewinst/totaal;
 			
 			attribute<GJ_yr> Vrv_VT (BOdomain) :=
 				  Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[vbw/installaties/VT]
 				* PrevState/Nr_asl[PrevState_rel]
 				//* PrevState/Functioneel_base/Klimaateffect[PrevState_rel]
-				* PrevState/Gedragfactor/VT
+				//* PrevState/Gedragfactor/VT
 				* PrevState/Fvraag_Hestia_startsituatie/Functioneel/Fitfactor_VT[PrevState_rel];
 
 			attribute<Kwh_yr_m2>                  Kwh_m2_RV      (BOdomain) := makedefined(((RV_per_Bouwdeel_now/Totaal + Vrv_VT) / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / PrevState/Oppervlakte[PrevState_rel],0.0[Kwh_yr_m2]);
-			attribute<Kwh_yr_m2>                  Kwh_m2_tot     (BOdomain) := makedefined(((PrevState/Fvraag_Hestia_startsituatie/Functioneel/VT[PrevState_rel]+KK+ EA / Invoer/Kengetallen/Constanten/Efficiency_EA + TW/0.72+KD*0.0+RV/1.04) / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / PrevState/Oppervlakte[PrevState_rel],0.0[Kwh_yr_m2]);//, IntegrityCheck = "Kwh_m2_tot < 1000[Kwh_yr_m2]";
-			attribute<Classifications/Schillabel> Schillabel_rel (BOdomain) := classify(Kwh_m2_tot, classifications/Schillabel/classbreak);
-			attribute<ratio>                      Correction_RV  (BOdomain) := 1.0[ratio] + Invoer/Kengetallen/Constanten/BinnenTemp_A * Invoer/Kengetallen/Constanten/BinnenTemp_B ^ Kwh_m2_RV;
+			
+			attribute<ratio>                      Correction_RV  		(BOdomain) := 1.0[ratio] + Invoer/Kengetallen/Constanten/BinnenTemp_A * Invoer/Kengetallen/Constanten/BinnenTemp_B ^ Kwh_m2_RV;
+
+	
+
+		
 
 			container IsolatieNiveau_rel := for_each_nedv(
 				classifications/Bouwdeel/name,
@@ -193,6 +197,10 @@ container Templates
 			,BebouwingsObjectSrc
 			,GJ_yr)
 		{
+		
+			
+			attribute<GJ_yr> Total (BebouwingsObjectSrc) := ='add('+AsItemList(Classifications/bouwdeel/name)+')';
+			
 			container warmtewinst := BerekenWarmtewinst(BebouwingsObjectSrc, 'Theoretisch_RV');
 			
 			container gemeten_correctie
@@ -208,14 +216,66 @@ container Templates
 			attribute<GJ_yr> Vrv_VT_asl     (BebouwingsObjectSrc) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[Installaties/VT] * Nr_asl, descr = "warmteverlies ventilatie vast per aansluiting";
 			
 			//========= theoretische verlies ruimteverwarming (excl warmtewinsten)
-			attribute<GJ_yr> Theoretisch_RV (BebouwingsObjectSrc) := VL + DP + DS + MG + MS + DR + PL + RO + RB + KR + Vrv_VT_asl;
+			attribute<GJ_yr>     Theoretisch_RV (BebouwingsObjectSrc) := VL + DP + DS + MG + MS + DR + PL + RO + RB + KR + Vrv_VT_asl;
+			attribute<Kwh_yr_m2> Kwh_m2_RV      (BebouwingsObjectSrc) := makedefined((Theoretisch_RV / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / BebouwingsObjectSrc/Oppervlakte,0.0[Kwh_yr_m2]);
+			attribute<ratio>     Correction_RV  (BebouwingsObjectSrc) := 1.0[ratio] + Invoer/Kengetallen/Constanten/BinnenTemp_A * Invoer/Kengetallen/Constanten/BinnenTemp_B ^ Kwh_m2_RV;
 
 			//========= gemeten vraag ruimteverwarming gecorrigeerd voor warmtewinsten
-			attribute<GJ_yr> Gemeten_RV_i   (BebouwingsObjectSrc) := gemeten_correctie/verschilfactor * Functioneel/BaseValues/RV;
-			attribute<GJ_yr> Gemeten_RV     (BebouwingsObjectSrc) := Gemeten_RV_i + warmtewinst/totaal;
+			attribute<GJ_yr>     Gemeten_RV_i                  (BebouwingsObjectSrc) := gemeten_correctie/verschilfactor * Functioneel/BaseValues/RV;
+			attribute<GJ_yr>     Gemeten_RV_incl_tempcorrectie (BebouwingsObjectSrc) := Gemeten_RV_i + warmtewinst/totaal;
+			
+			container TemperatuurCorrectie
+			{
+				attribute<Kwh_yr_m2> R_cor     (BebouwingsObjectSrc) := makedefined((Gemeten_RV_incl_tempcorrectie / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / BebouwingsObjectSrc/Oppervlakte,0.0[Kwh_yr_m2]);
+				parameter<uint32>    NrIterations := 2000[uint32];
+				parameter<Kwh_yr_m2> Tolerance    := 1[Kwh_yr_m2];
+				container StartingState
+				{
+				attribute<Kwh_yr_m2> R_guess_new (BebouwingsObjectSrc) := 
+					  R_cor > 170[Kwh_yr_m2] ? R_cor
+					: R_cor > 160[Kwh_yr_m2] ? 147[Kwh_yr_m2]
+					: R_cor > 150[Kwh_yr_m2] ? 147[Kwh_yr_m2]
+					: R_cor > 140[Kwh_yr_m2] ? 136[Kwh_yr_m2]
+					: R_cor > 130[Kwh_yr_m2] ? 124[Kwh_yr_m2]
+					: R_cor > 120[Kwh_yr_m2] ? 112[Kwh_yr_m2]
+					: R_cor > 110[Kwh_yr_m2] ?  96[Kwh_yr_m2]
+					: R_cor > 100[Kwh_yr_m2] ?  74[Kwh_yr_m2]
+					: R_cor >  99[Kwh_yr_m2] ?  70[Kwh_yr_m2]
+					: R_cor >  98[Kwh_yr_m2] ?  65[Kwh_yr_m2]
+					: R_cor >  97[Kwh_yr_m2] ?  56[Kwh_yr_m2]
+					: R_cor >  96[Kwh_yr_m2] ?  38[Kwh_yr_m2]
+					: R_cor >  95[Kwh_yr_m2] ?  34[Kwh_yr_m2]
+					: R_cor >  90[Kwh_yr_m2] ?  25[Kwh_yr_m2]
+					: R_cor >  85[Kwh_yr_m2] ?  21[Kwh_yr_m2]
+					: 10[Kwh_yr_m2];
+				}
+				unit<uint32> Iteration := Range(uint32, 0, NrIterations)
+    		 	{
+     				attribute<string> name          := 'I' + string(id(.));
+    				attribute<string> PrevStateName := MakeDefined(Iteration/name[id(Iteration)-1], 'StartingState');
+     			}
+     
+    			container Iterations := for_each_ne(Iteration/name, 'IterationTemplate('+Iteration/PrevStateName+')');
+
+    			template IterationTemplate
+    			{
+    				container PrevStateName;
+
+    				attribute<Kwh_yr_m2> R_guess     (BebouwingsObjectSrc) := PrevStateName/R_guess_new;
+    				attribute<Kwh_yr_m2> Result      (BebouwingsObjectSrc) := R_guess * (1.0[ratio] + Invoer/Kengetallen/Constanten/BinnenTemp_A * Invoer/Kengetallen/Constanten/BinnenTemp_B ^ R_guess);
+    				attribute<Kwh_yr_m2> R_guess_new (BebouwingsObjectSrc) := (Result - R_cor) > 0.5[Kwh_yr_m2] ? (R_guess + 1[Kwh_yr_m2]) : (Result - R_cor) < -0.5[Kwh_yr_m2] ? (R_guess + 1[Kwh_yr_m2]) : R_guess;
+    			}
+
+			//	R * (1 + 7.2 * 0.96 ^ R);
+
+				attribute<Kwh_yr_m2> R      (BebouwingsObjectSrc) := ='Iterations/I' + string(NrIterations-1[uint32]) + '/R_guess_new';
+				attribute<ratio>     factor (BebouwingsObjectSrc) := R / R_cor;
+			}
+			attribute<GJ_yr> Gemeten_RV (BebouwingsObjectSrc) := Gemeten_RV_incl_tempcorrectie * TemperatuurCorrectie/factor;
 
 			//========= relatief verschil als fitfactor
-			attribute<ratio> Fitfactor      (BebouwingsObjectSrc) := Gemeten_RV / Theoretisch_RV;
+			attribute<ratio>     Fitfactor  (BebouwingsObjectSrc) := Gemeten_RV / Theoretisch_RV;
+
 
 			//========= gefit verlies bij isolatiegraad N0 als referentiepunt voor berekeningen per zichtjaar
 			container RV_N0_per_Bouwdeel := for_each_nedv(
