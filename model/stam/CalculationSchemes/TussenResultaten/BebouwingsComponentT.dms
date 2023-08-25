@@ -141,7 +141,7 @@ template BebouwingsComponentT
 		}
 	}
 	unit<uint32>      NieuwbouwBron :=
-		= Classifications/Periode/isHistorisch[Periode_rel] ? 'HistorischBouw' :
+		= Zichtjaar_jaar <= 2023w ? 'HistorischBouw' :
 		 doNieuwbouw  ? 'Invoer/RuimtelijkeData/Vastgoed/NieuwbouwObjecten/' + Classifications/Periode/name[Periode_rel] + '/BebouwingsObject'   :
 		'HistorischBouw', ishidden = "True";
 	
@@ -166,7 +166,7 @@ template BebouwingsComponentT
 	unit<uint8> BebouwingsTypeDomein := BO/BebouwingsTypeDomein, ishidden = "True";
 
 	// TODO parametriseren huidig jaar en welke jaren hebben nieuwe nieuwbouwperiode
-	parameter<bool> doNieuwbouw := Zichtjaar_jaar <= 2021w || Zichtjaar_jaar == 2031w || zichtjaar_jaar == 2041w ? Invoer/DefaultInstellingen/Basis/RuimtelijkeOntwikkelingAan : false, ishidden = "True";
+	parameter<bool> doNieuwbouw := Zichtjaar_jaar <= 2024w || Zichtjaar_jaar == 2031w || zichtjaar_jaar == 2041w ? Invoer/DefaultInstellingen/Basis/RuimtelijkeOntwikkelingAan : false, ishidden = "True";
 	container union := = doNieuwbouw ? 'CalculationSchemes/BebouwingsOperaties/union(PrevObject, NieuwbouwBron)' : '..';
 
 	unit<uint32> BO_base := = doNieuwbouw ? 'union/result' : 'PrevObject', ishidden = "True";
@@ -182,6 +182,7 @@ template BebouwingsComponentT
 		unit<uint32>    ModelObjectDomain := ModelObject, ishidden = "True";
 		attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel  (BO) := BO/buurt_rel, ishidden = "True";
 		attribute<ModelObject>                             Model_rel      (BO) := rlookup(BO/ModelObjectKey, ModelObject/ModelObjectKey), KeepData = "True", ishidden = "True";
+		attribute<Classifications/WoningType>              Woningtype_rel (BO) := ModelObject/Modeltype_rel[Model_rel];
 		attribute<PrevObject>                              PrevObject_rel (BO) := = doNieuwbouw ? 'rlookup(BO/code, PrevObject/code)' : 'ID(PrevObject)', ishidden = "True";
 
 		parameter<string> BCname := ../BCname, ishidden = "True";
@@ -203,7 +204,6 @@ template BebouwingsComponentT
 
 		attribute<bool> LabelGelijk := Energielabel_rel == PrevEnergielabel_rel || RekenstapName == 'StartJaar';
 
-		attribute<Classifications/WarmteOptie> WarmteOptie_rel (BO) := Isdefined( Bebouwingscomponenten/woning/BO/Aflevergebied_rel ) && Bebouwingscomponenten/Woning/BO/Aansluitingen/Warmtenet ? Classifications/WarmteOptie/V/Gebied_zK : PrevObject/WarmteOptie_rel[PrevObject_rel], ishidden = "True";
 		attribute<BO> Bo_rel (BO) := id(.), ishidden = "True";
 		
 		container Aansluitingen
@@ -245,7 +245,6 @@ template BebouwingsComponentT
 			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (BO) := Aansluitingen/GeenGasafsluiting ? BO_base/InstallatiePerProduct/DK : Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Gasvervanger[BO_base/InstallatiePerProduct/DK];
 			attribute<Classifications/AfgifteSysteem>                             AS (BO) := BO_base/InstallatiePerProduct/AS; // TODO: blijft na afsluiting gas; igv LT warmtenet, daar regelen?
 		}
-		attribute<Classifications/GebouwOptie>    GebouwOptie_rel    (BO) := PrevObject/GebouwOptie_rel[PrevObject_rel], ishidden = "True"; // REMOVE, OBSOLETE, vervangen door Schillabel_rel, InstallatiePerProduct en GebiedsOptie
 		attribute<Geography/rdc_grids/m100>       gridm100_rel       (BO) := point[Geography/rdc_grids/m100], ishidden = "True";
 
 		attribute<bool> IsMeergezins (.) := BebouwingsTypeDomein/IsMeergezins[BebouwingsType];
@@ -256,19 +255,21 @@ template BebouwingsComponentT
 			: 'Bouwjaar > 2021w || ResterendFactorBase == float64(0) ? 1.0 : ResterendFactorBase * float64(IsDefined(PlanRegio_rel))'; //TODO: huidig jaar parametriseren
 		attribute<bool>  Afbouw              := =Classifications/Periode/isHistorisch[Periode_rel] ? 'const(false,.)'
 			: 'PrevObject/ResterendNu[PrevObject_rel] > 0.0 && ResterendFactor <= 0.0';
+
+		parameter<ratio> AanbouwPerJaar := Zichtjaar_jaar <= 2030w ? 0.125 : 0.1;
 		
 		attribute<ratio> Aanbouwfactor   := = Invoer/DefaultInstellingen/Basis/RuimtelijkeOntwikkelingAan ? 
 			'Aanbouw ?
 				min_elem(float64(Zichtjaar_jaar + 1[yr_uint16] - 
-					(Bouwjaar > 2040[yr_uint16] ? 2041[yr_uint16] : 
-						Bouwjaar > 2030[yr_uint16] ? 2031[yr_uint16] : 
-						Bouwjaar > 2020[yr_uint16] ? 2021[yr_uint16] : Bouwjaar)) * 1[_yr] * 0.1[ratio], 1.0[ratio]) : 1.0[ratio]' :
+						(Bouwjaar > 2040[yr_uint16] ? 2041[yr_uint16] : 
+					 	 Bouwjaar > 2030[yr_uint16] ? 2031[yr_uint16] : 
+					 	 Bouwjaar > 2022[yr_uint16] ? 2024[yr_uint16] : Bouwjaar)) * 1[_yr] * AanbouwPerJaar, 1.0[ratio]) : 1.0[ratio]' :
 				'const(1.0[ratio],.)';
 
-		attribute<ratio> ResterendNu     := =Classifications/Periode/isHistorisch[Periode_rel] ?
+		attribute<ratio> ResterendNu     := =Zichtjaar_jaar <= 2023w ?
 			'isdefined(Sloopjaar) && Sloopjaar <= Zichtjaar_jaar ? 0.0 : 1.0'
 			: 'isdefined(Sloopjaar) && Sloopjaar <= Zichtjaar_jaar ? 0.0 :
-			Afbouw ? max_elem(PrevObject/ResterendNu[PrevObject_rel] - 0.1, 0.0) :
+			Afbouw ? max_elem(PrevObject/ResterendNu[PrevObject_rel] - AanbouwPerJaar, 0.0) :
 			Aanbouw ? Aanbouwfactor :
 			ResterendFactor';
 			//TODO: 0.1 dynamisch afleiden van aantal zichtjaren, werkt nu alleen bij 1-jaar stappen
@@ -417,7 +418,7 @@ template BebouwingsComponentT
 		attribute<bool> gebied (BO) := never;
 
 		//"Alloc" : Wordt alleen toegepast bij kandidaten die al deelnemer zijn in een gebiedsoptie
-		attribute<bool> Alloc  (BO) := Classifications/WarmteOptie/isGebiedsOptie[BO/WarmteOptie_rel];
+		attribute<bool> Alloc  (BO) := BO/Aansluitingen/Warmtenet;
 
 		//"NoAlloc" : Wordt alleen toegepast bij kandidaten die geen deelnemer zijn in een gebiedsoptie
 		attribute<bool> NoAlloc(BO) := not(Alloc);

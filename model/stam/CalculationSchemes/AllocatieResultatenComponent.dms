@@ -14,43 +14,32 @@ template AllocatieResultatenComponent
 	container    VraagKentallen := BO/VraagKentallen, IsHidden = "True";
 	unit<uint32> PlanRegio      := Invoer/SpecifiekeInstellingen/PlanRegio, IsHidden = "True";
 
-	attribute<Classifications/WarmteOptie> WarmteAllocatie         (BO) := BO/WarmteOptie_rel, IsHidden = "True"; // TODO_OV_RELEASE: substitute
 	attribute<Classifications/WoningType>  BebouwingsType          (BO) := BO/BebouwingsType, IsHidden = "True";
-	attribute<bool>                        VeroorzaaktGrondroering (BO) := Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie], IsHidden = "True";
+	attribute<bool>                        VeroorzaaktGrondroering (BO) := = 'OR('+AsItemList(replace('BO/InstallatiePerProduct/@PD@ == Classifications/Installatie/V/gebiedsOptie', '@PD@', Classifications/Product/name))+')', IsHidden = "True";
 
 	attribute<bool>                        GrondroeringInPlanRegio (PlanRegio) := sum(VeroorzaaktGrondroering ? 1 : 0, BO/PlanRegio_rel) > 0, IsHidden = "True";
 
 	unit<uint32> BO := BO_base
 	{
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel  := BO_base/GebouwOptie_rel, IsHidden = "True";
-		attribute<string>                      GebouwOptie_name := Classifications/GebouwOptie/name[GebouwOptie_rel];
 		attribute<Classifications/Schillabel>  Schillabel_rel   := BO_base/Schillabel_rel;
-		attribute<bool>                        NieuwGebiedOptie := not(Classifications/WarmteOptie/isGebiedsOptie[BebouwingsComponent_UpRef/BO/WarmteOptie_rel]) && Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie];
         
-		attribute<bool> KoudeGebouw :=
-			IsDefined(BemeterdeGebouwInput_rel/KDb) ||
-			IsDefined(BemeterdeGebouwInput_rel/KDp);
-		
-		attribute<bool> KoudeGebied :=
-			Classifications/WarmteOptie/KoudeActief[WarmteOptie_rel];
+		attribute<bool> KoudeGebouw := (IsDefined(BemeterdeGebouwInput_rel/KDb) || IsDefined(BemeterdeGebouwInput_rel/KDp)) && not(KoudeGebied);
+		attribute<bool> KoudeGebied := BO/InstallatiePerProduct/Kdb == Classifications/Installatie/V/Gebiedsoptie || BO/InstallatiePerProduct/Kdp == Classifications/Installatie/V/Gebiedsoptie;
 			
 		container BemeterdeGebouwInput_rel :=  BO_base/BemeterdeGebouwInput_rel, IsHidden = "True";
 			
 		container Aansluitingen := BO_Base/Aansluitingen
 		{		
 			
-			attribute<bool> IsHybride      (BO) := BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e	&& BemeterdeGebouwInput_rel/RVp != Classifications/BemeterdeGebouwInput/V/e;
-
-			attribute<bool> IsAllElectric  (BO) :=
-				(( BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e	&& BemeterdeGebouwInput_rel/RVp == Classifications/BemeterdeGebouwInput/V/e
-				&& BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/e	&& BemeterdeGebouwInput_rel/TWp == Classifications/BemeterdeGebouwInput/V/e)
-				|| aandelen/W50 || aandelen/W30 || aandelen/WK50 || aandelen/WK30)
-				&& not(IsHybride);
-
-			attribute<nrAsl> Enet_app      (BO) := float64((Enet_hwp + Enet_ewp) == 0[nrAsl]) * nrAansluitingen; // alleen apparatuur
-			attribute<nrAsl> Enet_hwp      (BO) := float64(IsHybride)                         * nrAansluitingen; // apparatuur en hybride systeem
-			attribute<nrAsl> Enet_ewp      (BO) := float64(IsAllElectric)                     * nrAansluitingen; // apparatuur en volledig elektrisch verwarmd
+			attribute<nrAsl> Enet_hwp (BO) := nrAansluitingen * float64(BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e	&& BemeterdeGebouwInput_rel/RVp != Classifications/BemeterdeGebouwInput/V/e);
+			attribute<nrAsl> Enet_app (BO) := nrAansluitingen * float64((Enet_hwp + Enet_ewp) == 0[nrAsl]), descr = "gebouw heeft alleen een lektriciteitsaansluiting voor overige apparatuur";
+			attribute<nrAsl> Enet_ewp (BO) := nrAansluitingen * float64(
+				and(   BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e
+					 , BemeterdeGebouwInput_rel/RVp == Classifications/BemeterdeGebouwInput/V/e
+					 , BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/e
+					 , BemeterdeGebouwInput_rel/TWp == Classifications/BemeterdeGebouwInput/V/e ));
 		}
+
 		container Functioneel := BO_Base/Functioneel
 		{
 			attribute<GJ_yr> V_RV      (BO) := BO_Base/Functioneel/RV;
@@ -224,20 +213,8 @@ template AllocatieResultatenComponent
 		, BO
 		, bool), IsHidden = "True";
 
-	container MeterVraag := for_each_nedv(Classifications/GebiedsOptie/name, 'float64(Aandelen/'+Classifications/GebiedsOptie/name+') * (BO/Functioneel/V_RV + BO/Functioneel/V_TW)', BO, GJ_yr)
-	{
-		attribute<GJ_yr> Aardgas       (BO) := BO/Metervraag/gas;// * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteAllocatie]));
-		attribute<GJ_yr> Elektriciteit (BO) := BO/Metervraag/e;
-		attribute<GJ_yr> Waterstof     (BO) := BO/Metervraag/H2;
-		attribute<GJ_yr> Pellets       (BO) := BO/Metervraag/pellets;
-		attribute<GJ_yr> Biomassa      (BO) := BO/Metervraag/biomassa;
-		attribute<GJ_yr> Olie          (BO) := BO/Metervraag/olie;
-		attribute<GJ_yr> Koude         (BO) := BO/Functioneel/V_KD * float64(Classifications/WarmteOptie/KoudeActief[WarmteAllocatie]);
-		attribute<GJ_yr> Warmte_LT     (BO) := BO/Functioneel/V_Warmte * float64(Classifications/WarmteOptie/IsLT[BO/WarmteOptie_rel]);
-		attribute<GJ_yr> Warmte_MT     (BO) := BO/Functioneel/V_Warmte * float64(Classifications/WarmteOptie/IsMT[BO/WarmteOptie_rel]);
-		attribute<GJ_yr> GebiedsOptie  (BO) := ='add('+AsItemList(Classifications/GebiedsOptie/name)+')';
-	}
-
+	container MeterVraag := BO/Metervraag;
+	
 	container AardGas
 	{
 		attribute<bool>   heeft_gas        (BO) := Metervraag/Aardgas > 0[GJ_yr] || Metervraag/Waterstof > 0[GJ_yr];

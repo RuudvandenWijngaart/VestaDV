@@ -132,7 +132,7 @@ container TVW
 				container eindjaar
 				{
 					parameter<uint32> start_cutoff := 2000;
-					parameter<uint32> eind_cutoff  := 2050;
+					parameter<uint32> eind_cutoff  := 2030;
 					attribute<uint32> plan (PL) := uint32(right(trim(plantabel_input/eindjaar_yyyy_),4));
 					attribute<bool> binnen_cutoff (PL) := plan > start_cutoff && plan <= eind_cutoff;
 				}
@@ -143,6 +143,12 @@ container TVW
 		{
 			unit<uint32> BinnenEindjaarCutoff := select_afew(PL, PL/matching/eindjaar/binnen_cutoff);
 			//unit<uint32> BinnenEindjaarCutoff := select_afew(PL, const(True, PL)); // Uncomment wanneer alle plannen in select_with_org_rel moeten
+
+			unit<uint32> Wnet := select_afew(BinnenEindjaarCutoff, BinnenEindjaarCutoff/Installatie_rel == Class/Installatie/V/Wnet && (BinnenEindjaarCutoff/Planstatus_rel == Class/Planstatus/V/uitvoerend || BinnenEindjaarCutoff/Planstatus_rel == Class/Planstatus/V/definitief))
+			{
+				Attribute<uint32> U_count := UBouw/Matching/P_count[org_rel];
+				Attribute<uint32> W_count := Woning/Matching/P_count[org_rel];
+			}
 
 			unit<uint32> WnetConcreet := select_afew(PL, 
 			PL/Installatie_rel == Class/Installatie/V/Wnet 
@@ -190,6 +196,7 @@ container TVW
 		{
 			
 			attribute<nrAsl> nr_Asl := const(1.0[nrAsl],.);
+			attribute<bool>  util   := union_data(.,const(false,woning),const(true,Ubouw));
 			
 			attribute<m2>    oppervlak := union_data(VBO, woning/oppervlakte, Ubouw/oppervlakte);
 			attribute<Invoer/RuimtelijkeData/StudieGebied/Buurt > buurt_rel := union_data(VBO, woning/buurt_rel, Ubouw/buurt_rel);
@@ -706,10 +713,12 @@ container TVW
 				parameter<string> piap_expr := 'point_in_all_polygons(p/xy, select_with_org_rels/BinnenEindjaarCutoff/geometry)';
 				parameter<string> workaround := 'overlay_polygon(driehoek[geography/rdc_mm], select_with_org_rels/BinnenEindjaarCutoff/geometry[geography/rdc_mm])';
 				unit<uint32> kruistabel  :=  =(GeoDmsVersion() > 8.0305) ? piap_expr : workaround;
+				attribute<uint32> P_count     (Subsets/BinnenEindjaarCutoff) := pcount(kruistabel/second_rel);
 				
 				container PL_counts
 				{
 					attribute<float64> totaal(p) := float64(pcount(kruistabel/first_rel));
+
 
 					container Isolatie
 					{
