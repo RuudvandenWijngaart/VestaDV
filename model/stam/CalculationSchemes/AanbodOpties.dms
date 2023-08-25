@@ -89,16 +89,21 @@ container AanbodOpties
 		parameter<GebouwOptie> Gebieds_GebouwOptie_rel := Classifications/GebiedsOptie/GebouwOptie_rel[Optie], IntegrityCheck = "IsDefined(this)";
 		
 		unit<uint32> results := BebouwingsObject
-		{
-			attribute<bool> Toewijzing := Classifications/WarmteOptie/kanGebiedsOptie[BebouwingsObject/WarmteOptie_rel] && GebruikOptie;
-			
-			attribute<GebouwOptie> GebouwOptie_rel := Toewijzing
-				? Gebieds_GebouwOptie_rel
-				: BebouwingsObject/GebouwOptie_rel;
-
-			attribute<Classifications/WarmteOptie> WarmteOptie_rel := Toewijzing
-				? Classifications/GebiedsOptie/WarmteOptie_rel[../Optie]
-				: BebouwingsObject/WarmteOptie_rel;
+		{			
+			container InstallatiePerProduct := for_each_nedv(
+					classifications/product/name
+				,	KoudeLevering ? replace('Connect ? Classifications/V/GebiedsOptie : BebouwingsObject/InstallatiePerProduct/@PD@', '@PD@', classifications/product/name)
+								  : replace('Connect && (Classifications/Product != Classifications/Product/KDb && Classifications/Product != Classifications/Product/KDp) ? Classifications/V/GebiedsOptie : BebouwingsObject/InstallatiePerProduct/@PD@', '@PD@', classifications/product/name)
+				,	BebouwingsObject
+				,	Classifications/Installatie
+				);
+						
+			container aansluitingen := BebouwingsObject/aansluitingen
+			{
+				attribute<nrAsl> GNet      (BebouwingsObject) := Connect ? 0.0[nrAsl] : BebouwingsObject/aansluitingen/GNet;
+				attribute<nrAsl> Warmtenet (BebouwingsObject) := Connect ? BebouwingsObject/nrAansluitingen : BebouwingsObject/aansluitingen/Warmtenet;
+				attribute<nrAsl> Koudenet  (BebouwingsObject) := Connect && KoudeLevering ? BebouwingsObject/nrAansluitingen : BebouwingsObject/aansluitingen/Koudenet;
+			}
 		}
 	}
 

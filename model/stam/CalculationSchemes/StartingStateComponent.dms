@@ -64,17 +64,68 @@ template StartingStateComponent
 			}
 
 			//========= warmteverlies ventilatie
-			attribute<GJ_yr> Vrv_VT_asl     (..) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[InstallatiePerProduct/VT] * nrAansluitingen_i, descr = "warmteverlies ventilatie vast per aansluiting";
+			attribute<GJ_yr>     Vrv_VT_asl     (..) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[InstallatiePerProduct/VT] * nrAansluitingen_i, descr = "warmteverlies ventilatie vast per aansluiting";
 			
 			//========= theoretische verlies ruimteverwarming (excl warmtewinsten)
-			attribute<GJ_yr> Theoretisch_RV (..) := VL + DP + DS + MG + MS + DR + PL + RO + RB + KR + Vrv_VT_asl;
+			attribute<GJ_yr>     Theoretisch_RV (..) := VL + DP + DS + MG + MS + DR + PL + RO + RB + KR + Vrv_VT_asl;
+			attribute<Kwh_yr_m2> Kwh_m2_RV      (..) := makedefined((Theoretisch_RV / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / Oppervlakte,0.0[Kwh_yr_m2]);
+			attribute<ratio>     Correction_RV  (..) := 1.0[ratio] + Invoer/Kengetallen/Constanten/BinnenTemp_A * Invoer/Kengetallen/Constanten/BinnenTemp_B ^ Kwh_m2_RV;
 
 			//========= gemeten vraag ruimteverwarming gecorrigeerd voor warmtewinsten
-			attribute<GJ_yr> Gemeten_RV_i   (..) := gemeten_correctie/verschilfactor * Functioneel/BaseValues/RV;
-			attribute<GJ_yr> Gemeten_RV     (..) := Gemeten_RV_i + warmtewinst/totaal;
+			attribute<GJ_yr>     Gemeten_RV_i                  (..) := gemeten_correctie/verschilfactor * Functioneel/BaseValues/RV;
+			attribute<GJ_yr>     Gemeten_RV_incl_tempcorrectie (..) := Gemeten_RV_i + warmtewinst/totaal;
+
+			container TemperatuurCorrectie
+			{
+				attribute<Kwh_yr_m2> R_cor     (...) := makedefined((Gemeten_RV_incl_tempcorrectie / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / Oppervlakte,0.0[Kwh_yr_m2]);
+				parameter<uint32>    NrIterations := 20[uint32];
+				parameter<Kwh_yr_m2> Tolerance    := 1[Kwh_yr_m2];
+				container StartingState
+				{
+				attribute<Kwh_yr_m2> R_guess_new (....) := 
+					  R_cor > 170[Kwh_yr_m2] ? R_cor
+					: R_cor > 160[Kwh_yr_m2] ? 147[Kwh_yr_m2]
+					: R_cor > 150[Kwh_yr_m2] ? 147[Kwh_yr_m2]
+					: R_cor > 140[Kwh_yr_m2] ? 136[Kwh_yr_m2]
+					: R_cor > 130[Kwh_yr_m2] ? 124[Kwh_yr_m2]
+					: R_cor > 120[Kwh_yr_m2] ? 112[Kwh_yr_m2]
+					: R_cor > 110[Kwh_yr_m2] ?  96[Kwh_yr_m2]
+					: R_cor > 100[Kwh_yr_m2] ?  74[Kwh_yr_m2]
+					: R_cor >  99[Kwh_yr_m2] ?  70[Kwh_yr_m2]
+					: R_cor >  98[Kwh_yr_m2] ?  65[Kwh_yr_m2]
+					: R_cor >  97[Kwh_yr_m2] ?  56[Kwh_yr_m2]
+					: R_cor >  96[Kwh_yr_m2] ?  38[Kwh_yr_m2]
+					: R_cor >  95[Kwh_yr_m2] ?  34[Kwh_yr_m2]
+					: R_cor >  90[Kwh_yr_m2] ?  25[Kwh_yr_m2]
+					: R_cor >  85[Kwh_yr_m2] ?  21[Kwh_yr_m2]
+					: 10[Kwh_yr_m2];
+				}
+				unit<uint32> Iteration := Range(uint32, 0, NrIterations)
+    		 	{
+     				attribute<string> name          := 'I' + string(id(.));
+    				attribute<string> PrevStateName := MakeDefined(Iteration/name[id(Iteration)-1], 'StartingState');
+     			}
+     
+    			container Iterations := for_each_ne(Iteration/name, 'IterationTemplate('+Iteration/PrevStateName+')');
+
+    			template IterationTemplate
+    			{
+    				container PrevStateName;
+
+    				attribute<Kwh_yr_m2> R_guess     (....) := PrevStateName/R_guess_new;
+    				attribute<Kwh_yr_m2> Result      (....) := R_guess * (1.0[ratio] + Invoer/Kengetallen/Constanten/BinnenTemp_A * Invoer/Kengetallen/Constanten/BinnenTemp_B ^ R_guess);
+    				attribute<Kwh_yr_m2> R_guess_new (....) := (Result - R_cor) > 0.5[Kwh_yr_m2] ? (R_guess + 1[Kwh_yr_m2]) : (Result - R_cor) < -0.5[Kwh_yr_m2] ? (R_guess + 1[Kwh_yr_m2]) : R_guess;
+    			}
+
+			//	R * (1 + 7.2 * 0.96 ^ R);
+
+				attribute<Kwh_yr_m2> R      (...) := ='Iterations/I' + string(NrIterations-1[uint32]) + '/R_guess_new';
+				attribute<ratio>     factor (...) := R / R_cor;
+			}
+			attribute<GJ_yr> Gemeten_RV (..) := Gemeten_RV_incl_tempcorrectie * TemperatuurCorrectie/factor;
 
 			//========= relatief verschil als fitfactor
-			attribute<ratio> Fitfactor      (..) := Gemeten_RV / Theoretisch_RV;
+			attribute<ratio>     Fitfactor  (..) := Gemeten_RV / Theoretisch_RV;
 
 			//========= gefit verlies bij isolatiegraad N0 als referentiepunt voor berekeningen per zichtjaar
 			container RV_N0_per_Bouwdeel := for_each_nedv(
