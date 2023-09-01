@@ -246,8 +246,10 @@ template BebouwingsComponentT
 
 		attribute<bool> IsMeergezins (.) := woningType_rel->IsMeergezins;
 
-		attribute<ratio> ResterendFactor     := Float64(SloopJaar <= zichtjaar_jaar);
-		attribute<bool>  Afbouw              := =Classifications/Periode/isHistorisch[Periode_rel] ? 'const(false,.)' : 'PrevObject/ResterendNu > 0.0 && ResterendFactor <= 0.0';
+		attribute<ratio> IsGebouwdFactor    := Float64(bouwjaar <= zichtjaar_jaar);
+		attribute<ratio> NietGeslooptFactor := Float64(Sloopjaar > Zichtjaar_jaar);
+			
+		attribute<bool>  Afbouw             := =Classifications/Periode/isHistorisch[Periode_rel] ? 'const(false,.)' : 'PrevObject/ResterendNu > 0.0 && (Sloopjaar <= Zichtjaar_jaar)';
 		attribute<bool>  Aanbouw := (Bouwjaar > 2023[yr_uint16]);
 
 		parameter<ratio> AanbouwPerJaar := Zichtjaar_jaar <= 2030w ? 0.125 : 0.1;
@@ -262,12 +264,9 @@ template BebouwingsComponentT
 				'min_elem(float64(Zichtjaar_jaar + 1[yr_uint16] - bouwperiode_beginjaar) * 1[_yr] * AanbouwPerJaar, 1.0[ratio]) : 1.0[ratio]' :
 				'const(1.0[ratio],.)';
 				
-		attribute<ratio> IsGebouwdFactor := Float64(bouwjaar <= zichtjaar_jaar);
-		attribute<ratio> NietGeslooptFactor := Float64(Sloopjaar <= Zichtjaar_jaar);
-			
 		attribute<ratio> ResterendNu     := =Zichtjaar_jaar <= 2023w 
 			? 'const(1.0, BO)'
-			: 'Afbouw ? max_elem(PrevObject/ResterendNu - AanbouwPerJaar, 0.0) : Aanbouw ? Aanbouwfactor : ResterendFactor';
+			: 'Afbouw ? max_elem(PrevObject/ResterendNu - AanbouwPerJaar, 0.0) : Aanbouw ? Aanbouwfactor : NietGeslooptFactor';
 			
 		attribute<ratio> AansluitFactor := Float64(IsDefined(PlanRegio_rel)) * ResterendNu * NietGeslooptFactor * IsGebouwdFactor;
 			//TODO: 0.1 dynamisch afleiden van aantal zichtjaren, werkt nu alleen bij 1-jaar stappen
