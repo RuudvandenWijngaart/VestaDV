@@ -92,4 +92,10 @@ Naast het studiegebied zijn er ook andere parameters die aangepast kunnen worden
 <p>
 Hestia kan, zeker als het studiegebied op heel Nederland staat ingesteld, veel geheugen vragen van uw machine. Dit kan leiden tot een crash van GeoDMS tijdens een model run. Het is mogelijk dit op te lossen door het virtueel geheugen dat ter beschikking van het Windows OS uit te breiden. Volg hiervoor de instructies op de GeoDMS Wiki over het<a href="https://github.com/ObjectVision/GeoDMS/wiki/Virtual-memory"> virtueel geheugen uitbreiden</a>.
 </p>
+<p>
+Een specifieke aanleiding voor een tekort aan geheugen kan zijn dat er in een zichtjaar een groot aantal woningen wordt geactiveerd door opgegeven beleid. Als een woning geactiveerd is, dan wordt voor deze woning een investeringsafweging gedaan en dit is geheugenintensief. Voor meer informatie over activatie, zie hoofdstuk 4 van het Functioneel Ontwerp. Mogelijke oplossingen voor deze aanleiding van een geheugentekort is het verspreiden van het beleid over meerdere zichtjaren, of het verkleinen van de groep woningen die door het beleid wordt geraakt.
+</p>
 </details>
+
+## Meer informatie
+In het Functioneel Ontwerp wordt de werking van Hestia tot in detail beschreven. Het Functioneel Ontwerp is als Word-document te vinden onder het pad: doc :arrow_right: PBL-2023-Functioneel-ontwerp-Hestia-1.0-5196. In hoofdstuk 3, Scenario, wordt verder ingegaan op mogelijke aanpassingen aan de scenarioinstellingen. Dit betreft onder andere klimaatscenario's, kostenontwikkelingcurves en beleid.
