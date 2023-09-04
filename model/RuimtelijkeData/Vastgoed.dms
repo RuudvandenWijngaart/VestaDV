@@ -12,14 +12,16 @@
 
 container Vastgoed
 {
+	parameter<string> Bestandslocatie := '20230420_RO_WLO_Hoog_Laag';
+
 	unit<uint8> NieuwbouwWoningType: nrofrows = 4, IsHidden = "True"
 	{
 		attribute<string> name     : [ 'rijtjeswoning', 'appartement', 'twee_onder_1_kap', 'vrijstaand'];
 	}
-	parameter<string> Scenario := Invoer/DefaultInstellingen/Basis/RuimtelijkeOntwikkelingScenario, IsHidden = "True"; //Keuze uit:
+	parameter<string> Scenario := Invoer/DefaultInstellingen/Basis/RuimtelijkeOntwikkelingScenario; //Keuze uit:
 		//Hoog, Laag
 		
-	unit<uint8> Periode := subset(Classifications/Periode/HasNieuwbouw)
+	unit<uint8> Periode := subset(Classifications/Periode/HasNieuwbouw), IsHidden = "True"
 	{
 		attribute<string>          name         := Classifications/Periode/name[nr_OrgEntity], DialogType = "LabelText";
 		attribute<string>          label        := name;
@@ -29,7 +31,7 @@ container Vastgoed
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
-	unit<uint8> VastgoedFiles: nrofrows = 2
+	unit<uint8> VastgoedFiles: nrofrows = 2, IsHidden = "True"
 	{
 		attribute<string> name     : [ 'Bouw', 'Sloop'];
 	}
@@ -37,9 +39,9 @@ container Vastgoed
 	container VastgoedPeriode := for_each_ne(
 		 Periode/name
 		,'LeesVastgoed(Periode/V/' + Periode/name + ')'
-		);
+		), IsHidden = "True";
 	
-	template LeesVastgoed
+	template LeesVastgoed : IsHidden = "True"
 	{
 		//case parameters
 		parameter<Periode>          Periode_rel;
@@ -50,7 +52,7 @@ container Vastgoed
 				 NieuwbouwWoningType/name
 				,Geography/rdc_grids/m25
 				,float32
-				,'%HestiaDataDir%/RO/' + '20230420_RO_WLO_Hoog_Laag' +'/Nieuwbouw' + Periode/RO_directory[Periode_rel]  + Scenario + '/' + NieuwbouwWoningType/name + '.tif'
+				,'%HestiaDataDir%/RO/' + Bestandslocatie +'/Nieuwbouw' + Periode/RO_directory[Periode_rel]  + Scenario + '/' + NieuwbouwWoningType/name + '.tif'
 			);
 			
 		container Nieuwbouw100 :=
@@ -156,44 +158,58 @@ container Vastgoed
 			Periode/name
 		,	'Nieuwbouw_properties(VastgoedPeriode/'+Periode/name+'/NieuwbouwPerJaar/BO_perjaar, Periode/V/'+Periode/name+')'
 			);
+	container SloopKaarten := for_each_ne(
+			Periode/name
+		,	'SloopKaartenT(Periode/V/'+Periode/name+')'
+			);
 
-	template Nieuwbouw_properties
+	template SloopKaartenT : IsHidden = "True"
+	{
+		//case parameters
+		parameter<Periode> Periode_rel;
+		//end parameters
+
+		attribute<float32> Rijtjeswoning    (Geography/rdc_grids/m100) := ='VastgoedPeriode/'+Periode/name[Periode_rel]+'/ResterendFactor/Data_rijtjeswoning';
+		attribute<float32> appartement      (Geography/rdc_grids/m100) := ='VastgoedPeriode/'+Periode/name[Periode_rel]+'/ResterendFactor/Data_appartement';
+		attribute<float32> twee_onder_1_kap (Geography/rdc_grids/m100) := ='VastgoedPeriode/'+Periode/name[Periode_rel]+'/ResterendFactor/Data_twee_onder_1_kap';
+		attribute<float32> vrijstaand       (Geography/rdc_grids/m100) := ='VastgoedPeriode/'+Periode/name[Periode_rel]+'/ResterendFactor/Data_vrijstaand';
+	}
+
+	template Nieuwbouw_properties : IsHidden = "True"
 	{
 		//case parameters
 		unit<uint32> NB;
 		parameter<Periode> Periode_rel;
 		//end parameters
 
-		unit<uint32> BebouwingsObject_buff := NB
+		unit<uint32> BebouwingsObject_buff := NB, IsHidden = "True"
 		{
 
 			attribute<StudieGebied/Buurt>          Buurt_rel         := Point_in_polygon(Geometry, StudieGebied/Buurt/Geometry);
 		}
 
-		unit<uint32> ModelObject := Invoer/Kengetallen/Bebouwing/Woning/Results;
+		unit<uint32> ModelObject := Invoer/Kengetallen/Bebouwing/Woning/Results, IsHidden = "True";
 		
 		unit<uint32> BebouwingsObject := subset(isdefined(BebouwingsObject_buff/Buurt_rel))
 		{
 
-			attribute<string>                      Code              := TypeName +string( Periode/name[Periode_rel] )+string( Geometry ) ;
-			attribute<string>                      TypeName          := Classifications/WoningType/name[Woningtype_rel];
-			attribute<string>                      label             := Code, DialogType = "LabelText";
-			attribute<rdc_meter>                   Geometry          := NB/geometry[nr_OrgEntity];
-			attribute<rdc_meter>                   Point             := geometry;
-			attribute<nrAsl>                       nrAansluitingen_i := =Periode_rel == Periode/V/Y2021_Y2030 ? '0.8 * NB/nr_aansl[nr_OrgEntity]' : 'NB/nr_aansl[nr_OrgEntity]';
+			attribute<string>                      Code              := TypeName +string( Periode/name[Periode_rel] )+string( Geometry ), IsHidden = "True";
+			attribute<string>                      TypeName          := Classifications/WoningType/name[Woningtype_rel], IsHidden = "True";
+			attribute<string>                      label             := Code, DialogType = "LabelText", IsHidden = "True";
+			attribute<rdc_meter>                   Geometry          := NB/geometry[nr_OrgEntity], IsHidden = "True";
+			attribute<nrAsl>                       nrAansluitingen_i := =Periode_rel == Periode/V/Y2021_Y2030 ? '0.8 * NB/nr_aansl[nr_OrgEntity]' : 'NB/nr_aansl[nr_OrgEntity]', IsHidden = "True";
+			attribute<nrAsl>                       nrAansluitingen   := nrAansluitingen_i;
 			attribute<Classifications/WoningType>  Woningtype_rel    := NB/Woningtype_rel[nr_OrgEntity];
-			attribute<Classifications/WoningType>  BebouwingsType    := Woningtype_rel;
-			attribute<m2>                          Oppervlakte_i     := Classifications/WoningType/Default_oppervlak_Nieuwbouw[Woningtype_rel] * nrAansluitingen_i;
-			attribute<units/pand_asl>              Pand_aandeel      := Classifications/WoningType/Pand_aandeel[Woningtype_rel];
-			attribute<yr_uint16>                   Sloopjaar         := Const(2100[yr_uint16],.);
-			attribute<StudieGebied/Buurt>          Buurt_rel         := Point_in_polygon(Geometry, StudieGebied/Buurt/Geometry);
+			attribute<m2>                          Oppervlakte_i     := Classifications/WoningType/Default_oppervlak_Nieuwbouw[Woningtype_rel] * nrAansluitingen_i, IsHidden ="True";
+			attribute<m2>                          Oppervlakte       := Oppervlakte_i;
+			attribute<units/pand_asl>              Pand_aandeel      := Classifications/WoningType/Pand_aandeel[Woningtype_rel], IsHidden = "True";
+			attribute<yr_uint16>                   Sloopjaar         := Const(2100[yr_uint16],.), IsHidden = "True";
+			attribute<StudieGebied/Buurt>          Buurt_rel         := Point_in_polygon(Geometry, StudieGebied/Buurt/Geometry), IsHidden = "True";
 
-			attribute<bool> ischeck := isdefined(Buurt_rel);
-
-			attribute<Geography/rdc_grids/m100>    gridm100_rel      := Geometry[Geography/rdc_grids/m100];
+			attribute<Geography/rdc_grids/m100>    gridm100_rel      := Geometry[Geography/rdc_grids/m100], IsHidden = "True";
 			attribute<Classifications/Eigendom>    Eigendom_rel      := NB/Eigendom_rel[nr_OrgEntity];
 
-			container NieuwbouwWarmtenet
+			container NieuwbouwWarmtenet : Ishidden = "True"
 			{
 				attribute<float64> rnd (BebouwingsObject) := rnd_uniform(/Invoer/TechnischeInstellingen/RandomSeed * 316[uint32], BebouwingsObject, range(float64, 0d, 1d));
 				attribute<bool> StartWarmtenet (BebouwingsObject) := 
@@ -204,21 +220,21 @@ container Vastgoed
 					: false;
 			}
 			attribute<Classifications/GebouwOptie> GebouwOptie_rel  := 
-				NieuwbouwWarmtenet/StartWarmtenet ? Classifications/GebouwOptie/V/Gebied_zK :
+				NieuwbouwWarmtenet/StartWarmtenet || isdefined(BestaandWarmtenet_rel) ? Classifications/GebouwOptie/V/Gebied_zK :
 				rlookup(DefaultInstellingen/Basis/StartGebouwOpties/NieuwbouwWoning, Classifications/GebouwOptie/name);
 			
-			unit<uint32> BestaandAflevergebied := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data;
-			unit<uint32> BestaandWarmtenet     := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Warmtenetten;
-			attribute<BestaandAflevergebied> Aflevergebied_rel := point_in_polygon(Geometry , BestaandAflevergebied/Geometry);
-			attribute<BestaandWarmtenet>     BestaandWarmtenet_rel     := BestaandAflevergebied/Warmtenet_rel[Aflevergebied_rel];
+			unit<uint32> BestaandAflevergebied := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data , IsHidden = "True";
+			unit<uint32> BestaandWarmtenet     := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Warmtenetten, IsHidden = "True";
+			attribute<BestaandAflevergebied> Aflevergebied_rel := point_in_polygon(Geometry , BestaandAflevergebied/Geometry), IsHidden = "True";
+			attribute<BestaandWarmtenet>     BestaandWarmtenet_rel     := BestaandAflevergebied/Warmtenet_rel[Aflevergebied_rel], IsHidden = "True";
 			
-			attribute<Classifications/BouwjaarWoning> BouwjaarKlasse_rel := const(Periode/BouwjaarKlasse_rel[Periode_rel],.);
+			attribute<Classifications/BouwjaarWoning> BouwjaarKlasse_rel := const(Periode/BouwjaarKlasse_rel[Periode_rel],.), IsHidden = "True";
 
-			attribute<Classifications/combines/WBE> ModelObjectKey  := combine_data( Classifications/combines/WBE , Woningtype_rel , combine_data( Classifications/combines/BE, BouwjaarKlasse_rel, Eigendom_rel)) ;
+			attribute<Classifications/combines/WBE> ModelObjectKey  := combine_data( Classifications/combines/WBE , Woningtype_rel , combine_data( Classifications/combines/BE, BouwjaarKlasse_rel, Eigendom_rel)) , IsHidden = "True";
 			
-			attribute<ModelObject> ModelObject_rel := rlookup(ModelObjectKey, ModelObject/ModelObjectKey);
+			attribute<ModelObject> ModelObject_rel := rlookup(ModelObjectKey, ModelObject/ModelObjectKey), IsHidden = "True";
 
-			attribute<Classifications/Schillabel> Schillabel_rel := const(Classifications/Schillabel/V/A,.);
+			attribute<Classifications/Schillabel> Schillabel_rel := const(Classifications/Schillabel/V/A,.), IsHidden = "True";
 
 			container Bouwdelen := for_each_nedv(
 			Classifications/bouwdeel/name,
@@ -236,13 +252,13 @@ container Vastgoed
 					Classifications/Bouwdeel/name,
 					'Classifications/Bouwdeel/Verlies[Classifications/Bouwdeel/V/'+Classifications/Bouwdeel/name+'] * Bouwdelen/'+Classifications/Bouwdeel/name+'',
 					(..),
-					m2);
+					m2), IsHidden = "True";
 			
-				attribute<ratio> Norm_verliesfactor (..) := ='add('+AsItemList('BouwDeelVerliesFactor/'+Classifications/Bouwdeel/name)+') / Totaal';
+				attribute<ratio> Norm_verliesfactor (..) := ='add('+AsItemList('BouwDeelVerliesFactor/'+Classifications/Bouwdeel/name)+') / Totaal', IsHidden = "True";
 				
-				attribute<m2>    Totaal             (..) := ='add('+AsItemList(Classifications/bouwdeel/name)+')';
+				attribute<m2>    Totaal             (..) := ='add('+AsItemList(Classifications/bouwdeel/name)+') - KR', IsHidden = "True";
 			}
-			container Gebied
+			container Gebied : IsHidden = "True"
 			{
 				attribute<float64> n      (..) := float64(nrAansluitingen_i);
 				attribute<float64> MEAN_x (..) := float64(pointCol(Geometry));
@@ -255,13 +271,22 @@ container Vastgoed
 				Classifications/Gebouw_Kapitaallasten/name,
 				'const(0[Eur_yr], BebouwingsObject)',
 				BebouwingsObject,
-				Eur_yr);
+				Eur_yr), IsHidden = "True";
+
+			parameter<Classifications/BebouwingsSectorBase> BcSector :=	Classifications/BebouwingsSectorBase/V/Woning, ishidden = "True";
+			attribute<bool> isMeergezins := Classifications/WoningType/IsMeergezins [ Woningtype_rel ] ;
+			container Schuiven : IsHidden = "True"
+			{
+				parameter<ratio> EfficiencySchuif := DefaultInstellingen/Basis/RuimtelijkeVraag/Lokaal/Generiek/kosten/EfficiencySchuif, IsHidden = "True";
+			}
+			Container AansluitCapaciteit := Model/CalculationSchemes/AansluitCapaciteitT(BebouwingsObject);
+
 
 			container Functioneel := for_each_nedv(
 				Classifications/FunctioneleVraag/name,
 				'BaseValues/'+ Classifications/FunctioneleVraag/name,
 				.,
-				GJ_yr)
+				GJ_yr), IsHidden = "True"
 			{
 				attribute<bool> RV_N0_check(..) := abs(RV_N0_per_Bouwdeel/Total - BaseValues/RV) < 0.001;
 				attribute<GJ_yr> RV_N0 (..) := BaseValues/RV, IntegrityCheck ="RV_N0_check";
@@ -314,19 +339,19 @@ container Vastgoed
 			}
 
 			container Func2Meter:= CalculationSchemes/FunctioneelToMetervraag ( . , false);
-			container SPF := Func2Meter/SPF;
+			container SPF := Func2Meter/SPF, IsHidden = "True";
 			container BemeterdeGebouwInput_rel := for_each_nedv(Classifications/Product/name
 				, 'rlookup(Classifications/Performance/Input_rel, Classifications/BemeterdeGebouwInput/nr_OrgEntity)[SPF/PerformancePerProduct/'+Classifications/Product/name+']'
 				, .
 				, Classifications/BemeterdeGebouwInput
 				);
-			container jaarlijks
+			container jaarlijks : IsHidden = "True"
 			{
 				attribute<Eur_yr> Kj_oh_LO  (..) := const(0.0[eur_yr],..);
 				attribute<Eur_yr> Kj_adm_LO (..) := const(0.0[eur_yr],..);
 			}
 
-			container Criteria;
+			container Criteria : IsHidden = "True";
 		}	
 	}
 }			
