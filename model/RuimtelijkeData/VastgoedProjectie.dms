@@ -10,7 +10,7 @@
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
-container Vastgoed
+container VastgoedProjectie
 {
 	unit<uint8> NieuwbouwWoningType: nrofrows = 4, IsHidden = "True"
 	{
@@ -30,6 +30,8 @@ container Vastgoed
 		attribute<string>          label        := name;
 		attribute<string>          RO_directory := Classifications/Periode/RO_directory[org_rel];
 		attribute<yr>              nrJaren      := Classifications/Periode/nrJaren[org_rel];
+		attribute<yr_uint16>       EindJaar     := RO_directory[yr_uint16];
+		attribute<yr_uint16>       BeginJaar    := EindJaar - uint16(nrJaren)+1w;
 		attribute<Classifications/BouwjaarWoning> BouwjaarKlasse_rel : [ 11, 12, 13];
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
@@ -302,8 +304,7 @@ container Vastgoed
 			attribute<rdc_meter>                   Point             := geometry;
 			attribute<nrAsl>                       nrAansluitingen_i := float64(NB/nr_aansl[nbb_rel]);
 			attribute<Classifications/WoningType>  Woningtype_rel    := NB/Woningtype_rel[nbb_rel];
-			attribute<Classifications/WoningType>  BebouwingsType    := Woningtype_rel;
-			attribute<bool> 					   isMeergezins 	 := Classifications/Woningtype/IsMeergezins[BebouwingsType];
+			attribute<bool> 					   isMeergezins 	 := Classifications/Woningtype/IsMeergezins[WoningType_rel];
 			attribute<m2>                          Oppervlakte_i     := Classifications/WoningType/Default_oppervlak_Nieuwbouw[Woningtype_rel] * nrAansluitingen_i;
 			attribute<units/pand_asl>              Pand_aandeel      := Classifications/WoningType/Pand_aandeel[Woningtype_rel];
 			attribute<yr_uint16>                   Sloopjaar         := Const(2100[yr_uint16],.);
@@ -468,5 +469,38 @@ container Vastgoed
 
 			container Criteria;
 		}	
+	}
+	
+	parameter<string> unionExpr := 'union_data(results, '+AsItemList('NieuwbouwObjecten/'+Periode/name+'/BebouwingsObject/@ATTR')+')';
+		
+	unit<uint32> results := ='union_unit('+AsItemList('NieuwbouwObjecten/'+Periode/name+'/BebouwingsObject')+')'
+	{
+		attribute<Classifications/combines/WBE> ModelObjectKey := =replace(unionExpr, '@ATTR', 'ModelObjectKey');
+		attribute<string> code := =replace(unionExpr, '@ATTR', 'code');
+		attribute<string> label := =replace(unionExpr, '@ATTR', 'label');
+		attribute<rdc_meter> Point := =replace(unionExpr, '@ATTR', 'Point');
+		attribute<rdc_meter> Geometry := Point;
+		attribute<Invoer/RuimtelijkeData/StudieGebied/buurt> buurt_rel := =replace(unionExpr, '@ATTR', 'buurt_rel');
+		attribute<Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data> Aflevergebied_rel := =replace(unionExpr, '@ATTR', 'Aflevergebied_rel');
+		
+		attribute<nrAsl> nrAansluitingen_i := =replace(unionExpr, '@ATTR', 'nrAansluitingen_i');
+		attribute<m2> Oppervlakte_i := =replace(unionExpr, '@ATTR', 'Oppervlakte_i');
+		
+		attribute<classifications/WoningType> Woningtype_rel := =replace(unionExpr, '@ATTR', 'Woningtype_rel');
+		attribute<bool> gasloos := const(true, results);
+		attribute<bool> isMeergezins := =replace(unionExpr, '@ATTR', 'isMeergezins');
+		attribute<units/pand_asl> Pand_aandeel := =replace(unionExpr, '@ATTR', 'Pand_aandeel');
+		attribute<yr_uint16> bouwjaar := ='union_data(results, '+AsItemList('const('+String(Periode/BeginJaar)+'[yr_uint16], NieuwbouwObjecten/'+Periode/Name+'/BebouwingsObject)')+')';
+		attribute<yr_uint16> Sloopjaar := =replace(unionExpr, '@ATTR', 'Sloopjaar');
+		attribute<Geography/rdc_grids/m100> gridm100_rel := =replace(unionExpr, '@ATTR', 'gridm100_rel');
+		attribute<Classifications/Eigendom> Eigendom_rel := =replace(unionExpr, '@ATTR', 'Eigendom_rel');
+		attribute<Classifications/SchilLabel> SchilLabel_rel := =replace(unionExpr, '@ATTR', 'SchilLabel_rel');
+		attribute<Classifications/SchilLabel> Default_Energielabel_rel := const(Classifications/SchilLabel/V/A, results);
+		attribute<uint32> SchilLabel_date := const((0/0), results);
+
+		container Bouwdelen := for_each_nedv(Classifications/bouwdeel/name, replace(unionExpr, '@ATTR', 'Bouwdelen/'+Classifications/bouwdeel/name), results, m2)
+		{
+			container Isolatie := for_each_nedv(Classifications/bouwdeel/name, replace(unionExpr, '@ATTR', 'Bouwdelen/Isolatie/'+Classifications/bouwdeel/name), results, Classifications/IsolatieNiveau);
+		}
 	}
 }			

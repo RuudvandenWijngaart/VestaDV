@@ -64,10 +64,11 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<string> name                 : ['geen_woonpand','vrijstaand','twee_onder_1_kap','hoekwoning'    ,'tussenwoning'    ,'meergezinspand_laag_midden','meergezinspand_hoog'];
 		attribute<string> resterendFactorName  : [     'onbekend','vrijstaand', 'TweeOnderEenKap','Rijtjeshuis'   ,'Rijtjeshuis'     , 'FlatTot4'                 ,'Flat5'];
 
-		attribute<bool>   IsMeergezins         : [ false, false, false, false, false, true, true ];
-		attribute<Units/asl_pand> StapelFactor : [ 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 6.0 ];
-		attribute<Units/pand_asl> pand_aandeel := IsMeergezins ? 1.0 / StapelFactor : 1.0[units/pand_asl];
+		attribute<bool>           IsMeergezins                : [ false, false, false, false, false, true, true ];
+		attribute<Units/asl_pand> StapelFactor                : [ 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 6.0 ];
+		attribute<Units/pand_asl> pand_aandeel                := IsMeergezins ? 1.0 / StapelFactor : 1.0[units/pand_asl];
 		attribute<Units/m2_asl>   Default_oppervlak_Nieuwbouw : [ 0.0, 199, 142, 122, 118, 78, 78 ]; //gemiddelden BAG 2021-01-01
+		attribute<ratio>          VerhuisKans                 : [ 0.0, 0.0332, 0.0404, 0.0432, 0.0487, 0.1069, 0.1069 ]; //Uit WP6, 2023
 
 		attribute<uint32> BrushColor: DialogType = "BrushColor",
 		[
@@ -857,18 +858,16 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
 
-	unit<uint32> Input : nrofrows = 11
+	unit<uint32> Input : nrofrows = 12
 	{
-		attribute<string> name         : ['e', 'gas', 'H2', 'biomassa', 'olie', 'pellets', 'LT', 'MT', 'zon', 'wind', 'kolen'];
 		attribute<string> label        := name, DialogType = "LabelText";
-		attribute<bool>   isBemeterd   := id(.) <= V/MT;
-		attribute<bool>   gebiedsOptie := id(.) <= V/MT && not(gebouwOptie);
-		attribute<bool>   opwekOptie   := id(.) == V/zon || id(.) == V/wind;
-		attribute<bool>   gebouwOptie  := id(.) <= V/pellets || opwekOptie;
+		attribute<string> name         : ['e'  , 'gas', 'H2', 'biomassa', 'olie', 'pellets', 'Warmte_30', 'Warmte_50', 'Warmte_70', 'Koude', 'zon', 'wind'];
+		attribute<bool>   isBemeterd   : [true , true , true, true      , true  , true     , true       , true       , true       , true   , false, false ];
+		attribute<bool>   gebiedsOptie : [false, false, true, false     , false , false    , true       , true       , true       , true   , false, false ];
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
-	unit<uint32> BemeterdeGebouwInput := select_with_org_rel(Input/gebouwOptie && Input/isBemeterd)
+	unit<uint32> BemeterdeGebouwInput := select_with_org_rel(Input/isBemeterd)
 	{
 		attribute<string> name  := Input/name[org_rel];
 		attribute<string> label := name, DialogType = "LabelText";
@@ -954,8 +953,6 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		
 		container V // only describe required constants
 		{
-// REMOVE: geen_x_x is NOT DEFINED in  Performance.csv
-//			parameter<..> geen_x_x  := rlookup('geen.x.x', code), IntegrityCheck = "IsDefined(this->Performance_rel)";
 			parameter<..> geen_x_RV := rlookup('geen.x.RV', code), IntegrityCheck = "IsDefined(this->Performance_rel)";
 			parameter<..> geen_x_TW := rlookup('geen.x.TW', code), IntegrityCheck = "IsDefined(this->Performance_rel)";
 			parameter<..> geen_x_KD := rlookup('geen.x.KD', code), IntegrityCheck = "IsDefined(this->Performance_rel)";
@@ -1049,7 +1046,6 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 
-		attribute<WarmteOptie>          WarmteOptie_rel    := rlookup(name, WarmteOptie/name);
 		attribute<GebouwOptieCategorie> Categorie_rel      := rlookup(categorie, GebouwOptieCategorie/name);
 		attribute<Schillabel>           Min_schillabel_rel := rlookup(min_schillabel, Schillabel/name);
 		
@@ -1088,7 +1084,6 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 	{
 		attribute<string>      name            : ['W70', 'W50', 'W30', 'WK70', 'WK50', 'WK30'];
 		attribute<string>      label           : ['W-net aflever 70C', 'W-net aflever 50C', 'W-net aflever 30C', 'W&K-net aflever 70C', 'W&K-net aflever 50C', 'W&K-net aflever 30C'];
-		attribute<WarmteOptie> WarmteOptie_rel := rlookup(name, WarmteOptie/name)  , Descr = "WarmteOptie is een zelfstandige gebouw-optie of een gebiedsoptie.";
 		attribute<bool>        KoudeLevering   : [false,false,false,true,true,true], Descr = "levert dit type gebiedsoptie ook koude of niet";
 		attribute<Celsius>     T_sec           : [70, 50, 30, 70, 50, 30]          , Descr = "aflevertemperatuur aan de afnemers vanuit het secundair net";
 		attribute<bool>        IsLT            : [false,true,true,false,true,true] , Descr = "wordt er afgeleverd op middentemperatuurniveau of niet";
@@ -1103,6 +1098,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
+	
 	unit<uint8> WarmteOptie := union_unit_uint8(GebouwOptie, GebiedsOptie)
 	{
 		attribute<string> name            := union_data(., GebouwOptie/name, GebiedsOptie/name);
@@ -1518,47 +1514,11 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			attribute<string> LabelBouwjaar   := BouwjaarWoningRapportage/Label[nr_2];
 			attribute<string> Label           := LabelWoningtype + '_' + LabelBouwjaar;
 		}
-/* REMOVE, NOT USED
-		unit<uint32> PeriodeWonen := combine(Periode, WoningtypeNieuwbouw) // wordt gebruikt om Nieuwbouw maps en ResterdFactorMaps te lezen.
-		{
-			attribute<bool>                hasNieuwbouw            := Periode/hasNieuwbouw[nr_1];
-			attribute<string>              Periode_label           := Periode/label[nr_1];
-			attribute<string>              Periode_name            := Periode/name[nr_1];
-			attribute<yr>                  nrJaren                 := Periode/nrJaren[nr_1];
-			attribute<string>              prev_Periode_name       := Periode/name[nr_1-1b];
-			attribute<units/yr_uint16>     Periode_Eindjaar        := Periode/EindJaar[nr_1];
-			attribute<string>              Wonen_Name              := WoningtypeNieuwbouw/name[nr_2];
-			attribute<string>              Wonen_wlo_FileName      := WoningtypeNieuwbouw/wlo_FileName[nr_2];
-			attribute<WoningtypeNieuwbouw> WoningtypeNieuwbouw_rel := nr_2;
-			attribute<string>              name                    := Periode_name + '/' + Wonen_Name;
-			attribute<string>              prev_name               := prev_Periode_name + '/' + wonen_Name;
-			attribute<string>              label                   := name;
-
-			container V := for_each_nedv(name, 'value('+string(id(.))+', ...)', void, .);
-		}
-END REMOVE */
 		unit<uint8> UtiltypeBouwjaarBestaand := combine_uint8(UtiltypeBestaand, BouwjaarUtilBestaand)
 		{
 			attribute<string> LabelUtiltype := UtiltypeBestaand/label[nr_1];
 			attribute<string> LabelBouwjaar   := BouwjaarUtilBestaand/label[nr_2];
 			attribute<string> label           := LabelUtiltype + '_' + LabelBouwjaar;
 		}
-/* REMOVE, NOT USED
-		unit<uint32> PeriodeUtiliteit := combine(Periode, UtilTypeNieuwbouw)
-		{
-			attribute<bool>                hasNieuwbouw            := Periode/hasNieuwbouw[nr_1];
-			attribute<string>              Periode_label           := Periode/label[nr_1];
-			attribute<string>              Periode_name            := Periode/name[nr_1];
-			attribute<yr>                  nrJaren                 := Periode/nrJaren[nr_1];
-			attribute<string>              prev_Periode_name       := Periode/name[nr_1-1b];
-			attribute<units/yr_uint16>     Periode_Eindjaar        := Periode/EindJaar[nr_1];
-			attribute<string>              Utiliteit_Name          := UtilTypeNieuwbouw/name[nr_2];
-			attribute<string>              wlo_filename_Nieuwbouw  := UtilTypeNieuwbouw/wlo_filename_Nieuwbouw[nr_2];
-			attribute<WoningtypeNieuwbouw> WoningtypeNieuwbouw_rel := nr_2;
-			attribute<string>              name                    := Periode_name + '/' + utiliteit_Name;
-			attribute<string>              prev_name               := prev_Periode_name + '/' + utiliteit_Name;
-			attribute<string>              label                   := name;
-		}
-END REMOVE */
 	}
 }
