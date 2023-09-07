@@ -17,50 +17,17 @@ template StateNaAllocatieComponent
 
 		container Aansluitingen := BO_base/Aansluitingen
 		{
-			attribute<nrAsl> Gnet  (BO) := nrAansluitingen * float64(not(Classifications/WarmteOptie/isGebiedsOptie[WarmteOptie_rel])) * float64(Metervraag/gas > 0[GJ_yr]);
-			attribute<nrAsl> Warmte(BO) := nrAansluitingen * float64(Classifications/WarmteOptie/IsWarmteNet[WarmteOptie_rel] || WarmteOptie_rel == Classifications/WarmteOptie/V/Gebied_zK || WarmteOptie_rel == Classifications/WarmteOptie/V/Gebied_gK);
+			attribute<nrAsl> Gnet   (BO) := nrAansluitingen * float64(Metervraag/gas > 0[GJ_yr]);
+			attribute<nrAsl> Warmte (BO) := = 'nrAansluitingen * float64(or('+AsItemList(replace('BO/InstallatiePerProduct/@PD@ == Classifications/Installatie/V/Gebiedsoptie','@PD@',Classifications/product/name))+'))';
+
+			attribute<nrAsl> W70    (BO) := Warmte;
+			attribute<nrAsl> W50    (BO) := const(0.0[nrAsl],BO);
+			attribute<nrAsl> W30    (BO) := const(0.0[nrAsl],BO);
+			attribute<nrAsl> WK70   (BO) := const(0.0[nrAsl],BO);
+			attribute<nrAsl> WK50   (BO) := const(0.0[nrAsl],BO);
+			attribute<nrAsl> WK30   (BO) := const(0.0[nrAsl],BO);
 		}
-		container WarmteVraag // CalculationSchemes/WarmteVraagT is hier expliciet geinstantieerd wegens iets andere toepassing bij herberekening achteraf.
-		{
-			// begin case parameters
-			// attribute<Celsius> T_sec(BO) := Classifications/GebiedsOptie/T_sec[Classifications/WarmteOptie/GebiedsOptie_rel[WarmteOptie_rel]];
-			attribute<bool>    IsLT(BO) := Classifications/WarmteOptie/IsLT[WarmteOptie_rel];
-			attribute<bool>    Koudebeschikbaar(BO) := WarmteOptie_rel == Classifications/WarmteOptie/V/WKO; // TODO OV: Generaliseren
-			attribute<float64> BeschikbaarheidsFactor(BO) := Float64(Classifications/WarmteOptie/IsGebiedsOptie[WarmteOptie_rel]);
-			// end case parameters
 
-			//Aansluitwaardes
-			attribute<kW>     ASW_RV             (BO) := IsLT ? BO/AansluitCapaciteit/ASW_RVlt : BO/AansluitCapaciteit/ASW_RVmt;
-			attribute<kW>     ASW_TW             (BO) := IsLT ? BO/AansluitCapaciteit/ASW_TWlt : BO/AansluitCapaciteit/ASW_TWmt;
-			attribute<kW>     ASW_K              (BO) := KoudeBeschikbaar     ? BO/AansluitCapaciteit/ASW_K    : 0[kw];
-
-			//Gelijktijdigheidsfactoren
-			attribute<ratio>  GTF_RV             (BO) := IsLT ? BO/AansluitCapaciteit/GTF_RVlt : BO/AansluitCapaciteit/GTF_RVmt;
-			attribute<ratio>  GTF_TW             (BO) := const(BO/AansluitCapaciteit/GTF_TW,BO);
-			attribute<ratio>  GTF_K              (BO) := const(BO/AansluitCapaciteit/GTF_K,BO);
-
-			//Vermogensvraag aan het secundaire net
-			attribute<kW>     P_RV_sec           (BO) := ASW_RV * GTF_RV;
-			attribute<kW>     P_TW_sec           (BO) := ASW_TW * GTF_TW;
-			attribute<kW>     P_K_sec            (BO) := KoudeBeschikbaar ? ASW_K * GTF_K : 0.0[kw];
-
-			attribute<kW>     AansluitCapaciteit (BO) := KoudeBeschikbaar ? max_elem(ASW_TW   + ASW_RV  , ASW_K  ) : ASW_TW   + ASW_RV  ;
-			attribute<kW>     P_sec              (BO) := KoudeBeschikbaar ? max_elem(P_TW_sec + P_RV_sec, P_K_sec) : P_TW_sec + P_RV_sec;
-
-			attribute<nrAsl>  nrAansluitingen    (BO) := BeschikbaarheidsFactor * BO/nrAansluitingen;
-			attribute<m2>     Oppervlakte        (BO) := BeschikbaarheidsFactor * BO/Oppervlakte;
-
-			attribute<GJ_yr>  V_RV               (BO) := BeschikbaarheidsFactor * BO/Functioneel/RV;
-			attribute<GJ_yr>  V_TW               (BO) := BeschikbaarheidsFactor * BO/Functioneel/TW;
-			attribute<GJ_yr>  V_KD               (BO) := BeschikbaarheidsFactor * BO/Functioneel/KD;
-			attribute<GJ_yr>  V_Warmte           (BO) := V_RV + V_TW;
-			attribute<Eur_yr> Oj_Warmte          (BO) := V_Warmte * BO/WarmteWet/WarmtePrijs, Source = "FO v7a F 8-10";
-			attribute<Eur_yr> Oj_VastRechtMT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtMT_T;
-			attribute<Eur_yr> Oj_VastRechtLT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtLT_T;
-			attribute<Eur_yr> Oj_VastRechtK      (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtK_T;
-			attribute<Eur>    Oi_AansluitBijdrage(BO) := BeschikbaarheidsFactor * BO/Opbrengsten/AansluitBijdrageT;
-		}
-		
 		container eenmalig := for_each_nedv(
 			Classifications/GebouwOptie_eenmalig/name,
 			'BO_base/kosten/eenmalig/'+ Classifications/GebouwOptie_eenmalig/name,
