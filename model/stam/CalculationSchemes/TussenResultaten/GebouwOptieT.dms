@@ -123,7 +123,6 @@ template select_with_org_relGebouwOptieT
 			attribute<GeschiktObject>              GeschiktObject_rel := value(pointrow(values), GeschiktObject);
 			attribute<Classifications/Installatie> Installatie_rel    := value(pointcol(values), Classifications/Installatie);
 			attribute<xProduct>                    First_xProduct_rel := rlookup(values, xProduct/xInstallatie_code);
-			attribute<Classifications/Product>     FirstProduct_rel   := xProduct/Product_rel[First_xProduct_rel];
 		}		
 		
 		attribute<Eur_asl> Ki_asl := sum(VerbruiksOpties/Installatie/Ki_asl[uInstallatie/Installatie_rel], uInstallatie/GeschiktObject_rel);
@@ -464,10 +463,11 @@ template select_with_org_relGebouwOptieT
 			parameter<BBN> BBN_rel;
 			//end case parameters
 
-			attribute<bool> Naleving      (GeschiktObject) := first(rnd_uniform(JaarSeed * 106u, GeschiktObject, range(float64, 0d, 1d)), GeschiktObject/BO_rel)[GeschiktObject/BO_rel] <= BBN/Naleving[BBN_rel];
-			attribute<bool> InDoelgroepED (GeschiktObject) := ='OR('+AsItemList(replace('BBN/doelgroep/@ED[BBN_rel] && BO/Eigendom_rel[geschiktobject/BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')', ishidden = "True";
-			attribute<bool> InDoelgroepWT (GeschiktObject) := BBN/doelgroep/EGW[BBN_rel] && BO/IsMeergezins[GeschiktObject/BO_rel] || BBN/doelgroep/MGW[BBN_rel] && not(BO/IsMeergezins[GeschiktObject/BO_rel]);
-			attribute<bool> Geldig        (GeschiktObject) := Naleving && InDoelgroepED && InDoelgroepWT;
+			attribute<bool> Naleving       (GeschiktObject) := first(rnd_uniform(JaarSeed * 106u, GeschiktObject, range(float64, 0d, 1d)), GeschiktObject/BO_rel)[GeschiktObject/BO_rel] <= BBN/Naleving[BBN_rel];
+			attribute<bool> InDoelgroepED  (GeschiktObject) := ='OR('+AsItemList(replace('BBN/doelgroep/@ED[BBN_rel] && BO/Eigendom_rel[geschiktobject/BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')', ishidden = "True";
+			attribute<bool> InDoelgroepWT  (GeschiktObject) := BBN/doelgroep/EGW[BBN_rel] && BO/IsMeergezins[GeschiktObject/BO_rel] || BBN/doelgroep/MGW[BBN_rel] && not(BO/IsMeergezins[GeschiktObject/BO_rel]);
+			attribute<bool> BouwjaarVoldaan(GeschiktObject) := BO/Bouwjaar[GeschiktObject/BO_rel] >= MakeDefined(BBN/Voorwaarde/MinBouwjaar[BBN_rel], 0w) && BO/Bouwjaar[GeschiktObject/BO_rel] < MakeDefined(BBN/Voorwaarde/MaxBouwjaar[BBN_rel], 9999w);
+			attribute<bool> Geldig         (GeschiktObject) := Naleving && InDoelgroepED && InDoelgroepWT && BouwjaarVoldaan;
 
 			attribute<Classifications/SchilLabel> LabelNorm (GeschiktObject) := not(Geldig) ? Classifications/Schillabel/V/N : BBN/LabelNorm/Min_label[BBN_rel];
 		}
@@ -515,9 +515,9 @@ template select_with_org_relGebouwOptieT
 		}
 
 		attribute<bool> InDoelgroepED (GeschiktObject) := ='OR('+AsItemList(replace('ZBV/doelgroep/@ED[ZBV_rel] && BO/Eigendom_rel[geschiktobject/BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')', ishidden = "True";
-		attribute<bool> InDoelgroepWT (GeschiktObject) := ZBV/doelgroep/EGW[ZBV_rel] && BO/IsMeergezins[GeschiktObject/BO_rel] || ZBV/doelgroep/MGW[ZBV_rel] && not(BO/IsMeergezins[GeschiktObject/BO_rel]);
+//		attribute<bool> InDoelgroepWT (GeschiktObject) := ZBV/doelgroep/EGW[ZBV_rel] && BO/IsMeergezins[GeschiktObject/BO_rel] || ZBV/doelgroep/MGW[ZBV_rel] && not(BO/IsMeergezins[GeschiktObject/BO_rel]);
 
-		attribute<bool> GeldigVerbod  (GeschiktObject) := LabelVoorwaarde/Voldaan && InDoelgroepED && InDoelgroepWT;
+		attribute<bool> GeldigVerbod  (GeschiktObject) := LabelVoorwaarde/Voldaan && InDoelgroepED; // && InDoelgroepWT;
 		attribute<bool> OptieVerboden (GeschiktObject) := GeldigVerbod && Naleving/PerObject && Installatie/InOptie;
 	}
 	attribute<bool> Verboden (GeschiktObject) := =count(ZBV/naleving) > 0u ? 'or('+AsItemList('VerbodBerekening/'+ZBV/name+'/OptieVerboden')+')' : 'const(false,GeschiktObject)';
