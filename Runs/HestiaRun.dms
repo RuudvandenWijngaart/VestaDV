@@ -12,8 +12,9 @@ container HestiaRun
 	#include <%projDir%/model/Classifications.dms>
 
 	//====== Invoer: over welke periode moet er worden gerekend?
-	parameter<uint16> eerste_jaar := 2020[uint16], Descr = "Eerste zichtjaar";
-	parameter<uint8>  aantal_jaar := 11[uint8]   , Descr = "Aantal zichtjaren";
+	parameter<uint16> eerste_jaar             := 2020[uint16], Descr = "Eerste zichtjaar";
+	parameter<uint8>  aantal_jaar             := 11[uint8]   , Descr = "Aantal zichtjaren";
+	parameter<string> Studiegebied            := Invoer/StudieGebied;
 
 	//====== Opbouw lijst van zichtjaren en rekenstappen
 	unit<uint8> all_rekenstap: nrofrows = 51, IsHidden = "True";
@@ -33,38 +34,41 @@ container HestiaRun
 	{
 		// Invoer: Geografische selectie welke gebied wordt onderzocht.
 
-		// Volledig Nederland zonder selectie. Comment uit indien een andere optie gekozen wordt.
-		// parameter<string>   StudieGebied : ['NL'];
+		// Volledig Nederland zonder selectie. Comment in om te gebruiken.
+		// parameter<string>   StudieGebied : ['NL'], IsHidden = "True";
 
 		// Enkele gemeente als selectie. Comment in om te gebruiken.
-		 parameter<string>   StudieGebied : ['GM0050']; //GM0050 (Zeewolde) is handig om kleinschalig te testen OF GM0213 (meer oudere gebouwen)
+		   parameter<string>   StudieGebied : ['GM0050'], IsHidden = "True"; //GM0050 (Zeewolde) is handig om kleinschalig te testen OF GM0213 (meer oudere gebouwen)
 
 		// Meerdere gemeenten als studiegebied. Comment in om te gebruiken.
-		// parameter<string>   StudieGebied : ['GM0402,GM0344,GM1581,GM0439,GM0153,GM0599,GM0034,GM0050,GM0321'];
+		// parameter<string>   StudieGebied : ['GM0402,GM0344,GM1581,GM0439,GM0153,GM0599,GM0034,GM0050,GM0321'], IsHidden = "True";
 
 	    // RES-regio als selectie. Comment in om te gebruiken.
-		// parameter<string>   RES_Gebied   : ['RESTwente'];
+		// parameter<string>   RES_Gebied   : ['RESTwente'], IsHidden = "True";
 		// parameter<string>   StudieGebied :=
-		// Geography/RegioIndelingen/Energieregio/GM_code_list[rlookup(RES_Gebied, Geography/RegioIndelingen/Energieregio/name)];
-		
+		// Geography/RegioIndelingen/Energieregio/GM_code_list[rlookup(RES_Gebied, Geography/RegioIndelingen/Energieregio/name)], IsHidden = "True";
+
 		// Provincie als selectie. Comment in om te gebruiken.
 		// parameter<string> Provincie := 'ZuidHolland';
 		// parameter<string>   StudieGebied := 
 		// Geography/RegioIndelingen/Provincie/GM_code_list[rlookup(Provincie, Geography/RegioIndelingen/Provincie/name)];
- 
-		parameter<bool> StartgegevensAan := true, Descr = "Worden invoer voor isolatieniveaus en gebouwopties meegenomen?";
 
-		container DefaultInstellingen
+		parameter<bool> StartgegevensAan        := eerste_jaar >= 2020[uint16], Descr = "Worden invoer voor isolatieniveaus en gebouwopties meegenomen?", IsHidden = "True";
+		parameter<bool> HerberekenStartsituatie := false, IsHidden = "True";
+
+		container DefaultInstellingen : IsHidden = "True"
 		{
 			// Ophalen opties voor instellingen die per rekenstap gebruikt kunnen worden.
 			#include <%projDir%/Runs/DefaultSettings/Basis.dms>
 			#include <%projDir%/Runs/DefaultSettings/Rekenstap.dms>		
 		}
+
+		parameter<string> EnergieprijsScenario := '20220709_VV_Euro2020';
 		
-		container SpecifiekeInstellingen := DefaultInstellingen/Basis
+		container SpecifiekeInstellingen := DefaultInstellingen/Basis, IsHidden = "True"
 		{
 			// Invoer: welke energieprijzenbestanden worden gebruikt.
-			parameter<string> Energieprijzenbron := '20220709_VV_Euro2020';
+			parameter<string> Energieprijzenbron := EnergieprijsScenario;
 			
 			// Invoer: Per rekenstap worden specifieke instellingen gebruikt.
 			// De lijst van rekenstappen wordt gedefinieerd bij rekenstap.
@@ -97,214 +101,5 @@ container HestiaRun
 	#include <%projDir%/model/Resultaten.dms>
 	#include <%projDir%/model/ConfigSettings.dms>
 	#include <%projDir%/model/ExportSettings.dms>
-	unit<uint8> Tellingen := select_with_org_rel(ID(classifications/zichtjaar) < 51b) // voor telling testen niet altijd alle jaren nodig
-	{
-		attribute<string> name := org_rel->name;
-		attribute<uint32> BO                    := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/BO')+')';
-		attribute<units/nrAsl> BO_asl           := ='union_data(., '+AsItemList('sum(/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/BO/nrAansluitingen)')+')';
-		attribute<uint32> ProductActieveWoning  := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ProductActieveWoning')+')';
-		attribute<uint32> BouwdeelActieveWoning := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/BouwdeelActieveWoning')+')';
-		attribute<uint32> OptiesHere            := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ProductActieveWoning/OptiesHere')+')';
-		attribute<uint32> DubbelActief          := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ProductActieveWoning/sub_BouwdeelActief')+')';
-		attribute<uint32> DA_xIsolatieAmbitie   := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ProductActieveWoning/sub_BouwdeelActief/xIsolatieAmbitie')+')';
-		attribute<uint32> EnkelProductActief    := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ProductActieveWoning/sub_BouwdeelInactief')+')';
-		attribute<uint32> PA_xIsolatieAmbitie   := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ProductActieveWoning/xIsolatieAmbitie')+')';
-		attribute<uint32> BA_AmbitieBerekening  := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/BouwdeelActieveWoning/AmbitieBerekening')+')';
-		attribute<uint32> EnkelBouwdeelActief   := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/BouwdeelActieveWoning/ProductInactieveBO')+')';
-		attribute<uint32> EBA_AmbitieBerekening := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/BouwdeelActieveWoning/ProductInactieveAmbitie')+')';
-		attribute<uint32> ActieveWoning         := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning')+')';
-		attribute<units/nrAsl> A_asl            := ='union_data(., '+AsItemList('sum( /TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/BO_rel->nrAansluitingen)')+')';
-		attribute<uint32> A_xInvesteringsOptie  := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/xInvesteringsOptie')+')';
-		attribute<uint32> A_xGebouwOptie        := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/xGebouwOptie')+')';
-		attribute<uint32> A_GeschikteOptie      := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/GeschikteOptie')+')';
-		
-		attribute<uint32> A_Zonder_xIO          := ='ActieveWoning        - union_data(., '+AsItemList('sum_uint32(pcount(/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/xInvesteringsOptie/ActieveWoning_rel )>0)')+')';
-		attribute<uint32> AxIO_Zonder_GO        := ='A_xInvesteringsOptie - union_data(., '+AsItemList('sum_uint32(pcount(/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/GeschikteOptie/xInvesteringsOptie_rel)>0)')+')';
-
-		container Subsidies
-		{
-			container SubsidieBudgetten := for_each_nedv(
-				  Tellingen/name
-				, 'TussenResultaten/'+Tellingen/name+'/AllocatieResultaten/Subsidiebudgetten/Maximaal_budget'
-				, /Invoer/Beleid/Subsidie/SubsidieBudget 
-				, units/Eur );
-			container SubsidieAanvraag := for_each_nedv(
-				  Tellingen/name
-				, 'TussenResultaten/'+Tellingen/name+'/AllocatieResultaten/Subsidiebudgetten/Aanvraag_per_budget'
-				, /Invoer/Beleid/Subsidie/SubsidieBudget 
-				, units/Eur );
-			container SubsidieResterend := for_each_nedv(
-				  Tellingen/name
-				, 'TussenResultaten/'+Tellingen/name+'/AllocatieResultaten/Subsidiebudgetten/Resterend_budget'
-				, /Invoer/Beleid/Subsidie/SubsidieBudget 
-				, units/Eur );
-			container SubsidieFactor := for_each_nedv(
-				  Tellingen/name
-				, 'SubsidieBudgetten/'+Tellingen/name+'/ SubsidieAanvraag/'+Tellingen/name
-				, /Invoer/Beleid/Subsidie/SubsidieBudget 
-				, units/ratio );
-		}
-
-
-		container SELPETellingen
-		{
-
-			unit<uint32> table := Resultaten/StartJaar/SELPE/Installatie_x_ProductType/long_sparse
-			{
-				attribute<string>      name  := Resultaten/Startjaar/SELPE/Installatie_x_ProductType/long_sparse/name;
-				attribute<units/PJ_yr> J2020 := Resultaten/Startjaar/SELPE/Installatie_x_ProductType/long_sparse/PJ;
-				attribute<units/PJ_yr> J2021 := Resultaten/R1_2021/SELPE/Installatie_x_ProductType/long_sparse/PJ;
-				attribute<units/PJ_yr> J2022 := Resultaten/R2_2022/SELPE/Installatie_x_ProductType/long_sparse/PJ;
-				attribute<units/PJ_yr> J2023 := Resultaten/R3_2023/SELPE/Installatie_x_ProductType/long_sparse/PJ;
-				attribute<units/PJ_yr> J2024 := Resultaten/R4_2024/SELPE/Installatie_x_ProductType/long_sparse/PJ;
-				attribute<units/PJ_yr> J2025 := Resultaten/R5_2025/SELPE/Installatie_x_ProductType/long_sparse/PJ;
-				attribute<units/PJ_yr> J2026 := Resultaten/R6_2026/SELPE/Installatie_x_ProductType/long_sparse/PJ;
-				attribute<units/PJ_yr> J2027 := Resultaten/R7_2027/SELPE/Installatie_x_ProductType/long_sparse/PJ;
-				attribute<units/PJ_yr> J2028 := Resultaten/R8_2028/SELPE/Installatie_x_ProductType/long_sparse/PJ;
-				attribute<units/PJ_yr> J2029 := Resultaten/R9_2029/SELPE/Installatie_x_ProductType/long_sparse/PJ;
-				attribute<units/PJ_yr> J2030 := Resultaten/R10_2030/SELPE/Installatie_x_ProductType/long_sparse/PJ;
-
-			}
-			
-			parameter<string> OutputFolder := '%localDataProjDir%/Results/SELPE/';
-			unit<uint32> variable := SubItem_PropValues(table,'name');
-			container export_csv := Model/CalculationSchemes/Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), OutputFolder+'SELPETellingen.csv');
-		}
-
-		container KalibratieTellingen
-		{
-			attribute<units/nrAsl> Asl             (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/Asl')+')';
-			attribute<units/nrAsl> A               (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/A')+')';
-			attribute<units/nrAsl> B               (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/B')+')';
-			attribute<units/nrAsl> C               (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/C')+')';
-			attribute<units/nrAsl> D               (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/D')+')';
-			attribute<units/nrAsl> E               (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/E')+')';
-			attribute<units/nrAsl> F               (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/F')+')';
-			attribute<units/nrAsl> G               (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/G')+')';
-			attribute<units/nrAsl> RV_gas          (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/RV_gas')+')';
-			attribute<units/nrAsl> RV_gebiedsoptie (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/RV_gebiedsoptie')+')';
-			attribute<units/nrAsl> TW_gas          (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/TW_gas')+')';
-			attribute<units/nrAsl> VT_nat          (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/VT_nat')+')';
-
-			attribute<units/GJ_yr> V_gas           (Tellingen) := ='union_data(.., '+AsItemList('sum(/Resultaten/'+name+'/EnergyResults/Metervraag/gebouwen/gas/Totaal)')+')';
-			attribute<units/GJ_yr> V_warmte        (Tellingen) := ='union_data(.., '+AsItemList('sum(/Resultaten/'+name+'/EnergyResults/Metervraag/gebouwen/WarmteKoudeLevering/V_warmte)')+')';
-
-			unit<uint32> all_rekenstap: nrofrows = 51;
-
-			unit<uint32> rekenstap32 := select_with_org_rel(id(all_rekenstap) < uint32(aantal_jaar)), IsHidden = "True"
-			{
-				attribute<units/yr_uint16> Jaar  := (uint16(2000) + uint16(id(.)))[units/yr_uint16];
-
-				attribute<string>          label := string(id(.))+'_'+string(Jaar);
-				attribute<string>          name  := id(.) == 0u ? 'StartJaar' : 'R' + label; 
-			}	
-
-			unit<uint32> table := Rekenstap32
-			{
-				attribute<Tellingen> Tellingen_rel := rlookup(name, Tellingen/name);
-
-				attribute<units/nrAsl> Asl := KalibratieTellingen/Asl[Tellingen_rel];
-				attribute<units/nrAsl> A               := KalibratieTellingen/A[Tellingen_rel];
-				attribute<units/nrAsl> B               := KalibratieTellingen/B[Tellingen_rel];
-				attribute<units/nrAsl> C               := KalibratieTellingen/C[Tellingen_rel];
-				attribute<units/nrAsl> D               := KalibratieTellingen/D[Tellingen_rel];
-				attribute<units/nrAsl> E               := KalibratieTellingen/E[Tellingen_rel];
-				attribute<units/nrAsl> F               := KalibratieTellingen/F[Tellingen_rel];
-				attribute<units/nrAsl> G               := KalibratieTellingen/G[Tellingen_rel];
-				attribute<units/nrAsl> RV_gas          := KalibratieTellingen/RV_gas[Tellingen_rel];
-				attribute<units/nrAsl> RV_gebiedsoptie := KalibratieTellingen/RV_gebiedsoptie[Tellingen_rel];
-				attribute<units/nrAsl> TW_gas          := KalibratieTellingen/TW_gas[Tellingen_rel];
-				attribute<units/nrAsl> VT_nat          := KalibratieTellingen/VT_nat[Tellingen_rel];
-
-				attribute<units/GJ_yr> V_gas           := KalibratieTellingen/V_gas[Tellingen_rel];
-				attribute<units/GJ_yr> V_warmte        := KalibratieTellingen/V_warmte[Tellingen_rel];
-			}
-			parameter<string> OutputFolder := '%localDataProjDir%/Results/Kalibratie/';
-			unit<uint32> variable := SubItem_PropValues(table,'name');
-			container export_csv := Model/CalculationSchemes/Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), OutputFolder+'KalibratieTellingen.csv');
-		}
-
-		container MaatregelTellingen
-		{
-			//====== KPIs voor export
-			attribute<units/nrAsl> Asl  (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/Asl')+')';
-
-			attribute<units/m2> RB_m2   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/RB')+')';
-			attribute<units/m2> RO_m2   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/RO')+')';
-			attribute<units/m2> DR_m2   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/DR')+')';
-			attribute<units/m2> PL_m2   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/PL')+')';
-			attribute<units/m2> VL_m2   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/VL')+')';
-			attribute<units/m2> MG_m2   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/MG')+')';
-			attribute<units/m2> MS_m2   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/MS')+')';
-			attribute<units/m2> DP_m2   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/DP')+')';
-			attribute<units/m2> DS_m2   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/DS')+')';
-			attribute<units/m2> KR_m2   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/KR')+')';
-
-			attribute<units/ratio> muur_ia (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/muur')+')';
-			attribute<units/ratio> dak_ia  (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/dak')+')';
-			attribute<units/ratio> glas_ia (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/glas')+')';
-			attribute<units/ratio> vloer_ia(Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/vloer')+')';
-			attribute<units/ratio> RB_ia   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/RB')+')';
-			attribute<units/ratio> RO_ia   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/RO')+')';
-			attribute<units/ratio> DR_ia   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/DR')+')';
-			attribute<units/ratio> PL_ia   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/PL')+')';
-			attribute<units/ratio> VL_ia   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/VL')+')';
-			attribute<units/ratio> MG_ia   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/MG')+')';
-			attribute<units/ratio> MS_ia   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/MS')+')';
-			attribute<units/ratio> DP_ia   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/DP')+')';
-			attribute<units/ratio> DS_ia   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/DS')+')';
-			attribute<units/ratio> KR_ia   (Tellingen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/KR')+')';
-
-			//===== End KPIs
-
-			unit<uint32> all_rekenstap: nrofrows = 51;
-
-			unit<uint32> rekenstap32 := select_with_org_rel(id(all_rekenstap) < uint32(aantal_jaar)), IsHidden = "True"
-			{
-				attribute<units/yr_uint16> Jaar  := (uint16(2000) + uint16(id(.)))[units/yr_uint16];
-
-				attribute<string>          label := string(id(.))+'_'+string(Jaar);
-				attribute<string>          name  := id(.) == 0u ? 'StartJaar' : 'R' + label; 
-			}	
-
-			unit<uint32> table := Rekenstap32
-			{
-				attribute<Tellingen> Tellingen_rel := rlookup(name, Tellingen/name);
-
-				//====== KPIs voor export
-				attribute<units/nrAsl> Asl := MaatregelTellingen/Asl[Tellingen_rel];
-
-				attribute<units/m2> RB_m2 := MaatregelTellingen/RB_m2[Tellingen_rel];
-				attribute<units/m2> RO_m2 := MaatregelTellingen/RO_m2[Tellingen_rel];
-				attribute<units/m2> DR_m2 := MaatregelTellingen/DR_m2[Tellingen_rel];
-				attribute<units/m2> PL_m2 := MaatregelTellingen/PL_m2[Tellingen_rel];
-				attribute<units/m2> VL_m2 := MaatregelTellingen/VL_m2[Tellingen_rel];
-				attribute<units/m2> MG_m2 := MaatregelTellingen/MG_m2[Tellingen_rel];
-				attribute<units/m2> MS_m2 := MaatregelTellingen/MS_m2[Tellingen_rel];
-				attribute<units/m2> DP_m2 := MaatregelTellingen/DP_m2[Tellingen_rel];
-				attribute<units/m2> DS_m2 := MaatregelTellingen/DS_m2[Tellingen_rel];
-				attribute<units/m2> KR_m2 := MaatregelTellingen/KR_m2[Tellingen_rel];
-
-				attribute<units/ratio> muur_ia  := MaatregelTellingen/muur_ia[Tellingen_rel];
-				attribute<units/ratio> dak_ia   := MaatregelTellingen/dak_ia[Tellingen_rel];
-				attribute<units/ratio> glas_ia  := MaatregelTellingen/glas_ia[Tellingen_rel];
-				attribute<units/ratio> vloer_ia := MaatregelTellingen/vloer_ia[Tellingen_rel];
-				attribute<units/ratio> RB_ia := MaatregelTellingen/RB_ia[Tellingen_rel];
-				attribute<units/ratio> RO_ia := MaatregelTellingen/RO_ia[Tellingen_rel];
-				attribute<units/ratio> DR_ia := MaatregelTellingen/DR_ia[Tellingen_rel];
-				attribute<units/ratio> PL_ia := MaatregelTellingen/PL_ia[Tellingen_rel];
-				attribute<units/ratio> VL_ia := MaatregelTellingen/VL_ia[Tellingen_rel];
-				attribute<units/ratio> MG_ia := MaatregelTellingen/MG_ia[Tellingen_rel];
-				attribute<units/ratio> MS_ia := MaatregelTellingen/MS_ia[Tellingen_rel];
-				attribute<units/ratio> DP_ia := MaatregelTellingen/DP_ia[Tellingen_rel];
-				attribute<units/ratio> DS_ia := MaatregelTellingen/DS_ia[Tellingen_rel];
-				attribute<units/ratio> KR_ia := MaatregelTellingen/KR_ia[Tellingen_rel];
-
-				//===== End KPIs
-			}
-			parameter<string> OutputFolder := '%localDataProjDir%/Results/Kalibratie/';
-			unit<uint32> variable := SubItem_PropValues(table,'name');
-			container export_csv := Model/CalculationSchemes/Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), OutputFolder+'KalibratieTellingen.csv');
-		}
-	}
+	#include <%projDir%/model/Tellingen.dms>
 }

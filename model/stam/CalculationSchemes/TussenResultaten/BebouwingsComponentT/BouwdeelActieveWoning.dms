@@ -22,13 +22,13 @@ unit<uint32> BouwdeelActieveWoning := select_with_org_rel(BO/Activatie/BouwdeelA
 
 	unit<uint8> IV := classifications/IsolatieVerbetering, ishidden = "True";
 	
-	unit<uint32> AmbitieBerekening := combine_unit(BouwdeelActieveWoning, IV)
+	unit<uint32> AmbitieBerekening := combine(BouwdeelActieveWoning, IV)
 	,	Descr = "iedere (relevante) isolatie ambitie voor iedere op bouwdeel geactiveerde woning"
 	{
-		attribute<BouwdeelActieveWoning> BouwdeelActieveWoning_rel := value(ID(.) / #IV, BouwdeelActieveWoning); // first_rel
-		attribute<IV> IsolatieVerbetering_rel := value(ID(.) % #IV, IV); // second_rel
+		attribute<BouwdeelActieveWoning> BouwdeelActieveWoning_rel := first_rel, IsHidden = "True"; // first_rel
+		attribute<IV> IsolatieVerbetering_rel := second_rel, IsHidden = "True"; // second_rel
 		
-		attribute<BO> BO_rel  := BouwdeelActieveWoning/BO_rel[BouwdeelActieveWoning_rel];
+		attribute<BO> BO_rel  := BouwdeelActieveWoning/BO_rel[BouwdeelActieveWoning_rel], ishidden = "True";
 
 		attribute<classifications/IsolatieAmbitie> IsolatieAmbitie_rel := IV/IsolatieAmbitie_rel[IsolatieVerbetering_rel];
 		
@@ -46,7 +46,7 @@ unit<uint32> BouwdeelActieveWoning := select_with_org_rel(BO/Activatie/BouwdeelA
 			classifications/Bouwdeel/Verlies[classifications/IsolatieMaatregel/bouwdeel_rel] // hoeveel relatief belang 
 		*	MakeDefined(classifications/IsolatieMaatregel/R_RV / value(100, Percent), 0.0);
 		
-		unit<uint32> IMxUV := classifications/IsolatieMaatregel/xUitvoering;
+		unit<uint32> IMxUV := classifications/IsolatieMaatregel/xUitvoering, ishidden = "True";
 		
 		container SpecificP50P := for_each_nedv(classifications/IsolatieMaatregel/name
 		,	replace('Classifications/Scurve_isolatie/p50p_f[@EDxIM]'
@@ -93,7 +93,7 @@ unit<uint32> BouwdeelActieveWoning := select_with_org_rel(BO/Activatie/BouwdeelA
 			,float64);
 
 		// TODO: check for overflow
-		parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(classifications/BouwdeelIsolatie/bouwdeel_rel) )
+		parameter<float64> LOG_MAX_FLOAT64 := 700.0, ishidden = "True"; // slightly less than ln( 2^1024 / pcount(classifications/BouwdeelIsolatie/bouwdeel_rel) )
 		container OddsRatio := for_each_nedv(classifications/IsolatieMaatregel/name
 		,	replace('IsDefined(Geschiktheid/@BDI) ? exp(min_elem(Geschiktheid/@BDI * SpecificBeta/@BDI, LOG_MAX_FLOAT64)) : 0.0'
 			,	'@BDI', classifications/IsolatieMaatregel/name)
@@ -121,34 +121,34 @@ unit<uint32> BouwdeelActieveWoning := select_with_org_rel(BO/Activatie/BouwdeelA
 				classifications/Bouwdeel/IsolatieCodeSubFactor1!=0w 
 				?	replace('uint16(AmbitieBerekening/KiesBouwdelen/@BD/NewIsolatieNiveau_rel) * classifications/Bouwdeel/V/@BD->IsolatieCodeSubFactor1', '@BD', classifications/Bouwdeel/name)
 				:	string(0/0)
-				)+')';
+				)+')', ishidden = "True";
 		attribute<uint16> IsolatieCode2 := 
 			= 'add('+AsItemList(
 				classifications/Bouwdeel/IsolatieCodeSubFactor2!=0w 
 				?	replace('uint16(AmbitieBerekening/KiesBouwdelen/@BD/NewIsolatieNiveau_rel) * classifications/Bouwdeel/V/@BD->IsolatieCodeSubFactor2', '@BD', classifications/Bouwdeel/name)
 				:	string(0/0)
-				)+')';
-		attribute<uint32> IsolatieCode := UInt32(IsolatieCode1)+1024*UInt32(IsolatieCode2);
+				)+')', ishidden = "True";
+		attribute<uint32> IsolatieCode := UInt32(IsolatieCode1)+1024*UInt32(IsolatieCode2), ishidden = "True";
 
-		attribute<UniekIsolatieCode> UniekIsolatieCode_rel := rlookup(IsolatieCode, UniekIsolatieCode/values);
-		attribute<UICxBAW> UICxBAW_code := point(BouwdeelActieveWoning_rel, UniekIsolatieCode_rel, UICxBAW);
+		attribute<UniekIsolatieCode> UniekIsolatieCode_rel := rlookup(IsolatieCode, UniekIsolatieCode/values), ishidden = "True";
+		attribute<UICxBAW> UICxBAW_code := point(BouwdeelActieveWoning_rel, UniekIsolatieCode_rel, UICxBAW), ishidden = "True";
 			
-		attribute<UniekAmbitie> UniekAmbitie_rel := rlookup(UICxBAW_code, UniekAmbitie/values);
+		attribute<UniekAmbitie> UniekAmbitie_rel := rlookup(UICxBAW_code, UniekAmbitie/values), ishidden = "True";
 	}
 	unit<uint32> UniekIsolatieCode:= unique(AmbitieBerekening/IsolatieCode), ishidden = "True";
 	unit<UPoint> UICxBAW : ishidden = "True";
 	
 	unit<uint32> UniekAmbitie := unique(AmbitieBerekening/UICxBAW_code)
 	{
-		attribute<BouwdeelActieveWoning>           BouwdeelActieveWoning_rel := value(PointRow(values), BouwdeelActieveWoning);
-		attribute<BO>                              BO_Rel                    := BouwdeelActieveWoning_rel->BO_rel;
-		attribute<UniekIsolatieCode>               UniekIsolatieCode_rel     := value(PointCol(values), UniekIsolatieCode);
-		attribute<uint32>                          IsolatieCode              := UniekIsolatieCode_rel->values;
-		attribute<classifications/IsolatieAmbitie> MinIsolatieAmbitie_rel    := min(AmbitieBerekening/IsolatieAmbitie_rel, AmbitieBerekening/UniekAmbitie_rel);  // take the lowest for P50P lookup
-		attribute<classifications/IsolatieAmbitie> MaxIsolatieAmbitie_rel    := max(AmbitieBerekening/IsolatieAmbitie_rel, AmbitieBerekening/UniekAmbitie_rel);  // take the lowest for P50P lookup
-		attribute<m2>                              Oppervlakte_i             := BO/Oppervlakte[BO_Rel];
-		attribute<nrAsl>                           nrAansluitingen_i         := BO/nrAansluitingen[BO_Rel];
-		attribute<Classifications/Woningtype>      BebouwingsType            := BO/BebouwingsType[BO_Rel];
+		attribute<BouwdeelActieveWoning>           BouwdeelActieveWoning_rel := value(PointRow(values), BouwdeelActieveWoning), ishidden = "True";
+		attribute<BO>                              BO_Rel                    := BouwdeelActieveWoning_rel->BO_rel, ishidden = "True";
+		attribute<UniekIsolatieCode>               UniekIsolatieCode_rel     := value(PointCol(values), UniekIsolatieCode), ishidden = "True";
+		attribute<uint32>                          IsolatieCode              := UniekIsolatieCode_rel->values, ishidden = "True";
+		attribute<classifications/IsolatieAmbitie> MinIsolatieAmbitie_rel    := min(AmbitieBerekening/IsolatieAmbitie_rel, AmbitieBerekening/UniekAmbitie_rel), ishidden = "True";  // take the lowest for P50P lookup
+		attribute<classifications/IsolatieAmbitie> MaxIsolatieAmbitie_rel    := max(AmbitieBerekening/IsolatieAmbitie_rel, AmbitieBerekening/UniekAmbitie_rel), ishidden = "True";  // take the lowest for P50P lookup
+		attribute<m2>                              Oppervlakte_i             := BO/Oppervlakte[BO_Rel], ishidden = "True";
+		attribute<nrAsl>                           nrAansluitingen_i         := BO/nrAansluitingen[BO_Rel], ishidden = "True";
+		attribute<Classifications/Woningtype>      WoningType_rel            := BO/WoningType_rel[BO_Rel], ishidden = "True";
 
 		
 		container Bouwdelen := for_each_nedv(classifications/Bouwdeel/name
@@ -318,9 +318,9 @@ unit<uint32> BouwdeelActieveWoning := select_with_org_rel(BO/Activatie/BouwdeelA
 		:	rnd[BouwdeelActieveWoning_rel] < CumulP/n4 ? max_elem(classifications/IsolatieNiveau/V/n4, OrgIsolatieNiveau_rel[BouwdeelActieveWoning_rel]) 	
 		:	OrgIsolatieNiveau_rel[BouwdeelActieveWoning_rel];
 	}
-	attribute<bool> ProductActief := BO/Activatie/ProductActief[BouwdeelActieveWoning/BO_rel];
+	attribute<bool> ProductActief := BO/Activatie/ProductActief[BouwdeelActieveWoning/BO_rel], ishidden = "True";
 	
-	unit<uint32> ProductInactieveBO := select_with_org_rel(not(ProductActief))
+	unit<uint32> ProductInactieveBO := subset(not(ProductActief))
 	{
 		attribute<BouwdeelActieveWoning> BouwdeelActieveWoning_rel := org_rel;
 		attribute<BO> BO_rel := BouwdeelActieveWoning/BO_rel[BouwdeelActieveWoning_rel];
@@ -328,15 +328,15 @@ unit<uint32> BouwdeelActieveWoning := select_with_org_rel(BO/Activatie/BouwdeelA
 	
 	unit<uint32> ProductInactieveAmbitie := select(IsDefined(rlookup(UniekAmbitie/BouwdeelActieveWoning_rel,ProductInactieveBO/BouwdeelActieveWoning_rel)))
 	{
-		attribute<ProductInactieveBO>                  ProductInactieveBO_rel  := select_data(., rlookup(UniekAmbitie/BouwdeelActieveWoning_rel,ProductInactieveBO/BouwdeelActieveWoning_rel));
+		attribute<ProductInactieveBO>                  ProductInactieveBO_rel  := select_data(., rlookup(UniekAmbitie/BouwdeelActieveWoning_rel,ProductInactieveBO/BouwdeelActieveWoning_rel)), ishidden = "True";
 		
-		attribute<classifications/IsolatieAmbitie>     MinIsolatieAmbitie_rel  := select_data(., UniekAmbitie/MinIsolatieAmbitie_rel);
-		attribute<classifications/IsolatieAmbitie>     MaxIsolatieAmbitie_rel  := select_data(., UniekAmbitie/MaxIsolatieAmbitie_rel);
+		attribute<classifications/IsolatieAmbitie>     MinIsolatieAmbitie_rel  := select_data(., UniekAmbitie/MinIsolatieAmbitie_rel), ishidden = "True";
+		attribute<classifications/IsolatieAmbitie>     MaxIsolatieAmbitie_rel  := select_data(., UniekAmbitie/MaxIsolatieAmbitie_rel), ishidden = "True";
 		
-		attribute<bool>                                GeenAmbitie             := select_data(., UniekAmbitie/Bouwdelen/GeenAmbitie);
+		attribute<bool>                                GeenAmbitie             := select_data(., UniekAmbitie/Bouwdelen/GeenAmbitie), ishidden = "True";
 		
-		attribute<BouwdeelActieveWoning> BouwdeelActieveWoning_rel := ProductInactieveBO/BouwdeelActieveWoning_rel[ProductInactieveBO_rel];
-		attribute<BO> BO_rel := ProductInactieveBO/BO_rel[ProductInactieveBO_rel];
+		attribute<BouwdeelActieveWoning> BouwdeelActieveWoning_rel := ProductInactieveBO/BouwdeelActieveWoning_rel[ProductInactieveBO_rel], ishidden = "True";
+		attribute<BO> BO_rel := ProductInactieveBO/BO_rel[ProductInactieveBO_rel], ishidden = "True";
 		
 		attribute<Classifications/Schillabel> Schillabel_rel := GeenAmbitie ? BO/Schillabel_rel[BO_rel] : select_data(., UniekAmbitie/Schillabel_rel);
 		

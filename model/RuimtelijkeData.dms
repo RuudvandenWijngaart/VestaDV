@@ -45,7 +45,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			attribute<.>         per_m100 (Geography/rdc_grids/m100) := poly2grid(geometry, Geography/rdc_grids/m100);
 		}
 
-		unit<uint32> Buurt := select_with_org_rel(GeselecteerdeBuurt)
+		unit<uint32> Buurt := select_with_org_rel(GeselecteerdeBuurt), ishidden = "True"
 		,	DialogType = "Map"
 		,	DialogData = "geometry"
 		{
@@ -119,6 +119,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 		:	StorageName     = "%HestiaDataDir%/vraag/wonen/v20230201_csv.csv"
 		,	StorageType     = "gdal.vect"
 		,	StorageReadOnly = "True"
+		,	IsHidden        = "True"
 		{
 			attribute<Classifications/SchilLabel>   schillabel_rel   := rlookup(replace(Pand_energieklasse, '+','') , Classifications/SchilLabel/name)  , IntegrityCheck = "strlen(Pand_energieklasse) == 0 || IsDefined(this)";
 			attribute<Classifications/EnergieLabel> EnergieLabel_rel := rlookup(replace(Pand_energieklasse, '+','p'), Classifications/EnergieLabel/name), IntegrityCheck = "strlen(Pand_energieklasse) == 0 || IsDefined(this)";
@@ -137,20 +138,6 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 																;
 		}
 
-		unit<uint32> src_NTA := select_with_org_rel(strcount(Invoer/RuimtelijkeData/EnergieLabel/src/Pand_berekeningstype, 'NTA 8800') > 0)
-		{
-			attribute<Classifications/EnergieLabel>  EnergieLabel_rel := src/EnergieLabel_rel[org_rel];
-
-			attribute<string> Pand_primaire_fossiele_energie := src/Pand_primaire_fossiele_energie[org_rel];
-			attribute<string> Pand_eis_primaire_fossiele_energie := src/Pand_eis_primaire_fossiele_energie[org_rel];
-			attribute<string> Pand_primaire_fossiele_energie_EMG_forfaitair := src/Pand_primaire_fossiele_energie_EMG_forfaitair[org_rel];
-
-			attribute<string> Pand_bagpandid := src/Pand_bagpandid[org_rel];
-
-			attribute<Invoer/RuimtelijkeData/BAG/import/pand> Pand_rel := rlookup(Pand_bagpandid, Invoer/RuimtelijkeData/BAG/import/pand/identificatie);
-			attribute<units/yr_uint16> bouwjaar_gecorrigeerd := Invoer/RuimtelijkeData/BAG/import/pand/bouwjaar_gecorrigeerd[pand_rel];
-		}
-
 		unit<uint32> data := unique(src/adres_key)
 		{
 			attribute<string>                       nummeraanduiding_id := nummeraanduiding/identificatie[rlookup(values, nummeraanduiding/adres_key)];
@@ -158,28 +145,23 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			attribute<uint32>                       datum_laatste       := max(src/datum_numeriek, rlookup(src/adres_key, values));
 			attribute<Classifications/SchilLabel>   SchilLabel_rel      := rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/schillabel_rel)  , FreeData = "True";
 			attribute<Classifications/EnergieLabel> EnergieLabel_rel    := rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/EnergieLabel_rel), FreeData = "True";
-			attribute<bool>                         isNTA8800           := strcount(rjoin(values + '_' + string(datum_laatste), src/adres_key + '_' + string(src/datum_numeriek), src/Pand_berekeningstype), 'NTA 8800') > 0;
-			
-			unit<uint32> NTA8800 := select_with_org_rel(isNTA8800)
-			{
-				attribute<Classifications/EnergieLabel> EnergieLabel_rel := data/EnergieLabel_rel[org_rel];
-			}
 		}
+
 		unit<uint32> defaultlabels_2020 := BAG/import/VBO
 		{
 			container Default_Energielabel
 			{
-				unit<uint32>                          ModelObject           := Invoer/Kengetallen/Bebouwing/Woning/Results;
-				attribute<ModelObject>                ModelObject_rel (VBO) := rlookup( VBO/ModelObjectKey , ModelObject/ModelObjectKey );
-				parameter<uint32>                     seed                  := Invoer/TechnischeInstellingen/RandomSeed + 199;
-				attribute<float32>                    RndNr           (VBO) := rnd_uniform(seed, vbo, range(float32, 0f, 1f));
+				unit<uint32>                          ModelObject           := Invoer/Kengetallen/Bebouwing/Woning/Results, IsHidden = "True";
+				attribute<ModelObject>                ModelObject_rel (VBO) := rlookup( VBO/ModelObjectKey , ModelObject/ModelObjectKey ), IsHidden = "True";
+				parameter<uint32>                     seed                  := Invoer/TechnischeInstellingen/RandomSeed + 199, IsHidden = "True";
+				attribute<float32>                    RndNr           (VBO) := rnd_uniform(seed, vbo, range(float32, 0f, 1f)), IsHidden = "True";
 
 				container Probability := for_each_nedv(
 					  Classifications/SchilLabel/Name
 					, 'ModelObject/LabelFrequentie/'+Classifications/SchilLabel/Name+'[ModelObject_rel]'
 					, VBO
 					, float32);
-				container CumulProb
+				container CumulProb : IsHidden = "True"
 				{
 					attribute<float32> A (VBO) := Probability/A;
 					attribute<float32> B (VBO) := Probability/B + A;
@@ -205,8 +187,8 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 		{
 			container Default_Energielabel
 			{
-				attribute<yr_uint16>                  BJ              (VBO) := BAG/import/pand/bouwjaar_gecorrigeerd[VBO/pand_rel];
-				attribute<Classifications/WoningType> WT              (VBO) := VBO/woningtype_rel;
+				attribute<yr_uint16>                  BJ              (VBO) := BAG/import/pand/bouwjaar_gecorrigeerd[VBO/pand_rel], IsHidden = "True";
+				attribute<Classifications/WoningType> WT              (VBO) := VBO/woningtype_rel, IsHidden = "True";
 				attribute<Classifications/Schillabel> Schillabel_rel  (VBO) := 
 					WT == Classifications/WoningType/V/vrijstaand ? (
 						BJ <= 1945[yr_uint16] ? Classifications/SchilLabel/V/G :
@@ -245,9 +227,9 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			}
 		}
 
-		unit<uint32> defaultlabels := =Invoer/StartgegevensAan ? 'defaultlabels_2020' : 'defaultlabels_2000';
+		unit<uint32> defaultlabels := =Invoer/StartgegevensAan ? 'defaultlabels_2020' : 'defaultlabels_2000', IsHidden = "True";
 
-		container LabelToFSS
+		container LabelToFSS : IsHidden = "True"
 		{
 			unit<uint32> vbo := BAG/import/VBO
 			{
@@ -256,23 +238,18 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 					attribute<Classifications/SchilLabel>   SchilLabel_rel   := data/SchilLabel_rel[rlookup(identificatie, data/vbo_id)];
 					attribute<Classifications/EnergieLabel> EnergieLabel_rel := data/EnergieLabel_rel[rlookup(identificatie, data/vbo_id)];
 					attribute<uint32>  					    SchilLabel_date  := data/datum_laatste[rlookup(identificatie, data/vbo_id)];
-					attribute<bool>                         isNTA8800        := data/isNTA8800[rlookup(identificatie, data/vbo_id)];
 				}
 				unit<uint32> Label_reader := vbo, StorageName = "%HestiaDataDir%/vraag/Wonen/Schillabels.fss", StorageReadOnly = "true"
 				{
 					attribute<Classifications/SchilLabel>   SchilLabel_rel;
 					attribute<uint32>  					    SchilLabel_date;
 					attribute<Classifications/EnergieLabel> EnergieLabel_rel;
-					attribute<bool>                         isNTA8800;
 				}
-				
-				parameter<bool> recalculate := false;
-				unit<uint32>    label_src    := = recalculate ?  'Label_writer' : 'Label_reader';
+				unit<uint32>    label_src    := = Invoer/HerberekenStartsituatie ?  'Label_writer' : 'Label_reader';
 
 				attribute<Classifications/SchilLabel> 	SchilLabel_afgemeld   := label_src/SchilLabel_rel;
 				attribute<Classifications/EnergieLabel> EnergieLabel_afgemeld := label_src/EnergieLabel_rel;
 				attribute<uint32> 						Schillabel_datum 	  := label_src/SchilLabel_date;
-				attribute<bool>                         isNTA8800        	  := label_src/isNTA8800;
 			}
 		}
 		//======= Allocatie gebouwdeelkwaliteit per VBO ======
@@ -282,7 +259,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 		,	StorageType     = "gdal.vect"
 		,	StorageReadOnly = "True"
 		{
-			attribute<Classifications/BouwjaarWoningMinimaleBouwdeelkwaliteit>   bouwjaarklasse_rel   := rlookup(Bouwjaar, Classifications/BouwjaarWoningMinimaleBouwdeelkwaliteit/excel_code)  , IntegrityCheck = "strlen(Bouwjaar) == 0 || IsDefined(this)";
+			attribute<Classifications/BouwjaarWoningMinimaleBouwdeelkwaliteit>   bouwjaarklasse_rel   := rlookup(Bouwjaar, Classifications/BouwjaarWoningMinimaleBouwdeelkwaliteit/excel_code)  , IntegrityCheck = "strlen(Bouwjaar) == 0 || IsDefined(this)", IsHidden = "True";
 			
 			container V := for_each_ind(
 			'nedv'
@@ -290,7 +267,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			,'rlookup(MinimaleBouwdeelKwaliteit_src/' + classifications/bouwdeel/name + ', Classifications/IsolatieNiveau/name)'
 			,MinimaleBouwdeelKwaliteit_src
 			,Classifications/IsolatieNiveau
-			);
+			), IsHidden = "True";
 		}
 		container BouwdeelKwaliteit_2000_1 := BouwdeelKwaliteitAllocatieT1('niveau_combinatie_label_frequentietabel_KWR_2000_FM.csv');
 		container BouwdeelKwaliteit_2000_2 := BouwdeelKwaliteitAllocatieT2('niveau_combinatie_label_frequentietabel_KWR_2000_FM.csv');
@@ -298,7 +275,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 		container BouwdeelKwaliteit_2020_1 := BouwdeelKwaliteitAllocatieT1('niveau_combinatie_label_frequentietabel_WoON_2020_FM.csv');
 		container BouwdeelKwaliteit_2020_2 := BouwdeelKwaliteitAllocatieT2('niveau_combinatie_label_frequentietabel_WoON_2020_FM.csv');
 
-		template BouwdeelKwaliteitAllocatieT1
+		template BouwdeelKwaliteitAllocatieT1 : IsHidden = "True"
 		{
 			parameter<string> FreqTableName;
 
@@ -403,7 +380,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 		}
 
 
-		template BouwdeelKwaliteitAllocatieT2
+		template BouwdeelKwaliteitAllocatieT2 : IsHidden = "True"
 		{
 			parameter<string> FreqTableName;
 			unit<uint32> Src: StorageName = "= '%projDir%/isolatie/' + FreqTableName", StorageType = "gdal2.vect", StorageReadOnly = "True";
@@ -475,12 +452,12 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 		{
 			unit<uint32> vbo := BAG/import/VBO
 			{
-				parameter<string> Isolatie_vbo_path_1 := Invoer/StartgegevensAan ? 'BouwdeelKwaliteit_2020_1/vbo/' : 'BouwdeelKwaliteit_2000_1/vbo/';
-				parameter<string> Isolatie_vbo_path_2 := Invoer/StartgegevensAan ? 'BouwdeelKwaliteit_2020_2/vbo/' : 'BouwdeelKwaliteit_2000_2/vbo/';
+				parameter<string> Isolatie_vbo_path_1 := Invoer/StartgegevensAan ? 'BouwdeelKwaliteit_2020_1/vbo/' : 'BouwdeelKwaliteit_2000_1/vbo/', IsHidden = "True";
+				parameter<string> Isolatie_vbo_path_2 := Invoer/StartgegevensAan ? 'BouwdeelKwaliteit_2020_2/vbo/' : 'BouwdeelKwaliteit_2000_2/vbo/', IsHidden = "True";
 
-				unit<uint32> Isolatie_temp := Isolatie_writer;
+				unit<uint32> Isolatie_temp := Isolatie_writer, IsHidden = "True";
 				
-				container MinimaleIsolatieNiveausNa1991
+				container MinimaleIsolatieNiveausNa1991 : IsHidden = "True"
 				{
 					attribute<uint16> bouwjaar_rel (vbo) := BAG/import/pand/bouwjaar_gecorrigeerd[VBO/pand_rel];
 					attribute<string> vbo_id (vbo) := /Invoer/RuimtelijkeData/BAG/import/VBO/identificatie;
@@ -527,9 +504,9 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 				,replace('recollect_by_cond(MinimaleIsolatieNiveausNa1991/bouwjaar_rel > 1991[uint16], MinimaleIsolatieNiveausNa1991/BouwjaarNa1991/IsolatieNiveauNieuw/@BD@/IsolatieNiveau, Isolatie_temp/@BD@)', '@BD@',Classifications/Bouwdeel/Name)
 				,vbo
 				,Classifications/Isolatieniveau
-				);
+				), IsHidden = "True";
 
-				unit<uint32> Isolatie_writer := vbo, Storagename = "%HestiaDataDir%/vraag/Wonen/Isolatie.fss"
+				unit<uint32> Isolatie_writer := vbo, Storagename = "%HestiaDataDir%/vraag/Wonen/Isolatie.fss", IsHidden = "True"
 				{
 					attribute<Classifications/Isolatieniveau> RB := ='makedefined('+Isolatie_vbo_path_1 + 'Isolatie_vbo/RB,' + Isolatie_vbo_path_2 + 'Isolatie_vbo/RB)';
 					attribute<Classifications/Isolatieniveau> RO := ='makedefined('+Isolatie_vbo_path_1 + 'Isolatie_vbo/RO,' + Isolatie_vbo_path_2 + 'Isolatie_vbo/RO)';
@@ -543,7 +520,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 					attribute<Classifications/Isolatieniveau> KR := ='makedefined('+Isolatie_vbo_path_1 + 'Isolatie_vbo/KR,' + Isolatie_vbo_path_2 + 'Isolatie_vbo/KR)';
 				}
 				
-				unit<uint32> Isolatie_reader := vbo, StorageName = "%HestiaDataDir%/vraag/Wonen/Isolatie.fss", StorageReadOnly = "true"
+				unit<uint32> Isolatie_reader := vbo, StorageName = "%HestiaDataDir%/vraag/Wonen/Isolatie.fss", StorageReadOnly = "true", IsHidden = "True"
 				{
 					attribute<Classifications/Isolatieniveau> RB;
 					attribute<Classifications/Isolatieniveau> RO;
@@ -556,11 +533,8 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 					attribute<Classifications/Isolatieniveau> DS;
 					attribute<Classifications/Isolatieniveau> KR;
 				}
-				
-				
-				
-				parameter<bool> recalculate := False;
-				unit<uint32>    Isolatie_src    := = recalculate ?  'IsolatieMetMinimaleIsolatieNiveaus' : 'Isolatie_reader';
+								
+				unit<uint32>    Isolatie_src    := = Invoer/HerberekenStartsituatie ?  'IsolatieMetMinimaleIsolatieNiveaus' : 'Isolatie_reader', IsHidden = "True";
 
 				container Isolatie := for_each_nedv(Classifications/Bouwdeel/name, 'Isolatie_src/' + Classifications/Bouwdeel/name + '[BAG/vbo_woonfunctie_studiegebied/org_rel]',BAG/vbo_woonfunctie_studiegebied , Classifications/Isolatieniveau);
 			}
@@ -574,7 +548,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 	#include <Dimensies.dms>
 	#include <EigendomNieuwbouw.dms>
 	
-	container buislengte 
+	container buislengte : IsHidden = "True"
 	{
 		unit<uint32> buislengte_input
 		:	StorageName     = "%HestiaDataDir%/infra/20200220_buislengte.csv"
@@ -613,6 +587,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 		unit<uint32> per_buurt := Studiegebied/buurt
 		, DialogType = "map"
 		, DialogData = "geometry"
+		, IsHidden   = "True"
 		{
 			attribute<Geography/rdc_meter> geometry (poly) := Studiegebied/buurt/Geometry;
 			attribute<string>              BU_CODE         := Studiegebied/buurt/BU_CODE;
@@ -657,7 +632,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "True"
 			parameter<float32> Referentie_T := =replace('T1995[V/@RS@] + (ReferentieJaar - 1995[float32]) * ((T2030[V/@RS@] - T1995[V/@RS@]) / 35[float32])', '@RS@', ReferentieStation);   
 			parameter<float32> Referentie_Graaddagen := 6369[float32] - (337[float32] * Referentie_T);   
 		
-			container V := for_each_nedv(ItemName, string(id(.))+'[..]', void, .);
+			container V := for_each_nedv(ItemName, string(id(.))+'[..]', void, .), IsHidden = "True";
 		}
 		unit<wpoint> Grid := Geography/rdc_grids/m100
 		{

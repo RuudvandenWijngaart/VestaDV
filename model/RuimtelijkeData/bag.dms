@@ -16,7 +16,8 @@
 
 container BAG: url="%HestiaDataDir%/BAG/20230223_actualisatie_BAG_WP.txt"
 {
-	parameter<string>          SourceDir    := '%HestiaDataDir%/BAG/20230101', IsHidden = "True";
+	parameter<string> SourceDir       := '%HestiaDataDir%/BAG/20230101', IsHidden = "True";
+	parameter<string> Datum           := '01-01-2023';
 
 	container typeringen : IsHidden = "True"
 	{
@@ -216,32 +217,29 @@ container BAG: url="%HestiaDataDir%/BAG/20230223_actualisatie_BAG_WP.txt"
 		attribute<Units/m2>                               oppervlakte                := select_data(., import/vbo/oppervlak_filters/wonen);
 		attribute<string>                                 pand_id                    := select_data(., import/vbo/pand_id );
 		attribute<import/pand>                            pand_rel                   := select_data(., import/vbo/pand_rel);
-		attribute<units/pand_asl>                         pand_aandeel               := 1.0 / value(import/pand/nr_woningen[pand_rel],units/asl_pand);
+		attribute<units/pand_asl>                         pand_aandeel               := 1.0 / value(import/pand/nr_woningen[pand_rel],units/asl_pand), IsHidden = "True";
  
-		attribute<Studiegebied/buurt>                       buurt_rel                  := point_in_polygon(geometry, Studiegebied/buurt/geometry);
-		attribute<BestaandeWarmtenetten/Aflevergebied_data> Aflevergebied_rel          := point_in_polygon(geometry, BestaandeWarmtenetten/Aflevergebied_data/geometry);
+		attribute<Studiegebied/buurt>                       buurt_rel                  := point_in_polygon(geometry, Studiegebied/buurt/geometry), IsHidden = "True";
+		attribute<BestaandeWarmtenetten/Aflevergebied_data> Aflevergebied_rel          := point_in_polygon(geometry, BestaandeWarmtenetten/Aflevergebied_data/geometry), IsHidden = "True";
 
 		attribute<Units/yr_uint16>                        bouwjaar                   := pand_rel->bouwjaar_gecorrigeerd;
-		attribute<Units/yr_uint16>                        sloopjaar                  := pand_rel->sloopjaar_gecorrigeerd;
-		attribute<Classifications/BouwjaarWoning>         BouwjaarWoning_rel         := select_data(., import/vbo/BouwjaarWoning_rel);
+		attribute<Units/yr_uint16>                        sloopjaar                  := pand_rel->sloopjaar_gecorrigeerd, IsHidden = "True";
+		attribute<Classifications/BouwjaarWoning>         BouwjaarWoning_rel         := select_data(., import/vbo/BouwjaarWoning_rel), IsHidden = "True";
 		attribute<Classifications/Eigendom>               Eigendom_rel               := select_data(., import/vbo/Eigendom_rel);
 		attribute<bool>                                   Gasloos                    := Gasnetten/Gasloos[pand_rel];
-		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := pand_rel->woonpand_type;
+		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := pand_rel->woonpand_type, IsHidden = "True";
 		attribute<Classifications/SchilLabel>             Default_Energielabel_rel   := pand_rel->Default_Energielabel_Bouwjaar;
 
 		attribute<classifications/WoningType>             Woningtype_rel             := select_data(., import/vbo/Woningtype_rel);
 		attribute<uint8>                                  nr_verdiepingen            := pand_rel->nr_verdiepingen;
 		attribute<typeringen/gebruiksdoel>                gebruiksdoel               := const(Invoer/RuimtelijkeData/BAG/typeringen/gebruiksdoel/V/woon,.);
 		
-		attribute<units/m2> Gem_opp (classifications/WoningType) := mean(oppervlakte, Woningtype_rel);
-
-		
 		container Bouwdelen := for_each_nedv(
 			Classifications/bouwdeel/name
 			,'makedefined( org_rel->Dimensies/Bouwdelen/' + Classifications/bouwdeel/name + ',
 			  oppervlakte * Classifications/Woningtype/Bouwdeeldimensies/' + Classifications/bouwdeel/name + '[Woningtype_rel])'
 			,.
-			,Units/m2)
+			,Units/m2), IsHidden = "True"
 			{
 				attribute<m2> Totaal (..) := ='add('+AsItemList(Classifications/bouwdeel/name)+') - KR', Descr = "Totaaloppervlak gebouwschil";
 
@@ -250,34 +248,8 @@ container BAG: url="%HestiaDataDir%/BAG/20230223_actualisatie_BAG_WP.txt"
 					'EnergieLabel/BouwdeelKwaliteit/vbo/Isolatie/' + Classifications/bouwdeel/name,
 					..,
 					Classifications/IsolatieNiveau);
-			}
-			
-		container Export
-		{
-			attribute<string>         identificatie   (..) := ../identificatie;
-			attribute<rdc_meter>      geometry        (..) := ../geometry;
-			attribute<string>         postcode        (..) := ../postcode;
-			attribute<string>         adres           (..) := ../label;
-			
-			attribute<Units/m2>       oppervlakte     (..) := ../oppervlakte;
-			attribute<Units/yr_uint16>bouwjaar        (..) := ../bouwjaar;
-			attribute<Units/yr_uint16>sloopjaar       (..) := ../sloopjaar;
-			attribute<uint8>          nr_verdiepingen (..) := ../nr_verdiepingen;
-			attribute<units/pand_asl> Pand_aandeel    (..) := ../pand_aandeel;
-			attribute<string>         woningtype      (..) := classifications/WoningType/name[Woningtype_rel];
-			
-			attribute<string>         pand_id         (..) := ../pand_id;
-			attribute<string>         buurt_id        (..) := Studiegebied/buurt/bu_code[../buurt_rel];
-		}
-		
+			}		
 	}
-
-	container Tabel_Woningtype_Bouwjaar := for_each_nedv(
-		 classifications/BouwjaarWoning/name
-		,'sum(vbo_woonfunctie_studiegebied/BouwjaarWoning_rel == ' + string(id(classifications/BouwjaarWoning)) + '[Classifications/BouwjaarWoning] ? 1 : 0  ,vbo_woonfunctie_studiegebied/Woningtype_rel)'
-		,classifications/WoningType
-		,uint32
-	);
 
 	parameter<string> vbo_utiliteit_industrie_sub_expr := 
 		  SpecifiekeInstellingen/BAG/IndustrieDoetMee == 0b ? '!import/vbo/gebruiksdoelen/Industrie'
