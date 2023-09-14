@@ -69,6 +69,37 @@ template BebouwingsComponentT
 
 		attribute<BO> Bo_rel (BO) := id(.), ishidden = "True";
 		
+		container Bouwdelen := for_each_nedv(
+				classifications/bouwdeel/name,
+				'PrevObject/Bouwdelen/'+classifications/bouwdeel/name,
+				.,
+				m2)
+			{
+				container LastVervanging := for_each_nedv(
+					classifications/bouwdeel/name,
+					'PrevObject/Bouwdelen/LastVervanging/' + classifications/bouwdeel/name,
+					..,
+					yr_uint16);
+
+				attribute<bool> BouwnormNaleving (BO) := Bouwjaar < 2020[uint16] ? False :
+				rnd_uniform(JaarSeed * 101u, BO, range(float64, 0d, 1d)) <= first(ZichtjaarBeleid/NieuwbouwNorm/naleving);
+
+				container Isolatie := for_each_nedv(
+					classifications/bouwdeel/name,
+					'not(BouwnormNaleving) ? 
+						PrevObject/Bouwdelen/Isolatie/'+classifications/bouwdeel/name+' :
+						ZichtjaarBeleid/NieuwbouwNorm/BouwdeelNorm/'+classifications/bouwdeel/name,
+					..,
+					Classifications/IsolatieNiveau);
+					
+				container IsChangedNow := for_each_nedv(
+					classifications/Bouwdeel/name,
+					'const(false,...)',
+					..,
+					bool), ishidden = "True";
+			}
+		
+		
 		container Aansluitingen
 		{
 			container BWN := Invoer/RuimtelijkeData/BestaandeWarmtenetten, ishidden = "True";
@@ -142,7 +173,6 @@ template BebouwingsComponentT
 		attribute<nrAsl> nrAansluitingen := AansluitFactor * nrAansluitingen_i;
 		attribute<m2>    Oppervlakte     := AansluitFactor * Oppervlakte_i;
 		
-// REMOVE		attribute<ratio> StartAfbouw     := PrevObject/ResterendNu - ResterendNu;
 
 		container AansluitCapaciteit
 		{
