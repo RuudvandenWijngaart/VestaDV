@@ -107,8 +107,7 @@ template BebouwingsComponentT
 			attribute<bool>  GeenGasafsluiting (BO) := not(Warmte > 0[nrAsl]) && (PrevGNet > 0[nrAsl]), ishidden = "True";
 			attribute<nrAsl> GNet              (BO) := makedefined(GeenGasafsluiting ? PrevObject/Aansluitingen/GNet : 0[nrAsl], nrAansluitingen * float64(not(BO/Gasloos)));
 			attribute<nrAsl> Warmte            (BO) := nrAansluitingen * float64(MakeDefined(BWN/Aflevergebied_data/Startjaar, 0[yr_uint16])[BO/Aflevergebied_rel] <= Zichtjaar_jaar);
-			attribute<nrAsl> Koude             (BO) := nrAansluitingen * float64(Warmte  > 0[nrAsl] && BWN/AfleverType/HeeftKoude[ BWN/Aflevergebied_data/Type_rel[ BO/Aflevergebied_rel ] ]);
-			attribute<nrAsl> Koude             (BO) := nrAansluitingen * float64(Warmte > 0[nrAsl] && BWN/AfleverType/HeeftKoude[ BWN/Aflevergebied_data/Type_rel[ BO/Aflevergebied_rel ] ] );
+			attribute<nrAsl> Koude             (BO) := nrAansluitingen * float64(Warmte > 0[nrAsl] && BWN/AfleverType/HeeftKoude[ BWN/Aflevergebied_data/Type_rel[ BO/Aflevergebied_rel ] ]);
 		}
 		
 		// Vervang Installaties voor RV en TW wanneer Gas zojuist is afgesloten.
@@ -148,14 +147,13 @@ template BebouwingsComponentT
 		attribute<ratio> NietGeslooptFactor := Float64(Sloopjaar > Zichtjaar_jaar);
 			
 		attribute<bool>  Afbouw             := =Classifications/Periode/isHistorisch[Periode_rel] ? 'const(false,.)' : 'PrevObject/ResterendNu > 0.0 && (Sloopjaar <= Zichtjaar_jaar)';
-		attribute<bool>  Aanbouw := (Bouwjaar > 2023[yr_uint16]);
-			: 'PrevObject/ResterendNu[PrevObject_rel] > 0.0 && ResterendFactor <= 0.0', ishidden = "True";
+		attribute<bool>  Aanbouw            := MakeDefined(Bouwjaar, 0w) > 2023[yr_uint16], ishidden = "True";
 
 		parameter<ratio> AanbouwPerJaar := Zichtjaar_jaar <= 2030w ? 0.125 : 0.1, ishidden = "True";
-		attribute<yr_uint16> bouwperiode_beginjaar := (Bouwjaar > 2040[yr_uint16] ? 2041[yr_uint16] : 
-					 	 Bouwjaar > 2030[yr_uint16] ? 2031[yr_uint16] : 
-					 	 Bouwjaar > 2022[yr_uint16] ? 2024[yr_uint16] : Bouwjaar);
-				'const(1.0[ratio],.)', ishidden = "True";
+		attribute<yr_uint16> bouwperiode_beginjaar := 
+			Bouwjaar > 2040[yr_uint16] ? 2041[yr_uint16] : 
+			Bouwjaar > 2030[yr_uint16] ? 2031[yr_uint16] : 
+			Bouwjaar > 2022[yr_uint16] ? 2024[yr_uint16] : Bouwjaar, ishidden = "True";
 		
 		attribute<ratio> Aanbouwfactor   := =Invoer/DefaultInstellingen/Basis/RuimtelijkeOntwikkelingAan ? 
 			'Aanbouw ?'
@@ -167,8 +165,6 @@ template BebouwingsComponentT
 			: 'Afbouw ? max_elem(PrevObject/ResterendNu - AanbouwPerJaar, 0.0) : Aanbouw ? Aanbouwfactor : NietGeslooptFactor';
 			
 		attribute<ratio> AansluitFactor := Float64(IsDefined(PlanRegio_rel)) * ResterendNu * NietGeslooptFactor * IsGebouwdFactor;
-			ResterendFactor', ishidden = "True";
-			//TODO: 0.1 dynamisch afleiden van aantal zichtjaren, werkt nu alleen bij 1-jaar stappen
 						
 		attribute<nrAsl> nrAansluitingen := AansluitFactor * nrAansluitingen_i;
 		attribute<m2>    Oppervlakte     := AansluitFactor * Oppervlakte_i;
