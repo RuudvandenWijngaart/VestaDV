@@ -26,8 +26,6 @@ template BebouwingsComponentT
 	unit<uint32>   HistorischBouw := select(BeginSituatieResults/actief_bouwjaar)
 		, Descr = "bebouwing dat in het huidige historische zichtjaar is gebouwd", Source = "BAG", ishidden = "True"
 	{
-		unit<uint16> ModelObjectKeyDomein := BeginSituatieResults/ModelObjectKeyDomein;
-	
 		attribute<Geography/rdc_meter>                       point             := select_data(HistorischBouw, BeginSituatieResults/point);
 		attribute<Geography/rdc_meter>                       geometry          := select_data(HistorischBouw, BeginSituatieResults/geometry);
 		attribute<string>                                    code              := select_data(HistorischBouw, BeginSituatieResults/code);
@@ -35,13 +33,15 @@ template BebouwingsComponentT
 		attribute<Invoer/RuimtelijkeData/StudieGebied/buurt> Buurt_rel         := select_data(HistorischBouw, BeginSituatieResults/Buurt_rel);
 		attribute<Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data> Aflevergebied_rel := select_data(HistorischBouw, BeginSituatieResults/Aflevergebied_rel);
 		attribute<Classifications/WoningType>                Woningtype_rel    := select_data(HistorischBouw, BeginSituatieResults/Woningtype_rel);
+		attribute<Classifications/gebouwoptie>               Gebouwoptie_rel   := select_data(HistorischBouw, BeginSituatieResults/Gebouwoptie_rel);
 		attribute<units/yr_uint16>                           Bouwjaar          := select_data(HistorischBouw, BeginSituatieResults/Bouwjaar);
 		attribute<units/yr_uint16>                           Sloopjaar         := select_data(HistorischBouw, BeginSituatieResults/Sloopjaar);
 		attribute<Classifications/Eigendom>                  Eigendom_rel      := select_data(HistorischBouw, BeginSituatieResults/Eigendom_rel);
-		attribute<ModelObjectKeyDomein>                      ModelObjectKey    := select_data(HistorischBouw, BeginSituatieResults/ModelObjectKey);
+		attribute<uint16>                                    ModelObjectKey    := select_data(HistorischBouw, BeginSituatieResults/ModelObjectKey);
 		attribute<nrAsl>                                     nrAansluitingen_i := select_data(HistorischBouw, BeginSituatieResults/nrAansluitingen_i);
 		attribute<m2>                                        Oppervlakte_i     := select_data(HistorischBouw, BeginSituatieResults/Oppervlakte_i);
 		attribute<pand_asl>                                  pand_aandeel      := select_data(HistorischBouw, BeginSituatieResults/pand_aandeel);
+		attribute<Invoer/RuimtelijkeData/BAG/import/pand>    pand_rel          := select_data(HistorischBouw, BeginSituatieResults/pand_rel);
 		attribute<Geography/rdc_grids/m100>                  gridm100_rel      := point[Geography/rdc_grids/m100];
 		attribute<Classifications/Schillabel>                Schillabel_rel    := select_data(HistorischBouw, BeginSituatieResults/Schillabel_rel);
 		attribute<Classifications/Schillabel>                Defaultlabel_rel  := select_data(HistorischBouw, BeginSituatieResults/Defaultlabel_rel);
@@ -138,6 +138,8 @@ template BebouwingsComponentT
 		{
 			attribute<eur_yr> Kj_OH_LO  (..) := const(0.0[eur_yr],..);
 			attribute<eur_yr> Kj_ADM_LO (..) := const(0.0[eur_yr],..);
+			attribute<eur_yr> oh_KD     (..) := const(0.0[eur_yr],..);
+			attribute<eur_yr> adm_KD    (..) := const(0.0[eur_yr],..);
 		}
 	}
 	unit<uint32>      NieuwbouwBron :=
@@ -179,7 +181,6 @@ template BebouwingsComponentT
 		container VraagKentallen            := VraagKentallenComponent, ishidden = "True";
 		container BcKentallen               := BC_kentallen, ishidden = "True";
 
-		unit<uint32>    ModelObjectDomain := ModelObject, ishidden = "True";
 		attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel  (BO) := BO/buurt_rel, ishidden = "True";
 		attribute<ModelObject>                             Model_rel      (BO) := rlookup(BO/ModelObjectKey, ModelObject/ModelObjectKey), KeepData = "True", ishidden = "True";
 		attribute<Classifications/WoningType>              Woningtype_rel (BO) := ModelObject/Modeltype_rel[Model_rel];
@@ -315,7 +316,7 @@ template BebouwingsComponentT
 
 		#include <Activatie.dms>
 
-		container jaarlijks
+		container jaarlijks := BO_base/jaarlijks
 		{
 			attribute<eur_yr> Kj_elek        (BO) := Metervraag/e        * Prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl [classify( metervraag/e , Prijzen/Elektriciteit/Staffel/ClassBreak )];
 			attribute<eur_yr> Kj_gas         (BO) := Metervraag/gas      * Prijzen/AardGas/Staffel/KGJ_eindgebruik_excl [classify( metervraag/gas , Prijzen/AardGas/Staffel/ClassBreak )];
@@ -338,6 +339,8 @@ template BebouwingsComponentT
 			attribute<eur_yr> Km_H2          (BO) := Kj_H2;
 			attribute<eur_yr> Kj_oh_LO       (BO) := = doNieuwbouw ? 'union/result/jaarlijks/Kj_oh_LO' : 'PrevObject/jaarlijks/Kj_oh_LO';
 			attribute<eur_yr> kj_adm_LO      (BO) := = doNieuwbouw ? 'union/result/jaarlijks/Kj_adm_LO': 'PrevObject/jaarlijks/Kj_adm_LO';
+			attribute<eur_yr> oh_KD          (BO) := = doNieuwbouw ? 'union/result/jaarlijks/oh_KD'    : 'PrevObject/jaarlijks/oh_KD';
+			attribute<eur_yr> adm_KD         (BO) := = doNieuwbouw ? 'union/result/jaarlijks/adm_KD'   : 'PrevObject/jaarlijks/adm_KD';
 		}
 	}
 		
