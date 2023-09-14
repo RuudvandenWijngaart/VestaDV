@@ -1,0 +1,295 @@
+	container OSM
+	{  
+		parameter<string> file_date := "20_09_2022";
+		parameter<string> localdir  := "%HestiaDataDir%/OSM/Snapshots/Netwerk_"+file_date;
+		parameter<string> dir       := '%HestiaDataDir%/OSM/'+file_date;
+		parameter<string> date      := 'latest';
+		unit<uint32> Regios : nrofrows = 12
+		{
+			unit<uint32> Elements  := Range(uint32, 0, nrAttr*#.)
+			{
+				attribute<String> Text:
+				// Regio             , OrgSet , OrgPath, Land, Type, 
+				[
+				'Drenthe'                 ,'NL', 'OD',
+				'Flevoland'               ,'NL', 'OD',
+				'Friesland'               ,'NL', 'OD',
+				'Gelderland'              ,'NL', 'OD',
+				'Groningen'               ,'NL', 'OD',
+				'Limburg'                 ,'NL', 'OD',
+				'Noord-Brabant'           ,'NL', 'OD',
+				'Noord-Holland'           ,'NL', 'OD',
+				'Overijssel'              ,'NL', 'OD',
+				'Utrecht'                 ,'NL', 'OD',
+				'Zeeland'                 ,'NL', 'OD',
+				'Zuid-Holland'            ,'NL', 'OD'
+				]; 
+			}
+			
+			attribute<string>        label          := Elements/Text[value(UInt32(ID(.))* nrAttr + 0, Elements)], DialogType = "LabelText";
+			attribute<string>        name           := replace(label, '-', '_');
+			attribute<string>        Country        := Elements/Text[value(UInt32(ID(.))* nrAttr + 1, Elements)];
+			attribute<string>        Type_src       := Elements/Text[value(UInt32(ID(.))* nrAttr + 2, Elements)];
+			
+			parameter<uint32> nrAttr := 3;
+		}
+		
+		unit<uint8> wegtypegroep: nrofrows = 6
+		{
+			attribute<string> Label: DialogType = "LabelText", 
+				['voetpad','fietspad','weg','overig','in aanbouw','gesloten'];
+			attribute<uint32> PenColor: DialogType = "PenColor", 
+				[rgb(255,255,0),rgb(255,128,0),rgb(200,0,0),rgb(128,128,128),rgb(0,200,0),rgb(0,0,200)];
+			attribute<uint32> PenWidth: expr = "const(4,.,uint32)", DialogType = "PenWidth";
+		}
+		
+		unit<uint8> wegtype: NrOfRows = 78
+		{
+			attribute<String>       Name                 := Label;
+			attribute<km_hr>        CarSpeedOutside      := Elements/Text[value(UInt32(ID(.))* nrAttr + 0, Elements)][km_hr];
+			attribute<km_hr>        CarSpeedInside       := Elements/Text[value(UInt32(ID(.))* nrAttr + 1, Elements)][km_hr];
+			attribute<km_hr>        BikeSpeed            := Elements/Text[value(UInt32(ID(.))* nrAttr + 2, Elements)][km_hr];
+			attribute<bool>         IsMain               := bool(Elements/Text[value(UInt32(ID(.))* nrAttr + 3, Elements)]);
+			attribute<wegtypegroep> wegtypegroepnr       := Elements/Text[value(UInt32(ID(.))* nrAttr + 4, Elements)][wegtypegroep];
+			attribute<String>       Label                := Elements/Text[value(UInt32(ID(.))* nrAttr + 5, Elements)], DialogType = "LabelText";
+			attribute<km_hr>        TruckSpeedOutside    := Elements/Text[value(UInt32(ID(.))* nrAttr + 6, Elements)][km_hr];
+			attribute<km_hr>        TruckSpeedInside     := Elements/Text[value(UInt32(ID(.))* nrAttr + 7, Elements)][km_hr];
+
+			attribute<bool>         IsPartOfCarNetwork    := CarSpeedInside  > value(1, km_hr);
+			attribute<bool>         IsPartOfBikeNetwork   := BikeSpeed       > value(1, km_hr);
+			// attribute<bool>         IsPartOfTruckNetwork  :  = TruckSpeedInside  > value(1, km_hr);
+			
+			attribute<bool>         IsPartOfPedestrianNetwork := !(Label = 'motorway' || Label = 'motorway_link' || Label = 'trunk' || Label = 'trunk_link');
+
+			// attribute<m_s>          TruckSpeedOutside_ms:= TruckSpeedOutside / value(3600, s / hr) * value(1000, m / km);
+			// attribute<m_s>          TruckSpeedInside_ms:= TruckSpeedInside  / value(3600, s / hr) * value(1000, m / km);
+
+			attribute<m_s>          CarSpeedOutside_ms   := CarSpeedOutside / value(3600, s / hr) * value(1000, m / km);
+			attribute<m_s>          CarSpeedInside_ms    := CarSpeedInside  / value(3600, s / hr) * value(1000, m / km);
+			attribute<m_s>          BikeSpeed_ms         := BikeSpeed       / value(3600, s / hr) * value(1000, m / km);
+		
+			parameter<uint32> nrAttr := 8;
+			unit<UInt32> Elements := Range(uint32, 0, nrAttr*#.)
+			{
+				attribute<String> Text:
+				[
+					//Car speed outside,Car speed inside,Bike speed, IsMain, group,Label, Truck speed outside, Truck speed inside
+					' 30',' 30','15','True' ,'2','access','50','30',
+					' 40',' 40','15','False','2','binnenweg','50','30',
+					'  1','  1','10','False','0','bridleway',' -1',' -1',
+					'  1','  1',' 1','False','3','bus_guideway',' -1',' -1',
+					'  1','  1',' 1','False','3','bus_stop',' -1',' -1',
+					'  1','  1',' 1','False','5','closed',' -1',' -1',
+					'  1','  1',' 1','False','4','construction',' -1',' -1',
+					'  1','  1',' 1','False','2','crossing',' -1',' -1',
+					'  1','  1','15','False','1','cycleway',' -1',' -1',
+					'  1','  1','15','False','1','cycleway;service',' -1',' -1',
+					'  1','  1',' 1','False','5','disused',' -1',' -1',
+					'  1','  1','10','False','0','dog track',' -1',' -1',
+					'  1','  1','10','False','2','driveway',' -1',' -1',
+					'  1','  1','15','False','1','fi',' -1',' -1',
+					'  1','  1','15','False','1','fiets-/voetpad',' -1',' -1',
+					'  1','  1',' 1','False','3','FIXME',' -1',' -1',
+					'  1','  1',' 1','False','0','footpath',' -1',' -1',
+					'  1','  1',' 1','False','0','footway',' -1',' -1',
+					'  1','  1',' 1','False','2','gate',' -1',' -1',
+					' 20',' 20','15','False','2','living_street','20','20',
+					' 30',' 30','15','False','2','local','20','20',
+					' 40',' 40','15','False','2','minor','50','30',
+					'  1','  1','15','False','0','Molenpad',' -1',' -1',
+					'100',' 90',' 1','True', '2','motorway','80','70',
+					' 60',' 50',' 1','True', '2','motorway_link','60','50',
+					'  1','  1',' 1','False','5','no_track_anymore',' -1',' -1',
+					'  1','  1',' 1','False','0','pah',' -1',' -1',
+					'  1','  1',' 1','False','0','pat',' -1',' -1',
+					'  1','  1',' 1','False','0','path',' -1',' -1',
+					'  1','  1',' 1','False','0','pedestrian',' -1',' -1',
+					'  1','  1',' 1','False','3','platform',' -1',' -1',
+					' 75',' 40',' 1','True', '2','primary','70','40',
+					' 55',' 35',' 1','True', '2','primary_link','65','35',
+					'  1','  1',' 1','False','2','private','-1','-1',
+					'  1','  1',' 1','False','4','proposed','-1','-1',
+					'  1','  1',' 1','False','2','race_track','-1','-1',
+					'  1','  1',' 1','False','2','raceway','-1','-1',
+					'  1','  1',' 1','False','5','removed?','-1','-1',
+					' 30',' 30','15','False','2','res','20','20',
+					' 30',' 30','15','False','2','residential','20','20',
+					' 30',' 30','15','False','2','residential;uncl','20','20',
+					' 20',' 20',' 1','False','2','rest_area','20','20',
+					' 40',' 40','15','False','2','road','50','30',
+					' 70',' 40','15','True', '2','secondary','70','40',
+					' 50',' 30',' 1','True', '2','secondary_link','65','35',
+					' 10',' 10','10','False','2','service','10','10',
+					' 10',' 10','10','False','2','service; unclass','10','10',
+					' 10',' 10','10','False','2','services','10','10',
+					'  1','  1',' 1','False','3','stairs','-1','-1',
+					'  1','  1',' 1','False','3','steps','-1','-1',
+					' 50',' 40','15','False','2','tertiary','50','30',
+					' 50',' 40','15','False','2','tertiary;unclass','50','30',
+					' 30',' 30','15','False','2','tertiary_link','45','25',
+					'  1','  1',' 1','False','2','track','-1','-1',
+					'  1','  1',' 1','False','3','traffic_signals','-1','-1',
+					'  1','  1',' 1','False','0','trail','-1','-1',
+					'100',' 90',' 1','True', '2','trunk','80','70',
+					' 90',' 80',' 1','True', '2','trunk_link','60','50',
+					' 20',' 20','15','False','2','turning_circle','10','10',
+					' 70',' 40','15','True', '2','unclassified','60','30',
+					' 70',' 40','15','False','2','undefined','60','30',
+					' 10',' 10',' 5','False','0','unpaved','10','10',
+					' 10',' 10',' 5','False','2','unpaved road','10','10',
+					' 10',' 10',' 5','False','0','unsurfaced','10','10',
+					'  1','  1',' 1','False','3','virtual','-1','-1',
+					'  1','  1',' 1','False','1','walkway','-1','-1',
+					'  1','  1',' 1','False','1','Weddeloop','-1','-1',
+					'  1','  1',' 1','False','3','ún','-1','-1',
+					'  7','  7',' 7','False','3','texel_ferry','7','7',
+					' 25',' 25','15','False','3','connectlink','25','25',
+					'  5','  5',' 5','False','3','riverferry','5','5',
+					' 15',' 15','15','False','3','vlieland_ferry','13','13',
+					' 15',' 15','15','False','3','vlieland_terschelling','25','25',
+					' 13',' 13','13','False','3','terschelling_ferry','25','25',
+					' 10',' 10','10','False','3','ameland_ferry','13','13',
+					'  7','  7',' 7','False','3','schiermonnikoog_ferry','11','11',
+					'  7','  7',' 7','False','3','ferry','10','10',
+					'120','110',' 1','True' ,'2','motorway_abroad','80','70'
+				];
+			}
+			
+			container V := for_each_nedv(replace(name,';','','ú','u',' ','_','-','_','?','','/',''), String(ID(.))+'[..]', void, .);
+		}
+		
+		container Prepare_SourceData :=
+			for_each_ne(
+				Regios/name
+				, 'Prepare_SourceData_T('+quote(Regios/name)+','+quote(Regios/country)+')'
+			)
+		{
+			parameter<string> Generate := =AsList(Regios/name+'/Generate', ' + ');
+		}
+		
+		Template Prepare_SourceData_T
+		{
+			parameter<string> Regio;
+			parameter<string> Country;
+
+			unit<uint32> Read_Roads_shp 
+			:	StorageName     = "= dir + '/' + Regio + '/gis_osm_roads_free_1.shp'"
+			,	StorageType     = "gdal.vect"
+			,	StorageReadOnly = "True"
+			,	DialogType = "Map"
+			,	DialogData = "geometry_lb"	
+			{
+				attribute<wgs84_base>        	geometry    (arc);
+				attribute<rdc_meter>         	geometry_rd (arc) := LatLongWgs842RD(geometry, dpoint)[rdc_meter];
+				attribute<string>            	fclass;
+				attribute<int32>             	maxspeed;
+				attribute<string>               OSM_id;
+			}
+			
+			unit<uint32> Make_Roads_fss := Read_Roads_shp
+			,   StorageName = "=localdir+'/RegionFiles/'+Regio+'/Roads_'+file_date+'.fss'"
+			{
+				attribute<rdc_meter>      		geometry (arc) := Read_Roads_shp/geometry_rd;
+				attribute<string>               fclass         := Read_Roads_shp/fclass;
+				attribute<km_hr>                maxspeed       := Read_Roads_shp/maxspeed[km_hr];
+				attribute<string>               OSM_id         := Read_Roads_shp/OSM_id;
+			}
+			
+			unit<uint32> Read_Roads_fss 
+			:   StorageName = "=localdir+'/RegionFiles/'+Regio+'/Roads_'+file_date+'.fss'"
+			,	StorageReadOnly = "True"
+			{
+				attribute<rdc_meter>           	geometry (arc);
+				attribute<string>              	fclass;
+				attribute<string>               OSM_id;
+				attribute<km_hr>                maxspeed;
+				attribute<OSM/wegtype> 			wegtype := rlookup(fclass, OSM/wegtype/name);  
+			}
+			
+			unit<uint32> Attributes := SubItem_PropValues(Make_Roads_fss,'name');
+			parameter<string> Generate := 'Ready', ExplicitSuppliers = "=AsList('Make_Roads_fss/'+Attributes/name, ';')";
+		}
+		
+		container Merge_SourceData
+		{
+			container Merge_Roads_perCountry :=
+				for_each_ne(
+					Regios/Country
+					, 'Make_Merged_Roads_perCountry_T('+quote(Regios/Country)+')'
+				);
+
+			Template Make_Merged_Roads_perCountry_T
+			{
+				parameter<string> country_name;
+				//
+				//unit<uint32> Country_regios := ='Regios/'+country_name;
+
+				unit<uint32>  Merge_CountryRegion_Roads := ='union_unit('+AsList('Prepare_SourceData/'+Regios/name+'/Read_Roads_fss', ',')+')'
+				{
+					attribute<rdc_meter>    geometry (arc)                   := ='union_data(., '+AsList('Prepare_SourceData/'+Regios/name+'/Read_Roads_fss/geometry', ',')+')';
+					attribute<OSM/wegtype>  wegtype                          := ='union_data(., '+AsList('Prepare_SourceData/'+Regios/name+'/Read_Roads_fss/wegtype', ',')+')';
+					attribute<string>       OSM_id                           := ='union_data(., '+AsList('Prepare_SourceData/'+Regios/name+'/Read_Roads_fss/OSM_id', ',')+')';
+				}
+			}
+
+			unit<uint32>  Merge_Country_Roads := ='union_unit('+AsList('Merge_Roads_perCountry/'+Regios/Country+'/Merge_CountryRegion_Roads', ',')+')'
+			{
+				attribute<rdc_meter>                    geometry (arc)     := ='union_data(., '+AsList('Merge_Roads_perCountry/'+Regios/Country+'/Merge_CountryRegion_Roads/geometry', ',')+')';
+				attribute<OSM/wegtype>                  wegtype            := ='union_data(., '+AsList('Merge_Roads_perCountry/'+Regios/Country+'/Merge_CountryRegion_Roads/wegtype', ',')+')';
+				attribute<string>                       OSM_id             := ='union_data(., '+AsList('Merge_Roads_perCountry/'+Regios/Country+'/Merge_CountryRegion_Roads/OSM_id', ',')+')';
+			}
+		}
+		
+		#include <NetworkPreperation.dms>
+
+		unit<uint32> Read_Final_Network
+		:   StorageName = "=localdir+'/Final_Network_'+file_date+'.fss'"
+		,   StorageReadOnly = "true"
+		{
+			attribute<rdc_meter>                          geometry (arc);
+			attribute<OSM/wegtype>  wegtype;
+			attribute<km_hr>                        maxspeed;
+			attribute<string>                       OSM_id;
+			attribute<string>                       wegtype_label                    := OSM/wegtype/label[wegtype];
+			/*attribute<bool>                         isPartOfCarNetwork        := OSM/wegtype/IsPartOfCarNetwork[wegtype];
+			attribute<bool>                         isPartOfBikeNetwork       := OSM/wegtype/isPartOfBikeNetwork[wegtype];
+			attribute<bool>                         isPartOfPedestrianNetwork := OSM/wegtype/isPartOfPedestrianNetwork[wegtype];
+			
+			container Connectiveness
+			{
+				unit<uint32> src := ..;
+				attribute<rdc_meter>               point (src)           := first_point(src/geometry);
+				attribute<rdc_meter>               nextpoint (src)       := last_point(src/geometry);
+				
+				unit<uint32> pointset : = union_unit(src,src)
+				{
+					attribute<rdc_meter>       point       := union_data(., ../point, ../nextpoint);
+					attribute<bool>                 isVerbonden := isNull(rlookup(point, NodesNotConnected/point));
+					attribute<src>                   ArcNr       := value(ID(.) % #(src), src);
+				}
+				
+				unit<uint32> NodeSet := unique(pointset/point)
+				,	DialogData = "Values"
+				,	DialogType = "Map"
+				{
+					attribute<rdc_meter> values;
+				}
+
+				attribute<NodeSet> F1 (src) := rlookup(point,     NodeSet/Values);
+				attribute<NodeSet> F2 (src) := rlookup(nextpoint, NodeSet/Values);
+			
+				unit<uint32> networks:= connected_parts(F1, F2) // Verzameling van alle netwerken, inclusief de subnetwerken.
+				{
+					attribute<uint32>   nr_nodes   := sum(const(1, NodeSet, uint32), partnr);
+					parameter<uint32>   MaxNrNodes := max(networks/nr_nodes);
+					parameter<networks> main       := rlookup(MaxNrNodes, nr_nodes); // uitgangspunt: het netwerk met de meeste nodes is het relevante netwerk
+				}
+
+				unit<uint32> NodesNotConnected := Subset(networks/partnr <> networks/main)
+				{
+					attribute<rdc_meter> point := NodeSet/Values[Nr_OrgEntity];
+				}
+				attribute<bool> isVerbonden (src) := all(pointset/isVerbonden, pointset/ArcNr);
+			}*/
+		}
+	}
