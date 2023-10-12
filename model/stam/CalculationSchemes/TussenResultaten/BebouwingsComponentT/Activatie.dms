@@ -157,7 +157,7 @@ container Activatie
 		'const(false,..)';
 	attribute<bool> BouwdeelActief     (..) := =RekenStapName == 'StartJaar' ? 'const(false,..)' : 'BouwdeelVervanging && not(KanNietActiveren)';
 	attribute<bool> ProductActief      (..) := =RekenStapName == 'StartJaar' ? 'const(false,..)' : 'ProductVervanging  && not(KanNietActiveren)';
-
+	
 	attribute<classifications/Uitvoering> Uitvoering (..) := switch(
 		  case(AND(Bouwdelen/RenovatieMoment, IsMeergezins                                                     ), Classifications/Uitvoering/V/Nat_Mgw_Prj)
 	//	, case(AND(Bouwdelen/RenovatieMoment, IsMeergezins                                                     ), Classifications/Uitvoering/V/Nat_Mgw_Ind) //Meergezinswoningen zijn altijd projectmatig (zet dit weer aan om aanname anders te maken)
@@ -168,4 +168,16 @@ container Activatie
 		, case(AND(                                         Eigendom_rel == Classifications/Eigendom/V/WoonCorp), Classifications/Uitvoering/V/Zst_Egw_Prj)
 		, 		                                                                                                  Classifications/Uitvoering/V/Zst_Egw_Ind);
 
+
+	// activatie in meerdere ProcesGroepen wanneer er teveel ineens geactiveerd zou worden
+	attribute<bool> Actief (..) := BouwdeelActief || BouwdeelActief;
+	attribute<uint32> ActivatieNr (..):= cumulate(uint32(Actief)) - uint32(Actief);
+	
+	parameter<uint32> CONFIG_SETTING_max_activatie_per_proces_groep := 65536;
+	
+	unit<uint32> ProcesGroep := range(uint32, 0, 1 + max(activatieNr) / CONFIG_SETTING_max_activatie_per_proces_groep)
+	{
+		attribute<string> name := 'PG'+string(id(.));
+	}
+	attribute<ProcesGroep> ProcesGroep_rel (..) := ActivatieNr / CONFIG_SETTING_max_activatie_per_proces_groep;
 }

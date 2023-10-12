@@ -323,19 +323,122 @@ template BebouwingsComponentT
 	parameter<ratio> BTW_Factor_gv      := ='1.0 '+(Classifications/BebouwingsSectorBase/DraagtBTW[BcSector] ? '+ Invoer/Kengetallen/BTW/BTW_gv[Zichtjaar_rel]      / 100[percent]' : ''), ishidden = "True";
 	parameter<ratio> BTW_Factor_energie := ='1.0 '+(Classifications/BebouwingsSectorBase/DraagtBTW[BcSector] ? '+ Invoer/Kengetallen/BTW/BTW_energie[Zichtjaar_rel] / 100[percent]' : ''), ishidden = "True";
 	
-	#include <ProductActieveWoning.dms>
-	#include <BouwdeelActieveWoning.dms>
-	#include <ActieveWoning.dms>
-	
-	unit<uint32> BebouwingsObjectMetGebouwOptie := ActieveWoning/BebouwingsObjectMetGebouwOptie, ishidden = "True"
+	template Activatie // TODO: move out of BebouwingsComponentT into CalculationSchemes/ActivatieT
 	{
+		parameter<BO/Activatie/ProcesGroep> ProcesGroep_rel;
+		
+		attribute<bool> IsInDezeProcesGroep(BO) := BO/Activatie/ProcesGroep_rel == ProcesGroep_rel;
+		
+		unit<uint32> PGBO := select(IsInDezeProcesGroep), isHidden = "True"
+		{
+			attribute<bool> ProductActief := collect_by_cond(PGBO, IsInDezeProcesGroep, BO/Activatie/ProductActief);
+			attribute<bool> BouwdeelActief := collect_by_cond(PGBO, IsInDezeProcesGroep, BO/Activatie/BouwdeelActief);
+			attribute<rdc_meter> Geometry := collect_by_cond(PGBO, BO/Geometry);
+		}
+		#include <BouwdeelActieveWoning.dms>
+		#include <ProductActieveWoning.dms>
+		#include <ActieveWoning.dms>
+	}
+	container ProcesGroepen := for_each_ne(BO/Activatie/ProcesGroep/name, 'Activatie('+string(id(BO/Activatie/ProcesGroep))+'[BO/Activatie/ProcesGroep])');
+	
+	unit<uint32> BebouwingsObjectMetGebouwOptie := BO, ishidden = "True"
+	{
+		parameter<string> union_expr := 'union_data(BO, '+AsItemList('ProcesGroepen/'+BO/Activatie/ProcesGroep/name+'/ActieveWoning/results/@A')+')';
+		attribute<Classifications/Schillabel>   Schillabel_rel   (BO) := =replace(union_expr, '@A', 'Schillabel_rel');
+		attribute<Classifications/Schillabel>  Energielabel_rel (BO) := =replace(union_expr, '@A', 'Energielabel_rel');
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel  (BO) := =replace(union_expr, '@A', 'GebouwOptie_rel');
+		
 		container BC_kentallen := ../BC_kentallen;
 		
-		container functioneel := ActieveWoning/BebouwingsObjectMetGebouwOptie/functioneel
+		container BemeterdeGebouwInput_rel := for_each_nedv(Classifications/Product/name
+		,	replace(union_expr, '@A', 'BemeterdeGebouwInput_rel/' + Classifications/Product/name)
+		,	BO, Classifications/BemeterdeGebouwInput);
+		
+		container metervraag := for_each_nedv(Classifications/BemeterdeGebouwInput/name
+		,	replace(union_expr, '@A', 'metervraag/' + Classifications/BemeterdeGebouwInput/name)
+		,	BO, GJ_yr)
 		{
-			container BaseValues := BO/Functioneel_base/BaseValues; // TODO: check of dit weg kan
+			attribute<GJ_yr> Vj_e_RV    (BO) := =replace(union_expr, '@A', 'metervraag/Vj_e_RV');
+
+			attribute<GJ_yr> Vj_e_TW    (BO) := =replace(union_expr, '@A', 'metervraag/Vj_e_TW');
+
+			attribute<GJ_yr> Vj_e_KD    (BO) := =replace(union_expr, '@A', 'metervraag/Vj_e_KD');
+
+			
+			attribute<GJ_yr> Vj_e_EA    (BO) := =replace(union_expr, '@A', 'metervraag/Vj_e_EA');
+			attribute<GJ_yr> Oj_e_ZonPV (BO) := =replace(union_expr, '@A', 'metervraag/Oj_e_ZonPV');
+			attribute<GJ_yr> Vj_e_VT    (BO) := =replace(union_expr, '@A', 'metervraag/Vj_e_VT');
+			attribute<GJ_yr> Vj_e_koken (BO) := =replace(union_expr, '@A', 'metervraag/Vj_e_koken');
+
+			attribute<GJ_yr> Vj_e_pomp  (BO) := =replace(union_expr, '@A', 'metervraag/Vj_e_pomp');
+		} 
+		
+		container functioneel := for_each_nedv(Classifications/FunctioneleVraag/name
+		,	replace(union_expr, '@A', 'functioneel/' + Classifications/FunctioneleVraag/name)
+		,	BO, GJ_yr)
+		{
+			attribute<ratio> Fitfactor_VT (BO) := BO/Functioneel_base/Fitfactor_VT;
+			container BaseValues         := BO/Functioneel_base/BaseValues; // TODO: check of dit weg kan
 			container RV_N0_Per_Bouwdeel := BO/Functioneel_base/RV_N0_Per_Bouwdeel; // TODO: check of dit weg kan
-		}		
+		}
+
+
+		container kapitaallasten := for_each_nedv(Classifications/Gebouw_kapitaallasten/name
+		,	replace(union_expr, '@A', 'kapitaallasten/' + Classifications/Gebouw_kapitaallasten/name)
+		,	BO, Eur_yr);
+		container eenmalig := for_each_nedv(Classifications/GebouwOptie_eenmalig/name
+		,	replace(union_expr, '@A', 'eenmalig/' + Classifications/GebouwOptie_eenmalig/name)
+		,	BO, Eur)
+		{
+			attribute<eur> Ki_gv (BO) := =replace(union_expr, '@A', 'eenmalig/Ki_gv');
+		}
+		
+		container jaarlijks := for_each_nedv(Classifications/GebouwOptie_jaarlijks/name
+		,	replace(union_expr, '@A', 'jaarlijks/' + Classifications/GebouwOptie_jaarlijks/name)
+		,	BO, Eur_yr)
+		{
+			attribute<Eur_yr> oh_KD  (BO) := =replace(union_expr, '@A', 'jaarlijks/oh_KD');
+			attribute<Eur_yr> adm_KD (BO) := =replace(union_expr, '@A', 'jaarlijks/adm_KD');
+		}
+		container subsidie := for_each_nedv(Zichtjaarbeleid/Subsidie/name
+		,	replace(union_expr, '@A', 'subsidie/' + Zichtjaarbeleid/Subsidie/name)
+		,	BO, Eur);
+		
+		container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
+		,	replace(union_expr, '@A', 'InstallatiePerProduct/' + Classifications/Product/name)
+		,	BO, Classifications/Installatie)
+		{
+			attribute<Classifications/AfgifteSysteem>                             AS (BO) := =replace(union_expr, '@A', 'InstallatiePerProduct/AS');
+			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (BO) := =replace(union_expr, '@A', 'InstallatiePerProduct/VT');
+			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (BO) := =replace(union_expr, '@A', 'InstallatiePerProduct/DK');
+			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (BO) := =replace(union_expr, '@A', 'InstallatiePerProduct/KK');
+
+			container LastVervanging := for_each_nedv(classifications/Product/name
+			,	replace(union_expr, '@A', 'InstallatiePerProduct/LastVervanging/' + Classifications/Product/name)
+			,	BO, yr_uint16)
+			{
+				attribute<yr_uint16> KK (BO) := =replace(union_expr, '@A', 'InstallatiePerProduct/LastVervanging/KK');
+				attribute<yr_uint16> VT (BO) := =replace(union_expr, '@A', 'InstallatiePerProduct/LastVervanging/VT');
+				attribute<yr_uint16> DK (BO) := =replace(union_expr, '@A', 'InstallatiePerProduct/LastVervanging/DK');
+			}
+		}
+		
+		container Bouwdelen := BO/Bouwdelen
+		{
+			container Isolatie := for_each_nedv(Classifications/Bouwdeel/name
+			,	replace(union_expr, '@A', 'Bouwdelen/Isolatie/' + Classifications/Bouwdeel/name)
+			,	BO, Classifications/IsolatieNiveau);
+				
+			container lastvervanging := for_each_nedv(classifications/bouwdeel/name
+			,	replace(union_expr, '@A', 'Bouwdelen/lastvervanging/' + Classifications/Bouwdeel/name)
+			,	BO, yr_uint16);
+		}
+		container AansluitCapaciteit := BO/AansluitCapaciteit
+		{
+			attribute<kW> RV (BO) := =replace(union_expr, '@A', 'AansluitCapaciteit/RV');
+			attribute<kW> KD (BO) := =replace(union_expr, '@A', 'AansluitCapaciteit/KD');
+			attribute<kW> TW (BO) := =replace(union_expr, '@A', 'AansluitCapaciteit/TW');
+		}
 	}
 	
 	unit<uint32> Results := BebouwingsObjectMetGebouwOptie, ishidden = "True"

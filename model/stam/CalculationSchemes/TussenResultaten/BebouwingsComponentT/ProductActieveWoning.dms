@@ -11,12 +11,12 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 
 //====== Berekeningen voor woningen die actief zijn op minimaal één functioneel product =====
-unit<uint32> ProductActieveWoning := select_with_org_rel(BO/Activatie/ProductActief)
+unit<uint32> ProductActieveWoning := select_with_org_rel(PGBO/ProductActief)
 {		
-	attribute<BO> BO_rel := org_rel, ishidden = "True";
-	attribute<rdc_meter> Geometry := lookup(BO_rel, BO/Geometry), ishidden = "True";
+	attribute<BO> BO_rel := collect_by_cond(ProductActieveWoning, IsInDezeProcesGroep && BO/Activatie/ProductActief, ID(BO)), ishidden = "True";
+	attribute<rdc_meter> Geometry := collect_by_cond(ProductActieveWoning, PGBO/Geometry), ishidden = "True";
 	
-	attribute<ProductActieveWoning> per_BO(BO) := invert(BO_rel), ishidden = "True";
+//	attribute<ProductActieveWoning> per_BO(BO) := invert(BO_rel), ishidden = "True";
 	
 	//====== Indeling van gebouwopties in categorieën: ketelopties (vaak gas), all-electric opties, en hybride opties =====
 	unit<uint8> OptiesHere := select_with_org_rel(IsDefined(classifications/gebouwoptie/categorie_rel)), ishidden = "True"
@@ -27,25 +27,29 @@ unit<uint32> ProductActieveWoning := select_with_org_rel(BO/Activatie/ProductAct
 		attribute<string> label := name, DialogType = "LabelText";
 		
 		attribute<string> Criterium_expr := ='replace_value(LowerCase(union_data(., '+AsItemList('LocatieSpecifiekeOpties/GebouwOpties/'+name)+')), ''criteria/always'', '''')';
-		attribute<string> Criterium_Expr2 := replace_value(Criterium_expr, '', 'const(true, xIsolatieAmbitie)')+'[xIsolatieAmbitie/BO_rel]'; // TODO: samenvoegen met Criterium_expr
+		attribute<string> Criterium_Expr2 := 
+			  Criterium_expr ==  '' ? 'const(true, xIsolatieAmbitie)'
+			: Criterium_expr == 'criteria/never' ? 'const(false, xIsolatieAmbitie)'
+			: 'collect_by_cond(ProductActieveWoning, IsInDezeProcesGroep && BO/Activatie/ProductActief, '+Criterium_expr+')[sub_BouwdeelInactief/ProductActieveWoning_rel]';
 	}
 	
-	attribute<bool> is_BouwdeelActief     := BO/Activatie/BouwdeelActief[BO_rel], Descr = "Check of ook bouwdelen actief zijn";
+	attribute<bool> is_BouwdeelActief     := collect_by_cond(ProductActieveWoning, PGBO/BouwdeelActief), Descr = "Check of ook bouwdelen actief zijn";
 	
 	//====== Berekeningen voor woningen die actief zijn op minimaal één functioneel product en ook op één of meerdere bouwdelen =====
 	unit<uint32> sub_BouwdeelActief   := select_with_org_rel(is_BouwdeelActief)
 	{
 		attribute<ProductActieveWoning> ProductActieveWoning_rel := org_rel, IsHidden = "True";
-		attribute<BO>                   BO_rel                   := lookup(ProductActieveWoning_rel, ProductActieveWoning/BO_rel), IsHidden = "True";
+		attribute<BO>                   BO_rel                   := ProductActieveWoning_rel->BO_rel, IsHidden = "True";
 		
 		attribute<BouwdeelActieveWoning> BouwdeelActieveWoning_rel := rlookup(BO_rel, BouwdeelActieveWoning/BO_rel), ishidden = "True";
 		
 		//===== voor woningen met ook actieve bouwdelen worden de gebouwopties per uniek ambitieniveau (max 5) berekend =====
-		unit<uint32> xIsolatieAmbitie := select(IsDefined(rlookup(BouwdeelActieveWoning/UniekAmbitie/BO_rel, sub_Bouwdeelactief/BO_rel)))
+		attribute<.> per_UA(BouwdeelActieveWoning/UniekAmbitie) := rlookup(BouwdeelActieveWoning/UniekAmbitie/BouwdeelActieveWoning_rel->BO_rel, sub_Bouwdeelactief/BO_rel);
+		unit<uint32> xIsolatieAmbitie := select(IsDefined(per_UA))
 		{
-			attribute<sub_BouwdeelActief> sub_BouwdeelActief_rel := select_data(xIsolatieAmbitie, rlookup(BouwdeelActieveWoning/UniekAmbitie/BO_rel, sub_Bouwdeelactief/BO_rel)), ishidden = "True";
-			attribute<classifications/IsolatieAmbitie> MinIsolatieAmbitie_rel := select_data(xIsolatieAmbitie, BouwdeelActieveWoning/UniekAmbitie/MinIsolatieAmbitie_rel), ishidden = "True";
-			attribute<classifications/IsolatieAmbitie> MaxIsolatieAmbitie_rel := select_data(xIsolatieAmbitie, BouwdeelActieveWoning/UniekAmbitie/MaxIsolatieAmbitie_rel), ishidden = "True";
+			attribute<sub_BouwdeelActief> sub_BouwdeelActief_rel := collect_by_cond(xIsolatieAmbitie, per_UA), ishidden = "True";
+			attribute<classifications/IsolatieAmbitie> MinIsolatieAmbitie_rel := collect_by_cond(xIsolatieAmbitie, BouwdeelActieveWoning/UniekAmbitie/MinIsolatieAmbitie_rel), ishidden = "True";
+			attribute<classifications/IsolatieAmbitie> MaxIsolatieAmbitie_rel := collect_by_cond(xIsolatieAmbitie, BouwdeelActieveWoning/UniekAmbitie/MaxIsolatieAmbitie_rel), ishidden = "True";
 			
 			attribute<BO> BO_rel := sub_BouwdeelActief_rel->BO_rel, ishidden = "True";
 			
@@ -76,7 +80,8 @@ unit<uint32> ProductActieveWoning := select_with_org_rel(BO/Activatie/ProductAct
 	unit<uint32> sub_BouwdeelInactief := select_with_org_rel(not(is_BouwdeelActief)), IsHidden = "True"
 	{
 		attribute<ProductActieveWoning> ProductActieveWoning_rel := org_rel;
-		attribute<BO>                   BO_rel                   := ProductActieveWoning/BO_rel[ProductActieveWoning_rel];
+//		attribute<PGBO>                 PGBO_rel                 := ProductActieveWoning_rel->PGBO_rel;
+		attribute<BO>                   BO_rel                   := ProductActieveWoning_rel->BO_rel;
 	}
 	
 	unit<uint32> xIsolatieAmbitie := union_unit(sub_BouwdeelActief/xIsolatieAmbitie, sub_BouwdeelInactief)
@@ -88,30 +93,36 @@ unit<uint32> ProductActieveWoning := select_with_org_rel(BO/Activatie/ProductAct
 		
 		attribute<ProductActieveWoning> ProductActieveWoning_rel := union_data(., sub_BouwdeelActief/xIsolatieAmbitie/ProductActieveWoning_rel, sub_BouwdeelInactief/ProductActieveWoning_rel), ishidden = "True";
 		
-		attribute<Classifications/SchilLabel> SchilLabel_rel := union_data(., sub_BouwdeelActief/xIsolatieAmbitie/SchilLabel_rel, BO/SchilLabel_rel[sub_BouwdeelInactief/BO_rel]);
-		attribute<Eur   >                     Ki_gv          := union_data(., sub_BouwdeelActief/xIsolatieAmbitie/Ki_gv , const(0[EUR],    sub_BouwdeelInactief));
-		attribute<Eur_yr>                     Kji_gv         := union_data(., sub_BouwdeelActief/xIsolatieAmbitie/Kji_gv, const(0[EUR_yr], sub_BouwdeelInactief));
-		attribute<Eur_yr>                     Kmi_gv         := union_data(., sub_BouwdeelActief/xIsolatieAmbitie/Kmi_gv, const(0[EUR_yr], sub_BouwdeelInactief));
+		attribute<Classifications/SchilLabel> SchilLabel_rel := union_data(.
+			, sub_BouwdeelActief/xIsolatieAmbitie/SchilLabel_rel
+			, collect_by_cond(ProductActieveWoning, IsInDezeProcesGroep && BO/Activatie/ProductActief, BO/SchilLabel_rel)[sub_BouwdeelInactief/ProductActieveWoning_rel]
+			);
+		attribute<Eur   >               Ki_gv  := union_data(., sub_BouwdeelActief/xIsolatieAmbitie/Ki_gv , const(0[EUR],    sub_BouwdeelInactief));
+		attribute<Eur_yr>               Kji_gv := union_data(., sub_BouwdeelActief/xIsolatieAmbitie/Kji_gv, const(0[EUR_yr], sub_BouwdeelInactief));
+		attribute<Eur_yr>               Kmi_gv := union_data(., sub_BouwdeelActief/xIsolatieAmbitie/Kmi_gv, const(0[EUR_yr], sub_BouwdeelInactief));
 		
 		container Bouwdelen {
 			container Isolatie := for_each_nedv(Classifications/Bouwdeel/name
-			,	replace('union_data(xIsolatieAmbitie, sub_BouwdeelActief/xIsolatieAmbitie/Bouwdelen/Isolatie/@BN, BO/Bouwdelen/Isolatie/@BN[sub_BouwdeelInactief/BO_rel])', '@BN', Classifications/Bouwdeel/name)
+			,	replace('union_data(xIsolatieAmbitie'
+					', sub_BouwdeelActief/xIsolatieAmbitie/Bouwdelen/Isolatie/@BN'
+					', collect_by_cond(ProductActieveWoning, IsInDezeProcesGroep && BO/Activatie/ProductActief, BO/Bouwdelen/Isolatie/@BN)[sub_BouwdeelInactief/ProductActieveWoning_rel])'
+				, '@BN', Classifications/Bouwdeel/name)
 			,	xIsolatieAmbitie, Classifications/IsolatieNiveau
 			);
 		}
 
 		container AansluitCapaciteit
 		{
-			attribute<kW> RV (xIsolatieAmbitie) := union_data(.., sub_BouwdeelActief/xIsolatieAmbitie/AansluitCapaciteit/RV, BO/AansluitCapaciteit/RV[sub_BouwdeelInactief/BO_rel]);
-			attribute<kW> KD (xIsolatieAmbitie) := union_data(.., sub_BouwdeelActief/xIsolatieAmbitie/AansluitCapaciteit/KD, BO/AansluitCapaciteit/KD[sub_BouwdeelInactief/BO_rel]);
-			attribute<kW> TW (xIsolatieAmbitie) := union_data(.., sub_BouwdeelActief/xIsolatieAmbitie/AansluitCapaciteit/TW, BO/AansluitCapaciteit/TW[sub_BouwdeelInactief/BO_rel]);
+			attribute<kW> RV (xIsolatieAmbitie) := union_data(.., sub_BouwdeelActief/xIsolatieAmbitie/AansluitCapaciteit/RV, collect_by_cond(ProductActieveWoning, IsInDezeProcesGroep && BO/Activatie/ProductActief, BO/AansluitCapaciteit/RV)[sub_BouwdeelInactief/ProductActieveWoning_rel]);
+			attribute<kW> KD (xIsolatieAmbitie) := union_data(.., sub_BouwdeelActief/xIsolatieAmbitie/AansluitCapaciteit/KD, collect_by_cond(ProductActieveWoning, IsInDezeProcesGroep && BO/Activatie/ProductActief, BO/AansluitCapaciteit/KD)[sub_BouwdeelInactief/ProductActieveWoning_rel]);
+			attribute<kW> TW (xIsolatieAmbitie) := union_data(.., sub_BouwdeelActief/xIsolatieAmbitie/AansluitCapaciteit/TW, collect_by_cond(ProductActieveWoning, IsInDezeProcesGroep && BO/Activatie/ProductActief, BO/AansluitCapaciteit/TW)[sub_BouwdeelInactief/ProductActieveWoning_rel]);
 		}
 		container functioneel := for_each_nedv(
 				Classifications/FunctioneleVraag/name,
 				replace(
 					'union_data(.., '
 						'select_data(sub_BouwdeelActief/xIsolatieAmbitie, BouwdeelActieveWoning/UniekAmbitie/functioneel/@PT@), '
-						'BO/functioneel/@PT@[sub_BouwdeelInactief/BO_rel])'
+						'collect_by_cond(ProductActieveWoning, IsInDezeProcesGroep && BO/Activatie/ProductActief, BO/functioneel/@PT@)[sub_BouwdeelInactief/ProductActieveWoning_rel])'
 				, '@PT@', Classifications/FunctioneleVraag/name ),
 				xIsolatieAmbitie,
 				GJ_yr);
@@ -123,9 +134,9 @@ unit<uint32> ProductActieveWoning := select_with_org_rel(BO/Activatie/ProductAct
 		
 		unit<uint32> PAW_xInvesteringsOptie := combine(xIsolatieAmbitie, Classifications/GebouwOptieCategorie)
 		{
-			attribute<BO>                                   BO_rel                   := xIsolatieAmbitie/BO_rel[xIsolatieAmbitie_rel], ishidden = "True";
-			attribute<xIsolatieAmbitie>                     xIsolatieAmbitie_rel     := nr_1, ishidden = "True";
-			attribute<Classifications/GebouwOptieCategorie> GebouwOptieCategorie_rel := nr_2, ishidden = "True";
+//			attribute<BO>                                   BO_rel                   := xIsolatieAmbitie/BO_rel[xIsolatieAmbitie_rel], ishidden = "True";
+			attribute<xIsolatieAmbitie>                     xIsolatieAmbitie_rel     := first_rel, ishidden = "True";
+			attribute<Classifications/GebouwOptieCategorie> GebouwOptieCategorie_rel := second_rel, ishidden = "True";
 			
 			attribute<ProductActieveWoning>                 ProductActieveWoning_rel := xIsolatieAmbitie_rel->ProductActieveWoning_rel, ishidden = "True"; //[xIsolatieAmbitie_rel];
 			attribute<Classifications/IsolatieAmbitie>      MinIsolatieAmbitie_rel   := xIsolatieAmbitie_rel->MinIsolatieAmbitie_rel, ishidden = "True";
