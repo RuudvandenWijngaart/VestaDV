@@ -12,9 +12,11 @@ echo %GeoDmdRunCmdBase% %RUNFILE% %TARGET%
 
 %GeoDmdRunCmdBase% %RUNFILE%.dms %TARGET%
 
-	if not errorlevel 1 (Echo *** %1 OK ) Else (
+	if %ERRORLEVEL% EQU 0 (Echo *** %1 OK ) Else (
 		Set RegrResult=FAILED
+ 		Echo !!! ExitCode %ERRORLEVEL% 
  		Echo !!! %1 FAILED
+ 		Echo !!! ExitCode %ERRORLEVEL%  >> %LogFilePath%
 		Echo !!! %1 FAILED >> %LogFilePath%
 		type %GeoDmsLogFilePath% >> %LogFilePath%
 	)
