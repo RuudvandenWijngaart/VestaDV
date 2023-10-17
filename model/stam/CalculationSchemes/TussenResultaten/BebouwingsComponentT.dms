@@ -149,20 +149,20 @@ template BebouwingsComponentT
 		attribute<ratio> NietGeslooptFactor := Float64(Sloopjaar > Zichtjaar_jaar);
 			
 		attribute<bool>  Afbouw             := =Classifications/Periode/isHistorisch[Periode_rel] ? 'const(false,.)' : 'PrevObject/ResterendNu > 0.0 && (Sloopjaar <= Zichtjaar_jaar)';
-		attribute<bool>  Aanbouw            := MakeDefined(Bouwjaar, 0w) > 2023[yr_uint16], ishidden = "True";
+		attribute<bool>  Aanbouw            := MakeDefined(Bouwjaar, 0w) >= StartNieuwbouwJaar, ishidden = "True";
 
-		parameter<ratio> AanbouwPerJaar := Zichtjaar_jaar <= 2030w ? 0.125 : 0.1, ishidden = "True";
+		parameter<ratio> AanbouwPerJaar := Zichtjaar_jaar <= 2030w ? 1d / (2030w - (StartNieuwbouwJaar -1[yr_uint16]))[float64] : 0.1, ishidden = "True";
 		attribute<yr_uint16> bouwperiode_beginjaar := 
 			Bouwjaar > 2040[yr_uint16] ? 2041[yr_uint16] : 
 			Bouwjaar > 2030[yr_uint16] ? 2031[yr_uint16] : 
-			Bouwjaar > 2022[yr_uint16] ? 2024[yr_uint16] : Bouwjaar, ishidden = "True";
+			Bouwjaar > 2020[yr_uint16] ? StartNieuwbouwJaar : Bouwjaar, ishidden = "True";
 		
 		attribute<ratio> Aanbouwfactor   := =Invoer/DefaultInstellingen/Basis/RuimtelijkeOntwikkelingAan ? 
 			'Aanbouw ?'
 				'min_elem(float64(sub_or_null(Zichtjaar_jaar + 1[yr_uint16], bouwperiode_beginjaar)) * 1[_yr] * AanbouwPerJaar, 1.0[ratio]) : 1.0[ratio]' :
 				'const(1.0[ratio],.)';
 				
-		attribute<ratio> ResterendNu     := =Zichtjaar_jaar <= 2023w 
+		attribute<ratio> ResterendNu     := =Zichtjaar_jaar < StartNieuwbouwJaar 
 			? 'const(1.0, BO)'
 			: 'Afbouw ? max_elem(PrevObject/ResterendNu - AanbouwPerJaar, 0.0) : Aanbouw ? Aanbouwfactor : NietGeslooptFactor';
 			
@@ -183,6 +183,7 @@ template BebouwingsComponentT
 			attribute<string> BouwjaarKlasseName    (BO) := src/Class/BouwjaarWoning/name[BouwjaarKlasse_rel];
 			attribute<string> EigendomName          (BO) := Classifications/Eigendom/label[Eigendom_rel];
 			attribute<string> nameZonderMutatieType (BO) := BouwsoortName + '_' +BouwjaarKlasseName+ '_' +EigendomName;
+			attribute<src/class/combines/BouwSoortBouwJaarKlasseEigendom> BouwSoortBouwJaarKlasseEigendom_rel (BO) := rlookup(nameZonderMutatieType, src/class/combines/BouwSoortBouwJaarKlasseEigendom/label);
 			
 			container WoningGroepen := for_each_ind(
 				'ne'
@@ -214,7 +215,7 @@ template BebouwingsComponentT
 				//====== Potentiele kandidaten voor overheveling
 				unit<uint32> OverhevelKandidaten := select_with_org_rel(not(isNuNieuw) && nrAansluitingen > 0d && nameZonderMutatieType == BouwSoortBouwJaarKlasseEigendom_label)
 				{
-					parameter<ratio> SchaalfactorAansluitingen  := Sum(BO/nrAansluitingen[org_rel]) / nrAslWoningvoorraad;
+					parameter<ratio> SchaalfactorAansluitingen  := 1d;//Sum(BO/nrAansluitingen[org_rel]) / nrAslWoningvoorraad;
 
 					//====== random nummer tussen 0 en 1 per kandidaat
 					attribute<float64> randomnrKoop     := rnd_uniform(JaarSeed * 18u, ., range(float64, 0d, 1d));
@@ -258,9 +259,9 @@ template BebouwingsComponentT
 			:Overheveling/BONaarWoonCorp ? Classifications/Eigendom/V/WoonCorp 
 			:Overheveling/BONaarPartHuur ? Classifications/Eigendom/V/PartHuur 
 			:Eigendom_prev
-			,IntegrityCheck = "Sum((pcount(Eigendom_rel) == pcount(Eigendom_prev))[uint32]) != 3[uint32]";
-
-
+			,IntegrityCheck = "=Zichtjaar_jaar == 2018[yr_uint16] ? 'True' : 'Sum((pcount(Eigendom_rel) == pcount(Eigendom_prev))[uint32]) != 3[uint32]'"; 
+			//Uitzondering voor 2018, want daar is geen overheveling in de dataset
+		
 		container AansluitCapaciteit     := Model/CalculationSchemes/AansluitCapaciteitT(., nrAansluitingen, Oppervlakte);
 		container Functioneel_base       //:= PrevObject, ishidden = "True"
 		{
