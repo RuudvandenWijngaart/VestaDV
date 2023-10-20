@@ -5,7 +5,7 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 container voorbeeldwoningen
 {
-	unit<uint32> vbw_data: StorageName = "%projDir%/data/voorbeeldwoningen_NTA8800_v0.5.csv", StorageType = "gdal2.vect", StorageReadOnly = "True"; 
+	unit<uint32> vbw_data: StorageName = "%projDir%/data/testWoningenv0.5.csv", StorageType = "gdal.vect", StorageReadOnly = "True"; 
 	
 	unit<uint32> Bouwdelen_vbw_dataset:= select_with_attr_by_org_rel(Classifications/Bouwdeel,const(True,Classifications/Bouwdeel))
 	{
@@ -13,12 +13,20 @@ container voorbeeldwoningen
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 	}
 	
-	unit<uint32> vbw := select_with_org_rel(IsDefined(vbw_data/samengevoegd_woningtype))
+
+	//unit<uint32> vbw := select_with_org_rel(IsDefined(vbw_data/samengevoegd_woningtype))
+	// unit<uint32> vbw := select_with_org_rel(vbw_data/samengevoegd_woningtype == "rijwoning tussen - 2. 1965 - 1974" && (vbw_data/energielabel_NTA == "C") && (vbw_data/pakket == "oorspronkelijk"))
+	// unit<uint32> vbw := select_with_org_rel(vbw_data/samengevoegd_woningtype == "rijwoning tussen - 2. 1965 - 1974" && (vbw_data/energielabel_NTA == "A" || vbw_data/energielabel_NTA == "C") && (vbw_data/pakket == "oorspronkelijk" || vbw_data/pakket == "isolatiestandaard excl installaties") )
+	// unit<uint32> vbw := select_with_org_rel(vbw_data/samengevoegd_woningtype == "vrijstaand - 0. < 1946" && (vbw_data/energielabel_NTA == "A" || vbw_data/energielabel_NTA == "G") && (vbw_data/pakket == "oorspronkelijk" || vbw_data/pakket == "[V2, G3, D2, L2, S2, K2]") )
+	unit<uint32> vbw := select_with_org_rel(vbw_data/samengevoegd_woningtype == "portiek - 1. 1946 - 1964" && (vbw_data/energielabel_NTA == "A" || vbw_data/energielabel_NTA == "B") && (vbw_data/pakket == "isolatiestandaard excl installaties" || vbw_data/pakket == "['V1', 'G2', 'D1', 'L2', 'S2']") && (vbw_data/subsubtype_appartement == "tussen midden"))
+	// unit<uint32> vbw := select_with_org_rel(vbw_data/samengevoegd_woningtype == "vrijstaand - 0. < 1946" && (vbw_data/energielabel_NTA == "F" || vbw_data/energielabel_NTA == "D") && (vbw_data/pakket == "['G2', 'D1', 'L1']" || vbw_data/pakket == "['D1', 'L1']") )
 	{
 		attribute<nrAsl> 						Nr_asl					(vbw)	:= const(1[nrAsl],.);
 		attribute<uint32> 						gebouwtype_gecodeerd 	(vbw)	:= vbw_data/gebouwtype_validatietool[org_rel][uint32]; // Kan gebruikt worden wanneer sleutel codering er is.
 		attribute<uint32> 						gebouwsubtype_gecodeerd (vbw)	:= vbw_data/gebouwsubtype_validatietool[org_rel][uint32]; // Kan gebruikt worden wanneer sleutel codering er is.
 		attribute<string> 						samengevoegd_woningtype (vbw) 	:= vbw_data/samengevoegd_woningtype[org_rel];
+		attribute<string> 						WoningTypeVBW			(vbw) 	:= vbw_data/subtype[org_rel];
+		attribute<string> 						WoningSubtype			(vbw) 	:= vbw_data/subsubtype_appartement[org_rel];	
 		attribute<Classifications/WoningType>	Woningtype				(vbw)  	:= strcount(samengevoegd_woningtype, 'vrijstaand') > 0 	  	? Classifications/WoningType/V/vrijstaand
 																				: strcount(samengevoegd_woningtype, '2 onder 1 kap') > 0  	? Classifications/WoningType/V/twee_onder_1_kap
 																				: strcount(samengevoegd_woningtype, 'galerij') > 0 		  	? Classifications/WoningType/V/meergezinspand_laag_midden
@@ -32,7 +40,7 @@ container voorbeeldwoningen
 		attribute<Classifications/schillabel> 	schillabel_NTA			(vbw)	:= lookup(EnergieLabel_NTA, Classifications/Energielabel/schillabel_rel); // Op basis van energielabel, want verondersteld dat alle vbw een Hr-ketel hebben
 		attribute<Classifications/EnergieLabel> EnergieLabel_NEN		(vbw) 	:= rlookup(vbw_data/energielabel_obv_ELG_NEN7120,Classifications/EnergieLabel/label)[org_rel]; // Placeholder voor wanneer NEN energielabels toegevoegd worden
 		attribute<Classifications/schillabel> 	Schillabel_NEN			(vbw)	:= lookup(EnergieLabel_NEN, Classifications/Energielabel/schillabel_rel); // Op basis van energielabel, want verondersteld dat alle vbw een Hr-ketel hebben
-		
+		attribute<string>						Isolatiepakket			(vbw) 	:= vbw_data/pakket[org_rel];				
 		attribute<Classifications/EnergieLabel> EnergieLabel			(vbw) 	:= EnergieLabel_NTA; // Kies welk energielabel gebruikt wordt in de berekeningen en de output
 		attribute<Classifications/schillabel> 	schillabel				(vbw)	:= lookup(EnergieLabel, Classifications/Energielabel/schillabel_rel); // Op basis van energielabel, want verondersteld dat alle vbw een Hr-ketel hebben
 
@@ -118,9 +126,6 @@ container voorbeeldwoningen
 		attribute<ratio> KlimaatFactorMap        (Geography/rdc_grids/m100) := MakeDefined(KlimaatFactorMapPartial, mean(KlimaatFactorMapPartial));
 		attribute<ratio> KlimaatFactorMapPartial (Geography/rdc_grids/m100) := ='Invoer/RuimtelijkeData/klimaat/Grid/Kaart/startjaar[ratio]';
 
-
-
-
 		container Gedragfactor := SpecifiekeInstellingen/RuimtelijkeVraag/Gedrag;
 
 		container Fvraag_Hestia_startsituatie := Templates/functionele_vraag(vbw, /Invoer/Kengetallen/Bebouwing/Woning/results , Classifications/BebouwingsSector/V/Woning ); 
@@ -138,60 +143,170 @@ container voorbeeldwoningen
 	
 	#include <%projDir%/model/voorbeeldwoningen/templates.dms>
 	
-	unit<uint32> vbwSelectie := select_with_org_rel(const(true, vbw))
-		{
-			attribute<string> 	Samengevoegd_woningtype	(.) := vbw/samengevoegd_woningtype[org_rel];
-			attribute<string> 	WoningType 				(.) := lookup(vbw/WoningType,Classifications/WoningType/name)[org_rel];
-			attribute<uint16> 	BouwJaar				(.) := vbw/BouwJaar[org_rel];
-			attribute<string> 	EnergieLabel			(.) := lookup(vbw/EnergieLabel, Classifications/EnergieLabel/name)[org_rel];
-			attribute<string> 	Schillabel_NTA			(.) := lookup(vbw/schillabel_NTA, Classifications/schillabel/name)[org_rel];
-			attribute<string> 	Schillabel_NEN			(.) := lookup(vbw/schillabel_NEN, Classifications/schillabel/name)[org_rel];
-			attribute<string> 	Schillabel_Hestia		(.) := lookup(vbw/Elabels/Energielabel_rel, Classifications/schillabel/name)[org_rel];
-			attribute<float64>	Oppervlakte				(.) := vbw/Oppervlakte[org_rel];
+	container outputs
+	{	
+		unit<uint32> table := vbw	
+		{	attribute<string> 	Samengevoegd_woningtype	(vbw) := vbw/samengevoegd_woningtype;
+																						  
+			attribute<string> 	WoningType 				(vbw) := lookup(vbw/WoningType,Classifications/WoningType/name);
+			attribute<string> 	WoningTypeVBW			(vbw) := vbw/WoningTypeVBW;	
+			attribute<string>	WoningSubtype			(vbw) := vbw/WoningSubtype;
+			attribute<uint16> 	BouwJaar				(vbw) := vbw/BouwJaar;
+			attribute<string>	Isolatiepakket			(vbw) := vbw/Isolatiepakket;
+			attribute<string> 	EnergieLabel			(vbw) := lookup(vbw/EnergieLabel, Classifications/EnergieLabel/name);
+			attribute<string> 	EnergieLabel_NEN		(vbw) := lookup(vbw/EnergieLabel_NEN, Classifications/EnergieLabel/name);
+			attribute<string> 	EnergieLabel_NTA		(vbw) := lookup(vbw/EnergieLabel_NTA, Classifications/EnergieLabel/name);
+			attribute<string> 	Schillabel_NTA			(vbw) := lookup(vbw/schillabel_NTA, Classifications/schillabel/name);
+			attribute<string> 	Schillabel_NEN			(vbw) := lookup(vbw/schillabel_NEN, Classifications/schillabel/name);
+			attribute<string> 	Schillabel_Hestia		(vbw) := lookup(vbw/Elabels/Energielabel_rel, Classifications/schillabel/name);
+			attribute<float64>	Oppervlakte				(vbw) := vbw/Oppervlakte;
 			
-			attribute<string> 	Installatie_RVb	(.) := lookup(vbw/Installaties/RVb, Classifications/installatie/name)[org_rel];
-			attribute<string> 	Installatie_RVp (.) := lookup(vbw/Installaties/RVp, Classifications/installatie/name)[org_rel];
-			attribute<string> 	Installatie_TWb (.) := lookup(vbw/Installaties/TWb, Classifications/installatie/name)[org_rel];
-			attribute<string> 	Installatie_TWp (.) := lookup(vbw/Installaties/TWp, Classifications/installatie/name)[org_rel];
-			attribute<string> 	Installatie_KK 	(.) := lookup(vbw/Installaties/KK, Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/name)[org_rel];
-			attribute<string> 	Installatie_VT 	(.) := lookup(vbw/Installaties/vt, Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/name)[org_rel];
+			attribute<string> 	Installatie_RVb	(vbw) := lookup(vbw/Installaties/RVb, Classifications/installatie/name);
+			attribute<string> 	Installatie_RVp (vbw) := lookup(vbw/Installaties/RVp, Classifications/installatie/name);
+			attribute<string> 	Installatie_TWb (vbw) := lookup(vbw/Installaties/TWb, Classifications/installatie/name);
+			attribute<string> 	Installatie_TWp (vbw) := lookup(vbw/Installaties/TWp, Classifications/installatie/name);
+			attribute<string> 	Installatie_KK 	(vbw) := lookup(vbw/Installaties/KK, Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/name);
+			attribute<string> 	Installatie_VT 	(vbw) := lookup(vbw/Installaties/vt, Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/name);
 			
-			attribute<string>	IsolatieNiveau_RB	(.) := lookup(vbw/Bouwdelen/RB/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name)[org_rel];
-			attribute<string>	IsolatieNiveau_RO	(.) := lookup(vbw/Bouwdelen/RO/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name)[org_rel];
-			attribute<string>	IsolatieNiveau_DR	(.) := lookup(vbw/Bouwdelen/DR/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name)[org_rel];
-			attribute<string>	IsolatieNiveau_PL	(.) := lookup(vbw/Bouwdelen/PL/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name)[org_rel];
-			attribute<string>	IsolatieNiveau_VL	(.) := lookup(vbw/Bouwdelen/VL/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name)[org_rel];
-			attribute<string>	IsolatieNiveau_MG	(.) := lookup(vbw/Bouwdelen/MG/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name)[org_rel];
-			attribute<string>	IsolatieNiveau_MS	(.) := lookup(vbw/Bouwdelen/MS/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name)[org_rel];
-			attribute<string>	IsolatieNiveau_DP	(.) := lookup(vbw/Bouwdelen/DP/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name)[org_rel];
-			attribute<string>	IsolatieNiveau_DS	(.) := lookup(vbw/Bouwdelen/DS/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name)[org_rel];
-			attribute<string>	IsolatieNiveau_KR	(.) := lookup(vbw/Bouwdelen/KR/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name)[org_rel];
+			attribute<string>	IsolatieNiveau_RB	(vbw) := lookup(vbw/Bouwdelen/RB/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<string>	IsolatieNiveau_RO	(vbw) := lookup(vbw/Bouwdelen/RO/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<string>	IsolatieNiveau_DR	(vbw) := lookup(vbw/Bouwdelen/DR/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<string>	IsolatieNiveau_PL	(vbw) := lookup(vbw/Bouwdelen/PL/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<string>	IsolatieNiveau_VL	(vbw) := lookup(vbw/Bouwdelen/VL/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<string>	IsolatieNiveau_MG	(vbw) := lookup(vbw/Bouwdelen/MG/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<string>	IsolatieNiveau_MS	(vbw) := lookup(vbw/Bouwdelen/MS/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<string>	IsolatieNiveau_DP	(vbw) := lookup(vbw/Bouwdelen/DP/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<string>	IsolatieNiveau_DS	(vbw) := lookup(vbw/Bouwdelen/DS/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<string>	IsolatieNiveau_KR	(vbw) := lookup(vbw/Bouwdelen/KR/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
 			
-			attribute<GJ_yr> 	Fvraag_RV_Hestia	(.) := vbw/fvraag_Hestia/RV[org_rel];
-			attribute<GJ_yr> 	Fvraag_TW_Hestia 	(.) := vbw/fvraag_Hestia/TW[org_rel];
-			attribute<GJ_yr> 	Fvraag_KK_Hestia 	(.) := vbw/fvraag_Hestia/KK[org_rel];
+			attribute<GJ_yr> 	Fvraag_RV_Hestia	(vbw) := vbw/fvraag_Hestia/RV;
+			attribute<GJ_yr> 	Fvraag_TW_Hestia 	(vbw) := vbw/fvraag_Hestia/TW;
+			attribute<GJ_yr> 	Fvraag_KK_Hestia 	(vbw) := vbw/fvraag_Hestia/KK;
 			
-			attribute<GJ_yr> 	Fvraag_RV_Vivet						(.) := vbw/fvraag_Hestia_startsituatie/Functioneel/RV[org_rel]; // RV in startsituatie is gefit op vivet
-			attribute<GJ_yr> 	Fvraag_RV_Vivet_meerdere_populaties	(.) := vbw/fvraag_vivet/RV[org_rel]; // wijkt af van Fvraag_RV_Vivet voor vrijstaande woningen
-			attribute<GJ_yr> 	Fvraag_TW_Vivet 					(.) := vbw/fvraag_vivet/TW[org_rel];
-			attribute<GJ_yr> 	Fvraag_KK_Vivet 					(.) := vbw/fvraag_vivet/KK[org_rel];
+			attribute<GJ_yr> 	Fvraag_RV_Vivet_BaseValues			                  (vbw) := vbw/fvraag_Hestia_startsituatie/Functioneel/RV;
+			attribute<GJ_yr> 	Fvraag_RV_Vivet_MetLokalePraktijkFactor               (vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/Gemeten_RV_i;
+			attribute<GJ_yr> 	Fvraag_RV_Vivet_MetLokalePraktijkFactor_MetWarmeWinst (vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/Gemeten_RV_incl_tempcorrectie;
+			attribute<GJ_yr> 	Fvraag_RV_Vivet_VoorFit			                      (vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/Gemeten_RV; // Bij deze variabele is er gedeeld door de BinnentemperatuursCorrectiefactor
+			attribute<GJ_yr> 	Fvraag_TW_Vivet 					                  (vbw) := vbw/fvraag_vivet/TW;
+			attribute<GJ_yr> 	Fvraag_KK_Vivet 					                  (vbw) := vbw/fvraag_vivet/KK;
 			
-			attribute<GJ_yr> 	Fvraag_RV_Hestia_ongefit	(.) := vbw/fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/Theoretisch_RV[org_rel];
-			attribute<GJ_yr> 	Fvraag_RV_Hestia_vanuit_ongefit_berekend	(.) := Fvraag_RV_Hestia_ongefit * Fitfactor_RV  * BinnenTemperatuurCorrectieFactor - Warmtewinst;
+			attribute<GJ_yr> 	Fvraag_RV_Hestia_ongefit	                                     (vbw) := vbw/fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/Theoretisch_RV;
+			attribute<GJ_yr> 	Fvraag_RV_Hestia_vanuit_ongefit_berekend	                     (vbw) := Fvraag_RV_Hestia_ongefit * Fitfactor_RV - Warmtewinst;																															   																																								 
+			attribute<GJ_yr> 	Fvraag_RV_Hestia_vanuit_ongefit_berekend_met_binnentempcorrectie (vbw) := Fvraag_RV_Hestia_ongefit * Fitfactor_RV  * BinnenTemperatuurCorrectieFactor - Warmtewinst;
 			
-			attribute<GJ_yr> 	Warmtewinst					(.) := vbw/Fvraag_Hestia/warmtewinst/totaal [org_rel];
-			attribute<float64>	Fitfactor_RV				(.) := vbw/fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/Fitfactor[org_rel];
-			attribute<ratio> 	Lokale_praktijkfactor 		(.) := vbw/fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/gemeten_correctie/Verschilfactor[org_rel];
-			attribute<ratio> 	BinnenTemperatuurCorrectieFactor 		(.) := /Invoer/voorbeeldwoningen/vbw/Fvraag_Hestia/Correction_RV[org_rel];
+			attribute<GJ_yr> 	Warmtewinst					     (vbw) := vbw/Fvraag_Hestia/warmtewinst/totaal ;
+			attribute<float64>	Fitfactor_RV				     (vbw) := vbw/fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/Fitfactor;
+			attribute<ratio> 	Lokale_praktijkfactor 		     (vbw) := vbw/fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/gemeten_correctie/Verschilfactor;
+			attribute<ratio> 	BinnenTemperatuurCorrectieFactor (vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/TemperatuurCorrectie/factor;
 			
-			attribute<GJ_yr> 	Mvraag_gas_Hestia 							(.) := vbw/Mvraag_Hestia/result/gas[org_rel];
-			attribute<GJ_yr> 	Mvraag_elek_Hestia 							(.) := vbw/Mvraag_Hestia/result/e[org_rel];
-			attribute<GJ_yr> 	Mvraag_elek_Hestia_zonder_ventilatie_EA 	(.) := vbw/Mvraag_Hestia/result/e_zonder_ventilatie_EA[org_rel];
-			attribute<GJ_yr>	Mvraag_totaal_Hestia 						(.) := vbw/Mvraag_Hestia/result/total[org_rel];
-			attribute<GJ_yr> 	Mvraag_totaal_Hestia_zonder_ventilatie_EA	(.) := vbw/Mvraag_Hestia/result/total_zonder_ventilatie_EA[org_rel];
+			attribute<GJ_yr> 	Mvraag_gas_Hestia 							(vbw) := vbw/Mvraag_Hestia/result/gas;
+			attribute<GJ_yr> 	Mvraag_elek_Hestia 							(vbw) := vbw/Mvraag_Hestia/result/e;
+			attribute<GJ_yr> 	Mvraag_elek_Hestia_zonder_ventilatie_EA 	(vbw) := vbw/Mvraag_Hestia/result/e_zonder_ventilatie_EA;
+			attribute<GJ_yr>	Mvraag_totaal_Hestia 						(vbw) := vbw/Mvraag_Hestia/result/total;
+			attribute<GJ_yr> 	Mvraag_totaal_Hestia_zonder_ventilatie_EA	(vbw) := vbw/Mvraag_Hestia/result/total_zonder_ventilatie_EA;
 			
-			attribute<GJ_yr> 	Mvraag_gas_Vivet 	(.) := vbw/Mvraag_vivet/result/gas[org_rel];
-			attribute<GJ_yr> 	Mvraag_elek_vivet 	(.) := vbw/Mvraag_vivet/result/e[org_rel];
-			attribute<GJ_yr> 	Mvraag_totaal_vivet	(.) := vbw/Mvraag_vivet/result/total[org_rel];
+			attribute<GJ_yr> 	Mvraag_gas_Vivet 	(vbw) := vbw/Mvraag_vivet/result/gas;
+			attribute<GJ_yr> 	Mvraag_elek_vivet 	(vbw) := vbw/Mvraag_vivet/result/e;
+			attribute<GJ_yr> 	Mvraag_totaal_vivet	(vbw) := vbw/Mvraag_vivet/result/total;
 		}
+		parameter<string> OutputFolder := '%localDataProjDir%/Results/Voorbeeldwoningen/';
+        unit<uint32> variable := SubItem_PropValues(table,'name');
+        container export_csv := Model/CalculationSchemes/Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), OutputFolder+'Voorbeeldwoningen_export.csv');}		
+		
+	container outputs_tests
+	{	
+		unit<uint32> table := vbw	
+		
+		{	attribute<string> 	Samengevoegd_woningtype	(vbw) := vbw/samengevoegd_woningtype;
+																						  
+		//	attribute<string> 	WoningType 				(vbw) := lookup(vbw/WoningType,Classifications/WoningType/name);
+		//	attribute<string> 	WoningTypeVBW			(vbw) := vbw/WoningTypeVBW;	
+			attribute<string>	WoningSubtype			(vbw) := vbw/WoningSubtype;
+			attribute<string>	Isolatiepakket			(vbw) := vbw/Isolatiepakket;
+			attribute<string> 	EnergieLabel			(vbw) := lookup(vbw/EnergieLabel, Classifications/EnergieLabel/name);
+			attribute<string> 	EnergieLabel_NEN			(vbw) := lookup(vbw/EnergieLabel_NEN, Classifications/EnergieLabel/name);
+			attribute<string> 	EnergieLabel_NTA			(vbw) := lookup(vbw/EnergieLabel_NTA, Classifications/EnergieLabel/name);
+		//	attribute<string> 	Schillabel_NTA			(vbw) := lookup(vbw/schillabel_NTA, Classifications/schillabel/name);
+		//	attribute<string> 	Schillabel_NEN			(vbw) := lookup(vbw/schillabel_NEN, Classifications/schillabel/name);
+		//	attribute<string> 	Schillabel_Hestia		(vbw) := lookup(vbw/Elabels/Energielabel_rel, Classifications/schillabel/name);
+			attribute<float64>	Oppervlakte				(vbw) := vbw/Oppervlakte;
+			
+			attribute<string> 	Installatie_RVb	(vbw) := lookup(vbw/Installaties/RVb, Classifications/installatie/name);
+			attribute<string> 	Installatie_RVp (vbw) := lookup(vbw/Installaties/RVp, Classifications/installatie/name);
+			attribute<string> 	Installatie_TWb (vbw) := lookup(vbw/Installaties/TWb, Classifications/installatie/name);
+			attribute<string> 	Installatie_TWp (vbw) := lookup(vbw/Installaties/TWp, Classifications/installatie/name);
+			attribute<string> 	Installatie_KK 	(vbw) := lookup(vbw/Installaties/KK, Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/name);
+			attribute<string> 	Installatie_VT 	(vbw) := lookup(vbw/Installaties/vt, Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/name);
+
+			attribute<float64>	Isolatiewaarde_RB	(vbw) := vbw/Bouwdelen/RB/Isolatiewaarde;			
+			attribute<string>	IsolatieNiveau_RB	(vbw) := lookup(vbw/Bouwdelen/RB/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+	 		attribute<float64>	Warmteverlies_RB	(vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/RB;	
+		
+			attribute<float64>	Isolatiewaarde_RO	(vbw) := vbw/Bouwdelen/RO/Isolatiewaarde;
+			attribute<string>	IsolatieNiveau_RO	(vbw) := lookup(vbw/Bouwdelen/RO/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<float64>	Warmteverlies_RO	(vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/RO;
+			
+			attribute<float64>	Isolatiewaarde_DR	(vbw) := vbw/Bouwdelen/DR/Isolatiewaarde;
+			attribute<string>	IsolatieNiveau_DR	(vbw) := lookup(vbw/Bouwdelen/DR/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<float64>	Warmteverlies_DR	(vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/DR;
+			
+			attribute<float64>	Isolatiewaarde_PL	(vbw) := vbw/Bouwdelen/PL/Isolatiewaarde;			
+			attribute<string>	IsolatieNiveau_PL	(vbw) := lookup(vbw/Bouwdelen/PL/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<float64>	Warmteverlies_PL	(vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/PL;
+			
+			attribute<float64>	Isolatiewaarde_VL	(vbw) := vbw/Bouwdelen/VL/Isolatiewaarde;			
+			attribute<string>	IsolatieNiveau_VL	(vbw) := lookup(vbw/Bouwdelen/VL/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<float64>	Warmteverlies_VL	(vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/VL;
+			
+			attribute<float64>	Isolatiewaarde_MG	(vbw) := vbw/Bouwdelen/MG/Isolatiewaarde;
+			attribute<string>	IsolatieNiveau_MG	(vbw) := lookup(vbw/Bouwdelen/MG/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<float64>	Warmteverlies_MG	(vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/MG;
+
+			attribute<float64>	Isolatiewaarde_MS	(vbw) := vbw/Bouwdelen/MS/Isolatiewaarde;			
+			attribute<string>	IsolatieNiveau_MS	(vbw) := lookup(vbw/Bouwdelen/MS/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<float64>	Warmteverlies_MS	(vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/MS;
+			
+			attribute<float64>	Isolatiewaarde_DP	(vbw) := vbw/Bouwdelen/DP/Isolatiewaarde;			
+			attribute<string>	IsolatieNiveau_DP	(vbw) := lookup(vbw/Bouwdelen/DP/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<float64>	Warmteverlies_DP	(vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/DP;
+			
+			attribute<float64>	Isolatiewaarde_DS	(vbw) := vbw/Bouwdelen/DS/Isolatiewaarde;			
+			attribute<string>	IsolatieNiveau_DS	(vbw) := lookup(vbw/Bouwdelen/DS/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<float64>	Warmteverlies_DS	(vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/DS;
+			
+			attribute<float64>	Isolatiewaarde_KR	(vbw) := vbw/Bouwdelen/KR/Isolatiewaarde;			
+			attribute<string>	IsolatieNiveau_KR	(vbw) := lookup(vbw/Bouwdelen/KR/IsolatieNiveau_rel , Classifications/IsolatieNiveau/name);
+			attribute<float64>	Warmteverlies_KR	(vbw) := vbw/Fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/KR;
+			
+			attribute<GJ_yr> 	Fvraag_RV_Hestia	(vbw) := vbw/fvraag_Hestia/RV;
+		//	attribute<GJ_yr> 	Fvraag_TW_Hestia 	(vbw) := vbw/fvraag_Hestia/TW;
+		//	attribute<GJ_yr> 	Fvraag_KK_Hestia 	(vbw) := vbw/fvraag_Hestia/KK;
+			
+			attribute<GJ_yr> 	Fvraag_RV_Vivet						(vbw) := vbw/fvraag_Hestia_startsituatie/Functioneel/RV; // RV in startsituatie is gefit op vivet
+		//	attribute<GJ_yr> 	Fvraag_RV_Vivet_meerdere_populaties	(vbw) := vbw/fvraag_vivet/RV; // wijkt af van Fvraag_RV_Vivet voor vrijstaande woningen
+		//	attribute<GJ_yr> 	Fvraag_TW_Vivet 					(vbw) := vbw/fvraag_vivet/TW;
+		//	attribute<GJ_yr> 	Fvraag_KK_Vivet 					(vbw) := vbw/fvraag_vivet/KK;
+			
+			attribute<GJ_yr> 	Fvraag_RV_Hestia_ongefit	(vbw) := vbw/fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/Theoretisch_RV;
+		//	attribute<GJ_yr> 	Fvraag_RV_Hestia_vanuit_ongefit_berekend	(vbw) := Fvraag_RV_Hestia_ongefit * Fitfactor_RV - Warmtewinst  ;																															   																																								 
+		//	attribute<GJ_yr> 	Fvraag_RV_Hestia_vanuit_ongefit_berekend_met_binnentempcorrectie	(vbw) := Fvraag_RV_Hestia_ongefit * Fitfactor_RV  * BinnenTemperatuurCorrectieFactor - Warmtewinst;
+			
+			attribute<GJ_yr> 	Warmtewinst					(vbw) := vbw/Fvraag_Hestia/warmtewinst/totaal ;
+			attribute<float64>	Fitfactor_RV				(vbw) := vbw/fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/Fitfactor;
+		//	attribute<ratio> 	Lokale_praktijkfactor 		(vbw) := vbw/fvraag_Hestia_startsituatie/warmteverlies_theoretisch_startjaar/gemeten_correctie/Verschilfactor;
+			attribute<ratio> 	BinnenTemperatuurCorrectieFactor 		(vbw) := /Invoer/voorbeeldwoningen/vbw/Fvraag_Hestia/Correction_RV;
+			
+		//	attribute<GJ_yr> 	Mvraag_gas_Hestia 							(vbw) := vbw/Mvraag_Hestia/result/gas;
+		//	attribute<GJ_yr> 	Mvraag_elek_Hestia 							(vbw) := vbw/Mvraag_Hestia/result/e;
+		//	attribute<GJ_yr> 	Mvraag_elek_Hestia_zonder_ventilatie_EA 	(vbw) := vbw/Mvraag_Hestia/result/e_zonder_ventilatie_EA;
+		//	attribute<GJ_yr>	Mvraag_totaal_Hestia 						(vbw) := vbw/Mvraag_Hestia/result/total;
+		//	attribute<GJ_yr> 	Mvraag_totaal_Hestia_zonder_ventilatie_EA	(vbw) := vbw/Mvraag_Hestia/result/total_zonder_ventilatie_EA;
+			
+		//	attribute<GJ_yr> 	Mvraag_gas_Vivet 	(vbw) := vbw/Mvraag_vivet/result/gas;
+		//	attribute<GJ_yr> 	Mvraag_elek_vivet 	(vbw) := vbw/Mvraag_vivet/result/e;
+		//	attribute<GJ_yr> 	Mvraag_totaal_vivet	(vbw) := vbw/Mvraag_vivet/result/total;
+		}
+		parameter<string> OutputFolder := '%localDataProjDir%/Results/Voorbeeldwoningen/';
+        unit<uint32> variable := SubItem_PropValues(table,'name');
+        container export_csv := Model/CalculationSchemes/Rapportage/WriteTable32ToCSV(table, AsList(variable/name, ';'), OutputFolder+'Voorbeeldwoningen_test_export.csv');}	
 }
