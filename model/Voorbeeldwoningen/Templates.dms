@@ -135,8 +135,8 @@ container Templates
 		attribute<GJ_yr> warmtewinst_zoninstraling    (Obs) := warmtewinst_zoninstraling_RO + warmtewinst_zoninstraling_RB;	
 
 		//============ totaal warmtewinsten
-		//attribute<GJ_yr> Totaal (Obs) := = 'min_elem(warmtewinst_personen + warmtewinst_apparaten + warmtewinst_zoninstraling, Invoer/Kengetallen/WarmteVraag/Max_warmtewinst * ' + warmteverlies_path + ')';
-		attribute<GJ_yr> Totaal (Obs) := warmtewinst_personen + warmtewinst_apparaten + warmtewinst_zoninstraling;
+		attribute<GJ_yr> Totaal (Obs) := = 'min_elem(warmtewinst_personen + warmtewinst_apparaten + warmtewinst_zoninstraling, Invoer/Kengetallen/WarmteVraag/Max_warmtewinst * ' + warmteverlies_path + ')';
+		attribute<GJ_yr> Totaal_zonder_max (Obs) := warmtewinst_personen + warmtewinst_apparaten + warmtewinst_zoninstraling;
 	}
 	
 	Template BerekenFunctioneel
@@ -155,7 +155,7 @@ container Templates
 			attribute<GJ_yr> EA (BOdomain) := PrevState/Fvraag_Hestia_startsituatie/Functioneel/EA[PrevState_rel];
 			attribute<GJ_yr> TW (BOdomain) := PrevState/Fvraag_Hestia_startsituatie/Functioneel/TW[PrevState_rel];
 			attribute<GJ_yr> KD (BOdomain) := PrevState/Fvraag_Hestia_startsituatie/Functioneel/KD[PrevState_rel];
-			attribute<GJ_yr> RV (BOdomain) := (RV_per_Bouwdeel_now/Totaal  + Vrv_VT)- warmtewinst/totaal;
+			attribute<GJ_yr> RV (BOdomain) := (RV_per_Bouwdeel_now/Totaal  + Vrv_VT) * Correction_RV - warmtewinst/totaal;
 			
 			attribute<GJ_yr> Vrv_VT (BOdomain) :=
 				  Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[vbw/installaties/VT]
@@ -163,6 +163,10 @@ container Templates
 				* PrevState/Fvraag_Hestia_startsituatie/Functioneel/BaseValues/Klimaateffect[PrevState_rel]
 				//* PrevState/Gedragfactor/VT
 				* PrevState/Fvraag_Hestia_startsituatie/Functioneel/Fitfactor_VT[PrevState_rel];			
+
+			attribute<Kwh_yr_m2>    Kwh_m2_RV      (BOdomain) := makedefined(((RV_per_Bouwdeel_now/Totaal + Vrv_VT) / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / PrevState/Oppervlakte[PrevState_rel],0.0[Kwh_yr_m2]);
+			attribute<ratio>        Correction_RV  		(BOdomain) := 1.0[ratio] + Invoer/Kengetallen/Constanten/BinnenTemp_A * Invoer/Kengetallen/Constanten/BinnenTemp_B ^ Kwh_m2_RV;
+
 
 			container IsolatieNiveau_rel := for_each_nedv(
 				classifications/Bouwdeel/name,
@@ -285,15 +289,17 @@ container Templates
 
     				attribute<Kwh_yr_m2> R_guess     (BebouwingsObjectSrc) := PrevStateName/R_guess_new;
     				attribute<Kwh_yr_m2> Result      (BebouwingsObjectSrc) := R_guess * (1.0[ratio] + Invoer/Kengetallen/Constanten/BinnenTemp_A * Invoer/Kengetallen/Constanten/BinnenTemp_B ^ R_guess);
-    				attribute<Kwh_yr_m2> R_guess_new (BebouwingsObjectSrc) := (Result - R_cor) > 0.5[Kwh_yr_m2] ? (R_guess + 1[Kwh_yr_m2]) : (Result - R_cor) < -0.5[Kwh_yr_m2] ? (R_guess + 1[Kwh_yr_m2]) : R_guess;
+    				attribute<Kwh_yr_m2> R_guess_new (BebouwingsObjectSrc) := (Result - R_cor) > 0.5[Kwh_yr_m2] ? (R_guess - 1[Kwh_yr_m2]) : (Result - R_cor) < -0.5[Kwh_yr_m2] ? (R_guess + 1[Kwh_yr_m2]) : R_guess;
     			}
 
 			//	R * (1 + 7.2 * 0.96 ^ R);
 
 				attribute<Kwh_yr_m2> R      (BebouwingsObjectSrc) := ='Iterations/I' + string(NrIterations-1[uint32]) + '/R_guess_new';
+				attribute<Kwh_yr_m2> Result      (BebouwingsObjectSrc) := ='Iterations/I' + string(NrIterations-1[uint32]) + '/result';
 				attribute<ratio>     factor (BebouwingsObjectSrc) := R / R_cor;
+				attribute<ratio>     factor2 (BebouwingsObjectSrc) := Result / R; // Kim heeft gelijk. Factor is geen binnen tempcorrectiefactor, maar het is de inverse.
 			}
-			attribute<GJ_yr> Gemeten_RV (BebouwingsObjectSrc) := Gemeten_RV_incl_tempcorrectie / TemperatuurCorrectie/factor;
+			attribute<GJ_yr> Gemeten_RV (BebouwingsObjectSrc) := Gemeten_RV_incl_tempcorrectie * TemperatuurCorrectie/factor; // Omdat factor de inverse van de binnentempcorrectiefactor is, hier vermenigvuldigen.
 
 			//========= relatief verschil als fitfactor
 			attribute<ratio>     Fitfactor  (BebouwingsObjectSrc) := Gemeten_RV / Theoretisch_RV;
