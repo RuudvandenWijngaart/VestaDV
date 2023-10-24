@@ -158,8 +158,9 @@ template ResultatenT
 				imp/Voorkomend_InstallatieGetalKD/Label[Voorkomend_InstallatieGetalKD_rel]+';'+
 				imp/Voorkomend_InstallatieGetalOV/Label[Voorkomend_InstallatieGetalOV_rel];
 				
-			attribute<uint32> nrWoningen := pcount(imp/results_rel);
-			attribute<nrAsl> nrAansluitingen := sum(imp/BO/nrAansluitingen, imp/results_rel);
+			attribute<uint32> nrWoningen                := pcount(imp/results_rel);
+			attribute<nrAsl>  nrAansluitingen           := sum(imp/BO/nrAansluitingen, imp/results_rel);
+			attribute<nrAsl>  nrAansluitingen_nieuwbouw := sum(imp/BO/nrAansluitingen * float64(imp/BO/Bouwjaar > 2022[yr_uint16]), imp/results_rel);
 			container Functioneel := for_each_nedv(Classifications/FunctioneleVraag/name
 			,	'sum(imp/BO/Functioneel/'+Classifications/FunctioneleVraag/name+', imp/results_rel)'
 			,	., GJ_yr );
@@ -180,37 +181,63 @@ template ResultatenT
 			parameter<nrAsl> RV_gebiedsoptie := sum(imp/BO/nrAansluitingen * float64(imp/BO/InstallatiePerProduct/RVb == Classifications/Installatie/V/gebiedsoptie));
 			parameter<nrAsl> TW_gas          := sum(imp/BO/nrAansluitingen * float64(imp/BO/InstallatiePerProduct/TWb == Classifications/Installatie/V/vr || imp/BO/InstallatiePerProduct/RVb == Classifications/Installatie/V/hr));
 			parameter<nrAsl> VT_nat          := sum(imp/BO/nrAansluitingen * float64(imp/BO/InstallatiePerProduct/VT  == Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V/Nat));
+
+			unit<uint32> aantal_installaties := results
+			{
+				attribute<string> label           := results/label;
+				attribute<nrAsl>  nrAansluitingen := results/nrAansluitingen;
+			}
+			unit<uint32> aantal_installaties_nieuwbouw := results
+			{
+				attribute<string> label           := results/label;
+				attribute<nrAsl>  nrAansluitingen := results/nrAansluitingen_nieuwbouw ;
+			}
 		}
 	}
 	
 	container Bouwdelen {
-		// evenzo voor iedere voorkomende combinatie van Bouwdelen: 4^10 = 2^20
+		/* iedere voorkomende combinatie van Bouwdelen: 8^10 = 2^30
+		Bouwdeel	first-bit	last-bit	factor	modulo
+		0			2			0			1		8
+		1			5			3			8		64
+		2			8			6			64		512
+		3			11			9			512		4096
+		4			14			12			4096	32768
+		5			17			15			32768	262144
+		6			20			18			262144	2097152
+		7			23			21			2097152	16777216
+		8			26			24			16777216	134217728
+		9			29			27			134217728	1073741824
+		*/
+		
 		container imp {
 			unit<uint32> BO := Allocatie/Woning/BO;
-			parameter<bool> CheckBouwdeelInvariants := #Classifications/Bouwdeel == 10 && #Classifications/IsolatieNiveau == 4;
-			attribute<uint16> BouwdeelG1(BO) := =replace('UInt16(BO/Bouwdelen/Isolatie/@B0) * 256w + UInt16(BO/Bouwdelen/Isolatie/@B1) * 64w +UInt16(BO/Bouwdelen/Isolatie/@B2) * 16w + UInt16(BO/Bouwdelen/Isolatie/@B3) * 4w +UInt16(BO/Bouwdelen/Isolatie/@B4)'
+			parameter<uint32> nrIsolatieNiveaus := #Classifications/IsolatieNiveau;
+			parameter<bool> CheckBouwdeelInvariants := #Classifications/Bouwdeel == 10 && nrIsolatieNiveaus <= 8; //8^5 <= nrbits(UInt16) en 8^10 <= nrbits(UInt32)
+			
+			attribute<uint16> BouwdeelG1(BO) := =replace('UInt16(BO/Bouwdelen/Isolatie/@B0) * 4096w + UInt16(BO/Bouwdelen/Isolatie/@B1) * 512w +UInt16(BO/Bouwdelen/Isolatie/@B2) * 64w + UInt16(BO/Bouwdelen/Isolatie/@B3) * 8w +UInt16(BO/Bouwdelen/Isolatie/@B4)'
 				,	'@B0', Classifications/Bouwdeel/name[0[Classifications/Bouwdeel]]
 				,	'@B1', Classifications/Bouwdeel/name[1[Classifications/Bouwdeel]]
 				,	'@B2', Classifications/Bouwdeel/name[2[Classifications/Bouwdeel]]
 				,	'@B3', Classifications/Bouwdeel/name[3[Classifications/Bouwdeel]]
 				,	'@B4', Classifications/Bouwdeel/name[4[Classifications/Bouwdeel]]
 			);
-			attribute<uint16> BouwdeelG2(BO) := =replace('UInt16(BO/Bouwdelen/Isolatie/@B0) * 256w + UInt16(BO/Bouwdelen/Isolatie/@B1) * 64w +UInt16(BO/Bouwdelen/Isolatie/@B2) * 16w + UInt16(BO/Bouwdelen/Isolatie/@B3) * 4w +UInt16(BO/Bouwdelen/Isolatie/@B4)'
+			attribute<uint16> BouwdeelG2(BO) := =replace('UInt16(BO/Bouwdelen/Isolatie/@B0) * 4096w + UInt16(BO/Bouwdelen/Isolatie/@B1) * 512w +UInt16(BO/Bouwdelen/Isolatie/@B2) * 64w + UInt16(BO/Bouwdelen/Isolatie/@B3) * 8w +UInt16(BO/Bouwdelen/Isolatie/@B4)'
 				,	'@B0', Classifications/Bouwdeel/name[5[Classifications/Bouwdeel]]
 				,	'@B1', Classifications/Bouwdeel/name[6[Classifications/Bouwdeel]]
 				,	'@B2', Classifications/Bouwdeel/name[7[Classifications/Bouwdeel]]
 				,	'@B3', Classifications/Bouwdeel/name[8[Classifications/Bouwdeel]]
 				,	'@B4', Classifications/Bouwdeel/name[9[Classifications/Bouwdeel]]
 			);
-			attribute<uint32> BouwdeelGetal(BO) := UInt32(BouwdeelG1) * 1024 + UInt32(BouwdeelG2);
-			attribute<uint32> combine_factor(Classifications/Bouwdeel) : [ 262144, 65536, 16384, 4096, 1024, 256, 64, 16, 4, 1];
+			attribute<uint32> BouwdeelGetal(BO) := UInt32(BouwdeelG1) * 32768 + UInt32(BouwdeelG2), IntegrityCheck = "CheckBouwdeelInvariants";
+			attribute<uint32> combine_factor(Classifications/Bouwdeel) : [ 134217728, 16777216, 2097152, 262144, 32768, 4096, 512, 64, 8, 1];
 			
 			attribute<results> results_rel(BO) := rlookup(BouwdeelGetal, results/values); 
 		}
 		unit<uint32> results := unique( imp/BouwdeelGetal )  
 		{ 
 			container Isolatie := for_each_nedv(Classifications/Bouwdeel/name
-			,	'(values / imp/combine_factor[Classifications/Bouwdeel/V/'+Classifications/Bouwdeel/name+'] % 4)[Classifications/IsolatieNiveau]'
+			,	'value(values / imp/combine_factor[Classifications/Bouwdeel/V/'+Classifications/Bouwdeel/name+'] % 8, Classifications/IsolatieNiveau)'
 			,	., Classifications/IsolatieNiveau	
 			);
 			attribute<string> Label := ='add('+AsItemList(''''+Classifications/Bouwdeel/name+'=''+Classifications/IsolatieNiveau/name[Isolatie/'+Classifications/Bouwdeel/name+']+'' ''')+')';
@@ -227,7 +254,17 @@ template ResultatenT
 			
 			container Arealen := for_each_nedv(Classifications/Bouwdeel/name
 			,	'sum(imp/BO/Bouwdelen/'+Classifications/Bouwdeel/name+', imp/results_rel)'
-			,	., m2 );
+			,	., m2 )
+			{
+				attribute<string> categorie (results) := label;
+			}
+
+			container NieuwbouwArealen := for_each_nedv(Classifications/Bouwdeel/name
+			,	'sum(imp/BO/Bouwdelen/'+Classifications/Bouwdeel/name+' * float64(imp/BO/Bouwjaar > 2022[yr_uint16]), imp/results_rel)'
+			,	., m2 )
+			{
+				attribute<string> categorie (results) := label;
+			}
 		}
 	}
 
