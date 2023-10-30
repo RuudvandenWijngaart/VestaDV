@@ -1,0 +1,152 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2021 - PBL & TNO                                        //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//           Dit is de container met rekenschema's die werken op Bebouwing              //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+container VergelijkingReferentieverbruik
+{
+	// WBS_rel is op basis van label startsituatie
+	attribute<classifications/combines/WBS> WBS_rel (BO) 	 := combine_data(classifications/combines/WBS, combine_data(classifications/combines/WB, woningtype_rel, classify(bouwjaar, classifications/bouwjaarwoning/classbreak)), energielabel_rel);
+	
+	container outputs
+	{
+		// per woningtype/bouwjaarklasse/NENlabelsprong. Wat betkent NENlabelsprong? Van startlabel naar label behorend bij pakket?
+			// aantal woningen
+			// Warmtevraag volgend vivet
+			// Warmtevraag volgens Hestia 
+			
+		/*	
+		container uitgangssituatie2 := for_each_ind(
+		'nedv'
+		, Classifications/combines/WBS/label
+		, 'sum(VergelijkingReferentieverbruik/UitgangsSituatie/Functioneel/RV, WBS_rel['+ Classifications/combines/WBS/label +'])'
+		, void
+		, units/GJ_yr);
+		*/
+		attribute<nrAsl> AantalWoningen              (classifications/combines/WBS) := sum(nrAansluitingen, WBS_rel);
+		attribute<GJ_yr> RV_UitgangsSituatie         (classifications/combines/WBS) := sum(VergelijkingReferentieverbruik/UitgangsSituatie/Functioneel/RV, WBS_rel);
+		attribute<GJ_yr> RV_LaagTemperatuurGeschikt  (classifications/combines/WBS) := sum(VergelijkingReferentieverbruik/LaagTemperatuurGeschikt/Functioneel/RV, WBS_rel);
+		attribute<GJ_yr> RV_StandaardEnStreefwaarden (classifications/combines/WBS) := sum(VergelijkingReferentieverbruik/StandaardEnStreefwaarden/Functioneel/RV, WBS_rel);
+		
+		
+		
+		// per woningtype/bouwjaarklasse/NTAlabelsprong
+			// aantal woningen
+			// Warmtevraag volgend vivet
+			// Warmtevraag volgens Hestia 
+	}
+	
+	attribute<GJ_yr> Warmtevraag_origineel (BO) := BO/Functioneel/RV;
+
+	container Isolatiepakketen
+	{
+		container LaagTemp
+		{
+			attribute<Classifications/IsolatieNiveau> RO (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> RB (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> DR (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> PL (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> VL (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> MG (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> MS (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> DP (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> DS (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> KR (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+		}
+		
+		container SeS
+		{
+			attribute<Classifications/IsolatieNiveau> RO (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> RB (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> DR (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> PL (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> VL (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> MG (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> MS (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> DP (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> DS (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+			attribute<Classifications/IsolatieNiveau> KR (BO) := const(rlookup("N3",Classifications/IsolatieNiveau/name), BO);
+		}
+	}	
+	
+	container UitgangsSituatie 			:= Templates/IsolatiepakketOplegT(BO/Functioneel/IsolatieNiveau_rel);
+	container LaagTemperatuurGeschikt   := Templates/IsolatiepakketOplegT(Isolatiepakketen/LaagTemp);
+	container StandaardEnStreefwaarden  := Templates/IsolatiepakketOplegT(Isolatiepakketen/SeS);
+
+	
+
+	container Templates
+	{
+		Template IsolatiepakketOplegT
+		{
+			// Start inputs
+			container Isolatiepakket;
+			// End inputs
+		
+			container Functioneel          := Templates/BerekenFunctioneel(BO, BO, id(BO), Isolatiepakket);
+			
+		}
+		
+		Template BerekenFunctioneel
+		{
+		unit<uint32> BOdomain;
+		unit<uint32> PrevState;
+		attribute<PrevState> PrevState_rel (BOdomain);
+		container Isolatiepakket;
+
+		attribute<GJ_yr> VT (BOdomain) :=
+			  Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_E_asl[PrevState/InstallatiePerProduct/VT[PrevState_rel]]
+			* PrevState/nrAansluitingen[PrevState_rel]
+			* PrevState/Functioneel_base/Gedragfactor/VT;
+			
+		attribute<GJ_yr> KK (BOdomain) := PrevState/Functioneel_base/KK[PrevState_rel];
+		attribute<GJ_yr> EA (BOdomain) := PrevState/Functioneel_base/EA[PrevState_rel];
+		attribute<GJ_yr> TW (BOdomain) := PrevState/Functioneel_base/TW[PrevState_rel];
+		attribute<GJ_yr> KD (BOdomain) := PrevState/Functioneel_base/KD[PrevState_rel];
+		attribute<GJ_yr> RV (BOdomain) := (RV_per_Bouwdeel_now/Totaal  + Vrv_VT) * Correction_RV - warmtewinst/totaal;
+		
+		attribute<GJ_yr> Vrv_VT (BOdomain) :=
+			  Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[PrevState/InstallatiePerProduct/VT[PrevState_rel]]
+			* PrevState/nrAansluitingen[PrevState_rel]
+			* PrevState/Functioneel_base/Klimaateffect[PrevState_rel]
+			* PrevState/Functioneel_base/Gedragfactor/VT
+			* PrevState/Functioneel_base/Fitfactor_VT[PrevState_rel], ishidden = "True";
+
+		attribute<Kwh_yr_m2>                  Kwh_m2_RV      (BOdomain) := makedefined(((RV_per_Bouwdeel_now/Totaal + Vrv_VT) / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / PrevState/Oppervlakte[PrevState_rel],0.0[Kwh_yr_m2]), ishidden = "True";
+		attribute<Kwh_yr_m2>                  Kwh_m2_tot     (BOdomain) := makedefined(((PrevState/Functioneel_base/VT[PrevState_rel]+KK+ EA / Invoer/Kengetallen/Constanten/Efficiency_EA + TW/0.72+KD*0.0+RV/1.04) / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / PrevState/Oppervlakte[PrevState_rel],0.0[Kwh_yr_m2]), ishidden = "True";//, IntegrityCheck = "Kwh_m2_tot < 1000[Kwh_yr_m2]";
+		attribute<Classifications/Schillabel> Schillabel_rel (BOdomain) := classify(Kwh_m2_tot, classifications/Schillabel/classbreak), ishidden = "True";
+		attribute<ratio>                      Correction_RV  (BOdomain) := 1.0[ratio] + Invoer/Kengetallen/Constanten/BinnenTemp_A * Invoer/Kengetallen/Constanten/BinnenTemp_B ^ Kwh_m2_RV, ishidden = "True";
+
+		container IsolatieNiveau_rel := Isolatiepakket;
+			
+		container BouwdeelIsolatie_rel := for_each_nedv(
+			classifications/Bouwdeel/name,
+			replace(
+				'combine_data(Classifications/BouwdeelIsolatie, classifications/Bouwdeel/V/@BN@, IsolatieNiveau_rel/@BN@)'
+			,	'@BN@', classifications/Bouwdeel/name),
+			BOdomain,
+			Classifications/BouwdeelIsolatie), ishidden = "True";
+
+		attribute<ratio> R_RV (Classifications/BouwdeelIsolatie):= Classifications/BouwdeelIsolatie/R_RV / 100[percent], ishidden = "True";
+		
+		container RV_per_Bouwdeel_now := for_each_nedv(
+			classifications/Bouwdeel/name,
+			replace(
+				'PrevState/Functioneel_base/RV_N0_per_Bouwdeel_now/@BN@[PrevState_rel] * makedefined(1.0[ratio] - R_RV[BouwdeelIsolatie_rel/@BN@], 1.0[ratio])'
+			,	'@BN@', classifications/Bouwdeel/name),
+			BOdomain,
+			GJ_yr)
+			{
+			attribute<GJ_yr> Totaal (BOdomain):= ='add('+AsItemList(Classifications/bouwdeel/name)+')';
+			}
+
+		container warmtewinst := Model/CalculationSchemes/BerekenWarmtewinst(BOdomain, '((RV_per_Bouwdeel_now/totaal + Vrv_VT) * Correction_RV)');
+		}
+	}
+}
