@@ -24,24 +24,33 @@ template StartingStateComponent
 		attribute<Classifications/SchilLabel>  SchilLabel_rel  := =(BebouwingsSector_rel == Classifications/BebouwingsSector/V/Woning) 
 			? 'MakeDefined(BebouwingsObjectSrc/SchilLabel_rel, Classifications/schillabel/V/N)'
 			: 'MakeDefined(BebouwingsObjectSrc/SchilLabel_rel, Default_Energielabel_rel';
-		attribute<uint32>                      SchilLabel_date := MakeDefined(BebouwingsObjectSrc/SchilLabel_date, (0/0)[uint32]);
+		attribute<Classifications/SchilLabel>  Energielabel_rel := Schillabel_rel;
+		attribute<uint32>                      SchilLabel_date := BebouwingsObjectSrc/SchilLabel_date;
 
 		attribute<Classifications/SchilLabel>  DefaultLabel_rel := MakeDefined(BebouwingsObjectSrc/SchilLabel_rel, Default_Energielabel_rel);
 
-		attribute<units/yr_uint16>             Bouwjaar       := BebouwingsObjectSrc/bouwjaar;
-		attribute<units/yr_uint16>             Sloopjaar      := BebouwingsObjectSrc/sloopjaar;
-		attribute<Classifications/Eigendom>    Eigendom_rel   := BebouwingsObjectSrc/Eigendom_rel;
 	
 		unit<uint32> BestaandAflevergebied := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data;
 		unit<uint32> BestaandWarmtenet     := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Warmtenetten;
-		attribute<BestaandAflevergebied> BestaandAflevergebied_rel := point_in_polygon(BebouwingsObjectSrc/point , BestaandAflevergebied/Geometry);
+		attribute<BestaandAflevergebied> BestaandAflevergebied_rel := point_in_polygon(BebouwingsObjectSrc/Geometry , BestaandAflevergebied/Geometry);
 		attribute<BestaandWarmtenet>     BestaandWarmtenet_rel     := BestaandAflevergebied/Warmtenet_rel[BestaandAflevergebied_rel];
 		
 		attribute<bool> Gasloos := =Invoer/StartgegevensAan ? 'BebouwingsObjectSrc/Gasloos' : 'const(false,.)';
-		attribute<bool> isMeergezins := BebouwingsTypeDomein/IsMeergezins [ BebouwingsType ] ;
+		attribute<bool> isMeergezins := WoningType_rel->IsMeergezins;
 
 		#include <StartGebouwOpties.dms>
 		attribute<Classifications/GebouwOptie> GebouwOptie_rel := StartGebouwOpties/GebouwOptie_rel;
+		
+		container Aansluitingen
+		{
+			unit<uint32> Aflevergebied := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data;
+
+			attribute<nrAsl> GNet(..) :=				
+				not(IsDefined(Aflevergebied_rel) && Aflevergebied/StartJaar[Aflevergebied_rel] <= Startjaar_jaar) && bouwjaar < 2020w // TODO: Check! 
+				? nrAansluitingen_i
+				: 0[nrAsl];
+		}
+		
 
 		//====================== INITIELE BEREKENING RUIMTEVERWARMING ================
 
@@ -53,28 +62,79 @@ template StartingStateComponent
 			,.
 			,GJ_yr)
 		{
-			container warmtewinst := Model/CalculationSchemes/BerekenWarmtewinst(.., 'Theoretisch_RV');
+			container warmtewinst := Model/CalculationSchemes/BerekenWarmtewinst(.., '4d / Invoer/Kengetallen/WarmteVraag/Max_warmtewinst * Gemeten_RV_i');
 			
 			container gemeten_correctie
 			{
 				attribute<Geography/RegioIndelingen/Wijk>                                WK_rel         (...) := Invoer/RuimtelijkeData/StudieGebied/Buurt/Wijk_rel[Planregio_rel];
-				attribute<Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/W_E>    W_E_rel        (...) := combine_data(Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/W_E, BebouwingsType, Eigendom_rel);
+				attribute<Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/W_E>    W_E_rel        (...) := combine_data(Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/W_E, Woningtype_rel, Eigendom_rel);
 				attribute<Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/WK_W_E> WK_W_E_rel     (...) := combine_data(Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/WK_W_E, WK_rel, W_E_rel);
 				attribute<ratio>                                                         Verschilfactor (...) := Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/WK_W_E/Verschilfactor[WK_W_E_rel];
 			}
 
 			//========= warmteverlies ventilatie
-			attribute<GJ_yr> Vrv_VT_asl     (..) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[InstallatiePerProduct/VT] * nrAansluitingen_i, descr = "warmteverlies ventilatie vast per aansluiting";
+			attribute<GJ_yr>     Vrv_VT_asl     (..) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[InstallatiePerProduct/VT] * nrAansluitingen_i, descr = "warmteverlies ventilatie vast per aansluiting";
 			
 			//========= theoretische verlies ruimteverwarming (excl warmtewinsten)
-			attribute<GJ_yr> Theoretisch_RV (..) := VL + DP + DS + MG + MS + DR + PL + RO + RB + KR + Vrv_VT_asl;
+			attribute<GJ_yr>     Theoretisch_RV (..) := VL + DP + DS + MG + MS + DR + PL + RO + RB + KR + Vrv_VT_asl;
+			attribute<Kwh_yr_m2> Kwh_m2_RV      (..) := makedefined((Theoretisch_RV / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / Oppervlakte_i,0.0[Kwh_yr_m2]);
+			attribute<ratio>     Correction_RV  (..) := 1.0[ratio] + Invoer/Kengetallen/Constanten/BinnenTemp_A * Invoer/Kengetallen/Constanten/BinnenTemp_B ^ Kwh_m2_RV;
 
 			//========= gemeten vraag ruimteverwarming gecorrigeerd voor warmtewinsten
-			attribute<GJ_yr> Gemeten_RV_i   (..) := gemeten_correctie/verschilfactor * Functioneel/BaseValues/RV;
-			attribute<GJ_yr> Gemeten_RV     (..) := Gemeten_RV_i + warmtewinst/totaal;
+			attribute<GJ_yr>     Gemeten_RV_i                  (..) := gemeten_correctie/verschilfactor * Functioneel/BaseValues/RV;
+			attribute<GJ_yr>     Gemeten_RV_incl_tempcorrectie (..) := Gemeten_RV_i + warmtewinst/totaal;
+
+			container TemperatuurCorrectie
+			{
+				attribute<Kwh_yr_m2> R_cor     (...) := makedefined((Gemeten_RV_incl_tempcorrectie / 3.6[MJ / kWh] * 1000 [ MJ / GJ]) / Oppervlakte_i,0.0[Kwh_yr_m2]);
+				parameter<uint32>    NrIterations := 20[uint32];
+				parameter<Kwh_yr_m2> Tolerance    := 1[Kwh_yr_m2];
+				container StartingState
+				{
+				attribute<Kwh_yr_m2> R_guess_new (....) := 
+					  R_cor > 170[Kwh_yr_m2] ? R_cor
+					: R_cor > 160[Kwh_yr_m2] ? 147[Kwh_yr_m2]
+					: R_cor > 150[Kwh_yr_m2] ? 147[Kwh_yr_m2]
+					: R_cor > 140[Kwh_yr_m2] ? 136[Kwh_yr_m2]
+					: R_cor > 130[Kwh_yr_m2] ? 124[Kwh_yr_m2]
+					: R_cor > 120[Kwh_yr_m2] ? 112[Kwh_yr_m2]
+					: R_cor > 110[Kwh_yr_m2] ?  96[Kwh_yr_m2]
+					: R_cor > 100[Kwh_yr_m2] ?  74[Kwh_yr_m2]
+					: R_cor >  99[Kwh_yr_m2] ?  70[Kwh_yr_m2]
+					: R_cor >  98[Kwh_yr_m2] ?  65[Kwh_yr_m2]
+					: R_cor >  97[Kwh_yr_m2] ?  56[Kwh_yr_m2]
+					: R_cor >  96[Kwh_yr_m2] ?  38[Kwh_yr_m2]
+					: R_cor >  95[Kwh_yr_m2] ?  34[Kwh_yr_m2]
+					: R_cor >  90[Kwh_yr_m2] ?  25[Kwh_yr_m2]
+					: R_cor >  85[Kwh_yr_m2] ?  21[Kwh_yr_m2]
+					: 10[Kwh_yr_m2];
+				}
+				unit<uint32> Iteration := Range(uint32, 0, NrIterations)
+    		 	{
+     				attribute<string> name          := 'I' + string(id(.));
+    				attribute<string> PrevStateName := MakeDefined(Iteration/name[sub_or_null(id(Iteration), 1)], 'StartingState');
+     			}
+     
+    			container Iterations := for_each_ne(Iteration/name, 'IterationTemplate('+Iteration/PrevStateName+')');
+
+    			template IterationTemplate
+    			{
+    				container PrevStateName;
+
+    				attribute<Kwh_yr_m2> R_guess     (....) := PrevStateName/R_guess_new;
+    				attribute<Kwh_yr_m2> Result      (....) := R_guess * (1.0[ratio] + Invoer/Kengetallen/Constanten/BinnenTemp_A * Invoer/Kengetallen/Constanten/BinnenTemp_B ^ R_guess);
+    				attribute<Kwh_yr_m2> R_guess_new (....) := (Result - R_cor) > 0.5[Kwh_yr_m2] ? (R_guess - 1[Kwh_yr_m2]) : (Result - R_cor) < -0.5[Kwh_yr_m2] ? (R_guess + 1[Kwh_yr_m2]) : R_guess;
+    			}
+
+			//	R * (1 + 7.2 * 0.96 ^ R);
+
+				attribute<Kwh_yr_m2> R      (...) := ='Iterations/I' + string(NrIterations-1[uint32]) + '/R_guess_new';
+				attribute<ratio>     factor (...) := R / R_cor;
+			}
+			attribute<GJ_yr> Gemeten_RV (..) := Gemeten_RV_incl_tempcorrectie * TemperatuurCorrectie/factor;
 
 			//========= relatief verschil als fitfactor
-			attribute<ratio> Fitfactor      (..) := Gemeten_RV / Theoretisch_RV;
+			attribute<ratio>     Fitfactor  (..) := Gemeten_RV / Theoretisch_RV;
 
 			//========= gefit verlies bij isolatiegraad N0 als referentiepunt voor berekeningen per zichtjaar
 			container RV_N0_per_Bouwdeel := for_each_nedv(
@@ -93,17 +153,17 @@ template StartingStateComponent
 		{
 			container Vermogens := Invoer/Kengetallen/Vermogens ( /Tussenresultaten/Startjaar/Schuiven/EfficiencySchuif ) ;
 			attribute<nrAsl> nrAansluitingen (results) := nrAansluitingen_i;
-			parameter<Classifications/BebouwingsSectorBase> BCsector := BebouwingsSector_rel;
+			parameter<Classifications/BebouwingsSectorBase> BCsector := BebouwingsSector_rel->org_rel;
 			attribute<kW> RV (results) := functioneel/RV * 0.25[kW_GJ_yr];
 			attribute<kW> TW (results) :=  = 
 				  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
-				  	'IsMeergezins ? Oppervlakte * Vermogens/ASW_TWmt_wl_opp + nrAansluitingen * Vermogens/ASW_TWmt_wl_asl : Oppervlakte * Vermogens/ASW_TWmt_wh_opp + nrAansluitingen * Vermogens/ASW_TWmt_wh_asl'
- 				: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte * Vermogens/ASW_TWmt_u_opp + nrAansluitingen * Vermogens/ASW_TWmt_u_asl'
+				  	'IsMeergezins ? Oppervlakte_i * Vermogens/ASW_TWmt_wl_opp + nrAansluitingen_i * Vermogens/ASW_TWmt_wl_asl : Oppervlakte_i * Vermogens/ASW_TWmt_wh_opp + nrAansluitingen_i * Vermogens/ASW_TWmt_wh_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte_i * Vermogens/ASW_TWmt_u_opp + nrAansluitingen_i * Vermogens/ASW_TWmt_u_asl'
  				: 'const(0.0[kW],..)';
 			attribute<kW> KD (results) :=  = 
 				  BCsector == Classifications/BebouwingsSectorBase/V/Woning ?
-				  	'IsMeergezins ? Oppervlakte * Vermogens/ASW_K_wl_opp + nrAansluitingen * Vermogens/ASW_K_wl_asl : Oppervlakte * Vermogens/ASW_K_wh_opp + nrAansluitingen * Vermogens/ASW_K_wh_asl'
- 				: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte * Vermogens/ASW_K_u_opp + nrAansluitingen * Vermogens/ASW_K_u_asl'
+				  	'IsMeergezins ? Oppervlakte_i * Vermogens/ASW_K_wl_opp + nrAansluitingen_i * Vermogens/ASW_K_wl_asl : Oppervlakte_i * Vermogens/ASW_K_wh_opp + nrAansluitingen_i * Vermogens/ASW_K_wh_asl'
+ 				: BCsector == Classifications/BebouwingsSectorBase/V/Util   ? 'Oppervlakte_i * Vermogens/ASW_K_u_opp + nrAansluitingen_i * Vermogens/ASW_K_u_asl'
  				: 'const(0.0[kW],..)';
 		}
 
@@ -155,13 +215,13 @@ template StartingStateComponent
 		{
 			container LastVervanging := for_each_nedv(
 				Classifications/Product/name,
-				'(uint16(Startjaar_jaar) - mod(uint16(Startjaar_jaar - Bouwjaar), Classifications/Installatie/Levensduur[InstallatiePerProduct/' + Classifications/Product/name + ']))[yr_uint16]',
+				'(uint16(Startjaar_jaar) - mod(uint16(sub_or_null(Startjaar_jaar, Bouwjaar)), Classifications/Installatie/Levensduur[InstallatiePerProduct/' + Classifications/Product/name + ']))[yr_uint16]',
 				..,
 				yr_uint16)
 				{
-					attribute<yr_uint16> KK (...) := (uint16(Startjaar_jaar) - mod(uint16(Startjaar_jaar - Bouwjaar), Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/Levensduur[InstallatiePerProduct/KK]))[yr_uint16];
-					attribute<yr_uint16> VT (...) := (uint16(Startjaar_jaar) - mod(uint16(Startjaar_jaar - Bouwjaar), Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Levensduur[InstallatiePerProduct/VT]))[yr_uint16];
-					attribute<yr_uint16> DK (...) := (uint16(Startjaar_jaar) - mod(uint16(Startjaar_jaar - Bouwjaar), Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Levensduur[InstallatiePerProduct/DK]))[yr_uint16];
+					attribute<yr_uint16> KK (...) := (uint16(Startjaar_jaar) - mod(uint16(sub_or_null(Startjaar_jaar, Bouwjaar)), Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes/Levensduur[InstallatiePerProduct/KK]))[yr_uint16];
+					attribute<yr_uint16> VT (...) := (uint16(Startjaar_jaar) - mod(uint16(sub_or_null(Startjaar_jaar, Bouwjaar)), Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Levensduur[InstallatiePerProduct/VT]))[yr_uint16];
+					attribute<yr_uint16> DK (...) := (uint16(Startjaar_jaar) - mod(uint16(sub_or_null(Startjaar_jaar, Bouwjaar)), Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes/Levensduur[InstallatiePerProduct/DK]))[yr_uint16];
 				}
 				
 			container KokenAllocatieInitieel := Model/CalculationSchemes/KokenAllocatieInitieel(..);
@@ -178,21 +238,32 @@ template StartingStateComponent
 				,Classifications/Performance/AfgifteSysteem_rel[SPF/PerformancePerProduct/RVp]
 			);
 		}
-		
-		container Func2Meter := CalculationSchemes/FunctioneelToMetervraag(., false);
+					
+		container Func2MeterSSC := CalculationSchemes/FunctioneelToMetervraag(., false);
 		container BemeterdeGebouwInput_rel := for_each_nedv(Classifications/Product/name
-			, 'rlookup(Classifications/Performance/Input_rel, Classifications/BemeterdeGebouwInput/nr_OrgEntity)[SPF/PerformancePerProduct/'+Classifications/Product/name+']'
+			, 'rlookup(Classifications/Performance/Input_rel, Classifications/BemeterdeGebouwInput/org_rel)[SPF/PerformancePerProduct/'+Classifications/Product/name+']'
 			, .
 			, Classifications/BemeterdeGebouwInput
 			);
 
-		container SPF := Func2Meter/SPF
+		container SPF := Func2MeterSSC/SPF
 		{
-			container PerformancePerProduct := Func2Meter/SPF/PerformancePerProduct;
+			container PerformancePerProduct := Func2MeterSSC/SPF/PerformancePerProduct;
 		}
 
 		container Bouwdelen := BebouwingsObjectSrc/Bouwdelen
 		{
+			container LastVervanging := for_each_nedv(
+				classifications/bouwdeel/name,
+				'max_elem(bouwjaar, (uint16(Startjaar_jaar) - mod(uint16(sub_or_null(Startjaar_jaar, Bouwjaar)), classifications/bouwdeel/levensduur[/Classifications/Bouwdeel/V/' +  /Classifications/Bouwdeel/name + ']))[yr_uint16])',
+				..,
+				yr_uint16);
+			container IsChangedNow := for_each_nedv(
+				classifications/bouwdeel/name,
+				'const(false,...)',
+				..,
+				bool);
+				
 			container BouwDeelVerliesFactor := for_each_nedv(
 				Classifications/Bouwdeel/name,
 				'Classifications/Bouwdeel/Verlies[Classifications/Bouwdeel/V/'+Classifications/Bouwdeel/name+'] * Bouwdelen/'+Classifications/Bouwdeel/name+'',
@@ -200,17 +271,23 @@ template StartingStateComponent
 				m2);
 			
 			
+			attribute<m2>    Totaal             (..) := ='add('+AsItemList(Classifications/bouwdeel/name)+') - KR', IsHidden = "True";
+			
 			attribute<ratio> Norm_verliesfactor (..) := ='add('+AsItemList('BouwDeelVerliesFactor/'+Classifications/Bouwdeel/name)+') / Totaal';
 
 			container Isolatie := for_each_nedv(
 					Classifications/bouwdeel/name,
 					'BebouwingsObjectSrc/Bouwdelen/Isolatie/'+Classifications/bouwdeel/name,
 					..,
-					Classifications/IsolatieNiveau);
+					Classifications/IsolatieNiveau);		
 		}
 		
 		container Kapitaallasten := for_each_nedv(Classifications/gebouw_kapitaallasten/name , 'const(0[Eur_yr], results)', results, Eur_yr), IsHidden = "True";
-		container Jaarlijks      := for_each_nedv(Classifications/GebouwOptie_jaarlijks/name , 'const(0[Eur_yr], results)', results, Eur_yr), IsHidden = "True";
+		container Jaarlijks      := for_each_nedv(Classifications/GebouwOptie_jaarlijks/name , 'const(0[Eur_yr], results)', results, Eur_yr), IsHidden = "True"
+		{
+			attribute<eur_yr> oh_KD   (results)  := const(0[Eur_yr], results);
+			attribute<eur_yr> adm_KD  (results)  := const(0[Eur_yr], results);
+		}
 
 		unit<uint32> VIVETexports := /Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied
 		{
@@ -257,33 +334,33 @@ template StartingStateComponent
 			template gemeenteBestand
 			{
 				parameter<string> GM_code_sel;
-				unit<uint32> table := subset(VIVETexports/GM_code == GM_code_sel)
+				unit<uint32> table := select_with_org_rel(VIVETexports/GM_code == GM_code_sel)
 				{
-					attribute<string>                      BAG_id         := VIVETexports/BAG_id[nr_orgentity];
-					attribute<string>                      BU_code        := VIVETexports/BU_code[nr_orgentity];
-					attribute<string>                      GM_code        := VIVETexports/GM_code[nr_orgentity];
-					attribute<string>                      adres          := VIVETexports/adres[nr_orgentity];
-					attribute<m2>                          oppervlak      := VIVETexports/oppervlak[nr_orgentity];
-					attribute<yr_uint16>                   Bouwjaar       := VIVETexports/Bouwjaar[nr_orgentity];
-					attribute<yr_uint16>                   sloopjaar      := VIVETexports/sloopjaar[nr_orgentity];
-					attribute<ModelObject>                 TBE            := VIVETexports/TBE[nr_orgentity];
-					attribute<string>                      TBE_string     := VIVETexports/TBE_string[nr_orgentity];
-					attribute<ratio>                       Verschilfactor := VIVETexports/Verschilfactor[nr_orgentity];
-					attribute<Classifications/Schillabel>  SchilLabel     := VIVETexports/SchilLabel[nr_orgentity];
-					attribute<uint32>                      Labeldatum     := VIVETexports/Labeldatum[nr_orgentity];
-					attribute<Classifications/Installatie> Inst_RVb       := VIVETexports/Inst_RVb[nr_orgentity];
-					attribute<Classifications/Installatie> Inst_RVp       := VIVETexports/Inst_RVp[nr_orgentity];
-					attribute<Classifications/Installatie> Inst_TWb       := VIVETexports/Inst_TWb[nr_orgentity];
-					attribute<Classifications/Installatie> Inst_TWp       := VIVETexports/Inst_TWp[nr_orgentity];
-					attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> Koken := VIVETexports/Koken[nr_orgentity];
-					attribute<GJ_yr>                       V_RV           := VIVETexports/V_RV[nr_orgentity];
-					attribute<GJ_yr>                       V_TW           := VIVETexports/V_TW[nr_orgentity];
-					attribute<GJ_yr>                       V_KK           := VIVETexports/V_KK[nr_orgentity];
-					attribute<GJ_yr>                       V_elek_kk      := VIVETexports/V_elek_kk[nr_orgentity];
-					attribute<GJ_yr>                       V_elek_twrv    := VIVETexports/V_elek_twrv[nr_orgentity];
-					attribute<GJ_yr>                       V_elek_pomp    := VIVETexports/V_elek_pomp[nr_orgentity];
-					attribute<GJ_yr>                       V_gas          := VIVETexports/V_gas[nr_orgentity];
-					attribute<ratio>                       klimaatfactor  := VIVETexports/klimaatfactor[nr_orgentity];
+					attribute<string>                      BAG_id         := VIVETexports/BAG_id[org_rel];
+					attribute<string>                      BU_code        := VIVETexports/BU_code[org_rel];
+					attribute<string>                      GM_code        := VIVETexports/GM_code[org_rel];
+					attribute<string>                      adres          := VIVETexports/adres[org_rel];
+					attribute<m2>                          oppervlak      := VIVETexports/oppervlak[org_rel];
+					attribute<yr_uint16>                   Bouwjaar       := VIVETexports/Bouwjaar[org_rel];
+					attribute<yr_uint16>                   sloopjaar      := VIVETexports/sloopjaar[org_rel];
+					attribute<ModelObject>                 TBE            := VIVETexports/TBE[org_rel];
+					attribute<string>                      TBE_string     := VIVETexports/TBE_string[org_rel];
+					attribute<ratio>                       Verschilfactor := VIVETexports/Verschilfactor[org_rel];
+					attribute<Classifications/Schillabel>  SchilLabel     := VIVETexports/SchilLabel[org_rel];
+					attribute<uint32>                      Labeldatum     := VIVETexports/Labeldatum[org_rel];
+					attribute<Classifications/Installatie> Inst_RVb       := VIVETexports/Inst_RVb[org_rel];
+					attribute<Classifications/Installatie> Inst_RVp       := VIVETexports/Inst_RVp[org_rel];
+					attribute<Classifications/Installatie> Inst_TWb       := VIVETexports/Inst_TWb[org_rel];
+					attribute<Classifications/Installatie> Inst_TWp       := VIVETexports/Inst_TWp[org_rel];
+					attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> Koken := VIVETexports/Koken[org_rel];
+					attribute<GJ_yr>                       V_RV           := VIVETexports/V_RV[org_rel];
+					attribute<GJ_yr>                       V_TW           := VIVETexports/V_TW[org_rel];
+					attribute<GJ_yr>                       V_KK           := VIVETexports/V_KK[org_rel];
+					attribute<GJ_yr>                       V_elek_kk      := VIVETexports/V_elek_kk[org_rel];
+					attribute<GJ_yr>                       V_elek_twrv    := VIVETexports/V_elek_twrv[org_rel];
+					attribute<GJ_yr>                       V_elek_pomp    := VIVETexports/V_elek_pomp[org_rel];
+					attribute<GJ_yr>                       V_gas          := VIVETexports/V_gas[org_rel];
+					attribute<ratio>                       klimaatfactor  := VIVETexports/klimaatfactor[org_rel];
 				}
 				parameter<string> OutputFolder := '%localDataProjDir%/Results/VIVET_exports/';
         		unit<uint32> variable := SubItem_PropValues(table,'name');
@@ -293,139 +370,8 @@ template StartingStateComponent
         	parameter<string> ExportAll    := 'Ready', ExplicitSuppliers = "= supplierlist";
 
 		}
-
-		// =============== attributen die ook per GebiedOptie kunnen wijzigen
-		attribute<Classifications/WarmteOptie> WarmteOptie_rel := Classifications/GebouwOptie/WarmteOptie_rel [ GebouwOptie_rel ];		
 	}
-	unit<uint32> PreStartJaar := subset(Results/bouwjaar < Startjaar_jaar)
-	{
-		unit<uint32> buurt         := Invoer/RuimtelijkeData/StudieGebied/buurt;
-		unit<uint32> Aflevergebied := Invoer/RuimtelijkeData/BestaandeWarmtenetten/Aflevergebied_data;
-		unit<uint16> ModelObjectKeyDomein := Results/ModelObjectKeyDomein;
-		
-		attribute<Geography/rdc_meter>         point             := Results/point[nr_orgentity];
-		attribute<Geography/rdc_meter>         geometry          := Results/geometry[nr_orgentity];
-		attribute<string>                      code              := Results/code[nr_orgentity];
-		attribute<string>                      label             := Results/label[nr_orgentity], DialogType = "labelText";
-		attribute<buurt>                       Buurt_rel         := Results/Buurt_rel[nr_orgentity];
-		attribute<Aflevergebied>               Aflevergebied_rel := Results/Aflevergebied_rel[nr_OrgEntity];
-		attribute<BebouwingsTypeDomein>        BebouwingsType    := Results/BebouwingsType[nr_orgentity];
-		attribute<units/yr_uint16>             Bouwjaar          := Results/Bouwjaar[nr_orgentity];
-		attribute<units/yr_uint16>             Sloopjaar         := Results/Sloopjaar[nr_orgentity];
-		attribute<Classifications/Eigendom>    Eigendom_rel      := Results/Eigendom_rel[nr_orgentity];
-		attribute<ratio>                       ResterendNu       := const(1.0,.);
-		attribute<ModelObjectKeyDomein>        ModelObjectKey    := Results/ModelObjectKey[nr_orgentity];
-		attribute<nrAsl>                       nrAansluitingen_i := Results/nrAansluitingen_i[nr_orgentity];
-		attribute<m2>                          Oppervlakte_i     := Results/Oppervlakte_i[nr_orgentity];
-		attribute<pand_asl>                    pand_aandeel      := Results/pand_aandeel[nr_orgentity];
-		attribute<Classifications/Schillabel>  Schillabel_rel    := Results/Schillabel_rel[nr_orgentity];
-		attribute<Classifications/Schillabel>  Energielabel_rel  := SchilLabel_rel;
-		attribute<Classifications/Schillabel>  Defaultlabel_rel  := Results/Defaultlabel_rel[nr_orgentity];
-		attribute<Classifications/WarmteOptie> WarmteOptie_rel   := Results/WarmteOptie_rel[nr_orgentity];
-		attribute<bool>                        Gasloos           := Results/gasloos[nr_orgentity];
-		
-		unit<uint8>  BebouwingsTypeDomein := Results/BebouwingsTypeDomein;
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel    := Results/GebouwOptie_rel[nr_orgentity];
-		
-		container Aansluitingen
-		{
-			attribute<nrAsl> GNet(PreStartJaar) :=				
-				not(IsDefined(Aflevergebied_rel) && Aflevergebied/StartJaar[Aflevergebied_rel] <= Startjaar_jaar) && Results/bouwjaar[nr_orgentity] < 2020w // TODO: Check! 
-				? nrAansluitingen_i
-				: 0[nrAsl];
-		}
-		
-		container Functioneel
-		{
-			container RV_N0_per_Bouwdeel := for_each_nedv(
-				Classifications/Bouwdeel/name,
-				'Results/Functioneel/RV_N0_per_Bouwdeel/'+Classifications/Bouwdeel/name+'[nr_orgentity]',
-				..,
-				GJ_yr);
-			attribute<ratio> Fitfactor_VT (..) := Results/Functioneel/Fitfactor_VT[nr_orgentity];
-			container BaseValues := for_each_nedv(
-				Classifications/FunctioneleVraag/name,
-				'Results/Functioneel/BaseValues/'+Classifications/FunctioneleVraag/name+'[nr_orgentity]',
-				..,
-				GJ_yr);
-		}
+	
 
-		container BemeterdeGebouwInput_rel :=  for_each_nedv(
-			classifications/Product/name,
-			'Results/BemeterdeGebouwInput_rel/' + Classifications/Product/Name + '[nr_orgentity]',
-			.,
-			Classifications/BemeterdeGebouwInput );
-		
-		container SPF := for_each_nedv(
-			classifications/Product/name,
-			'Results/SPF/' + Classifications/Product/Name + '[nr_orgentity]',
-			.,
-			float64)
-		{
-			container PerformancePerProduct :=  for_each_nedv(
-			classifications/Product/name,
-			'Results/SPF/PerformancePerProduct/' + Classifications/Product/Name + '[nr_orgentity]',
-			..,
-			Classifications/Performance);
-		}
 
-		Container Bouwdelen := for_each_nedv(
-			classifications/bouwdeel/name,
-			'Results/Bouwdelen/' + Classifications/Bouwdeel/Name + '[nr_orgentity]',
-			.,
-			m2)
-		{
-			container LastVervanging := for_each_nedv(
-				classifications/bouwdeel/name,
-				'(uint16(Startjaar_jaar) - mod(uint16(Startjaar_jaar - Bouwjaar), classifications/bouwdeel/levensduur[/Classifications/Bouwdeel/V/' +  /Classifications/Bouwdeel/name + ']))[yr_uint16]',
-				..,
-				yr_uint16);
-			container Isolatie := for_each_nedv(
-				classifications/bouwdeel/name,
-				'BebouwingsObjectSrc/Bouwdelen/Isolatie/'+classifications/bouwdeel/name+'[nr_orgentity]',
-				..,
-				Classifications/IsolatieNiveau);
-			container IsChangedNow := for_each_nedv(
-				classifications/bouwdeel/name,
-				'const(false,...)',
-				..,
-				bool);
-		}
-		
-		container Gebied
-		{
-			attribute<float64> n      (..) := Results/Gebied/n[nr_orgentity];
-			attribute<float64> MEAN_x (..) := Results/Gebied/MEAN_x[nr_orgentity];
-			attribute<float64> MEAN_y (..) := Results/Gebied/MEAN_y[nr_orgentity];
-			attribute<float64> SSD_xx (..) := Results/Gebied/SSD_xx[nr_orgentity];
-			attribute<float64> SSD_xy (..) := Results/Gebied/SSD_xy[nr_orgentity];
-			attribute<float64> SSD_yy (..) := Results/Gebied/SSD_yy[nr_orgentity];
-		}
-		
-		container Kapitaallasten := for_each_nedv( classifications/gebouw_kapitaallasten/name, 'Results/Kapitaallasten/' + classifications/gebouw_kapitaallasten/name + '[nr_orgentity]', ., Eur_yr);
-		container Jaarlijks      := for_each_nedv( classifications/GebouwOptie_jaarlijks/name, 'Results/Jaarlijks/'      + classifications/GebouwOptie_jaarlijks/name + '[nr_orgentity]', ., Eur_yr);
-		
-		container InstallatiePerProduct := for_each_nedv(Classifications/Product/name
-		, 'Results/InstallatiePerProduct/'+Classifications/Product/name+'[nr_orgentity]'
-		, .
-		, Classifications/Installatie)
-		{
-			container LastVervanging := for_each_nedv(
-				Classifications/Product/name,
-				'Results/InstallatiePerProduct/LastVervanging/'+Classifications/Product/name+'[nr_orgentity]',
-				..,
-				yr_uint16)
-				{
-					attribute<yr_uint16> KK (...) := Results/InstallatiePerProduct/LastVervanging/KK[nr_orgentity];
-					attribute<yr_uint16> VT (...) := Results/InstallatiePerProduct/LastVervanging/VT[nr_orgentity];
-					attribute<yr_uint16> DK (...) := Results/InstallatiePerProduct/LastVervanging/DK[nr_orgentity];
-					attribute<yr_uint16> AS (...) := Results/InstallatiePerProduct/LastVervanging/AS[nr_orgentity];
-				}
-			
-			attribute<Invoer/Kengetallen/OverigeInstallaties/KK/Installatietypes> KK (..) := Results/InstallatiePerProduct/KK[nr_orgentity];
-			attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> VT (..) := Results/InstallatiePerProduct/VT[nr_orgentity];
-			attribute<Invoer/Kengetallen/OverigeInstallaties/DK/Installatietypes> DK (..) := Results/InstallatiePerProduct/DK[nr_orgentity];
-			attribute<Classifications/AfgifteSysteem>                             AS (..) := Results/InstallatiePerProduct/AS[nr_orgentity];
-		}
-	}
 }

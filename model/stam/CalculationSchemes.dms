@@ -8,7 +8,6 @@ container CalculationSchemes: Using = "Units;Geography"
 {
 	#include <ModelObjectKentallenImport.dms>
 	#include <LegeBebouwingsComponent.dms>
-	#include <BebouwingsOperaties.dms>
 	#include <StartingStateComponent.dms>
 	#include <TussenResultaten.dms>	
 	#include <Payments.dms>
@@ -26,6 +25,7 @@ container CalculationSchemes: Using = "Units;Geography"
 	#include <AanbodOpties.dms>
 	#include <Rapportage.dms>
 	#include <NTA8800.dms>
+	#include <AansluitCapaciteit.dms>
 
 	// template om vraag naar warmte en koude te berekenenen voor gebiedsopties
 	template WarmteVraagT
@@ -65,11 +65,25 @@ container CalculationSchemes: Using = "Units;Geography"
 		attribute<GJ_yr>  V_Warmte           (BO) := V_RV + V_TW;
 		
 		//Opbrengsten
-		attribute<Eur_yr> Oj_Warmte          (BO) := V_Warmte * BO/WarmteWet/WarmtePrijs, Source = "FO v7a F 8-10";
+		attribute<Eur_yr> Oj_Warmte          (BO) := V_Warmte * WarmteWet/WarmtePrijs, Source = "FO v7a F 8-10";
 		attribute<Eur_yr> Oj_VastRechtMT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtMT_T;
 		attribute<Eur_yr> Oj_VastRechtLT     (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtLT_T;
 		attribute<Eur_yr> Oj_VastRechtK      (BO) := BeschikbaarheidsFactor * BO/Opbrengsten/VastRechtK_T;
 		attribute<Eur>    Oi_AansluitBijdrage(BO) := BeschikbaarheidsFactor * BO/Opbrengsten/AansluitBijdrageT;
+
+		container Warmtewet
+		{			
+			unit<uint32> GasVerbruikers := select(Bebouwingscomponenten/Woning/BO/Metervraag/Gas > 0.0[gj_yr])
+			{
+				attribute<GJ_yr> V_gas    := select_data(GasVerbruikers, Bebouwingscomponenten/Woning/BO/Metervraag/Gas);
+				attribute<GJ_yr> V_warmte := select_data(GasVerbruikers, Bebouwingscomponenten/Woning/BO/Functioneel/RV + Bebouwingscomponenten/Woning/BO/Functioneel/TW);
+			}
+			parameter<float64> PrijsFactor_impl :=  sum(GasVerbruikers/V_gas) / sum(GasVerbruikers/V_warmte) * Voorkeuren/MinderDanAndersFactor;
+			parameter<float64> PrijsFactor      :=  MakeDefined(PrijsFactor_impl, 1.25);
+			parameter<Eur_GJ>  WarmtePrijs      := = Voorkeuren/IsVasteWarmtePrijs 
+				? 'Voorkeuren/VasteWarmtePrijs'
+				: 'PrijsFactor * Prijzen/AardGas/Staffel/KGJ_eindgebruik_excl[classify(0[GJ_yr], Prijzen/Aardgas/Staffel/ClassBreak)]';
+		}
 	}
 
 	// template om de kosten van leidingen te berekenenen in euro per meter, afhankelijke van capaciteit
@@ -82,7 +96,7 @@ container CalculationSchemes: Using = "Units;Geography"
 
 		attribute<Eur_m> K_min (LeidingDomein) := Capaciteit > 0[MW] ? 400[Eur_m] + 210[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.5 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
 		attribute<Eur_m> K_max (LeidingDomein) := Capaciteit > 0[MW] ? 800[Eur_m] + 200[Eur / m] * (Capaciteit * 1.0[1 / MW])^ 0.6 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
-		attribute<Eur_m> K_m   (LeidingDomein) := (K_min * Schuiven/KostenMin + K_max * Schuiven/KostenMax) * Leercurves/MTnet/curve, descr = "kosten per meter, exclusief omwegfactor";
+		attribute<Eur_m> K_m   (LeidingDomein) := (K_min * Schuiven/KostenMin + K_max * Schuiven/KostenMax) * Leercurves/Warmtenet/curve, descr = "kosten per meter, exclusief omwegfactor";
 		attribute<Eur_m> aK_m  (LeidingDomein) := Invoer/Kengetallen/Constanten/Omwegfactor * K_m, descr = "kosten per meter, inclusief omwegfactor";
 	}
 	
@@ -98,70 +112,6 @@ container CalculationSchemes: Using = "Units;Geography"
 		parameter<ratio>   Base     := CurveMin * Schuiven/CurveMin + CurveMax * Schuiven/CurveMax, IsHidden = "True";
 		parameter<ratio>   Curve    := Base * Schuiven/LerenAan + 1[ratio] * Schuiven/LerenUit;
 	}
-	
-	template NieuwbouwUnite
-	{
-		// begin case parameters
-		container bron;
-		unit<uint8> TypeDomein;
-		parameter<yr_uint16> Periode_Eindjaar;
-		// einde case parameters
-		
-		
-		unit<uint32> results := ='Union_Unit(' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject') + ')'
-		,	DialogType ="Map"
-		,	DialogData ="point"
-		{
-			unit<uint16> ModelObjectKeyDomein := combine_unit_uint16(TypeDomein, Classifications/BouwjaarWoning);
-			
-			attribute<string> code     := label;
-			attribute<string> TypeName := ='Union_Data(., ' + asItemList('const(' + Quote(TypeDomein/name) + ', bron/' + TypeDomein/name + '/BebouwingsObject)') + ')';
-			attribute<string> label    := TypeName+string(Periode_Eindjaar)+string(point), DialogType = "labelText";
-
-			attribute<Geography/rdc_meter>  point   := ='Union_Data(., ' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject/point') + ')';
-			attribute<nrAsl>      nrAansluitingen_i := ='Union_Data(., ' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject/nrAansluitingen_i') + ')';
-			attribute<m2>         Oppervlakte_i     := ='Union_Data(., ' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject/Oppervlakte_i') + ')';
-			attribute<pand_asl>   Pand_aandeel      := ='union_data(., ' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject/pand_aandeel') + ')';
-			attribute<TypeDomein> BebouwingsType    := ='Union_Data(., ' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject/BebouwingsType') + ')';
-			
-			attribute<Geography/rdc_grids/m100>     gridm100_rel := point[Geography/rdc_grids/m100];
-			
-			attribute<RegioIndelingen/buurt>          Buurt_rel      := ='Union_Data(., ' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject/buurt_rel'  ) + ')';
-			attribute<Classifications/BouwjaarWoning> Bouwjaar       := const(classify(Periode_Eindjaar, Classifications/BouwjaarWoning/Classbreak),.);
-			attribute<ModelObjectKeyDomein>           ModelObjectKey := combine_data(ModelObjectKeyDomein, BebouwingsType, BouwJaar);
-			
-			container Bouwdelen := for_each_nedv(
-				Classifications/bouwdeel/name,
-				'Oppervlakte_i * Classifications/Woningtype/Bouwdeeldimensies/' + Classifications/bouwdeel/name + '[BebouwingsType]',
-				.,
-				Units/m2)
-			{
-				container Isolatie := for_each_nedv(
-				Classifications/bouwdeel/name,
-				'const(classifications/IsolatieNiveau/V/N4, results)',
-				..,
-				Classifications/IsolatieNiveau);
-			}
-			
-			container Gebied
-			{
-				attribute<float64> n      (..) := ='Union_Data(.., ' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject/Gebied/n'     ) + ')';
-				attribute<float64> MEAN_x (..) := ='Union_Data(.., ' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject/Gebied/MEAN_x') + ')';
-				attribute<float64> MEAN_y (..) := ='Union_Data(.., ' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject/Gebied/MEAN_y') + ')';
-				attribute<float64> SSD_xx (..) := ='Union_Data(.., ' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject/Gebied/SSD_xx') + ')';
-				attribute<float64> SSD_xy (..) := ='Union_Data(.., ' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject/Gebied/SSD_xy') + ')';
-				attribute<float64> SSD_yy (..) := ='Union_Data(.., ' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject/Gebied/SSD_yy') + ')';
-			}
-			
-			container Kapitaallasten := for_each_nedv(
-				Classifications/Gebouw_Kapitaallasten/name,
-				replace('union_data(.., ' + asItemList('bron/' + TypeDomein/name + '/BebouwingsObject/Kapitaallasten/@KL@') + ')', '@KL@', Classifications/Gebouw_Kapitaallasten/name),
-				results,
-				Eur_yr);
-			
-			container Criteria;
-		}
-	}
 
 	template HuishoudensGrootteSchatting
 	{
@@ -171,7 +121,7 @@ container CalculationSchemes: Using = "Units;Geography"
 
 		attribute<m2>    Oppervlakte     (Obs) := Obs/Oppervlakte_i, descr = "oppervlakte van verblijfsobject";
 		attribute<nrAsl> Aansluitingen   (Obs) := Obs/nrAansluitingen_i, descr = "aantal eenheden dat het verblijfsobject voor meetelt";
-		attribute<Classifications/Woningtype> BebouwingsType_rel (Obs) := Obs/BebouwingsType, descr = "type woning (vrijstaand, rij, appartement, etc.)";
+		attribute<Classifications/Woningtype> BebouwingsType_rel (Obs) := Obs/WoningType_rel, descr = "type woning (vrijstaand, rij, appartement, etc.)";
 		attribute<nrPers> nrPersonen     (Obs) :=
 			  Oppervlakte   * Classifications/Woningtype/Huishoudgrootte/Personen_per_m2[BebouwingsType_rel]
 			+ Aansluitingen * Classifications/Woningtype/Huishoudgrootte/Personen_per_aansluiting[BebouwingsType_rel], descr = "toepassing regressiecoefficienten huishoudensgrootte o.b.v. statistieken CBS, verwerkt in VIVET referentieverbruiken";
@@ -187,13 +137,13 @@ container CalculationSchemes: Using = "Units;Geography"
 		//============ schatting aantal personen per huishouden 		
 		container HuishoudensGrootte := model/calculationschemes/HuishoudensGrootteSchatting(Obs);
 
-		attribute<nrPers> Personen    (Obs) := HuishoudensGrootte/nrPersonen_rnd, descr = "inschatting aantal personen in huishouden";
-		attribute<m2>     Oppervlakte (Obs) := Obs/Oppervlakte_i, descr = "oppervlakte van verblijfsobject";
+		attribute<nrPers> Personen_asl    (Obs) := HuishoudensGrootte/nrPersonen_rnd / Obs/nrAansluitingen_i * 1[nrAsl], descr = "inschatting aantal personen in huishouden";
+		attribute<m2>     Oppervlakte_asl (Obs) := Obs/Oppervlakte_i / Obs/nrAansluitingen_i * 1[nrAsl], descr = "oppervlakte van verblijfsobject";
 
 		attribute<Invoer/Kengetallen/Bebouwing/Woning/TWprofiel> TWprofiel_rel (Obs) :=
 				rlookup( 
-						(Personen <= 1[nrPers] ?'A': Personen <= 2[nrPers] ?'B': Personen <= 3[nrPers] ?'C': Personen <= 4[nrPers] ?'D':'E')
-					+   (Oppervlakte < 75[m2] ? 'A': Oppervlakte < 100[m2] ?'B': Oppervlakte < 125[m2] ?'C': Oppervlakte < 150[m2]?'D':'E')
+						(Personen_asl <= 1[nrPers] ?'A': Personen_asl <= 2[nrPers] ?'B': Personen_asl <= 3[nrPers] ?'C': Personen_asl <= 4[nrPers] ?'D':'E')
+					+   (Oppervlakte_asl < 75[m2] ? 'A': Oppervlakte_asl < 100[m2] ?'B': Oppervlakte_asl < 125[m2] ?'C': Oppervlakte_asl < 150[m2]?'D':'E')
 				, Invoer/Kengetallen/Bebouwing/Woning/TWprofiel/code) ;
 	}
 
@@ -205,7 +155,7 @@ container CalculationSchemes: Using = "Units;Geography"
 		//end parameters
 
 		//============ warmtewinst door personen wordt bepaald als constante
-		container HuishoudensGrootte := model/calculationschemes/HuishoudensGrootteSchatting(Obs);
+		container HuishoudensGrootte := model/calculationschemes/HuishoudensGrootteSchatting(Obs), ishidden = "True";
 
 		attribute<GJ_yr> warmtewinst_personen         (Obs) := HuishoudensGrootte/nrPersonen * Invoer/Kengetallen/WarmteVraag/warmtewinst_personen;
 
@@ -287,8 +237,8 @@ container CalculationSchemes: Using = "Units;Geography"
   				container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
   			}
 
-  			attribute<BouwjaarKlasseKoken>    BouwjaarKlasseKoken_rel    (Obs) := classify(Obs/Bouwjaar   , BouwjaarKlasseKoken/Classbreak);
-  			attribute<OppervlakteKlasseKoken> OppervlakteKlasseKoken_rel (Obs) := classify(Obs/Oppervlakte, OppervlakteKlasseKoken/Classbreak);
+  			attribute<BouwjaarKlasseKoken>    BouwjaarKlasseKoken_rel    (Obs) := classify(Obs/Bouwjaar     , BouwjaarKlasseKoken/Classbreak);
+  			attribute<OppervlakteKlasseKoken> OppervlakteKlasseKoken_rel (Obs) := classify(Obs/Oppervlakte_i, OppervlakteKlasseKoken/Classbreak);
   			attribute<OppervlakBouwjaarKoken> OppervlakBouwjaarKoken_rel (Obs) := combine_data(OppervlakBouwjaarKoken, BouwjaarKlasseKoken_rel, OppervlakteKlasseKoken_rel);
   			attribute<CombinedKlasse>         CombinedKlasse_rel         (Obs) := combine_data(CombinedKlasse, Obs/Eigendom_rel, OppervlakBouwjaarKoken_rel);
 

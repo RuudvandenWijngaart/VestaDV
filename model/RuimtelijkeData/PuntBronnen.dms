@@ -11,7 +11,7 @@
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
-container WarmteBronnen
+container WarmteBronnen : IsHidden = "True"
 {
 	unit<uint32> Brontype := Kengetallen/WarmteBronnen/MetaData/Brontype, IsHidden = "True";
 
@@ -19,8 +19,6 @@ container WarmteBronnen
 	{
 		unit<uint32> MTsrc : StorageName = "%HestiaDataDir%/aanbod/puntbronnen/20200311_puntbronnen_MT.csv"
 			,	StorageType     = "gdal.vect"
-			,	DialogType      = "Map"
-			,	DialogData      = "geometry"
 			,	StorageReadOnly = "True"
 		{
 			attribute<string> label := bron_naam, DialogType = "LabelText";
@@ -28,8 +26,6 @@ container WarmteBronnen
 
 		unit<uint32> LTsrc : StorageName = "%HestiaDataDir%/aanbod/puntbronnen/20200311_Puntbronnen_LT.csv"
 			,	StorageType     = "gdal.vect"
-			,	DialogType      = "Map"
-			,	DialogData      = "geometry"
 			,	StorageReadOnly = "True"
 		{
 			attribute<string> label := bron_naam, DialogType = "LabelText";
@@ -64,21 +60,21 @@ container WarmteBronnen
 			parameter<classifications/Rekenjaar> Rekenjaar_rel    := rlookup(RekenjaarName, classifications/Rekenjaar/name);
 			parameter<units/yr_uint16>           Jaar             := classifications/Rekenjaar/Values[Rekenjaar_rel];
 
-			unit<uint32> BronElementen := SubSet(BronSrc/IsStudieGebied && BronSrc/ingebruik <= Jaar && BronSrc/uitgebruik > Jaar && BronSrc/MWth_max > 0[mw]) 
+			unit<uint32> BronElementen := select_with_org_rel(BronSrc/IsStudieGebied && BronSrc/ingebruik <= Jaar && BronSrc/uitgebruik > Jaar && BronSrc/MWth_max > 0[mw]) 
 				, DialogType = "Map"
 				, DialogData = "geometry"
 			{
-				attribute<string>    Label        := BronSrc/Label[nr_OrgEntity];
-				attribute<rdc_meter> geometry     := BronSrc/geometry[nr_OrgEntity];
-				attribute<Brontype>  BronType_rel := BronSrc/BronType_rel[nr_OrgEntity];
-				attribute<celsius>   T_bron       := BronSrc/T_bron[nr_OrgEntity];
-				attribute<ratio>     P_vol        := BronSrc/P_vol[nr_OrgEntity];
-				attribute<ratio>     P_cap        := BronSrc/P_cap[nr_OrgEntity];
-				attribute<Eur_kW>    Ki_cap_min   := BronSrc/Ki_cap_min[nr_OrgEntity];
-				attribute<Eur_kW>    Ki_cap_max   := BronSrc/Ki_cap_max[nr_OrgEntity];
-				attribute<_yr>       R_adm        := BronSrc/R_adm[nr_OrgEntity];
-				attribute<_yr>       R_oh         := BronSrc/R_oh[nr_OrgEntity];
-				attribute<MW>        MWth_max     := BronSrc/MWth_max[nr_OrgEntity];
+				attribute<string>    Label        := BronSrc/Label[org_rel];
+				attribute<rdc_meter> geometry     := BronSrc/geometry[org_rel];
+				attribute<Brontype>  BronType_rel := BronSrc/BronType_rel[org_rel];
+				attribute<celsius>   T_bron       := BronSrc/T_bron[org_rel];
+				attribute<ratio>     P_vol        := BronSrc/P_vol[org_rel];
+				attribute<ratio>     P_cap        := BronSrc/P_cap[org_rel];
+				attribute<Eur_kW>    Ki_cap_min   := BronSrc/Ki_cap_min[org_rel];
+				attribute<Eur_kW>    Ki_cap_max   := BronSrc/Ki_cap_max[org_rel];
+				attribute<_yr>       R_adm        := BronSrc/R_adm[org_rel];
+				attribute<_yr>       R_oh         := BronSrc/R_oh[org_rel];
+				attribute<MW>        MWth_max     := BronSrc/MWth_max[org_rel];
 				attribute<Eur_GJ>    K_GJ         := ='BronType/K_GJ/' +RekenjaarName+'[BronType_rel]';
 				attribute<Eur_GJ>    Km_GJ        := ='BronType/Km_GJ/'+RekenjaarName+'[BronType_rel]';
 			}
@@ -101,9 +97,9 @@ container WarmteBronnen
 				attribute<rdc_meter> geometry (poly) : StorageName = "%HestiaDataDir%/aanbod/GeoThermie/technisch_pot_aardwarmte_ThermoGIS21_maart_2019_EBN.shp", StorageReadOnly = "True";
 				attribute<int32>     GRIDCODE;
 			}
-			unit<uint32> GeschikteContour := subset(ContourSet/GRIDCODE >= 2[int32])
+			unit<uint32> GeschikteContour := select_with_org_rel(ContourSet/GRIDCODE >= 2[int32])
 			{
-				attribute<rdc_meter> geometry     (poly) := ContourSet/geometry[nr_OrgEntity];
+				attribute<rdc_meter> geometry     (poly) := ContourSet/geometry[org_rel];
 				attribute<Brontype>  BronType_rel        := const(Brontype/V/GeoThermie,.);
 				attribute<string>    Label               := 'GEO_' + string(id(.));
 			}
@@ -121,9 +117,9 @@ container WarmteBronnen
 				attribute<string>    WKO;
 				attribute<bool>      Geschikt := WKO == 'geschikt' || WKO == 'zeer geschikt';
 			}
-			unit<uint32> GeschikteContour := subset(ContourSet/Geschikt)
+			unit<uint32> GeschikteContour := select_with_org_rel(ContourSet/Geschikt)
 			{
-				attribute<rdc_meter> geometry     (poly) := ContourSet/geometry[nr_OrgEntity];
+				attribute<rdc_meter> geometry     (poly) := ContourSet/geometry[org_rel];
 				attribute<Brontype>  BronType_rel        := const(Brontype/V/WKO,.);
 				attribute<string>    Label               := 'WKO_' + string(id(.));
 			}
@@ -140,9 +136,9 @@ container WarmteBronnen
 				attribute<rdc_meter> geometry (poly) : StorageName = "%HestiaDataDir%/Aanbod/WKO/20200211_TEO_potentiecontour.shp", StorageReadOnly = "True";
 				attribute<bool>      Geschikt        := const(true, .);
 			}
-			unit<uint32> GeschikteContour := subset(ContourSet/Geschikt)
+			unit<uint32> GeschikteContour := select_with_org_rel(ContourSet/Geschikt)
 			{
-				attribute<rdc_meter> geometry     (poly) := ContourSet/geometry[nr_OrgEntity];
+				attribute<rdc_meter> geometry     (poly) := ContourSet/geometry[org_rel];
 				attribute<Brontype>  BronType_rel        := const(Brontype/V/TEO,.);
 				attribute<string>    Label               := 'TEO_' + string(id(.));
 
@@ -153,6 +149,7 @@ container WarmteBronnen
 			attribute<rdc_meter> geometry     (poly) := union_data(.,GeoThermie/GeschikteContour/geometry    , WKO/GeschikteContour/geometry    , TEO/GeschikteContour/geometry);
 			attribute<Brontype>  BronType_rel        := union_data(.,GeoThermie/GeschikteContour/BronType_rel, WKO/GeschikteContour/BronType_rel, TEO/GeschikteContour/BronType_rel);
 			attribute<String>    Label               := union_data(.,GeoThermie/GeschikteContour/Label       , WKO/GeschikteContour/Label       , TEO/GeschikteContour/Label);
+			attribute<m>         max_dist            := union_data(., const(10000[m], GeoThermie/GeschikteContour), const(1000[m], WKO/GeschikteContour), const(10000[m], TEO/GeschikteContour));
 		}
 		template BronSelectie: IsHidden = "True"
 		{
@@ -198,9 +195,9 @@ container WarmteBronnen
 				attribute<string>    bron_naam;
 				attribute<bool>      Geschikt := const(true,.);
 			}
-		unit<uint32> GeschikteLijnen := subset(LijnenSet/Geschikt)
+		unit<uint32> GeschikteLijnen := select_with_org_rel(LijnenSet/Geschikt)
 			{
-				attribute<rdc_meter> geometry      (arc) := LijnenSet/geometry[nr_OrgEntity];
+				attribute<rdc_meter> geometry      (arc) := LijnenSet/geometry[org_rel];
 				attribute<Brontype>  BronType_rel        := const(Brontype/V/Industrie,.);
 				attribute<string>    Label               := 'IND_' + string(id(.));
 

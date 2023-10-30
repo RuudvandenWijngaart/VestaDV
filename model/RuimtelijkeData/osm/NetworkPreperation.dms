@@ -1,0 +1,91 @@
+container NetworkPreperation
+{  
+	unit<uint32> road := Merge_SourceData/Merge_Country_Roads;
+	
+	container preperation
+	{
+		unit<uint32> road_segments  := arc2segm(road/geometry)
+		{
+			attribute<string>       key              := String(pointRow(point)) + '_' + String(pointCol(point)) + '_' + String(pointRow(nextpoint)) + '_'+ String(pointCol(nextpoint));
+			attribute<OSM/wegtype>  wegtype          := road/wegtype[SequenceNr];
+			attribute<string>       OSM_id           := road/OSM_id[SequenceNr];
+			
+			unit<uint32> pointset  := union_unit(., .)
+			{
+				attribute<rdc_meter>      point    := Union_Data(., ../point, ../nextpoint);
+				attribute<..>                        ArcID    := value(ID(.) % nrofrows(..), ..);
+				attribute<uint32>                    VolgNr   := ID(.) / nrofrows(..);
+			}
+			attribute<rdc_meter> geometry (arc)  := points2sequence(pointset/point, pointset/ArcID, pointset/VolgNr);
+		}
+		
+		#include <ExtraVerbindingen.dms>
+		
+		unit<uint32> road_segments_with_extra_nodes := connect(road_segments/geometry, ExtraVerbindingen/nodes/geometry)
+		{
+			attribute<rdc_meter>               UnionData (arc);
+			attribute<OSM/wegtype>  		   wegtype          := MakeDefined(road_segments/wegtype[nr_OrgEntity], OSM/wegtype/V/connectlink);
+			attribute<string>                       OSM_id           := road_segments/OSM_id[nr_OrgEntity];
+		}
+		
+	}
+	
+	
+	unit<uint32> Network_with_extraverbindingen  := ='union_unit(preperation/road_segments_with_extra_nodes, preperation/ExtraVerbindingen/link)'
+	{
+		attribute<rdc_meter>               geometry (arc)   := union_data(., preperation/road_segments_with_extra_nodes/uniondata, preperation/ExtraVerbindingen/link/geometry);
+		attribute<OSM/wegtype>  		   wegtype          := union_data(., preperation/road_segments_with_extra_nodes/wegtype,   preperation/ExtraVerbindingen/link/wegtype);
+		attribute<string>                  OSM_id           := union_data(., preperation/road_segments_with_extra_nodes/OSM_id,  const('',preperation/ExtraVerbindingen/link));
+		attribute<rdc_meter>               point            := first_point(geometry);
+		attribute<rdc_meter>               nextpoint        := last_point(geometry);
+			
+		unit<uint32> pointset : = union_unit(., .)
+		{
+			attribute<rdc_meter> point       := union_data(., ../point, ../nextpoint);
+			attribute<bool>                 isVerbonden := isNull(rlookup(point, NodesNotConnected/point));
+			attribute<..>                   ArcNr       := value(ID(.) % #(..), ..);
+		}
+
+		attribute<bool> isVerbonden := all(pointset/isVerbonden, pointset/ArcNr);
+
+		unit<uint32> NodeSet := unique(pointset/point)
+		,	DialogData = "Values"
+		,	DialogType = "Map"
+		{
+			attribute<rdc_meter> values;
+		}
+
+		attribute<NodeSet> F1 := rlookup(point,     NodeSet/Values);
+		attribute<NodeSet> F2 := rlookup(nextpoint, NodeSet/Values);
+	
+		unit<uint32> networks:= connected_parts(F1, F2) // Verzameling van alle netwerken, inclusief de subnetwerken.
+		{
+			attribute<uint32>   nr_nodes   := sum(const(1, NodeSet, uint32), partnr);
+			parameter<uint32>   MaxNrNodes := max(networks/nr_nodes);
+			parameter<networks> main       := rlookup(MaxNrNodes, nr_nodes); // uitgangspunt: het netwerk met de meeste nodes is het relevante netwerk
+		}
+
+		unit<uint32> NodesNotConnected := Subset(networks/partnr <> networks/main)
+		{
+			attribute<rdc_meter> point := NodeSet/Values[Nr_OrgEntity];
+		}
+		
+		unit<uint32> Make_Complete_verbonden := Subset(isVerbonden) // het resulterende verbonden wegennetwerk
+		{
+			attribute<rdc_meter>       	geometry (arc)            := ../geometry[nr_OrgEntity];
+			attribute<OSM/wegtype>  	wegtype                   := ../wegtype[nr_OrgEntity];
+			attribute<string>           OSM_id                    := ../OSM_id[nr_OrgEntity];
+		}
+		
+		unit<uint32> Make_Final_Network := unique(Make_Complete_verbonden/geometry)
+		,   StorageName = "=localdir+'/Final_Network_'+file_date+'.fss'"
+		{
+			attribute<rdc_meter>                    geometry (arc):= values;
+			attribute<OSM/wegtype>  wegtype       := rjoin(values, Make_Complete_verbonden/geometry, Make_Complete_verbonden/wegtype);
+			attribute<string>                       OSM_id        := rjoin(values, Make_Complete_verbonden/geometry, Make_Complete_verbonden/OSM_id);
+		}
+		
+		unit<uint32>      Attributes := SubItem_PropValues(Make_Final_Network,'name');
+		parameter<string> Generate               := 'Ready', ExplicitSuppliers = "=AsList('Make_Final_Network/'+Attributes/name, ';')";
+	}
+}

@@ -15,7 +15,7 @@ template RekenstapT
 	parameter<yr_uint16>                 Zichtjaar_jaar := Classifications/Zichtjaar/jaar[Zichtjaar_rel], ishidden = "true";
 	parameter<string>                    ZichtjaarName  := Classifications/Zichtjaar/name[Zichtjaar_rel], ishidden = "true";
 	parameter<Classifications/periode>   Periode_rel    := Classifications/ZichtJaar/Periode_rel[Zichtjaar_rel], ishidden = "true";
-	parameter<uint32>                    JaarSeed       := Invoer/TechnischeInstellingen/RandomSeed + uint32(Zichtjaar_jaar);
+	parameter<uint32>                    JaarSeed       := Invoer/TechnischeInstellingen/RandomSeed + uint32(Zichtjaar_jaar), isHidden = "True";
 
 	unit<uint32> PlanRegio              := Invoer/SpecifiekeInstellingen/PlanRegio, ishidden = "true";
 	container    SpecifiekeInstellingen := ='Invoer/SpecifiekeInstellingen/RekenStappen/' + RekenstapName, ishidden = "true";
@@ -64,7 +64,6 @@ template RekenstapT
 
 		parameter<ratio> EfficiencySchuif := SpecifiekeInstellingen/RuimtelijkeVraag/Lokaal/Generiek/Kosten/EfficiencySchuif; // 1.0 = maximale efficiency, 0.0 = minimale efficiency
 	}
-	container Vermogens := Invoer/Kengetallen/Vermogens(Schuiven/EfficiencySchuif), ishidden = "True";
 
 	container LeerCurves :=
 		for_each_ne(Classifications/leercurves/name,
@@ -77,6 +76,7 @@ template RekenstapT
 	#include<Prijzen.dms>
 
 	// TODO_OV: onderzoek of het aantal parameters hier niet wat naar beneden kan; er is veel samengevoegd en geabstraheerd; maak daar gebruik van.
+/*  REMOVE	
 	container BebouwingsComponenten :=
 		for_each_ne(Classifications/BebouwingsSector/name,
 			'BebouwingsComponentT('
@@ -86,6 +86,10 @@ template RekenstapT
 				'VraagKentallen/'+ Classifications/BebouwingsSector/name
 			+')'
 		);
+*/		
+	container BebouwingsComponenten {
+		container Woning := BebouwingsComponentT ('Woning', Invoer/Kengetallen/Bebouwing/Woning/results , SpecifiekeInstellingen/RuimtelijkeVraag/Lokaal/Woning , VraagKentallen/Woning );
+	}
 
 
 	container NCW: isHidden = "True"
@@ -94,23 +98,19 @@ template RekenstapT
 		container IN := SpecifiekeInstellingen/investering;
 		container RP := Invoer/Kengetallen/Eindgebruikerskosten/rentepercentages/PerJaar;
 
-		container ow13 := NettoContanteWaarde(DV/ow, IN/BeginOpbrengstJaar, 15[yr]);
-		container id13 := NettoContanteWaarde(DV/id, IN/BeginOpbrengstJaar, 15[yr]);
-		container wd13 := NettoContanteWaarde(DV/wd, IN/BeginOpbrengstJaar, 15[yr]);
-		container pt13 := NettoContanteWaarde(DV/pt, IN/BeginOpbrengstJaar, 15[yr]);
-		container mr13 := NettoContanteWaarde(DV/mr, IN/BeginOpbrengstJaar, 15[yr]);
-		
-		container ow28 := NettoContanteWaarde(DV/ow, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-		container id28 := NettoContanteWaarde(DV/id, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-		container wd28 := NettoContanteWaarde(DV/wd, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-		container pt28 := NettoContanteWaarde(DV/pt, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
-		container mr28 := NettoContanteWaarde(DV/mr, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
+		container wb15 := NettoContanteWaarde(DV/wb,  0[yr], 15[yr]);
+		container wb13 := NettoContanteWaarde(DV/wb, IN/BeginOpbrengstJaar, 15[yr]);
+		container wb20 := NettoContanteWaarde(DV/wb,  0[yr], 20[yr]);
+		container wb30 := NettoContanteWaarde(DV/wb,  0[yr], 30[yr]);
+		container wb28 := NettoContanteWaarde(DV/wb, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
 
 		container kw28 := NettoContanteWaarde(RP/R_k[Classifications/Zichtjaar/Rekenjaar_rel[Zichtjaar_rel]], IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar); //koopwoningen
 		container hw28 := NettoContanteWaarde(RP/R_h[Classifications/Zichtjaar/Rekenjaar_rel[Zichtjaar_rel]], IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar); //particuliere huurwoningen
 		container sw28 := NettoContanteWaarde(RP/R_s[Classifications/Zichtjaar/Rekenjaar_rel[Zichtjaar_rel]], IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar); //sociale huurwoningen
 
 		container u28  := NettoContanteWaarde(DV/E_u, IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
+		container mr28 := NettoContanteWaarde(DV/mr , IN/BeginOpbrengstJaar, IN/EindOpbrengstJaar);
+
 
 		container mr40 := NettoContanteWaarde(DV/mr,  0[yr], 40[yr]);
 		container mr50 := NettoContanteWaarde(DV/mr,  0[yr], 50[yr]);
@@ -178,7 +178,7 @@ template RekenstapT
 		}
 		unit<uint32> Subsidiebudgetten := ZichtjaarBeleid/Subsidie/SubsidieBudget
 		{
-			unit<uint32>    ZBS                         := ZichtjaarBeleid/Subsidie;
+			unit<uint32>    ZBS                         := ZichtjaarBeleid/Subsidie, ishidden = "True";
 			attribute<Eur>  Aanvraag_per_subsidie (ZBS) := = count(ZBS/SubsidieBudget_rel) = 0u ? 'const(0.0[eur],ZBS)' : 'merge(uint8(id(ZBS)), Eur,'+ AsItemList('sum(BebouwingsComponenten/Woning/ActieveWoning/BebouwingsObjectMetGebouwOptie/kosten/Subsidie/' + ZBS/name+')') +')';
 			attribute<Eur>  Maximaal_budget             := ZichtjaarBudget;
 			attribute<Eur>  Aanvraag_per_budget         := sum(Aanvraag_per_subsidie, ZBS/SubsidieBudget_rel);

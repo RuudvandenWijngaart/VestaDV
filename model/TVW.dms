@@ -5,7 +5,7 @@
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
-container TVW
+container TVW : IsHidden = "True"
 {
 	container gemeente
 	{
@@ -98,6 +98,7 @@ container TVW
 			attribute<Class/Installatie>    Installatie_rel    := uint32(installatie_code_code_)       , IntegrityCheck = "isDefined(this)";
 			attribute<Class/Infrastructuur> Infrastructuur_rel := uint32(infrastructuur_code_code_)    , IntegrityCheck = "isDefined(this)";
 			attribute<Class/Energiebron>    Energiebron_rel    := uint32(energiebron_code_code_)       , IntegrityCheck = "isDefined(this)";
+			attribute<string>               Energiebron_txt    := Energiebron_tekst_;
 
 			//attribute<nrAsl>                nrAansluitingen    := VBO/Matching/VBO_count                , IntegrityCheck = "isDefined(this)";
 			container Matching
@@ -139,10 +140,10 @@ container TVW
 			}
 		}		
 		
-		container Subsets
+		container select_with_org_rels
 		{
 			unit<uint32> BinnenEindjaarCutoff := select_afew(PL, PL/matching/eindjaar/binnen_cutoff);
-			//unit<uint32> BinnenEindjaarCutoff := select_afew(PL, const(True, PL)); // Uncomment wanneer alle plannen in subset moeten
+			//unit<uint32> BinnenEindjaarCutoff := select_afew(PL, const(True, PL)); // Uncomment wanneer alle plannen in select_with_org_rel moeten
 
 			unit<uint32> Wnet := select_afew(BinnenEindjaarCutoff, BinnenEindjaarCutoff/Installatie_rel == Class/Installatie/V/Wnet && (BinnenEindjaarCutoff/Planstatus_rel == Class/Planstatus/V/uitvoerend || BinnenEindjaarCutoff/Planstatus_rel == Class/Planstatus/V/definitief))
 			{
@@ -158,6 +159,9 @@ container TVW
 			&& Class/Energiebron/WKO[PL/Energiebron_rel]                     == False
 			&& Class/Energiebron/collectieve_warmtepomp[PL/Energiebron_rel]  == False
 			&& Class/Energiebron/onbekend[PL/Energiebron_rel]                == False
+			&& Class/Energiebron/WKO[PL/Energiebron_rel]                     == False
+			&& Class/Energiebron/collectieve_warmtepomp[PL/Energiebron_rel]  == False
+			&& Class/Energiebron/zon[PL/Energiebron_rel]                     == False
 			&& Class/Energiebron/niet_specifiek_benoemd[PL/Energiebron_rel]  == False
 			&& Class/Energiebron/niet_van_toepassing[PL/Energiebron_rel]     == False
 			&& Class/Energiebron/diverse_opties_mogelijk[PL/Energiebron_rel] == False );
@@ -198,7 +202,8 @@ container TVW
 			attribute<nrAsl> nr_Asl := const(1.0[nrAsl],.);
 			attribute<bool>  util   := union_data(.,const(false,woning),const(true,Ubouw));
 			
-			attribute<m2>    oppervlak := /Invoer/RuimtelijkeData/BAG/import/VBO/oppervlakte[m2];
+			attribute<m2>    oppervlak := union_data(VBO, woning/oppervlakte, Ubouw/oppervlakte);
+			attribute<Invoer/RuimtelijkeData/StudieGebied/Buurt > buurt_rel := union_data(VBO, woning/buurt_rel, Ubouw/buurt_rel);
 
 			container Matching
 			{
@@ -214,18 +219,16 @@ container TVW
 						union_data(union_unit(p,p,p,p), id(p), id(p), id(p), id(p)),
 						union_data(union_unit(p,p,p,p), const(0,p), const(1,p), const(2,p), const(3,p))
 									);
-				parameter<string> piap_expr := 'point_in_all_polygons(p/xy, Subsets/BinnenEindjaarCutoff/geometry)';
+				parameter<string> piap_expr := 'point_in_all_polygons(p/xy, select_with_org_rels/BinnenEindjaarCutoff/geometry)';
 				parameter<string> workaround := 'overlay_polygon(driehoek[geography/rdc_mm], PL/geometry[geography/rdc_mm])';
 				unit<uint32> kruistabel  := =(GeoDmsVersion() > 8.0305) ? piap_expr : workaround;
 
 
 				attribute<uint32> PL_count (p) := pcount(kruistabel/first_rel);
 				
-				attribute<uint32> P_count   (Subsets/BinnenEindjaarCutoff) := pcount(kruistabel/second_rel);
-				attribute<nrAsl>  VBO_count (Subsets/BinnenEindjaarCutoff) := sum(nr_Asl[kruistabel/first_rel], kruistabel/second_rel);	
-				attribute<nrAsl>  util_count (Subsets/BinnenEindjaarCutoff) := sum( float64(util[kruistabel/first_rel]) * nr_Asl[kruistabel/first_rel], kruistabel/second_rel);	
-				attribute<nrAsl>  woon_count (Subsets/BinnenEindjaarCutoff) := sum( float64(not(util[kruistabel/first_rel])) * nr_Asl[kruistabel/first_rel], kruistabel/second_rel);	
-				attribute<m2>     VBO_area  (PL) := sum(oppervlak[kruistabel/first_rel], kruistabel/second_rel);
+				attribute<uint32> P_count   (select_with_org_rels/BinnenEindjaarCutoff) := pcount(kruistabel/second_rel);
+				attribute<nrAsl>  VBO_count (select_with_org_rels/BinnenEindjaarCutoff) := sum(nr_Asl[kruistabel/first_rel], kruistabel/second_rel);	
+				attribute<m2>     VBO_area  (select_with_org_rels/BinnenEindjaarCutoff ) := sum(oppervlak[kruistabel/first_rel], kruistabel/second_rel);
 			
 				
 				
@@ -260,7 +263,7 @@ container TVW
 			}
 		}
 		
-		unit<uint32> UBouw := select_many(Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied, Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/sloopjaar == uint16(9999)) 
+		unit<uint32> UBouw := select_with_attr_by_cond(Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied, Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/sloopjaar == uint16(9999)) 
 		{
 			attribute<nrAsl> nr_Asl    := const(1.0[nrAsl],.);
 			attribute<m2>    oppervlak := oppervlakte;
@@ -280,8 +283,8 @@ container TVW
 						union_data(union_unit(p,p,p,p), id(p), id(p), id(p), id(p)),
 						union_data(union_unit(p,p,p,p), const(0,p), const(1,p), const(2,p), const(3,p))
 									);
-				parameter<string> piap_expr := 'point_in_all_polygons(p/xy, Subsets/BinnenEindjaarCutoff/geometry)';
-				parameter<string> workaround := 'overlay_polygon(driehoek[geography/rdc_mm], Subsets/BinnenEindjaarCutoff/geometry[geography/rdc_mm])';
+				parameter<string> piap_expr := 'point_in_all_polygons(p/xy, select_with_org_rels/BinnenEindjaarCutoff/geometry)';
+				parameter<string> workaround := 'overlay_polygon(driehoek[geography/rdc_mm], select_with_org_rels/BinnenEindjaarCutoff/geometry[geography/rdc_mm])';
 				unit<uint32> kruistabel  :=  =(GeoDmsVersion() > 8.0305) ? piap_expr : workaround;
 				
 				container PL_counts
@@ -291,8 +294,8 @@ container TVW
 				attribute<m2>     VBO_area    (PL) := Invoer/TVW/plan/VBO/Matching/VBO_area;
 					container Isolatie
 					{
-						unit<uint32> PL_subset         := select_afew(Subsets/BinnenEindjaarCutoff, not(Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel == Class/Isolatiegraad/V/onbekend) && not(Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel == Class/Isolatiegraad/V/geen_maatregelen));
-						unit<uint32> kruistabel        :=  point_in_all_polygons(p/xy, PL_subset/geometry);
+						unit<uint32> PL_select_with_org_rel         := select_afew(select_with_org_rels/BinnenEindjaarCutoff, not(select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel == Class/Isolatiegraad/V/onbekend) && not(select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel == Class/Isolatiegraad/V/geen_maatregelen));
+						unit<uint32> kruistabel        :=  point_in_all_polygons(p/xy, PL_select_with_org_rel/geometry);
 						attribute<float64> PL_count(p) :=  float64(pcount(kruistabel/first_rel));
 					}
 				}
@@ -300,9 +303,9 @@ container TVW
 				attribute<Invoer/RuimtelijkeData/Bebouwing/Util> ruimtelijkedata_rel2          (Ubouw):= rlookup(UBouw/identificatie, /Invoer/RuimtelijkeData/Bebouwing/Util/code);							
 				attribute<Invoer/RuimtelijkeData/Energielabel/data> ruimtelijkedata_rel          (Ubouw):= rlookup(UBouw/identificatie, /Invoer/RuimtelijkeData/Energielabel/data/vbo_id);							
 			
-				attribute<uint32> P_count     (Subsets/BinnenEindjaarCutoff) := pcount(kruistabel/second_rel);
-				attribute<nrAsl>  VBO_count   (Subsets/BinnenEindjaarCutoff) := Invoer/TVW/plan/VBO/Matching/VBO_count;
-				attribute<nrAsl>  UBouw_count (Subsets/BinnenEindjaarCutoff) := sum(nr_Asl[kruistabel/first_rel], kruistabel/second_rel);
+				attribute<uint32> P_count     (select_with_org_rels/BinnenEindjaarCutoff) := pcount(kruistabel/second_rel);
+				attribute<nrAsl>  VBO_count   (select_with_org_rels/BinnenEindjaarCutoff) := Invoer/TVW/plan/VBO/Matching/VBO_count;
+				attribute<nrAsl>  UBouw_count (select_with_org_rels/BinnenEindjaarCutoff) := sum(nr_Asl[kruistabel/first_rel], kruistabel/second_rel);
 				attribute<m2>     UBouw_area  (PL) := sum(oppervlak[kruistabel/first_rel], kruistabel/second_rel);
 
 
@@ -344,17 +347,17 @@ container TVW
 			{
 				container Any_IsolatiegraadKlasse
 				{
-					attribute<bool>  onbekend  			(UBouw) := any(Class/Isolatiegraad/onbekend 						[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  GeenMaatregelen  	(UBouw) := any(Class/Isolatiegraad/geen_maatregelen 				[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  IsolatieGeenNiveau (UBouw) := any(Class/Isolatiegraad/isolatie_geen_specifiek_niveau 	[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  StandaardEnStreef  (UBouw) := any(Class/Isolatiegraad/standaard_en_streefwaarden 		[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  ALabel  			(UBouw) := any(Class/Isolatiegraad/A 								[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  BLabel  			(UBouw) := any(Class/Isolatiegraad/B								[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  CLabel  			(UBouw) := any(Class/Isolatiegraad/C								[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  DLabel  			(UBouw) := any(Class/Isolatiegraad/D								[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  DC1940AB  			(UBouw) := any(Class/Isolatiegraad/DC_1940_AB_overig 				[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  DWonenBUtil  		(UBouw) := any(Class/Isolatiegraad/D_wonen_B_util 					[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  kWhM2  			(UBouw) := any(Class/Isolatiegraad/kWh_m2_AB 						[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  onbekend  			(UBouw) := any(Class/Isolatiegraad/onbekend 						[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  GeenMaatregelen  	(UBouw) := any(Class/Isolatiegraad/geen_maatregelen 				[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  IsolatieGeenNiveau (UBouw) := any(Class/Isolatiegraad/isolatie_geen_specifiek_niveau 	[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  StandaardEnStreef  (UBouw) := any(Class/Isolatiegraad/standaard_en_streefwaarden 		[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  ALabel  			(UBouw) := any(Class/Isolatiegraad/A 								[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  BLabel  			(UBouw) := any(Class/Isolatiegraad/B								[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  CLabel  			(UBouw) := any(Class/Isolatiegraad/C								[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  DLabel  			(UBouw) := any(Class/Isolatiegraad/D								[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  DC1940AB  			(UBouw) := any(Class/Isolatiegraad/DC_1940_AB_overig 				[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  DWonenBUtil  		(UBouw) := any(Class/Isolatiegraad/D_wonen_B_util 					[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  kWhM2  			(UBouw) := any(Class/Isolatiegraad/kWh_m2_AB 						[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 				}
 				
 				attribute<Classifications/schillabel>     schillabel  (UBouw) := StandaardGasvraag/Schillabel;
@@ -443,13 +446,13 @@ container TVW
 			{				
 				container BeoogdeInstallaties
 				{
-					attribute<bool>  Any_hWP  (UBouw) := any(Class/Installatie/hWP [Subsets/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  Any_eWP  (UBouw) := any(Class/Installatie/eWP [Subsets/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  Any_Wnet (UBouw) := any(Class/Installatie/Wnet[Subsets/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  Any_Hr   (UBouw) := any(Class/Installatie/Hr  [Subsets/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  Any_onbekend   (UBouw) := any(Class/Installatie/onbekend  [Subsets/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  Any_hWP  (UBouw) := any(Class/Installatie/hWP [select_with_org_rels/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  Any_eWP  (UBouw) := any(Class/Installatie/eWP [select_with_org_rels/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  Any_Wnet (UBouw) := any(Class/Installatie/Wnet[select_with_org_rels/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  Any_Hr   (UBouw) := any(Class/Installatie/Hr  [select_with_org_rels/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  Any_onbekend   (UBouw) := any(Class/Installatie/onbekend  [select_with_org_rels/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 					
-					attribute<bool>    Any_hernieuwbaar_gas     (UBouw) := any(Class/Energiebron/hernieuwbaar_gas [Subsets/BinnenEindjaarCutoff/Energiebron_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>    Any_hernieuwbaar_gas     (UBouw) := any(Class/Energiebron/hernieuwbaar_gas [select_with_org_rels/BinnenEindjaarCutoff/Energiebron_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 					attribute<bool>    Geen_beoogde_installatie (UBouw) := not(Any_eWP) && not(Any_eWP) && not(Any_hWP) && not(Any_Wnet) && not(Any_Hr) && not(Any_onbekend);
 					attribute<float64> Only_onbekend 			(UBouw) := float64(Any_onbekend && not(Any_hWP) && not(Any_eWP) && not(Only_Wnet) && not(Any_Hr));
 					attribute<bool>    Only_onbekend_bool 		(UBouw) := Any_onbekend && not(Any_hWP) && not(Any_eWP) && not(Only_Wnet) && not(Any_Hr);
@@ -589,92 +592,92 @@ container TVW
 			{
 				container Basisvariabelen
 				{
-					attribute<string> pln_code       		 (Subsets/BinnenEindjaarCutoff) := Subsets/BinnenEindjaarCutoff/Plan_code;
-					attribute<nrAsl>  VBO_count      		 (Subsets/BinnenEindjaarCutoff) := VBO/Matching/VBO_count;
-					attribute<nrAsl>  VBO_count_gecorrigeerd (Subsets/BinnenEindjaarCutoff) := sum(VBO/nr_Asl[VBO/Matching/kruistabel/first_rel] / float64(VBO/Matching/PL_count)[VBO/Matching/kruistabel/first_rel], VBO/Matching/kruistabel/second_rel);
-					attribute<nrAsl>  UBouw_count            (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl>  UBouw_weq_count        (Subsets/BinnenEindjaarCutoff) := sum(Ubouw/WoningEquivalenten[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<string> pln_code       		 (select_with_org_rels/BinnenEindjaarCutoff) := select_with_org_rels/BinnenEindjaarCutoff/Plan_code;
+					attribute<nrAsl>  VBO_count      		 (select_with_org_rels/BinnenEindjaarCutoff) := VBO/Matching/VBO_count;
+					attribute<nrAsl>  VBO_count_gecorrigeerd (select_with_org_rels/BinnenEindjaarCutoff) := sum(VBO/nr_Asl[VBO/Matching/kruistabel/first_rel] / float64(VBO/Matching/PL_count)[VBO/Matching/kruistabel/first_rel], VBO/Matching/kruistabel/second_rel);
+					attribute<nrAsl>  UBouw_count            (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl>  UBouw_weq_count        (select_with_org_rels/BinnenEindjaarCutoff) := sum(Ubouw/WoningEquivalenten[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 				}
 				
 				container isolatie_telling
 				{
-					attribute<nrAsl>  isolatie_count     (Subsets/BinnenEindjaarCutoff) := sum(Ubouw/nr_Asl[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  isolatie_weq_count (Subsets/BinnenEindjaarCutoff) := sum(Ubouw/WoningEquivalenten[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
+					attribute<nrAsl>  isolatie_count     (select_with_org_rels/BinnenEindjaarCutoff) := sum(Ubouw/nr_Asl[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)][select_with_org_rels/BinnenEindjaarCutoff/org_rel];
+					attribute<nrAsl>  isolatie_weq_count (select_with_org_rels/BinnenEindjaarCutoff) := sum(Ubouw/WoningEquivalenten[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)][select_with_org_rels/BinnenEindjaarCutoff/org_rel];
 				}
 				
 				container labelsprongen{
-					attribute<Class/Isolatiegraad> beoogde_isolatiegraad (Subsets/BinnenEindjaarCutoff) := Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel;
-					attribute<nrAsl>  origineel_A_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/A[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_B_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/B[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_C_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/C[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_D_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/D[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_E_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/E[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_F_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/F[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_G_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/G[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_Geen_label_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/geen_label[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
+					attribute<Class/Isolatiegraad> beoogde_isolatiegraad (select_with_org_rels/BinnenEindjaarCutoff) := select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel;
+					attribute<nrAsl>  origineel_A_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/A[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)][select_with_org_rels/BinnenEindjaarCutoff/org_rel];
+					attribute<nrAsl>  origineel_B_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/B[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)][select_with_org_rels/BinnenEindjaarCutoff/org_rel];
+					attribute<nrAsl>  origineel_C_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/C[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)][select_with_org_rels/BinnenEindjaarCutoff/org_rel];
+					attribute<nrAsl>  origineel_D_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/D[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)][select_with_org_rels/BinnenEindjaarCutoff/org_rel];
+					attribute<nrAsl>  origineel_E_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/E[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)][select_with_org_rels/BinnenEindjaarCutoff/org_rel];
+					attribute<nrAsl>  origineel_F_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/F[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)][select_with_org_rels/BinnenEindjaarCutoff/org_rel];
+					attribute<nrAsl>  origineel_G_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/G[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)][select_with_org_rels/BinnenEindjaarCutoff/org_rel];
+					attribute<nrAsl>  origineel_Geen_label_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/geen_label[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)][select_with_org_rels/BinnenEindjaarCutoff/org_rel];
 				}
 				
 				container installaties{
-					attribute<nrAsl> installatie_count (Subsets/BinnenEindjaarCutoff) := only_Hr_count + only_hWP_count + only_eWP_count + only_Wnet_count + hWP_Hr_count + hWP_eWP_count + eWP_Wnet_count + eWP_Hr_count + Wnet_Hr_count
+					attribute<nrAsl> installatie_count (select_with_org_rels/BinnenEindjaarCutoff) := only_Hr_count + only_hWP_count + only_eWP_count + only_Wnet_count + hWP_Hr_count + hWP_eWP_count + eWP_Wnet_count + eWP_Hr_count + Wnet_Hr_count
 																				+ Wnet_hWP_count + hWP_Wnet_Hr_count + eWP_Wnet_Hr_count + hWP_eWP_Hr_count + hWP_eWP_Wnet_count + hWP_eWP_Wnet_Hr_count;
-					attribute<nrAsl> only_Hr_count         (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_Hr[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> only_hWP_count        (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_hWP[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> only_eWP_count        (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_eWP[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> only_Wnet_count       (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_Wnet[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> only_Hr_count         (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_Hr[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> only_hWP_count        (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_hWP[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> only_eWP_count        (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_eWP[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> only_Wnet_count       (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_Wnet[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 				
-					attribute<nrAsl> hWP_Hr_count          (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPHr[Matching/kruistabel/first_rel]      / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> hWP_eWP_count         (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWP[Matching/kruistabel/first_rel]     / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> eWP_Wnet_count        (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPWnet[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> eWP_Hr_count          (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPHr[Matching/kruistabel/first_rel]      / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> Wnet_Hr_count         (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/WnetHr[Matching/kruistabel/first_rel]     / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> Wnet_hWP_count        (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPWnet[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_Hr_count          (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPHr[Matching/kruistabel/first_rel]      / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_eWP_count         (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWP[Matching/kruistabel/first_rel]     / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> eWP_Wnet_count        (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPWnet[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> eWP_Hr_count          (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPHr[Matching/kruistabel/first_rel]      / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> Wnet_Hr_count         (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/WnetHr[Matching/kruistabel/first_rel]     / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> Wnet_hWP_count        (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPWnet[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 
-					attribute<nrAsl> hWP_Wnet_Hr_count     (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPWnetHr[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> eWP_Wnet_Hr_count     (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPWnetHr[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> hWP_eWP_Hr_count      (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPHr[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> hWP_eWP_Wnet_count    (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPWnet[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_Wnet_Hr_count     (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPWnetHr[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> eWP_Wnet_Hr_count     (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPWnetHr[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_eWP_Hr_count      (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPHr[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_eWP_Wnet_count    (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPWnet[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 
-					attribute<nrAsl> hWP_eWP_Wnet_Hr_count (Subsets/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPWnetHr[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_eWP_Wnet_Hr_count (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPWnetHr[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 				
-					attribute<nrAsl> installatie_weq_count (Subsets/BinnenEindjaarCutoff) := only_Hr_weq_count + only_hWP_weq_count + only_eWP_weq_count + only_Wnet_weq_count + hWP_Hr_weq_count + hWP_eWP_weq_count + eWP_Wnet_weq_count + eWP_Hr_weq_count + Wnet_Hr_weq_count
+					attribute<nrAsl> installatie_weq_count (select_with_org_rels/BinnenEindjaarCutoff) := only_Hr_weq_count + only_hWP_weq_count + only_eWP_weq_count + only_Wnet_weq_count + hWP_Hr_weq_count + hWP_eWP_weq_count + eWP_Wnet_weq_count + eWP_Hr_weq_count + Wnet_Hr_weq_count
 																				+ Wnet_hWP_weq_count + hWP_Wnet_Hr_weq_count + eWP_Wnet_Hr_weq_count + hWP_eWP_Hr_weq_count + hWP_eWP_Wnet_weq_count + hWP_eWP_Wnet_Hr_weq_count;
-					attribute<nrAsl> only_Hr_weq_count         (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_Hr[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> only_hWP_weq_count        (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_hWP[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> only_eWP_weq_count        (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_eWP[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> only_Wnet_weq_count       (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_Wnet[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> only_Hr_weq_count         (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_Hr[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> only_hWP_weq_count        (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_hWP[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> only_eWP_weq_count        (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_eWP[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> only_Wnet_weq_count       (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_Wnet[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 				
-					attribute<nrAsl> hWP_Hr_weq_count          (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPHr[Matching/kruistabel/first_rel]      / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> hWP_eWP_weq_count         (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWP[Matching/kruistabel/first_rel]     / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> eWP_Wnet_weq_count        (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPWnet[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> eWP_Hr_weq_count          (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPHr[Matching/kruistabel/first_rel]      / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> Wnet_Hr_weq_count         (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/WnetHr[Matching/kruistabel/first_rel]     / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> Wnet_hWP_weq_count        (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPWnet[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_Hr_weq_count          (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPHr[Matching/kruistabel/first_rel]      / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_eWP_weq_count         (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWP[Matching/kruistabel/first_rel]     / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> eWP_Wnet_weq_count        (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPWnet[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> eWP_Hr_weq_count          (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPHr[Matching/kruistabel/first_rel]      / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> Wnet_Hr_weq_count         (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/WnetHr[Matching/kruistabel/first_rel]     / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> Wnet_hWP_weq_count        (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPWnet[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 
-					attribute<nrAsl> hWP_Wnet_Hr_weq_count     (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPWnetHr[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> eWP_Wnet_Hr_weq_count     (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPWnetHr[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> hWP_eWP_Hr_weq_count      (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPHr[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> hWP_eWP_Wnet_weq_count    (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPWnet[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_Wnet_Hr_weq_count     (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPWnetHr[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> eWP_Wnet_Hr_weq_count     (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPWnetHr[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_eWP_Hr_weq_count      (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPHr[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_eWP_Wnet_weq_count    (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPWnet[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 
-					attribute<nrAsl> hWP_eWP_Wnet_Hr_weq_count (Subsets/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPWnetHr[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_eWP_Wnet_Hr_weq_count (select_with_org_rels/BinnenEindjaarCutoff) := sum(UBouw/WoningEquivalenten[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPWnetHr[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 				}
 				container gasvraag
 				{
-					attribute<GJ_yr>  originele_gasvraag      (Subsets/BinnenEindjaarCutoff) := sum(StandaardGasvraag/totaal[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  originele_gasvraag      (select_with_org_rels/BinnenEindjaarCutoff) := sum(StandaardGasvraag/totaal[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 
-					attribute<GJ_yr>  besparing_isolatie_optimistisch      (Subsets/BinnenEindjaarCutoff) := sum(Isolatie/optimistisch/gasbesparing_RV_isolatie                  [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  besparing_isolatie_pessimistisch     (Subsets/BinnenEindjaarCutoff) := sum(Isolatie/pessimistisch/gasbesparing_RV_isolatie                 [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  besparing_installaties_optimistisch  (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_zonder_isolatie/gasbesparing_totaal  [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  besparing_installaties_pessimistisch (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_zonder_isolatie/gasbesparing_totaal [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  besparing_totaal_optimistisch        (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_met_isolatie/gasbesparing_totaal     [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  besparing_totaal_pessimistisch       (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_met_isolatie/gasbesparing_totaal    [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  besparing_isolatie_optimistisch      (select_with_org_rels/BinnenEindjaarCutoff) := sum(Isolatie/optimistisch/gasbesparing_RV_isolatie                  [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  besparing_isolatie_pessimistisch     (select_with_org_rels/BinnenEindjaarCutoff) := sum(Isolatie/pessimistisch/gasbesparing_RV_isolatie                 [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  besparing_installaties_optimistisch  (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_zonder_isolatie/gasbesparing_totaal  [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  besparing_installaties_pessimistisch (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_zonder_isolatie/gasbesparing_totaal [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  besparing_totaal_optimistisch        (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_met_isolatie/gasbesparing_totaal     [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  besparing_totaal_pessimistisch       (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_met_isolatie/gasbesparing_totaal    [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 				}
 				
 				container hernieuwbaar_gas
 				{
-					attribute<GJ_yr>  installaties_optimistisch  (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_zonder_isolatie/duurzaam_gas  [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  installaties_pessimistisch (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_zonder_isolatie/duurzaam_gas [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  totaal_optimistisch        (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_met_isolatie/duurzaam_gas     [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  totaal_pessimistisch       (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_met_isolatie/duurzaam_gas    [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  installaties_optimistisch  (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_zonder_isolatie/duurzaam_gas  [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  installaties_pessimistisch (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_zonder_isolatie/duurzaam_gas [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  totaal_optimistisch        (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_met_isolatie/duurzaam_gas     [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  totaal_pessimistisch       (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_met_isolatie/duurzaam_gas    [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 				}
 }
 			
@@ -692,9 +695,9 @@ container TVW
 			}
 		}
 		
-		unit<uint32> Woning := select_many(Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied, Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/sloopjaar = uint16(9999))
+		unit<uint32> Woning := select_with_attr_by_cond(Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied, Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/sloopjaar = uint16(9999))
 		{
-			attribute<nrAsl> nr_Asl := const(1.0[nrAsl],.);
+			//attribute<nrAsl> nr_Asl := const(1.0[nrAsl],.);
 
 			container Matching
 			{
@@ -711,8 +714,8 @@ container TVW
 						union_data(union_unit(p,p,p,p), id(p), id(p), id(p), id(p)),
 						union_data(union_unit(p,p,p,p), const(0,p), const(1,p), const(2,p), const(3,p))
 									);
-				parameter<string> piap_expr := 'point_in_all_polygons(p/xy, Subsets/BinnenEindjaarCutoff/geometry)';
-				parameter<string> workaround := 'overlay_polygon(driehoek[geography/rdc_mm], Subsets/BinnenEindjaarCutoff/geometry[geography/rdc_mm])';
+				parameter<string> piap_expr := 'point_in_all_polygons(p/xy, select_with_org_rels/BinnenEindjaarCutoff/geometry)';
+				parameter<string> workaround := 'overlay_polygon(driehoek[geography/rdc_mm], select_with_org_rels/BinnenEindjaarCutoff/geometry[geography/rdc_mm])';
 				unit<uint32> kruistabel  :=  =(GeoDmsVersion() > 8.0305) ? piap_expr : workaround;
 				attribute<uint32> P_count     (Subsets/BinnenEindjaarCutoff) := pcount(kruistabel/second_rel);
 				
@@ -723,8 +726,8 @@ container TVW
 
 					container Isolatie
 					{
-						unit<uint32> PL_subset         := select_afew(Subsets/BinnenEindjaarCutoff, not(Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel == Class/Isolatiegraad/V/onbekend) && not(Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel == Class/Isolatiegraad/V/geen_maatregelen));
-						unit<uint32> kruistabel        :=  point_in_all_polygons(p/xy, PL_subset/geometry);
+						unit<uint32> PL_select_with_org_rel         := select_afew(select_with_org_rels/BinnenEindjaarCutoff, not(select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel == Class/Isolatiegraad/V/onbekend) && not(select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel == Class/Isolatiegraad/V/geen_maatregelen));
+						unit<uint32> kruistabel        :=  point_in_all_polygons(p/xy, PL_select_with_org_rel/geometry);
 						attribute<float64> PL_count(p) :=  float64(pcount(kruistabel/first_rel));
 					}
 				}
@@ -759,17 +762,17 @@ container TVW
 			{
 				container Any_IsolatiegraadKlasse
 				{
-					attribute<bool>  onbekend  			(woning) := any(Class/Isolatiegraad/onbekend 						[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  GeenMaatregelen  	(woning) := any(Class/Isolatiegraad/geen_maatregelen 				[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  IsolatieGeenNiveau (woning) := any(Class/Isolatiegraad/isolatie_geen_specifiek_niveau 	[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  StandaardEnStreef  (woning) := any(Class/Isolatiegraad/standaard_en_streefwaarden 		[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  ALabel  			(woning) := any(Class/Isolatiegraad/A 								[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  BLabel  			(woning) := any(Class/Isolatiegraad/B								[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  CLabel  			(woning) := any(Class/Isolatiegraad/C								[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  DLabel  			(woning) := any(Class/Isolatiegraad/D								[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  DC1940AB  			(woning) := any(Class/Isolatiegraad/DC_1940_AB_overig 				[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  DWonenBUtil  		(woning) := any(Class/Isolatiegraad/D_wonen_B_util 					[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  kWhM2  			(woning) := any(Class/Isolatiegraad/kWh_m2_AB 						[Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  onbekend  			(woning) := any(Class/Isolatiegraad/onbekend 						[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  GeenMaatregelen  	(woning) := any(Class/Isolatiegraad/geen_maatregelen 				[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  IsolatieGeenNiveau (woning) := any(Class/Isolatiegraad/isolatie_geen_specifiek_niveau 	[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  StandaardEnStreef  (woning) := any(Class/Isolatiegraad/standaard_en_streefwaarden 		[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  ALabel  			(woning) := any(Class/Isolatiegraad/A 								[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  BLabel  			(woning) := any(Class/Isolatiegraad/B								[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  CLabel  			(woning) := any(Class/Isolatiegraad/C								[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  DLabel  			(woning) := any(Class/Isolatiegraad/D								[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  DC1940AB  			(woning) := any(Class/Isolatiegraad/DC_1940_AB_overig 				[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  DWonenBUtil  		(woning) := any(Class/Isolatiegraad/D_wonen_B_util 					[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  kWhM2  			(woning) := any(Class/Isolatiegraad/kWh_m2_AB 						[select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 				}
 				
 				attribute<Classifications/schillabel>     schillabel     	   (woning) := BeginSituatie/StartingStateComponenten/Woning/Results/schillabel_rel[Matching/ruimtelijkedata_rel];
@@ -861,13 +864,13 @@ container TVW
 			{				
 				container BeoogdeInstallaties
 				{
-					attribute<bool>  Any_hWP  (woning) := any(Class/Installatie/hWP [Subsets/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  Any_eWP  (woning) := any(Class/Installatie/eWP [Subsets/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  Any_Wnet (woning) := any(Class/Installatie/Wnet[Subsets/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  Any_Hr   (woning) := any(Class/Installatie/Hr  [Subsets/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
-					attribute<bool>  Any_onbekend   (woning) := any(Class/Installatie/onbekend  [Subsets/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  Any_hWP  (woning) := any(Class/Installatie/hWP [select_with_org_rels/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  Any_eWP  (woning) := any(Class/Installatie/eWP [select_with_org_rels/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  Any_Wnet (woning) := any(Class/Installatie/Wnet[select_with_org_rels/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  Any_Hr   (woning) := any(Class/Installatie/Hr  [select_with_org_rels/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  Any_onbekend   (woning) := any(Class/Installatie/onbekend  [select_with_org_rels/BinnenEindjaarCutoff/Installatie_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 					
-					attribute<bool>  Any_hernieuwbaar_gas   (woning) := any(Class/Energiebron/hernieuwbaar_gas [Subsets/BinnenEindjaarCutoff/Energiebron_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
+					attribute<bool>  Any_hernieuwbaar_gas   (woning) := any(Class/Energiebron/hernieuwbaar_gas [select_with_org_rels/BinnenEindjaarCutoff/Energiebron_rel[Matching/kruistabel/second_rel]], Matching/kruistabel/first_rel);
 					attribute<bool>  Geen_beoogde_installatie   (woning) := not(Any_eWP) && not(Any_eWP) && not(Any_hWP) && not(Any_Wnet) && not(Any_Hr) && not(Any_onbekend);
 					attribute<float64> Only_onbekend (woning) := float64(Any_onbekend && not(Any_hWP) && not(Any_eWP) && not(Only_Wnet) && not(Any_Hr));
 					attribute<bool>    Only_onbekend_bool (woning) := Any_onbekend && not(Any_hWP) && not(Any_eWP) && not(Only_Wnet) && not(Any_Hr);
@@ -1007,76 +1010,76 @@ container TVW
 			{
 				container Basisvariabelen
 				{
-					attribute<string> pln_code       (Subsets/BinnenEindjaarCutoff) := Subsets/BinnenEindjaarCutoff/Plan_code;
-					attribute<nrAsl>  VBO_count      		 (Subsets/BinnenEindjaarCutoff) := VBO/Matching/VBO_count;
-					attribute<nrAsl>  VBO_count_gecorrigeerd (Subsets/BinnenEindjaarCutoff) := sum(VBO/nr_Asl[VBO/Matching/kruistabel/first_rel] / float64(VBO/Matching/PL_count)[VBO/Matching/kruistabel/first_rel], VBO/Matching/kruistabel/second_rel);
-					attribute<nrAsl>  Woning_count   (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl>  koop_count     (Subsets/BinnenEindjaarCutoff) := sum(eigendom/Koop[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl>  parthuur_count (Subsets/BinnenEindjaarCutoff) := sum(eigendom/PartHuur[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl>  wooncorp_count (Subsets/BinnenEindjaarCutoff) := sum(eigendom/WoonCorp[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<string> pln_code       (select_with_org_rels/BinnenEindjaarCutoff) := select_with_org_rels/BinnenEindjaarCutoff/Plan_code;
+					attribute<nrAsl>  VBO_count      		 (select_with_org_rels/BinnenEindjaarCutoff) := VBO/Matching/VBO_count;
+					attribute<nrAsl>  VBO_count_gecorrigeerd (select_with_org_rels/BinnenEindjaarCutoff) := sum(VBO/nr_Asl[VBO/Matching/kruistabel/first_rel] / float64(VBO/Matching/PL_count)[VBO/Matching/kruistabel/first_rel], VBO/Matching/kruistabel/second_rel);
+					attribute<nrAsl>  Woning_count   (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl>  koop_count     (select_with_org_rels/BinnenEindjaarCutoff) := sum(eigendom/Koop[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl>  parthuur_count (select_with_org_rels/BinnenEindjaarCutoff) := sum(eigendom/PartHuur[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl>  wooncorp_count (select_with_org_rels/BinnenEindjaarCutoff) := sum(eigendom/WoonCorp[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 				}
 				container isolatie_telling
 				{
-					attribute<nrAsl>  isolatie_count		  (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  isolatie_koop_count     (Subsets/BinnenEindjaarCutoff) := sum(eigendom/Koop[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  isolatie_parthuur_count (Subsets/BinnenEindjaarCutoff) := sum(eigendom/PartHuur[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  isolatie_wooncorp_count (Subsets/BinnenEindjaarCutoff) := sum(eigendom/WoonCorp[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
+					attribute<nrAsl>  isolatie_count		  (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)];
+					attribute<nrAsl>  isolatie_koop_count     (select_with_org_rels/BinnenEindjaarCutoff) := sum(eigendom/Koop[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)];
+					attribute<nrAsl>  isolatie_parthuur_count (select_with_org_rels/BinnenEindjaarCutoff) := sum(eigendom/PartHuur[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)];
+					attribute<nrAsl>  isolatie_wooncorp_count (select_with_org_rels/BinnenEindjaarCutoff) := sum(eigendom/WoonCorp[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)];
 				}
 				
 				container labelsprongen
 				{
-					attribute<Class/Isolatiegraad> beoogde_isolatiegraad (Subsets/BinnenEindjaarCutoff) := Subsets/BinnenEindjaarCutoff/Isolatiegraad_rel;
-					attribute<nrAsl>  origineel_A_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/A[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_B_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/B[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_C_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/C[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_D_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/D[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_E_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/E[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_F_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/F[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_G_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/G[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
-					attribute<nrAsl>  origineel_Geen_label_count		(Subsets/BinnenEindjaarCutoff) := sum(isolatie/schillabels/geen_label[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_subset/org_rel)][Subsets/BinnenEindjaarCutoff/org_rel];
+					attribute<Class/Isolatiegraad> beoogde_isolatiegraad (select_with_org_rels/BinnenEindjaarCutoff) := select_with_org_rels/BinnenEindjaarCutoff/Isolatiegraad_rel;
+					attribute<nrAsl>  origineel_A_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/A[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)];
+					attribute<nrAsl>  origineel_B_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/B[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)];
+					attribute<nrAsl>  origineel_C_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/C[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)];
+					attribute<nrAsl>  origineel_D_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/D[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)];
+					attribute<nrAsl>  origineel_E_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/E[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)];
+					attribute<nrAsl>  origineel_F_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/F[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)];
+					attribute<nrAsl>  origineel_G_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/G[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)];
+					attribute<nrAsl>  origineel_Geen_label_count		(select_with_org_rels/BinnenEindjaarCutoff) := sum(isolatie/schillabels/geen_label[Matching/PL_counts/Isolatie/kruistabel/first_rel] * isolatie/WordtGeisoleerd[Matching/PL_counts/Isolatie/kruistabel/first_rel] / Matching/PL_counts/Isolatie/PL_count[Matching/PL_counts/Isolatie/kruistabel/first_rel], Matching/PL_counts/Isolatie/kruistabel/second_rel)[invert(Matching/PL_counts/Isolatie/PL_select_with_org_rel/org_rel)];
 				}
 				
 				container Installaties
 				{
-					attribute<nrAsl> installatie_count (Subsets/BinnenEindjaarCutoff) := only_Hr_count + only_hWP_count + only_eWP_count + only_Wnet_count + hWP_Hr_count + hWP_eWP_count + eWP_Wnet_count + eWP_Hr_count + Wnet_Hr_count
+					attribute<nrAsl> installatie_count (select_with_org_rels/BinnenEindjaarCutoff) := only_Hr_count + only_hWP_count + only_eWP_count + only_Wnet_count + hWP_Hr_count + hWP_eWP_count + eWP_Wnet_count + eWP_Hr_count + Wnet_Hr_count
 																				+ Wnet_hWP_count + hWP_Wnet_Hr_count + eWP_Wnet_Hr_count + hWP_eWP_Hr_count + hWP_eWP_Wnet_count + hWP_eWP_Wnet_Hr_count;
-					attribute<nrAsl> only_Hr_count         (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_Hr[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> only_hWP_count        (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_hWP[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> only_eWP_count        (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_eWP[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> only_Wnet_count       (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_Wnet[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> only_Hr_count         (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_Hr[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> only_hWP_count        (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_hWP[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> only_eWP_count        (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_eWP[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> only_Wnet_count       (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/only_Wnet[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 				
-					attribute<nrAsl> hWP_Hr_count          (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPHr[Matching/kruistabel/first_rel]      / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> hWP_eWP_count         (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWP[Matching/kruistabel/first_rel]     / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> eWP_Wnet_count        (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPWnet[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> eWP_Hr_count          (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPHr[Matching/kruistabel/first_rel]      / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> Wnet_Hr_count         (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/WnetHr[Matching/kruistabel/first_rel]     / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> Wnet_hWP_count        (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPWnet[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_Hr_count          (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPHr[Matching/kruistabel/first_rel]      / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_eWP_count         (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWP[Matching/kruistabel/first_rel]     / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> eWP_Wnet_count        (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPWnet[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> eWP_Hr_count          (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPHr[Matching/kruistabel/first_rel]      / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> Wnet_Hr_count         (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/WnetHr[Matching/kruistabel/first_rel]     / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> Wnet_hWP_count        (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPWnet[Matching/kruistabel/first_rel]    / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 
-					attribute<nrAsl> hWP_Wnet_Hr_count     (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPWnetHr[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> eWP_Wnet_Hr_count     (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPWnetHr[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> hWP_eWP_Hr_count      (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPHr[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<nrAsl> hWP_eWP_Wnet_count    (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPWnet[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_Wnet_Hr_count     (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPWnetHr[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> eWP_Wnet_Hr_count     (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/eWPWnetHr[Matching/kruistabel/first_rel]  / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_eWP_Hr_count      (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPHr[Matching/kruistabel/first_rel]   / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_eWP_Wnet_count    (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPWnet[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 
-					attribute<nrAsl> hWP_eWP_Wnet_Hr_count (Subsets/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPWnetHr[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<nrAsl> hWP_eWP_Wnet_Hr_count (select_with_org_rels/BinnenEindjaarCutoff) := sum(woning/nr_Asl[Matching/kruistabel/first_rel] * Techniekkeuze/BeoogdeInstallaties/hWPeWPWnetHr[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 				}
 				
 				container gasvraag{
-					attribute<GJ_yr>  originele_gasvraag      (Subsets/BinnenEindjaarCutoff) := sum(StandaardGasvraag/totaal[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  originele_gasvraag      (select_with_org_rels/BinnenEindjaarCutoff) := sum(StandaardGasvraag/totaal[Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 
-					attribute<GJ_yr>  besparing_isolatie_optimistisch      (Subsets/BinnenEindjaarCutoff) := sum(Isolatie/optimistisch/gasbesparing_RV_isolatie                  [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  besparing_isolatie_pessimistisch     (Subsets/BinnenEindjaarCutoff) := sum(Isolatie/pessimistisch/gasbesparing_RV_isolatie                 [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  besparing_installaties_optimistisch  (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_zonder_isolatie/gasbesparing_totaal  [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  besparing_installaties_pessimistisch (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_zonder_isolatie/gasbesparing_totaal [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  besparing_totaal_optimistisch        (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_met_isolatie/gasbesparing_totaal     [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  besparing_totaal_pessimistisch       (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_met_isolatie/gasbesparing_totaal    [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  besparing_isolatie_optimistisch      (select_with_org_rels/BinnenEindjaarCutoff) := sum(Isolatie/optimistisch/gasbesparing_RV_isolatie                  [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  besparing_isolatie_pessimistisch     (select_with_org_rels/BinnenEindjaarCutoff) := sum(Isolatie/pessimistisch/gasbesparing_RV_isolatie                 [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  besparing_installaties_optimistisch  (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_zonder_isolatie/gasbesparing_totaal  [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  besparing_installaties_pessimistisch (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_zonder_isolatie/gasbesparing_totaal [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  besparing_totaal_optimistisch        (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_met_isolatie/gasbesparing_totaal     [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  besparing_totaal_pessimistisch       (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_met_isolatie/gasbesparing_totaal    [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 				}
 				
 				container hernieuwbaar_gas
 				{
-					attribute<GJ_yr>  installaties_optimistisch  (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_zonder_isolatie/duurzaam_gas  [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  installaties_pessimistisch (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_zonder_isolatie/duurzaam_gas [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  totaal_optimistisch        (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_met_isolatie/duurzaam_gas     [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
-					attribute<GJ_yr>  totaal_pessimistisch       (Subsets/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_met_isolatie/duurzaam_gas    [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  installaties_optimistisch  (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_zonder_isolatie/duurzaam_gas  [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  installaties_pessimistisch (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_zonder_isolatie/duurzaam_gas [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  totaal_optimistisch        (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/optimistisch_met_isolatie/duurzaam_gas     [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
+					attribute<GJ_yr>  totaal_pessimistisch       (select_with_org_rels/BinnenEindjaarCutoff) := sum(Techniekkeuze/pessimistisch_met_isolatie/duurzaam_gas    [Matching/kruistabel/first_rel] / Matching/PL_counts/totaal[Matching/kruistabel/first_rel], Matching/kruistabel/second_rel);
 				}
 			}
 		}

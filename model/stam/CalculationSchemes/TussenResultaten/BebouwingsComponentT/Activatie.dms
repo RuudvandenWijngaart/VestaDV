@@ -7,7 +7,6 @@
 container Activatie
 {			
 	//parameters voor activatie
-	parameter<ratio> VerhuizingPerJaar := SpecifiekeInstellingen/Probabilisering/VerhuizingPerJaar;
 	parameter<ratio> StartKoudeBasis   := SpecifiekeInstellingen/Probabilisering/StartKoudeBasis;
 	parameter<ratio> StartOokKoudePiek := SpecifiekeInstellingen/Probabilisering/StartOokKoudePiek;
 	parameter<ratio> SpreidingsFactor  := SpecifiekeInstellingen/Probabilisering/SpreidingsFactor;
@@ -27,8 +26,9 @@ container Activatie
 			parameter<ZBA> ZBA_rel;
 			//end case parameters
 
-			parameter<ratio> R_Naleving      := makedefined(ZBA/Naleving[ZBA_rel],0.0[ratio]) , ishidden = "True";
-			attribute<bool>  Naleving   (BO) := rnd_uniform(JaarSeed * 104u, BO, range(float32, 0d, 1d)) < R_Naleving;
+			parameter<ratio> R_Naleving       := makedefined(ZBA/Naleving[ZBA_rel],0.0[ratio]) , ishidden = "True";
+			attribute<bool>  Naleving    (BO) := rnd_uniform(JaarSeed * 104u, BO, range(float32, 0d, 1d)) < R_Naleving;
+			attribute<bool>  InDoelgroep (BO) := ='OR('+ AsItemList( replace('ZBA/doelgroep/@ED[ZBA_rel] && BO/Eigendom_rel == Classifications/Eigendom/V/@ED', '@ED', Classifications/Eigendom/name) ) +')';
 
 			container LabelVoorwaarde := for_each_nedv(
 				  Classifications/Schillabel/name
@@ -39,79 +39,79 @@ container Activatie
 				attribute<bool> Voldaan (BO) := ='merge(uint8(Energielabel_rel), bool, '+AsItemList(Classifications/Schillabel/name)+')';
 			}
 
+			attribute<bool> BoSelectie(BO) := Naleving && LabelVoorwaarde/Voldaan && InDoelgroep;
 			container Grondslag := for_each_nedv(
 				  classifications/bouwdeel/name
-				, 'ZBA/Grondslag/'+classifications/bouwdeel/name+'[ZBA_rel] && Naleving && LabelVoorwaarde/Voldaan' 
+				, 'ZBA/Grondslag/'+classifications/bouwdeel/name+'[ZBA_rel] && BoSelectie' 
 				, BO
 				, bool)
 			{
-				attribute<bool> RV (BO) := ZBA/Grondslag/RV[ZBA_rel] && Naleving && LabelVoorwaarde/Voldaan;
-				attribute<bool> TW (BO) := ZBA/Grondslag/TW[ZBA_rel] && Naleving && LabelVoorwaarde/Voldaan;
-				attribute<bool> KD (BO) := ZBA/Grondslag/KD[ZBA_rel] && Naleving && LabelVoorwaarde/Voldaan;
-				attribute<bool> VT (BO) := ZBA/Grondslag/VT[ZBA_rel] && Naleving && LabelVoorwaarde/Voldaan;
+				attribute<bool> RV (BO) := ZBA/Grondslag/RV[ZBA_rel] && BoSelectie;
+				attribute<bool> TW (BO) := ZBA/Grondslag/TW[ZBA_rel] && BoSelectie;
+				attribute<bool> KD (BO) := ZBA/Grondslag/KD[ZBA_rel] && BoSelectie;
+				attribute<bool> VT (BO) := ZBA/Grondslag/VT[ZBA_rel] && BoSelectie;
 			}
 		}
 
 		container BeleidsActivatie := for_each_nedv(
 			 classifications/bouwdeel/name
-			,count(ZBA/nr_orgentity) == 0[uint32] ? 'const(false,BO)' : replace('OR('+AsItemList('ActivatieBepaling/'+ZBA/name+'/Grondslag/@BD@')+')','@BD@',Classifications/bouwdeel/name)
+			,count(ZBA/org_rel) == 0[uint32] ? 'const(false,BO)' : replace('OR('+AsItemList('ActivatieBepaling/'+ZBA/name+'/Grondslag/@BD@')+')','@BD@',Classifications/bouwdeel/name)
 			,BO
 			,bool)
 		{
-			attribute<bool> RV (BO) := =count(ZBA/nr_orgentity) == 0[uint32] ? 'const(false,BO)' : 'OR('+AsItemList('ActivatieBepaling/'+ZBA/name+'/Grondslag/RV')+')';
-			attribute<bool> TW (BO) := =count(ZBA/nr_orgentity) == 0[uint32] ? 'const(false,BO)' : 'OR('+AsItemList('ActivatieBepaling/'+ZBA/name+'/Grondslag/TW')+')';
-			attribute<bool> KD (BO) := =count(ZBA/nr_orgentity) == 0[uint32] ? 'const(false,BO)' : 'OR('+AsItemList('ActivatieBepaling/'+ZBA/name+'/Grondslag/KD')+')';
-			attribute<bool> VT (BO) := =count(ZBA/nr_orgentity) == 0[uint32] ? 'const(false,BO)' : 'OR('+AsItemList('ActivatieBepaling/'+ZBA/name+'/Grondslag/VT')+')';
+			attribute<bool> RV (BO) := =count(ZBA/org_rel) == 0[uint32] ? 'const(false,BO)' : 'OR('+AsItemList('ActivatieBepaling/'+ZBA/name+'/Grondslag/RV')+')';
+			attribute<bool> TW (BO) := =count(ZBA/org_rel) == 0[uint32] ? 'const(false,BO)' : 'OR('+AsItemList('ActivatieBepaling/'+ZBA/name+'/Grondslag/TW')+')';
+			attribute<bool> KD (BO) := =count(ZBA/org_rel) == 0[uint32] ? 'const(false,BO)' : 'OR('+AsItemList('ActivatieBepaling/'+ZBA/name+'/Grondslag/KD')+')';
+			attribute<bool> VT (BO) := =count(ZBA/org_rel) == 0[uint32] ? 'const(false,BO)' : 'OR('+AsItemList('ActivatieBepaling/'+ZBA/name+'/Grondslag/VT')+')';
 		}
 	}
 
+	attribute<bool>    Verhuismoment (..) := rnd_uniform(JaarSeed * 2u, .., range(float32, 0d, 1d)) < Classifications/WoningType/Verhuiskans[BO/WoningType_rel];
+	
+	attribute<float64> KoudeKans     (..) := rnd_uniform(JaarSeed * 3u, .., range(float32, 0d, 1d)), isHidden = "True";
+	attribute<bool>    KoudemomentB  (..) := KoudeKans   > 1.0[ratio] - StartKoudeBasis  , Descr = "Jaarlijkse kans dat een gebouweigenaar besluit te starten met de basisvraag naar koude in te vullen" , isHidden = "True";
+	attribute<bool>    KoudemomentP  (..) := KoudeKans   > 1.0[ratio] - StartOokKoudePiek, Descr = "Jaarlijkse kans dat een gebouweigenaar besluit te starten ook de piekvraag naar koude in te vullen, indien ook al basis ingevuld" , isHidden = "True";
 
-	attribute<float64> Verhuiskans   (..) := rnd_uniform(JaarSeed * 2u, .., range(float32, 0d, 1d));
-	attribute<bool>    Verhuismoment (..) := Verhuiskans > 1.0[ratio] - VerhuizingPerJaar;
-	attribute<float64> KoudeKans     (..) := rnd_uniform(JaarSeed * 3u, .., range(float32, 0d, 1d));
-	attribute<bool>    KoudemomentB  (..) := KoudeKans   > 1.0[ratio] - StartKoudeBasis  , Descr = "Jaarlijkse kans dat een gebouweigenaar besluit te starten met de basisvraag naar koude in te vullen" ;
-	attribute<bool>    KoudemomentP  (..) := KoudeKans   > 1.0[ratio] - StartOokKoudePiek, Descr = "Jaarlijkse kans dat een gebouweigenaar besluit te starten ook de piekvraag naar koude in te vullen, indien ook al basis ingevuld" ;
-
-	parameter<ratio> increment        := 1.0/(1.0-SpreidingsFactor)*StaartFactor;
+	parameter<ratio> increment        := 1.0/(1.0-SpreidingsFactor)*StaartFactor, isHidden = "True";
 
 	container Bouwdeel_odds := for_each_nedv(
 		 classifications/bouwdeel/name
 		,'BO/Bouwdelen/Isolatie/'+ classifications/bouwdeel/name +' == Classifications/IsolatieNiveau/V/N4 ? 0.0[ratio] : Verhuismoment ? 1.0[ratio] :
 		 max_elem(min_elem(increment * 
-		 ((float64(Zichtjaar_jaar - BO/Bouwdelen/LastVervanging/' + classifications/bouwdeel/name + ') / float64(Classifications/Bouwdeel/Levensduur[Classifications/Bouwdeel/V/'+ classifications/bouwdeel/name +'])) - SpreidingsFactor), 1.0[ratio]),0.0[ratio])'
+		 ((float64(sub_or_null(Zichtjaar_jaar, BO/Bouwdelen/LastVervanging/' + classifications/bouwdeel/name + ')) / float64(Classifications/Bouwdeel/Levensduur[Classifications/Bouwdeel/V/'+ classifications/bouwdeel/name +'])) - SpreidingsFactor), 1.0[ratio]),0.0[ratio])'
 		,(..)
-		,float64);
+		,float64), isHidden = "True";
 
 	container Bouwdelen_base := for_each_nedv(
 		classifications/bouwdeel/name,
-		'BO/Bouwdelen/Isolatie/'+ classifications/bouwdeel/name +' == Classifications/IsolatieNiveau/V/N4 ? false : Verhuismoment ? true 
-		: Zichtjaar_jaar - BO/Bouwdelen/LastVervanging/' + classifications/bouwdeel/name +
-		'>= Classifications/Bouwdeel/Levensduur[Classifications/Bouwdeel/V/'+ classifications/bouwdeel/name +']',
+		'BO/Bouwdelen/Isolatie/'+ classifications/bouwdeel/name +' != Classifications/IsolatieNiveau/V/N4 && (Verhuismoment || '
+		'(MakeDefined(sub_or_null(Zichtjaar_jaar, BO/Bouwdelen/LastVervanging/' + classifications/bouwdeel/name + '), 0w)'
+		'>= Classifications/Bouwdeel/Levensduur[Classifications/Bouwdeel/V/'+ classifications/bouwdeel/name +']))',
 		(..),
-		bool);
+		bool), isHidden = "True";
 
 	container Product_odds := for_each_nedv(
 		 classifications/product/name
 		,'max_elem(min_elem(increment * ('
-			'(float64(Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name + ') '
+			'(float64(sub_or_null(Zichtjaar_jaar, InstallatiePerProduct/LastVervanging/' + classifications/product/name + ')) '
 				'/ float64(Classifications/Installatie/Levensduur[InstallatiePerProduct/'+ classifications/product/name +']))'
 			'- SpreidingsFactor), 1.0[ratio]),0.0[ratio]) '
 			'> rnd_uniform(JaarSeed * (18u+ Classifications/Product/V/'+classifications/product/name+') , ..., range(float64, 0d, 1d))'
 		,(..)
-		,bool);
+		,bool), isHidden = "True";
 
 	container Producten_base := for_each_nedv(
 		classifications/product/name,
-		'Zichtjaar_jaar - InstallatiePerProduct/LastVervanging/' + classifications/product/name +
-		'>= Classifications/Installatie/Levensduur[InstallatiePerProduct/'+ classifications/product/name +']',
+		'Zichtjaar_jaar >= InstallatiePerProduct/LastVervanging/' + classifications/product/name +
+		'+ Classifications/Installatie/Levensduur[InstallatiePerProduct/'+ classifications/product/name +']',
 		(..),
-		bool);
+		bool), isHidden = "True";
 
 	container Producten_EOL := for_each_nedv(
 		classifications/product/name,
 		(SpreidingsFactor > 0.99 ? 'Producten_base/' : 'Product_odds/') + classifications/product/name, 
 		(..),
-		bool);
+		bool), isHidden = "True";
 
 	container Producten
 	{
@@ -153,11 +153,10 @@ container Activatie
 	attribute<bool> ProductVervanging  (..) := ='add('+AsItemList('uint8(Producten/'+Classifications/product/name+')')+') > 0b';
 
 	attribute<bool> KanNietActiveren   (..) := =Invoer/DefaultInstellingen/Basis/RuimtelijkeOntwikkelingAan ? 
-		'(Sloopjaar - Zichtjaar_jaar) < 10[yr_uint16] || (Zichtjaar_jaar - Bouwjaar) < 10[yr_uint16] || Afbouw || Aanbouw || not(nrAansluitingen > 0.0[nrAsl])' :
+		'MakeDefined(sub_or_null(Sloopjaar, Zichtjaar_jaar), 9999w) < 10[yr_uint16] || MakeDefined(sub_or_null(Zichtjaar_jaar, Bouwjaar), 9999w) < 10[yr_uint16] || Afbouw || Aanbouw || not(nrAansluitingen > 0.0[nrAsl])' :
 		'const(false,..)';
 	attribute<bool> BouwdeelActief     (..) := =RekenStapName == 'StartJaar' ? 'const(false,..)' : 'BouwdeelVervanging && not(KanNietActiveren)';
 	attribute<bool> ProductActief      (..) := =RekenStapName == 'StartJaar' ? 'const(false,..)' : 'ProductVervanging  && not(KanNietActiveren)';
-	attribute<bool> Actief_conditie    (..) := BouwdeelActief || ProductActief;
 
 	attribute<classifications/Uitvoering> Uitvoering (..) := switch(
 		  case(AND(Bouwdelen/RenovatieMoment, IsMeergezins                                                     ), Classifications/Uitvoering/V/Nat_Mgw_Prj)

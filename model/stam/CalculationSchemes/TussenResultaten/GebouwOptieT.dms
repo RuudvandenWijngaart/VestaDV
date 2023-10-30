@@ -4,7 +4,7 @@
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
-template SubsetGebouwOptieT
+template select_with_org_relGebouwOptieT
 {
 	// begin case parameters	
 	unit<uint32> ActiefObject;
@@ -20,7 +20,7 @@ template SubsetGebouwOptieT
 	attribute<bool> KoudeGeschikt (ActiefObject) := Classifications/GebouwOptie/MetKoude[GebouwOptie_rel] ? (BO/Activatie/Producten/KDb[ActiefObject/BO_rel] || BO/Activatie/Producten/KDp[ActiefObject/BO_rel]) : true;
 	
 	attribute<bool> LabelGeschikt (ActiefObject) := 
-	AND( ActiefObject/SchilLabel_rel <= Classifications/GebouwOptie/Min_schillabel_rel[GebouwOptie_rel]
+	AND( MakeDefined(ActiefObject/SchilLabel_rel, Classifications/Schillabel/V/G) <= Classifications/GebouwOptie/Min_schillabel_rel[GebouwOptie_rel]
 	,	OR(BO/Aansluitingen/GNet[ActiefObject/BO_rel] > 0[nrAsl], not(Classifications/GebouwOptie/GasNodig[GebouwOptie_rel]))
 	)
 	, Descr = "Voldoet de woning aan de isolatienorm voor deze gebouwoptie en is benodigde aansluiting aanwezig?";
@@ -43,7 +43,7 @@ template SubsetGebouwOptieT
 		attribute<Classifications/IsolatieAmbitie> MaxIsolatieAmbitie_rel := select_data(GeschiktObject, ../MaxIsolatieAmbitie_rel);
 		attribute<m2>                              Oppervlakte_i          := BO/Oppervlakte[BO_Rel];
 		attribute<nrAsl>                           nrAansluitingen_i      := BO/nrAansluitingen[BO_Rel];
-		attribute<Classifications/Woningtype>      BebouwingsType         := BO/BebouwingsType[BO_Rel];
+		attribute<Classifications/Woningtype>      WoningType_rel         := BO/WoningType_rel[BO_Rel];
 		
 		container AansluitCapaciteit
 		{
@@ -123,7 +123,6 @@ template SubsetGebouwOptieT
 			attribute<GeschiktObject>              GeschiktObject_rel := value(pointrow(values), GeschiktObject);
 			attribute<Classifications/Installatie> Installatie_rel    := value(pointcol(values), Classifications/Installatie);
 			attribute<xProduct>                    First_xProduct_rel := rlookup(values, xProduct/xInstallatie_code);
-			attribute<Classifications/Product>     FirstProduct_rel   := xProduct/Product_rel[First_xProduct_rel];
 		}		
 		
 		attribute<Eur_asl> Ki_asl := sum(VerbruiksOpties/Installatie/Ki_asl[uInstallatie/Installatie_rel], uInstallatie/GeschiktObject_rel);
@@ -189,7 +188,7 @@ template SubsetGebouwOptieT
 	
 	container Jaarlijks := Kj_verbruik
 	{	
-		attribute<Eur_yr> KJ_OH_LO       (GeschiktObject/xProduct) := =replace(KX_expr, '@X', 'j_OH');
+		attribute<Eur_yr> Kj_OH_LO       (GeschiktObject/xProduct) := =replace(KX_expr, '@X', 'j_OH');
 		attribute<Eur_yr> Kj_Adm_LO      (GeschiktObject/xProduct) := =replace(KX_expr, '@X', 'j_Adm');
 		attribute<Eur_yr> Kj_Vastrecht_g (GeschiktObject) := VastRechtBijdrageG; // bijdrage en heffingskortingen voor E, MT en LT zijn voor alle GebouwOpties hetzelfde, dus niet relevant voor de afweging.
 	}
@@ -224,13 +223,12 @@ template SubsetGebouwOptieT
 	
 	container metervraag := Func2Meter/result;
 	
-	
 	container meterprijzen
 	{
-		attribute<Eur_GJ> Pj_e  (GeschiktObject) := Prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl [classify(metervraag/e  , Prijzen/Elektriciteit/Staffel/ClassBreak)];
-		attribute<Eur_GJ> Pj_gas(GeschiktObject) := Prijzen/AardGas/Staffel/KGJ_eindgebruik_excl       [classify(metervraag/gas, Prijzen/AardGas/Staffel/ClassBreak)];
-		attribute<Eur_GJ> Pm_e  (GeschiktObject) := Prijzen/Elektriciteit/Staffel/KGJ_Maatschappelijk  [classify(metervraag/e  , Prijzen/Elektriciteit/Staffel/ClassBreak)];
-		attribute<Eur_GJ> Pm_gas(GeschiktObject) := Prijzen/AardGas/Staffel/KGJ_Maatschappelijk        [classify(metervraag/gas, Prijzen/AardGas/Staffel/ClassBreak)];
+		attribute<Eur_GJ> Pj_e   (GeschiktObject) := Prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl [classify(metervraag/e  , Prijzen/Elektriciteit/Staffel/ClassBreak)];
+		attribute<Eur_GJ> Pj_gas (GeschiktObject) := Prijzen/AardGas/Staffel/KGJ_eindgebruik_excl       [classify(metervraag/gas, Prijzen/AardGas/Staffel/ClassBreak)];
+		attribute<Eur_GJ> Pm_e   (GeschiktObject) := Prijzen/Elektriciteit/Staffel/KGJ_Maatschappelijk  [classify(metervraag/e  , Prijzen/Elektriciteit/Staffel/ClassBreak)];
+		attribute<Eur_GJ> Pm_gas (GeschiktObject) := Prijzen/AardGas/Staffel/KGJ_Maatschappelijk        [classify(metervraag/gas, Prijzen/AardGas/Staffel/ClassBreak)];
 
 		parameter<Eur_GJ> Pj_biomassa := Prijzen/Overig/Pj_biomassa;
 		parameter<Eur_GJ> Pj_olie     := Prijzen/Overig/Pj_olie;
@@ -243,11 +241,16 @@ template SubsetGebouwOptieT
 		parameter<Eur_GJ> Pm_pellets  := Pj_pellets;
 		parameter<Eur_GJ> Pm_H2       := Pj_H2;
 
-		attribute<Eur_GJ> Pj_LT      (GeschiktObject) := Pj_MT;
-		attribute<Eur_GJ> Pj_MT      (GeschiktObject) := Pj_gas; // TODO: koppelen aan warmteprijs
+		attribute<Eur_GJ> Pj_Warmte_30  (GeschiktObject) := Pj_Warmte_70;
+		attribute<Eur_GJ> Pj_Warmte_50  (GeschiktObject) := Pj_Warmte_70;
+		attribute<Eur_GJ> Pj_Warmte_70  (GeschiktObject) := Pj_gas;
+		attribute<Eur_GJ> Pj_Koude      (GeschiktObject) := const(0.0[Eur_GJ],Geschiktobject);
 
-		attribute<Eur_GJ> Pm_LT      (GeschiktObject) := Pj_LT;
-		attribute<Eur_GJ> Pm_MT      (GeschiktObject) := Pj_MT;
+		attribute<Eur_GJ> Pm_Warmte_30  (GeschiktObject) := Pj_Warmte_30;
+		attribute<Eur_GJ> Pm_Warmte_50  (GeschiktObject) := Pj_Warmte_50;
+		attribute<Eur_GJ> Pm_Warmte_70  (GeschiktObject) := Pj_Warmte_70;
+		attribute<Eur_GJ> Pm_Koude      (GeschiktObject) := Pj_Koude;
+
 	}
 
 	container Kj_verbruik := for_each_nedv(
@@ -311,7 +314,7 @@ template SubsetGebouwOptieT
 
 		attribute<bool>    InDoelgroep    (GeschiktObject) := ='OR('+AsItemList(replace('ZBS/doelgroep/@ED[ZBS_rel] && BO/Eigendom_rel[geschiktobject/BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')', ishidden = "True";
 		attribute<eur>     MaxBedrag      (GeschiktObject) := BO/nrAansluitingen[GeschiktObject/BO_rel] * ZBS/Voorwaarde/MaxBedrag_asl[ZBS_rel], ishidden = "True";
-		attribute<float64> LabelStappenNu (GeschiktObject) := float64(Bo/Energielabel_rel[GeschiktObject/BO_rel] - energielabelberekening/Energielabel_rel);
+		attribute<float64> LabelStappenNu (GeschiktObject) := float64(sub_or_null(Bo/Energielabel_rel[GeschiktObject/BO_rel], energielabelberekening/Energielabel_rel));
 		attribute<bool>    nrStappenOk    (GeschiktObject) := LabelStappenNu == nrLabelStappen;
 
 		//====== Bepaling subsidiebedragen
@@ -346,14 +349,14 @@ template SubsetGebouwOptieT
 		container Oi_gv_bouwdeel := for_each_nedv(
 				classifications/Bouwdeel/name,
 				replace(
-					'(makedefined(GeschiktObject/Bouwdelen/@BD'
+					'((makedefined(GeschiktObject/Bouwdelen/@BD'
 					'*  Classifications/IsolatieMaatregel/xUitvoering/kosten['
 							'combine_data(Classifications/IsolatieMaatregel/xUitvoering'
 							', IsolatieMaatregel/@BD'
 							', BO/Activatie/Uitvoering[GeschiktObject/BO_Rel]'
 							')'
 						']'
-					', 0.0[Eur]) * Aandeel + Bedrag * BO/nrAansluitingen[GeschiktObject/BO_rel]) + PerOpp * GeschiktObject/Bouwdelen/@BD'+
+					', 0.0[Eur]) * Aandeel + Bedrag * BO/nrAansluitingen[GeschiktObject/BO_rel]) + PerOpp * GeschiktObject/Bouwdelen/@BD)'+
 					'* float64(OR('+AsItemList(replace('ZBS/Maatregel/Isolatie/@BM[ZBS_rel] && IsolatieMaatregel/@BD == Classifications/IsolatieMaatregel/V/@BM','@BM',Classifications/IsolatieMaatregel/name))+')) '+
 					'* float64(GeschiktObject/Bouwdelen/Isolatie/@BD != BO/Bouwdelen/Isolatie/@BD[GeschiktObject/BO_rel])'
 				,	'@BD', classifications/Bouwdeel/name),
@@ -460,10 +463,11 @@ template SubsetGebouwOptieT
 			parameter<BBN> BBN_rel;
 			//end case parameters
 
-			attribute<bool> Naleving      (GeschiktObject) := first(rnd_uniform(JaarSeed * 106u, GeschiktObject, range(float64, 0d, 1d)), GeschiktObject/BO_rel)[GeschiktObject/BO_rel] <= BBN/Naleving[BBN_rel];
-			attribute<bool> InDoelgroepED (GeschiktObject) := ='OR('+AsItemList(replace('BBN/doelgroep/@ED[BBN_rel] && BO/Eigendom_rel[geschiktobject/BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')', ishidden = "True";
-			attribute<bool> InDoelgroepWT (GeschiktObject) := BBN/doelgroep/EGW[BBN_rel] && BO/IsMeergezins[GeschiktObject/BO_rel] || BBN/doelgroep/MGW[BBN_rel] && not(BO/IsMeergezins[GeschiktObject/BO_rel]);
-			attribute<bool> Geldig        (GeschiktObject) := Naleving && InDoelgroepED && InDoelgroepWT;
+			attribute<bool> Naleving       (GeschiktObject) := first(rnd_uniform(JaarSeed * 106u, GeschiktObject, range(float64, 0d, 1d)), GeschiktObject/BO_rel)[GeschiktObject/BO_rel] <= BBN/Naleving[BBN_rel];
+			attribute<bool> InDoelgroepED  (GeschiktObject) := ='OR('+AsItemList(replace('BBN/doelgroep/@ED[BBN_rel] && BO/Eigendom_rel[geschiktobject/BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')', ishidden = "True";
+			attribute<bool> InDoelgroepWT  (GeschiktObject) := BBN/doelgroep/EGW[BBN_rel] && BO/IsMeergezins[GeschiktObject/BO_rel] || BBN/doelgroep/MGW[BBN_rel] && not(BO/IsMeergezins[GeschiktObject/BO_rel]);
+			attribute<bool> BouwjaarVoldaan(GeschiktObject) := BO/Bouwjaar[GeschiktObject/BO_rel] >= MakeDefined(BBN/Voorwaarde/MinBouwjaar[BBN_rel], 0w) && BO/Bouwjaar[GeschiktObject/BO_rel] < MakeDefined(BBN/Voorwaarde/MaxBouwjaar[BBN_rel], 9999w);
+			attribute<bool> Geldig         (GeschiktObject) := Naleving && InDoelgroepED && InDoelgroepWT && BouwjaarVoldaan;
 
 			attribute<Classifications/SchilLabel> LabelNorm (GeschiktObject) := not(Geldig) ? Classifications/Schillabel/V/N : BBN/LabelNorm/Min_label[BBN_rel];
 		}
@@ -511,9 +515,9 @@ template SubsetGebouwOptieT
 		}
 
 		attribute<bool> InDoelgroepED (GeschiktObject) := ='OR('+AsItemList(replace('ZBV/doelgroep/@ED[ZBV_rel] && BO/Eigendom_rel[geschiktobject/BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')', ishidden = "True";
-		attribute<bool> InDoelgroepWT (GeschiktObject) := ZBV/doelgroep/EGW[ZBV_rel] && BO/IsMeergezins[GeschiktObject/BO_rel] || ZBV/doelgroep/MGW[ZBV_rel] && not(BO/IsMeergezins[GeschiktObject/BO_rel]);
+//		attribute<bool> InDoelgroepWT (GeschiktObject) := ZBV/doelgroep/EGW[ZBV_rel] && BO/IsMeergezins[GeschiktObject/BO_rel] || ZBV/doelgroep/MGW[ZBV_rel] && not(BO/IsMeergezins[GeschiktObject/BO_rel]);
 
-		attribute<bool> GeldigVerbod  (GeschiktObject) := LabelVoorwaarde/Voldaan && InDoelgroepED && InDoelgroepWT;
+		attribute<bool> GeldigVerbod  (GeschiktObject) := LabelVoorwaarde/Voldaan && InDoelgroepED; // && InDoelgroepWT;
 		attribute<bool> OptieVerboden (GeschiktObject) := GeldigVerbod && Naleving/PerObject && Installatie/InOptie;
 	}
 	attribute<bool> Verboden (GeschiktObject) := =count(ZBV/naleving) > 0u ? 'or('+AsItemList('VerbodBerekening/'+ZBV/name+'/OptieVerboden')+')' : 'const(false,GeschiktObject)';
@@ -579,6 +583,9 @@ template SubsetGebouwOptieT
 			attribute<Eur_yr> Km_olie        (GeschiktObject) := .../Km_verbruik/olie;
 			attribute<Eur_yr> Km_pellets     (GeschiktObject) := .../Km_verbruik/pellets;
 			attribute<Eur_yr> Km_H2          (GeschiktObject) := .../Km_verbruik/H2;
+
+			attribute<Eur_yr> oh_KD          (GeschiktObject) := sum(.../jaarlijks/Kj_oh_LO  * float64(xProduct/product_rel == Classifications/Product/V/KDp || xProduct/product_rel == Classifications/Product/V/KDb), xProduct/GeschiktObject_rel);
+			attribute<Eur_yr> adm_KD         (GeschiktObject) := sum(.../jaarlijks/Kj_adm_LO * float64(xProduct/product_rel == Classifications/Product/V/KDp || xProduct/product_rel == Classifications/Product/V/KDb), xProduct/GeschiktObject_rel);
 		}
 		container subsidie := for_each_nedv(
 			ZichtjaarBeleid/subsidie/name,
@@ -587,5 +594,6 @@ template SubsetGebouwOptieT
 			Eur);
 				
 		container metervraag := Func2Meter/result;
+		container Upref      := GeschikteOptieBerekening;
 	}	
 }

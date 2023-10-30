@@ -6,34 +6,14 @@
 
 container AanbodOpties
 {
-	#include <RestWarmte.dms>
-	#include <RestWarmteIteratie.dms>
-	//#include <GeoThermie.dms>
-	//#include <WKO.dms>
-	//#include <WKOWoningData.dms>
-	//#include <WKOUtilData.dms>
-	//#include <WKOData.dms>
-	//#include <WKOIter.dms>
-	//#include <WKOResults.dms>
-	//#include <WijkTempl.dms>
 	#include <WarmtenetTempl.dms>
-	//#include <LtWarmtenet.dms>
-	//#include <LtData.dms>
-	//#include <TEOData.dms>
-	//#include <LtBronIter.dms>
-	//#include <ltResults.dms>
-	//#include <TEO.dms>
-	//#include <Waterstof.dms>
-	//#include <WaterstofData.dms>
-	//#include <BuurtWKO.dms>
-
 	
 	template W70
 	{
 		// begin case parameters
 		container BeginStatus;
 		// end
-		container impl := WarmtenetTempl(BeginStatus, Classifications/GebiedsOptie/V/W70), isHidden = "True";
+		container impl := WarmtenetTempl(BeginStatus, Classifications/GebiedsOptie/V/W70);
 		container Results := impl/Results
 		{
 			container W70 := impl/Results/PlanregioResults;
@@ -44,7 +24,7 @@ container AanbodOpties
 		// begin case parameters
 		container BeginStatus;
 		// end
-		container impl := WarmtenetTempl(BeginStatus, Classifications/GebiedsOptie/V/W50), isHidden = "True";
+		container impl := WarmtenetTempl(BeginStatus, Classifications/GebiedsOptie/V/W50);
 		container Results := impl/Results
 		{
 			container W50 := impl/Results/PlanregioResults;
@@ -55,7 +35,7 @@ container AanbodOpties
 		// begin case parameters
 		container BeginStatus;
 		// end
-		container impl := WarmtenetTempl(BeginStatus, Classifications/GebiedsOptie/V/W30), isHidden = "True";
+		container impl := WarmtenetTempl(BeginStatus, Classifications/GebiedsOptie/V/W30);
 		container Results := impl/Results
 		{
 			container W30 := impl/Results/PlanregioResults;
@@ -66,7 +46,7 @@ container AanbodOpties
 		// begin case parameters
 		container BeginStatus;
 		// end
-		container impl := WarmtenetTempl(BeginStatus, Classifications/GebiedsOptie/V/WK70), isHidden = "True";
+		container impl := WarmtenetTempl(BeginStatus, Classifications/GebiedsOptie/V/WK70);
 		container Results := impl/Results
 		{
 			container WK70 := impl/Results/PlanregioResults;
@@ -77,7 +57,7 @@ container AanbodOpties
 		// begin case parameters
 		container BeginStatus;
 		// end
-		container impl := WarmtenetTempl(BeginStatus, Classifications/GebiedsOptie/V/WK50), isHidden = "True";
+		container impl := WarmtenetTempl(BeginStatus, Classifications/GebiedsOptie/V/WK50);
 		container Results := impl/Results
 		{
 			container WK50 := impl/Results/PlanregioResults;
@@ -88,7 +68,7 @@ container AanbodOpties
 		// begin case parameters
 		container BeginStatus;
 		// end
-		container impl := WarmtenetTempl(BeginStatus, Classifications/GebiedsOptie/V/WK30), isHidden = "True";
+		container impl := WarmtenetTempl(BeginStatus, Classifications/GebiedsOptie/V/WK30);
 		container Results := impl/Results
 		{
 			container WK30 := impl/Results/PlanregioResults;
@@ -109,16 +89,21 @@ container AanbodOpties
 		parameter<GebouwOptie> Gebieds_GebouwOptie_rel := Classifications/GebiedsOptie/GebouwOptie_rel[Optie], IntegrityCheck = "IsDefined(this)";
 		
 		unit<uint32> results := BebouwingsObject
-		{
-			attribute<bool> Toewijzing := Classifications/WarmteOptie/kanGebiedsOptie[BebouwingsObject/WarmteOptie_rel] && GebruikOptie;
-			
-			attribute<GebouwOptie> GebouwOptie_rel := Toewijzing
-				? Gebieds_GebouwOptie_rel
-				: BebouwingsObject/GebouwOptie_rel;
-
-			attribute<Classifications/WarmteOptie> WarmteOptie_rel := Toewijzing
-				? Classifications/GebiedsOptie/WarmteOptie_rel[../Optie]
-				: BebouwingsObject/WarmteOptie_rel;
+		{			
+			container InstallatiePerProduct := for_each_nedv(
+					classifications/product/name
+				,	KoudeLevering ? replace('Connect ? Classifications/V/GebiedsOptie : BebouwingsObject/InstallatiePerProduct/@PD@', '@PD@', classifications/product/name)
+								  : replace('Connect && (Classifications/Product != Classifications/Product/KDb && Classifications/Product != Classifications/Product/KDp) ? Classifications/V/GebiedsOptie : BebouwingsObject/InstallatiePerProduct/@PD@', '@PD@', classifications/product/name)
+				,	BebouwingsObject
+				,	Classifications/Installatie
+				);
+						
+			container aansluitingen := BebouwingsObject/aansluitingen
+			{
+				attribute<nrAsl> GNet      (BebouwingsObject) := Connect ? 0.0[nrAsl] : BebouwingsObject/aansluitingen/GNet;
+				attribute<nrAsl> Warmtenet (BebouwingsObject) := Connect ? BebouwingsObject/nrAansluitingen : BebouwingsObject/aansluitingen/Warmtenet;
+				attribute<nrAsl> Koudenet  (BebouwingsObject) := Connect && KoudeLevering ? BebouwingsObject/nrAansluitingen : BebouwingsObject/aansluitingen/Koudenet;
+			}
 		}
 	}
 

@@ -1,0 +1,109 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2023 - PBL & TNO                                        //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+unit<uint8> Jaarreeksen := select_with_org_rel(ID(classifications/zichtjaar) < 41b) // voor telling testen niet altijd alle jaren nodig
+{
+	attribute<string> name := org_rel->name, IsHidden = "True";
+	attribute<string> RekenstapNaam := name;
+	attribute<uint32> BO                    := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/BO')+')', Ishidden = "true";
+	attribute<units/nrAsl> Aantal_woningen           := ='union_data(., '+AsItemList('sum(/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/BO/nrAansluitingen)')+')';
+	attribute<uint32> Aantal_productactieve_woningen := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ProductActieveWoning')+')';
+	attribute<uint32> Aantal_bouwdeelactieve_Woning  := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/BouwdeelActieveWoning')+')';
+	attribute<uint32> OptiesHere            := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ProductActieveWoning/OptiesHere')+')', Ishidden = "true";
+	attribute<uint32> DubbelActief          := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ProductActieveWoning/sub_BouwdeelActief')+')', Ishidden = "true";
+	attribute<uint32> DA_xIsolatieAmbitie   := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ProductActieveWoning/sub_BouwdeelActief/xIsolatieAmbitie')+')', Ishidden = "true";
+	attribute<uint32> EnkelProductActief    := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ProductActieveWoning/sub_BouwdeelInactief')+')', Ishidden = "true";
+	attribute<uint32> PA_xIsolatieAmbitie   := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ProductActieveWoning/xIsolatieAmbitie')+')', Ishidden = "true";
+	attribute<uint32> BA_AmbitieBerekening  := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/BouwdeelActieveWoning/AmbitieBerekening')+')', Ishidden = "true";
+	attribute<uint32> EnkelBouwdeelActief   := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/BouwdeelActieveWoning/ProductInactieveBO')+')', Ishidden = "true";
+	attribute<uint32> EBA_AmbitieBerekening := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/BouwdeelActieveWoning/ProductInactieveAmbitie')+')', Ishidden = "true";
+	attribute<uint32> Aantal_actieve_woningen         := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning')+')';
+	attribute<units/nrAsl> A_asl            := ='union_data(., '+AsItemList('sum( /TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/BO_rel->nrAansluitingen)')+')', Ishidden = "true";
+	attribute<uint32> A_xInvesteringsOptie  := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/xInvesteringsOptie')+')', Ishidden = "true";
+	attribute<uint32> A_xGebouwOptie        := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/xGebouwOptie')+')', Ishidden = "true";
+	attribute<uint32> A_GeschikteOptie      := ='union_data(., '+AsItemList('#/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/GeschikteOptie')+')', Ishidden = "true";
+	
+	attribute<uint32> A_Zonder_xIO          := ='Aantal_actieve_woningen - union_data(., '+AsItemList('sum_uint32(pcount(/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/xInvesteringsOptie/ActieveWoning_rel )>0)')+')', Ishidden = "true";
+	attribute<uint32> AxIO_Zonder_GO        := ='A_xInvesteringsOptie - union_data(., '+AsItemList('sum_uint32(pcount(/TussenResultaten/'+name+'/BebouwingsComponenten/Woning/ActieveWoning/GeschikteOptie/xInvesteringsOptie_rel)>0)')+')', Ishidden = "true";
+
+	attribute<units/GJ_yr> Gasvraag       := ='union_data(., '+AsItemList('sum(/Resultaten/'+name+'/EnergyResults/Metervraag/gebouwen/Gas/totaal)')+')'                  , Ishidden = "true";
+	attribute<units/GJ_yr> Warmtelevering := ='union_data(., '+AsItemList('sum(/Resultaten/'+name+'/EnergyResults/Metervraag/gebouwen/WarmteKoudeLevering/V_warmte)')+')', Ishidden = "true";
+	attribute<units/GJ_yr> Zonneboiler    := ='union_data(., '+AsItemList('sum(/Resultaten/'+name+'/EnergyResults/Metervraag/ZonB/Oj_ZonB)')+')'                         , Ishidden = "true";
+
+	container Subsidies
+	{
+		container Subsidiebudgetten_maximaal := for_each_nedv(
+			  Jaarreeksen/name
+			, 'TussenResultaten/'+Jaarreeksen/name+'/AllocatieResultaten/Subsidiebudgetten/Maximaal_budget'
+			, /Invoer/Beleid/Subsidie/SubsidieBudget 
+			, units/Eur )
+		{
+			attribute<string> Instrument (/Invoer/Beleid/Subsidie/SubsidieBudget) := Invoer/Beleid/Subsidie/SubsidieBudget/name;
+		}
+		container Subsidie_aangevraagd := for_each_nedv(
+			  Jaarreeksen/name
+			, 'TussenResultaten/'+Jaarreeksen/name+'/AllocatieResultaten/Subsidiebudgetten/Aanvraag_per_budget'
+			, /Invoer/Beleid/Subsidie/SubsidieBudget 
+			, units/Eur )
+		{
+			attribute<string> Instrument (/Invoer/Beleid/Subsidie/SubsidieBudget) := Invoer/Beleid/Subsidie/SubsidieBudget/name;
+		}
+		container Subsidie_resterend := for_each_nedv(
+			  Jaarreeksen/name
+			, 'TussenResultaten/'+Jaarreeksen/name+'/AllocatieResultaten/Subsidiebudgetten/Resterend_budget'
+			, /Invoer/Beleid/Subsidie/SubsidieBudget 
+			, units/Eur )
+		{
+			attribute<string> Instrument (/Invoer/Beleid/Subsidie/SubsidieBudget) := Invoer/Beleid/Subsidie/SubsidieBudget/name;
+		}
+		container SubsidieFactor := for_each_nedv(
+			  Jaarreeksen/name
+			, 'Subsidiebudgetten_maximaal/'+Jaarreeksen/name+'/ Subsidie_aangevraagd/'+Jaarreeksen/name
+			, /Invoer/Beleid/Subsidie/SubsidieBudget 
+			, units/ratio ), IsHidden = "True";
+	}
+
+
+	container Processen := for_each_nedv(
+		Jaarreeksen/name,
+		'Resultaten/'+Jaarreeksen/name+'/Processen/Installatie_x_ProductType/long_sparse/PJ',
+		Resultaten/StartJaar/Processen/Installatie_x_ProductType/long_sparse,
+		units/PJ_yr)
+	{
+		attribute<string> Procescode (Resultaten/StartJaar/Processen/Installatie_x_ProductType/long_sparse) := Resultaten/Startjaar/Processen/Installatie_x_ProductType/long_sparse/name;
+	}
+	
+
+	container Energielabels
+	{
+		attribute<units/nrAsl> A_en_beter (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/A')+')';
+		attribute<units/nrAsl> B (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/B')+')';
+		attribute<units/nrAsl> C (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/C')+')';
+		attribute<units/nrAsl> D (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/D')+')';
+		attribute<units/nrAsl> E (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/E')+')';
+		attribute<units/nrAsl> F (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/F')+')';
+		attribute<units/nrAsl> G (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/Installaties/Results/G')+')';
+	}
+
+	container IsolatieMaatregelen
+	{
+		//====== KPIs voor export
+		attribute<units/m2>    IsolatieMaatregelen_RB   (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/RB')+')';
+		attribute<units/m2>    IsolatieMaatregelen_RO   (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/RO')+')';
+		attribute<units/m2>    IsolatieMaatregelen_DR   (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/DR')+')';
+		attribute<units/m2>    IsolatieMaatregelen_PL   (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/PL')+')';
+		attribute<units/m2>    IsolatieMaatregelen_VL   (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/VL')+')';
+		attribute<units/m2>    IsolatieMaatregelen_MG   (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/MG')+')';
+		attribute<units/m2>    IsolatieMaatregelen_MS   (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/MS')+')';
+		attribute<units/m2>    IsolatieMaatregelen_DP   (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/DP')+')';
+		attribute<units/m2>    IsolatieMaatregelen_DS   (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/DS')+')';
+		attribute<units/m2>    IsolatieMaatregelen_KR   (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Change/KR')+')';
+		attribute<units/ratio> Geisoleerd_aandeel_muur  (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/muur')+')';
+		attribute<units/ratio> Geisoleerd_aandeel_dak   (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/dak')+')';
+		attribute<units/ratio> Geisoleerd_aandeel_glas  (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/glas')+')';
+		attribute<units/ratio> Geisoleerd_aandeel_vloer (Jaarreeksen) := ='union_data(.., '+AsItemList('/Resultaten/'+name+'/MaatregelenRapportage/Rapport/Woning/BouwdeelNiveau/Aandeel/vloer')+')';
+	}
+}

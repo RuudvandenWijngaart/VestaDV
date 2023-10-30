@@ -10,11 +10,11 @@
 //                                                                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
 
-//====== Berekeningen voor woningen die actief zijn op minimaal één functioneel product =====
+//====== Berekeningen voor woningen die actief zijn op minimaal ??n functioneel product =====
 unit<uint32> ActieveWoning := select_with_org_rel(BO/Activatie/ProductActief || BO/Activatie/BouwdeelActief)
 {		
-	attribute<BO> BO_rel := org_rel, ishidden = "True";
-	attribute<rdc_meter> Geometry := select_data(ActieveWoning, BO/Geometry), ishidden = "True";
+	attribute<BO> BO_rel := org_rel, ishidden = "False";
+	attribute<rdc_meter> Geometry := lookup(BO_rel, BO/Geometry), ishidden = "True";
 	attribute<ActieveWoning> per_BO(BO) := invert(BO_rel), ishidden = "True";
 	
 	unit<uint32> xInvesteringsOptie := union_unit(ProductActieveWoning/xIsolatieAmbitie/PAW_xInvesteringsOptie, BouwdeelActieveWoning/ProductInactieveAmbitie)
@@ -58,7 +58,12 @@ unit<uint32> ActieveWoning := select_with_org_rel(BO/Activatie/ProductActief || 
 			attribute<Classifications/GebouwOptieCategorie>  Categorie_rel := =replace(constr_expr1, '@A', 'Categorie_rel', '@C', 'Classifications/GebouwOptieCategorie/V/Hybride');
 			attribute<Classifications/IsolatieAmbitie> MinIsolatieAmbitie_rel := =replace(constr_expr2, '@A', 'MinIsolatieAmbitie_rel');
 			attribute<Classifications/IsolatieAmbitie> MaxIsolatieAmbitie_rel := =replace(constr_expr2, '@A', 'MaxIsolatieAmbitie_rel');
-			attribute<xInvesteringsOptie> xInvesteringsOptie_rel := union_data(., ProductActieveWoning/xIsolatieAmbitie/xGebouwOptie/PAW_xInvesteringsOptie_rel, ID(BouwdeelActieveWoning/ProductInactieveAmbitie)+#ProductActieveWoning/xIsolatieAmbitie/PAW_xInvesteringsOptie)[xInvesteringsOptie];
+			
+			attribute<xInvesteringsOptie> xInvesteringsOptie_rel := 
+				union_data(.
+				,	convert( ProductActieveWoning/xIsolatieAmbitie/xGebouwOptie/PAW_xInvesteringsOptie_rel , xInvesteringsOptie)
+				,	convert( ID(BouwdeelActieveWoning/ProductInactieveAmbitie) + #ProductActieveWoning/xIsolatieAmbitie/PAW_xInvesteringsOptie, xInvesteringsOptie)
+				);
 			
 			attribute<bool> Criterium := =replace(constr_expr1, '@A', 'Criterium', '@C', 'true');
 			
@@ -88,7 +93,7 @@ unit<uint32> ActieveWoning := select_with_org_rel(BO/Activatie/ProductActief || 
 			attribute<EUR_yr> Kmi_gv := =replace(constr_expr2, '@A', 'Kmi_gv');
 	}
 
-	container GeschikteOptieBerekening := SubsetGebouwOptieT(xGebouwOptie, BO);
+	container GeschikteOptieBerekening := select_with_org_relGebouwOptieT(xGebouwOptie, BO);
 			
 	unit<uint32> GeschikteOptie := GeschikteOptieBerekening/results, ishidden = "True"
 	{
@@ -118,7 +123,7 @@ unit<uint32> ActieveWoning := select_with_org_rel(BO/Activatie/ProductActief || 
 		attribute<Float64> Probability   (GeschikteOptie)     := OddsRatio / TotalOddsRatio[GeschikteOptie/xInvesteringsOptie_rel];
 		attribute<Float64> CumulProb     (GeschikteOptie)     := cumulate(Probability, GeschikteOptie/xInvesteringsOptie_rel);
 		attribute<Float64> rnd           (xInvesteringsOptie) := rnd_uniform(JaarSeed * 5u, xInvesteringsOptie, range(float64, 0.0, 1.0));
-		attribute<bool>    isSelected    (GeschikteOptie)     := CumulProb - Probability <= rnd[GeschikteOptie/xInvesteringsOptie_rel] && rnd[GeschikteOptie/xInvesteringsOptie_rel] < CumulProb;
+		attribute<bool>    isSelected    (GeschikteOptie)     := MakeDefined(CumulProb - Probability, -1.0) <= rnd[GeschikteOptie/xInvesteringsOptie_rel] && rnd[GeschikteOptie/xInvesteringsOptie_rel] < MakeDefined(CumulProb, 0.0);
 		attribute<uint32>  nrSelected    (xInvesteringsOptie) := sum_uint32(isSelected, GeschikteOptie/xInvesteringsOptie_rel); // Diagnostic IntegrityCheck = "all(nrSelected == 1)"
 
 		attribute<GeschikteOptie>              SCurve_GeschikteOptie_rel (xInvesteringsOptie) := max_index( isSelected, GeschikteOptie/xInvesteringsOptie_rel);	
@@ -165,7 +170,7 @@ unit<uint32> ActieveWoning := select_with_org_rel(BO/Activatie/ProductActief || 
 		attribute<Float64> Probability   (xInvesteringsOptie) := OddsRatio / TotalOddsRatio[xInvesteringsOptie/ActieveWoning_rel];
 		attribute<Float64> CumulProb     (xInvesteringsOptie) := cumulate(Probability, xInvesteringsOptie/ActieveWoning_rel);
 		attribute<Float64> rnd           (ActieveWoning)      := rnd_uniform(JaarSeed * 6u, ActieveWoning, range(float64, 0.0, 1.0));
-		attribute<bool>    isSelected    (xInvesteringsOptie) := CumulProb - Probability <= rnd[xInvesteringsOptie/ActieveWoning_rel] && rnd[xInvesteringsOptie/ActieveWoning_rel] < CumulProb;
+		attribute<bool>    isSelected    (xInvesteringsOptie) := MakeDefined(CumulProb - Probability, -1.0) <= rnd[xInvesteringsOptie/ActieveWoning_rel] && rnd[xInvesteringsOptie/ActieveWoning_rel] < CumulProb;
 		attribute<uint32>  nrSelected    (ActieveWoning)      := sum_uint32(isSelected, xInvesteringsOptie/ActieveWoning_rel); // Diagnostic IntegrityCheck = "all(nrSelected == 1)"
 
 		attribute<xInvesteringsOptie>  SCurve_xInvesteringsOptie_rel (ActieveWoning) := max_index( isSelected, xInvesteringsOptie/ActieveWoning_rel);
@@ -180,10 +185,9 @@ unit<uint32> ActieveWoning := select_with_org_rel(BO/Activatie/ProductActief || 
 	
 	unit<uint32> BebouwingsObjectMetGebouwOptie := BO
 	{
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel  (BO) := makedefined(GeschikteOptie/GebouwOptie_rel  [Choice_per_BO/GeschikteOptie_rel], BO/GebouwOptie_rel);
 		attribute<Classifications/Schillabel>  Schillabel_rel   (BO) := makedefined(GeschikteOptie/SchilLabel_rel   [Choice_per_BO/GeschikteOptie_rel], BO/SchilLabel_rel);
 		attribute<Classifications/Schillabel>  Energielabel_rel (BO) := makedefined(GeschikteOptie/Energielabel_rel [Choice_per_BO/GeschikteOptie_rel], BO/Energielabel_rel);
-		
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel  (BO) := makedefined(GeschikteOptie/GebouwOptie_rel  [Choice_per_BO/GeschikteOptie_rel], BO/GebouwOptie_rel);
 		
 		container BemeterdeGebouwInput_rel := for_each_nedv(
 				Classifications/Product/name,
@@ -196,10 +200,46 @@ unit<uint32> ActieveWoning := select_with_org_rel(BO/Activatie/ProductActief || 
 				BO,
 				GJ_yr)
 		{
+			attribute<GJ_yr> Vj_e_RV    (BO) := makedefined(  GeschikteOptie/Upref/Func2Meter/Metervraag_per_product/RVb           [ Choice_per_BO/GeschikteOptie_rel ]
+															* float64(GeschikteOptie/Upref/Func2Meter/BemeterdeGebouwInput_rel/RVb [ Choice_per_BO/GeschikteOptie_rel ] == Classifications/BemeterdeGebouwInput/V/e)
+															+ GeschikteOptie/Upref/Func2Meter/Metervraag_per_product/RVp           [ Choice_per_BO/GeschikteOptie_rel ]
+															* float64(GeschikteOptie/Upref/Func2Meter/BemeterdeGebouwInput_rel/RVp [ Choice_per_BO/GeschikteOptie_rel ] == Classifications/BemeterdeGebouwInput/V/e)
+															, BO/metervraagBerekening/Metervraag_per_product/RVb
+															* float64(BO/metervraagBerekening/BemeterdeGebouwInput_rel/RVb == Classifications/BemeterdeGebouwInput/V/e)
+															+ BO/metervraagBerekening/Metervraag_per_product/RVp
+															* float64(BO/metervraagBerekening/BemeterdeGebouwInput_rel/RVp == Classifications/BemeterdeGebouwInput/V/e) ) ;
 
-			attribute<GJ_yr> gas_orgineel(BO) := BO/metervraag/gas;
-			attribute<GJ_yr> gas_besparing (BO):= gas - gas_orgineel;
-		}
+			attribute<GJ_yr> Vj_e_TW    (BO) := makedefined(  GeschikteOptie/Upref/Func2Meter/Metervraag_per_product/TWb           [ Choice_per_BO/GeschikteOptie_rel ]
+															* float64(GeschikteOptie/Upref/Func2Meter/BemeterdeGebouwInput_rel/TWb [ Choice_per_BO/GeschikteOptie_rel ] == Classifications/BemeterdeGebouwInput/V/e)
+															+ GeschikteOptie/Upref/Func2Meter/Metervraag_per_product/TWp           [ Choice_per_BO/GeschikteOptie_rel ]
+															* float64(GeschikteOptie/Upref/Func2Meter/BemeterdeGebouwInput_rel/TWp [ Choice_per_BO/GeschikteOptie_rel ] == Classifications/BemeterdeGebouwInput/V/e)
+															, BO/metervraagBerekening/Metervraag_per_product/TWb
+															* float64(BO/metervraagBerekening/BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/e)
+															+ BO/metervraagBerekening/Metervraag_per_product/TWp
+															* float64(BO/metervraagBerekening/BemeterdeGebouwInput_rel/TWp == Classifications/BemeterdeGebouwInput/V/e) ) ;
+
+			attribute<GJ_yr> Vj_e_KD    (BO) := makedefined(  GeschikteOptie/Upref/Func2Meter/Metervraag_per_product/KDb           [ Choice_per_BO/GeschikteOptie_rel ]
+															* float64(GeschikteOptie/Upref/Func2Meter/BemeterdeGebouwInput_rel/KDb [ Choice_per_BO/GeschikteOptie_rel ] == Classifications/BemeterdeGebouwInput/V/e)
+															+ GeschikteOptie/Upref/Func2Meter/Metervraag_per_product/KDp           [ Choice_per_BO/GeschikteOptie_rel ]
+															* float64(GeschikteOptie/Upref/Func2Meter/BemeterdeGebouwInput_rel/KDp [ Choice_per_BO/GeschikteOptie_rel ] == Classifications/BemeterdeGebouwInput/V/e)
+															, BO/metervraagBerekening/Metervraag_per_product/KDb
+															* float64(BO/metervraagBerekening/BemeterdeGebouwInput_rel/KDb == Classifications/BemeterdeGebouwInput/V/e)
+															+ BO/metervraagBerekening/Metervraag_per_product/KDp
+															* float64(BO/metervraagBerekening/BemeterdeGebouwInput_rel/KDp == Classifications/BemeterdeGebouwInput/V/e) ) ;
+
+			
+			attribute<GJ_yr> Vj_e_EA    (BO) := makedefined( GeschikteOptie/Upref/Func2Meter/VraagBO/Functioneel/EA     [ Choice_per_BO/GeschikteOptie_rel ], BO/metervraagBerekening/VraagBO/Functioneel/EA     ) ;
+			attribute<GJ_yr> Oj_e_ZonPV (BO) := makedefined( GeschikteOptie/Upref/Func2Meter/eEffect/ZonPV/Oj_elek      [ Choice_per_BO/GeschikteOptie_rel ], BO/metervraagBerekening/eEffect/ZonPV/Oj_elek      ) ;
+			attribute<GJ_yr> Vj_e_VT    (BO) := makedefined( GeschikteOptie/Upref/Func2Meter/eEffect/ventilatie/Vj_elek [ Choice_per_BO/GeschikteOptie_rel ], BO/metervraagBerekening/eEffect/ventilatie/Vj_elek ) ;
+			attribute<GJ_yr> Vj_e_koken (BO) := makedefined( GeschikteOptie/Upref/Func2Meter/koken/Vj_elek              [ Choice_per_BO/GeschikteOptie_rel ], BO/metervraagBerekening/koken/Vj_elek              ) ;
+
+			attribute<GJ_yr> Vj_e_pomp  (BO) := makedefined(  GeschikteOptie/Upref/Func2Meter/eEffect/volume/Vj_elek     [ Choice_per_BO/GeschikteOptie_rel ]
+															+ GeschikteOptie/Upref/Func2Meter/eEffect/capaciteit/Vj_elek [ Choice_per_BO/GeschikteOptie_rel ]
+															, BO/metervraagBerekening/eEffect/volume/Vj_elek        
+															+ BO/metervraagBerekening/eEffect/capaciteit/Vj_elek) ;
+
+		} 
+
 		container functioneel := for_each_nedv(
 				Classifications/FunctioneleVraag/name,
 				replace('makedefined(GeschikteOptie/functioneel/@FV@[Choice_per_BO/GeschikteOptie_rel], BO/functioneel/@FV@)', '@FV@', Classifications/FunctioneleVraag/name ),
@@ -208,8 +248,7 @@ unit<uint32> ActieveWoning := select_with_org_rel(BO/Activatie/ProductActief || 
 			{
 				attribute<ratio> Fitfactor_VT (BO) := BO/Functioneel_base/Fitfactor_VT;
 			}
-		container kosten
-		{
+
 			container kapitaallasten := for_each_nedv(
 				Classifications/Gebouw_kapitaallasten/name,
 				replace('makedefined(GeschikteOptie/kapitaallasten/@GK@[Choice_per_BO/GeschikteOptie_rel], BO/kapitaallasten/@GK@)', '@GK@', Classifications/Gebouw_kapitaallasten/name ),
@@ -227,13 +266,16 @@ unit<uint32> ActieveWoning := select_with_org_rel(BO/Activatie/ProductActief || 
 				Classifications/GebouwOptie_jaarlijks/name,
 				replace('makedefined(GeschikteOptie/jaarlijks/@GJ@[Choice_per_BO/GeschikteOptie_rel], BO/jaarlijks/@GJ@)', '@GJ@', Classifications/GebouwOptie_jaarlijks/name ),
 				BO,
-				Eur_yr);
+				Eur_yr)
+				{
+					attribute<Eur_yr> oh_KD  (BO) := makedefined(GeschikteOptie/jaarlijks/oh_KD[Choice_per_BO/GeschikteOptie_rel], BO/jaarlijks/oh_KD);
+					attribute<Eur_yr> adm_KD (BO) := makedefined(GeschikteOptie/jaarlijks/adm_KD[Choice_per_BO/GeschikteOptie_rel], BO/jaarlijks/adm_KD);
+				}
 			container subsidie := for_each_nedv(
 				Zichtjaarbeleid/Subsidie/name,
 				replace('makedefined(GeschikteOptie/Subsidie/@SB@[Choice_per_BO/GeschikteOptie_rel], 0[Eur])', '@SB@', Zichtjaarbeleid/Subsidie/name ),
 				BO,
 				Eur);
-		}
 			
 		container InstallatiePerProduct := for_each_nedv(
 				Classifications/Product/name,

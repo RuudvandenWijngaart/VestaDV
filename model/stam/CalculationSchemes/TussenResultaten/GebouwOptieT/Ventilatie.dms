@@ -19,7 +19,9 @@ container ventilatie
 			 = GeenNormen ? 'const( (0/0)[Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes], GeschiktObject)' : 'max_elem('+AsItemList('Normen/'+BBN/name+'/Geldig ? BBN/Ventilatienorm/Ventilatietype_norm[Normen/'+BBN/name+'/BBN_rel] : (0/0)[Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes]')+')';
 
 		//===== CHECK: is genormeerd installatietype per object wel beschikbaar in het huidige zichtjaar?
-		attribute<bool> Type_norm_beschikbaar (GeschiktObject) := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/startjaar[Installatietype_norm_i] <= Zichtjaar_jaar && Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/eindjaar[Installatietype_norm_i] >= Zichtjaar_jaar;
+		attribute<bool> Type_norm_beschikbaar (GeschiktObject) := 
+				MakeDefined(Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/startjaar[Installatietype_norm_i], 0000w) <= Zichtjaar_jaar 
+			&&	MakeDefined(Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/eindjaar [Installatietype_norm_i], 9999w) >= Zichtjaar_jaar;
 		attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_norm (GeschiktObject) := Type_norm_beschikbaar ? Installatietype_norm_i : (0/0)[Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes];
 	}
 	template ImplSubs : ishidden = "True"
@@ -40,11 +42,11 @@ container ventilatie
 
 			attribute<bool> InDoelgroepED (GeschiktObject) := ='OR('+AsItemList(replace('BBN/doelgroep/@ED[BBN_rel] && BO/Eigendom_rel[geschiktobject/BO_rel] == Classifications/Eigendom/V/@ED','@ED',Classifications/Eigendom/label))+')', ishidden = "True";
 			attribute<bool> InDoelgroepWT (GeschiktObject) := BBN/doelgroep/EGW[BBN_rel] && BO/IsMeergezins[GeschiktObject/BO_rel] || BBN/doelgroep/MGW[BBN_rel] && not(BO/IsMeergezins[GeschiktObject/BO_rel]);
+			
+			attribute<bool> SchilfactorVoldaan  (GeschiktObject) := Schilfactor >= MakeDefined(MinSchilfactor, 0.0) && Schilfactor < MakeDefined(MaxSchilfactor, 9999.0);
+			attribute<bool> BouwjaarVoldaan     (GeschiktObject) := Bouwjaar >= MakeDefined(MinBouwjaar, 0w) && Bouwjaar < MakeDefined(MaxBouwjaar, 9999w);
 
-			attribute<bool> SchilfactorVoldaan  (GeschiktObject) := IsNull(MinSchilfactor)  || Schilfactor >= MinSchilfactor && Schilfactor < MaxSchilfactor;
-			attribute<bool> BouwjaarVoldaan     (GeschiktObject) := IsNull(MinBouwjaar)     || Bouwjaar >= MinBouwjaar && Bouwjaar < MaxBouwjaar;
-
-			attribute<bool> VoorwaardenVoldaan  (GeschiktObject) := AND(SchilfactorVoldaan,BouwjaarVoldaan,InDoelgroepWT,InDoelgroepED);
+			attribute<bool> VoorwaardenVoldaan  (GeschiktObject) := AND(SchilfactorVoldaan, BouwjaarVoldaan, InDoelgroepWT, InDoelgroepED);
 		}
 
 		attribute<bool>  Geldig   (GeschiktObject) := voorwaarden/VoorwaardenVoldaan && Naleving;
@@ -57,16 +59,16 @@ container ventilatie
 		attribute<bool>                                                       VentilatieActief    (GeschiktObject) := BO/Activatie/producten/VT[GeschiktObject/BO_rel];
 
 		//====== Selectie van ventilatiesystemen die in huidige zichtjaar toegepast kunnen worden
-		unit<uint32> Ventilatieopties := subset(Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/startjaar <= Zichtjaar_jaar && Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/eindjaar >= Zichtjaar_jaar)
+		unit<uint32> Ventilatieopties := select_with_org_rel(Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/startjaar <= Zichtjaar_jaar && Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/eindjaar >= Zichtjaar_jaar)
 		{
-			attribute<string>    name       := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/name[nr_orgentity];
-			attribute<GJ_yr_asl> V_RV_asl   := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[nr_orgentity];
-			attribute<GJ_yr_asl> V_E_asl    := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_E_asl[nr_orgentity];
-			attribute<yr_uint16> Levensduur := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Levensduur[nr_orgentity];
-			attribute<float64>   P50P       := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/P50P[nr_orgentity];
-			attribute<float64>   BETA       := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/BETA[nr_orgentity];
+			attribute<string>    name       := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/name[org_rel];
+			attribute<GJ_yr_asl> V_RV_asl   := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[org_rel];
+			attribute<GJ_yr_asl> V_E_asl    := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_E_asl[org_rel];
+			attribute<yr_uint16> Levensduur := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Levensduur[org_rel];
+			attribute<float64>   P50P       := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/P50P[org_rel];
+			attribute<float64>   BETA       := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/BETA[org_rel];
 
-//					container Ki_asl := for_each_nedv(Classifications/Uitvoering/Name, 'leerCurves/Ventilatie/curve * Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Ki_asl/'+Classifications/Uitvoering/Name+'[nr_orgentity]',Ventilatieopties ,eur_asl);
+//					container Ki_asl := for_each_nedv(Classifications/Uitvoering/Name, 'leerCurves/Ventilatie/curve * Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/Ki_asl/'+Classifications/Uitvoering/Name+'[org_rel]',Ventilatieopties ,eur_asl);
 			container V      := for_each_nedv(name, string(id(.))+'[..]', void, .);
 		}
 
@@ -74,19 +76,19 @@ container ventilatie
 
 		//====== Berekeningen per ventilatiesysteem t.b.v. afweging
 		container PerOptie := for_each_ne(Ventilatieopties/Name, 'OptieBerekening(Ventilatieopties/V/'+Ventilatieopties/Name+')');
-		template OptieBerekening
+		template OptieBerekening : ishidden = "true"
 		{
 			//case parameter
 			parameter<Ventilatieopties> Ventilatieoptie_rel;
 			//end
 			parameter<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype := rlookup(Ventilatieopties/name[Ventilatieoptie_rel], Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/name);
 
-			unit<uint32> VentilatieMaatregel := subset(Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/InstallatieMaatregel/Installatie_na == Installatietype)
+			unit<uint32> VentilatieMaatregel := select_with_org_rel(Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/InstallatieMaatregel/Installatie_na == Installatietype)
 			{
-				attribute<string> name := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/InstallatieMaatregel/name[nr_orgentity];
-				attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_voor := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/InstallatieMaatregel/Installatie_voor[nr_orgentity];
+				attribute<string> name := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/InstallatieMaatregel/name[org_rel];
+				attribute<Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes> Installatietype_voor := Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/InstallatieMaatregel/Installatie_voor[org_rel];
 
-				container Ki_asl := for_each_nedv(Classifications/Uitvoering/Name, 'leerCurves/Ventilatie/curve * Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/InstallatieMaatregel/Ki_asl/'+Classifications/Uitvoering/Name+'[nr_orgentity]',VentilatieMaatregel ,eur_asl);
+				container Ki_asl := for_each_nedv(Classifications/Uitvoering/Name, 'leerCurves/Ventilatie/curve * Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/InstallatieMaatregel/Ki_asl/'+Classifications/Uitvoering/Name+'[org_rel]',VentilatieMaatregel ,eur_asl);
 			}
 			attribute<VentilatieMaatregel> VentilatieMaatregel_rel (GeschiktObject) := rlookup(Installatietype_org, VentilatieMaatregel/Installatietype_voor);
 

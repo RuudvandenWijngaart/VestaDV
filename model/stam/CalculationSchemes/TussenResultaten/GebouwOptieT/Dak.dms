@@ -11,12 +11,12 @@ container DK
 
 	//===== Oorspronkelijke dakinstallatie
 	attribute<inst> Installatietype_org (GeschiktObject) := BO/InstallatiePerProduct/DK[GeschiktObject/BO_rel];
-	attribute<bool> EOL                 (GeschiktObject) := inst/Levensduur[Installatietype_org] <= (Zichtjaar_jaar - BO/InstallatiePerProduct/LastVervanging/DK)[GeschiktObject/BO_rel];
+	attribute<bool> EOL                 (GeschiktObject) := MakeDefined(inst/Levensduur[Installatietype_org], 9999w) <= MakeDefined((Zichtjaar_jaar - BO/InstallatiePerProduct/LastVervanging/DK)[GeschiktObject/BO_rel], 0w);
 	
 	parameter<float64> LOG_MAX_FLOAT64 := 700.0; // slightly less than ln( 2^1024 / pcount(xInvesteringsOptie/ActieveWoning_rel) )
 
 	container PerOptie := for_each_ne(inst/Name, 'OptieBerekening(inst/V/'+inst/Name+')');
-	template OptieBerekening
+	template OptieBerekening : ishidden = "true"
 	{
 		//case parameter
 		parameter<inst> inst_rel;
@@ -26,7 +26,7 @@ container DK
 		{
 			attribute<m2>     A_DK          (GeschiktObject) := add(GeschiktObject/Bouwdelen/DP, GeschiktObject/Bouwdelen/DS);
 			attribute<kW>     kWp           (GeschiktObject) := inst/pdak_opp[inst_rel] * A_DK * inst/NuttigDak * inst/dakaandeelZonPV[inst_rel] * leerCurves/ZonPVcap/Curve;
-			attribute<GJ_yr>  Oj_elek_ZonBV (GeschiktObject) := makedefined(kWp * ( (GeschiktObject/Bouwdelen/DP / A_DK) * inst/Opbr_cap_e_DP[inst_rel] + (GeschiktObject/Bouwdelen/DS / A_DK) * inst/Opbr_cap_e_DS[inst_rel] ), 0[GJ_yr]);
+			attribute<GJ_yr>  Oj_elek_ZonPV (GeschiktObject) := makedefined(kWp * ( (GeschiktObject/Bouwdelen/DP / A_DK) * inst/Opbr_cap_e_DP[inst_rel] + (GeschiktObject/Bouwdelen/DS / A_DK) * inst/Opbr_cap_e_DS[inst_rel] ), 0[GJ_yr]);
 			attribute<GJ_yr>  Oj_tw_ZonB    (GeschiktObject) := float64(inst/Opbr_opp_TW[inst_rel] > 0.0[GJ_yr_m2]) * GeschiktObject/Functioneel/TW * inst/AandeelTW;
 			attribute<GJ_yr>  Vj_elek_ZonB  (GeschiktObject) := const(inst/Hulpenergie[inst_rel],GeschiktObject);
 		}
@@ -40,11 +40,11 @@ container DK
 				+ (Schuiven/KostenMin * inst/Ki_PV_opp_min[inst_rel] + Schuiven/KostenMax * inst/Ki_PV_opp_max[inst_rel]) * Energie/A_DK * inst/NuttigDak * inst/dakaandeelZonPV[inst_rel] );
 			attribute<Eur_yr> Kj_OH         (GeschiktObject) := const(inst/Kj_OH[inst_rel],GeschiktObject);
 
-			attribute<Eur_yr> Kji_ZonB      (GeschiktObject) := = inst/Levensduur[inst_rel] > 15[yr_uint16] ? 'Ki_zonB  * NcwRefs/AF_20[GeschiktObject/BO_rel]' : 'Ki_zonB  * NcwRefs/AF_15[GeschiktObject/BO_rel]';
-			attribute<Eur_yr> Kji_ZonPV     (GeschiktObject) := = inst/Levensduur[inst_rel] > 15[yr_uint16] ? 'Ki_ZonPV * NcwRefs/AF_20[GeschiktObject/BO_rel]' : 'Ki_ZonPV * NcwRefs/AF_15[GeschiktObject/BO_rel]';
+			attribute<Eur_yr> Kji_ZonB      (GeschiktObject) := = MakeDefined(inst/Levensduur[inst_rel], 0[yr_uint16]) > 15[yr_uint16] ? 'Ki_zonB  * NcwRefs/AF_20[GeschiktObject/BO_rel]' : 'Ki_zonB  * NcwRefs/AF_15[GeschiktObject/BO_rel]';
+			attribute<Eur_yr> Kji_ZonPV     (GeschiktObject) := = MakeDefined(inst/Levensduur[inst_rel], 0[yr_uint16]) > 15[yr_uint16] ? 'Ki_ZonPV * NcwRefs/AF_20[GeschiktObject/BO_rel]' : 'Ki_ZonPV * NcwRefs/AF_15[GeschiktObject/BO_rel]';
 
-			attribute<Eur_yr> Kmi_ZonB      (GeschiktObject) := = inst/Levensduur[inst_rel] > 15[yr_uint16] ? 'Ki_zonB  * NCW/mr20/AnnualisationFactor' : 'Ki_zonB  * NCW/mr15/AnnualisationFactor';
-			attribute<Eur_yr> Kmi_ZonPV     (GeschiktObject) := = inst/Levensduur[inst_rel] > 15[yr_uint16] ? 'Ki_ZonPV * NCW/mr20/AnnualisationFactor' : 'Ki_ZonPV * NCW/mr15/AnnualisationFactor';
+			attribute<Eur_yr> Kmi_ZonB      (GeschiktObject) := = MakeDefined(inst/Levensduur[inst_rel], 0[yr_uint16]) > 15[yr_uint16] ? 'Ki_zonB  * NCW/mr20/AnnualisationFactor' : 'Ki_zonB  * NCW/mr15/AnnualisationFactor';
+			attribute<Eur_yr> Kmi_ZonPV     (GeschiktObject) := = MakeDefined(inst/Levensduur[inst_rel], 0[yr_uint16]) > 15[yr_uint16] ? 'Ki_ZonPV * NCW/mr20/AnnualisationFactor' : 'Ki_ZonPV * NCW/mr15/AnnualisationFactor';
 
 		//	='add(Ki_zonB, Ki_ZonPV) * NcwRefs/_'+string(inst/Levensduur[inst_rel])+'/AnnualisationFactor';
 
@@ -53,17 +53,15 @@ container DK
 		}	
 		container Opbrengsten
 		{
-			attribute<Eur_yr> Oj_productie  (GeschiktObject) := (Energie/Oj_elek_ZonBV - Energie/Vj_elek_ZonB) * first(prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl) + Energie/Oj_tw_ZonB * 
+			attribute<Eur_yr> Oj_productie  (GeschiktObject) := (Energie/Oj_elek_ZonPV - Energie/Vj_elek_ZonB) * first(prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl) + Energie/Oj_tw_ZonB * 
 				(  Func2Meter/BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/e        ? first(prijzen/Elektriciteit/Staffel/KGJ_eindgebruik_excl)
-				 : Func2Meter/BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/H2       ? meterprijzen/Pj_H2
 				 : Func2Meter/BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/biomassa ? meterprijzen/Pj_biomassa
 				 : Func2Meter/BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/olie     ? meterprijzen/Pj_olie
 				 : Func2Meter/BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/pellets  ? meterprijzen/Pj_pellets
 				 : first(prijzen/AardGas/Staffel/KGJ_eindgebruik_excl)	);
 
-			attribute<Eur_yr> Om_productie  (GeschiktObject) := (Energie/Oj_elek_ZonBV - Energie/Vj_elek_ZonB) * first(prijzen/Elektriciteit/Staffel/KGJ_Maatschappelijk) + Energie/Oj_tw_ZonB * 
+			attribute<Eur_yr> Om_productie  (GeschiktObject) := (Energie/Oj_elek_ZonPV - Energie/Vj_elek_ZonB) * first(prijzen/Elektriciteit/Staffel/KGJ_Maatschappelijk) + Energie/Oj_tw_ZonB * 
 				(  Func2Meter/BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/e        ? first(prijzen/Elektriciteit/Staffel/KGJ_Maatschappelijk)
-				 : Func2Meter/BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/H2       ? meterprijzen/Pm_H2
 				 : Func2Meter/BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/biomassa ? meterprijzen/Pm_biomassa
 				 : Func2Meter/BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/olie     ? meterprijzen/Pm_olie
 				 : Func2Meter/BemeterdeGebouwInput_rel/TWb == Classifications/BemeterdeGebouwInput/V/pellets  ? meterprijzen/Pm_pellets
@@ -101,7 +99,7 @@ container DK
 	container Result
 	{
 		//====== Definitievie waarden gekozen systeem
-		attribute<GJ_yr>  Oj_elek_ZonBV (GeschiktObject) := ='merge(uint8(Installatietype_def), GJ_yr,' +AsItemList('PerOptie/'+inst/Name+'/Energie/Oj_elek_ZonBV')+')';
+		attribute<GJ_yr>  Oj_elek_ZonPV (GeschiktObject) := ='merge(uint8(Installatietype_def), GJ_yr,' +AsItemList('PerOptie/'+inst/Name+'/Energie/Oj_elek_ZonPV')+')';
 		attribute<GJ_yr>  Oj_tw_ZonB    (GeschiktObject) := ='merge(uint8(Installatietype_def), GJ_yr,' +AsItemList('PerOptie/'+inst/Name+'/Energie/Oj_tw_ZonB')+')';
 		attribute<GJ_yr>  Vj_elek_ZonB  (GeschiktObject) := ='merge(uint8(Installatietype_def), GJ_yr,' +AsItemList('PerOptie/'+inst/Name+'/Energie/Vj_elek_ZonB')+')';
 		attribute<Eur>    Ki_zonB       (GeschiktObject) := ='merge(uint8(Installatietype_def), Eur,'   +AsItemList('PerOptie/'+inst/Name+'/Kosten/Ki_zonB')+')';

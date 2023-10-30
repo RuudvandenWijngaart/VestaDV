@@ -20,7 +20,7 @@ container Gasnetten
 		//namen van netbeheerders uit bestand kunnen mogelijk cijfer als eerste karakter hebben, daarom prefix NB_
 		attribute<string>    label := 'NB_' + netBeheerd;
 
-		container V := for_each_nedv(label, 'value('+string(id(.))+', ..)', void, .);
+		container V := for_each_nedv(label, 'value('+string(id(.))+', ..)', void, .), IsHidden = "True";
 	}
 
 	//inlezen data van Enexis: puntenwolk met aansluitingen bij gebouwen (4 bestanden)
@@ -91,17 +91,17 @@ container Gasnetten
 		}
 
 		//subselectie van panden in het Enexis verzorgingsgebied
-		unit<uint32> Pand := subset(BAG/import/pand/nr_verdiepingen > 0.0[uint8] && BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_ENX)
+		unit<uint32> Pand := select_with_org_rel(BAG/import/pand/nr_verdiepingen > 0.0[uint8] && BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_ENX)
 		{
-			attribute<rdc_meter> Geometry    (poly) := BAG/import/pand/geometry[nr_orgentity];
-			attribute<rdc_mm   > Geometry_mm (poly) := BAG/import/pand/geometry_mm[nr_orgentity];
+			attribute<rdc_meter> Geometry    (poly) := BAG/import/pand/geometry[org_rel];
+			attribute<rdc_mm   > Geometry_mm (poly) := BAG/import/pand/geometry_mm[org_rel];
 			attribute<nrAsl>     nr_aansl           := sum(Aansluitingen/nr_aansl, Aansluitingen/Pand_rel_1);
-			attribute<pand_2>    Pand_2_rel         := invert(pand_2/nr_orgentity);
+			attribute<pand_2>    Pand_2_rel         := invert(pand_2/org_rel);
 
-			unit<uint32> Pand_2 := subset(not(nr_aansl > 1[nrAsl]))
+			unit<uint32> Pand_2 := select_with_org_rel(not(nr_aansl > 1[nrAsl]))
 			{
-				attribute<rdc_meter> Geometry    (poly) := ../geometry[nr_orgentity];
-				attribute<rdc_mm   > Geometry_mm (poly) := ../geometry_mm[nr_orgentity];
+				attribute<rdc_meter> Geometry    (poly) := ../geometry[org_rel];
+				attribute<rdc_mm   > Geometry_mm (poly) := ../geometry_mm[org_rel];
 				attribute<nrAsl>     nr_aansl           := sum(Aansluitingen/nr_aansl, Aansluitingen/Pand_rel_2);
 			}
 			//indicatie per pand of die geen gasaansluiting heeft
@@ -123,9 +123,9 @@ container Gasnetten
 		}
 
 		//subselectie: voor koppeling met panden worden alleen aansluitleidingen gebruikt
-		unit<uint32> AansluitLeidingen := subset(Leidingen/NETVLAK == 'Lage Druk' && Leidingen/SUBNETTYPE == 'Aansluitnet')
+		unit<uint32> AansluitLeidingen := select_with_org_rel(Leidingen/NETVLAK == 'Lage Druk' && Leidingen/SUBNETTYPE == 'Aansluitnet')
 		{
-		   attribute<rdc_meter> geometry    (arc) := Leidingen/geometry[nr_orgentity];
+		   attribute<rdc_meter> geometry    (arc) := Leidingen/geometry[org_rel];
 		}
 
 		//aanlsluitleidingen worden omgezet in punten (start en eindpunt)
@@ -144,21 +144,21 @@ container Gasnetten
 		    container connect_3 := connect_info(pand/pand_2/pand_3/geometry, point, maxDist);
 		    attribute<pand/pand_2/pand_3> Pand_rel_3 := connect_3/arcID;
 		}
-		unit<uint32> Pand := subset(BAG/import/pand/nr_verdiepingen > 0.0[uint8] && BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_002Liander)
+		unit<uint32> Pand := select_with_org_rel(BAG/import/pand/nr_verdiepingen > 0.0[uint8] && BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_002Liander)
 		{
-			attribute<rdc_meter> Geometry (poly) := BAG/import/pand/geometry[nr_orgentity];
+			attribute<rdc_meter> Geometry (poly) := BAG/import/pand/geometry[org_rel];
 			attribute<nrAsl>     nr_aansl        := sum(Aansluitingen/nr_aansl, Aansluitingen/Pand_rel_1);
-			attribute<pand_2>    Pand_2_rel      := invert(pand_2/nr_orgentity);
+			attribute<pand_2>    Pand_2_rel      := invert(pand_2/org_rel);
 
-			unit<uint32> Pand_2 := subset(not(nr_aansl > 0[nrAsl]))
+			unit<uint32> Pand_2 := select_with_org_rel(not(nr_aansl > 0[nrAsl]))
 			{
-				attribute<rdc_meter> Geometry (poly) := ../geometry[nr_orgentity];
+				attribute<rdc_meter> Geometry (poly) := ../geometry[org_rel];
 				attribute<nrAsl>     nr_aansl        := sum(Aansluitingen/nr_aansl, Aansluitingen/Pand_rel_2);
-				attribute<pand_3>    Pand_3_rel      := invert(pand_3/nr_orgentity);
+				attribute<pand_3>    Pand_3_rel      := invert(pand_3/org_rel);
 
-				unit<uint32> Pand_3 := subset(not(nr_aansl > 1[nrAsl]))
+				unit<uint32> Pand_3 := select_with_org_rel(not(nr_aansl > 1[nrAsl]))
 				{
-					attribute<rdc_meter> Geometry (poly) := ../geometry[nr_orgentity];
+					attribute<rdc_meter> Geometry (poly) := ../geometry[org_rel];
 					attribute<nrAsl>     nr_aansl        := sum(Aansluitingen/nr_aansl, Aansluitingen/Pand_rel_3);
 					attribute<Bool>      HeeftGas        := nr_aansl > 0[nrAsl];
 				}
@@ -183,9 +183,9 @@ container Gasnetten
 		}
 
 		//subselectie van panden in het Stedin verzorgingsgebied
-		unit<uint32> Pand := subset(BAG/import/pand/nr_verdiepingen > 0.0[uint8] && BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_enduris)
+		unit<uint32> Pand := select_with_org_rel(BAG/import/pand/nr_verdiepingen > 0.0[uint8] && BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_enduris)
 		{
-			attribute<rdc_meter> Geometry (poly) := BAG/import/pand/geometry[nr_orgentity];
+			attribute<rdc_meter> Geometry (poly) := BAG/import/pand/geometry[org_rel];
 
 			//panden worden omgezet naar serie punten
 			unit<uint32> points := sequence2points(Geometry)
@@ -212,9 +212,9 @@ container Gasnetten
 		   attribute<rdc_meter> geometry (arc);
 		}
 		//subselectie van panden in het Stedin verzorgingsgebied
-		unit<uint32> Pand := subset(BAG/import/pand/nr_verdiepingen > 0.0[uint8] && (BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_stedin || BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_stedinDNWG))
+		unit<uint32> Pand := select_with_org_rel(BAG/import/pand/nr_verdiepingen > 0.0[uint8] && (BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_stedin || BAG/import/pand/Netbeheer_rel == Gasnetbeheervlak/V/NB_stedinDNWG))
 		{
-			attribute<rdc_meter> Geometry (poly) := BAG/import/pand/geometry[nr_orgentity];
+			attribute<rdc_meter> Geometry (poly) := BAG/import/pand/geometry[org_rel];
 
 			//panden worden omgezet naar serie punten
 			unit<uint32> points := sequence2points(Geometry)
@@ -230,10 +230,10 @@ container Gasnetten
 
 	//de resultaten van de analyse op de verschillende netbeheerders worden gecombineerd tot een landelijk overzicht
 	attribute<bool> Gasloos_result (BAG/import/pand) := 	
-		Stedin_data/pand/Gasloos[invert(Stedin_data/pand/nr_orgentity)]   ||
-		Enduris_data/pand/Gasloos[invert(Enduris_data/pand/nr_orgentity)] ||
-		Liander_data/pand/Gasloos[invert(Liander_data/pand/nr_orgentity)] ||
-		Enexis_data/pand/Gasloos[invert(Enexis_data/pand/nr_orgentity)] , IsHidden = "True" ;
+		Stedin_data/pand/Gasloos[invert(Stedin_data/pand/org_rel)]   ||
+		Enduris_data/pand/Gasloos[invert(Enduris_data/pand/org_rel)] ||
+		Liander_data/pand/Gasloos[invert(Liander_data/pand/org_rel)] ||
+		Enexis_data/pand/Gasloos[invert(Enexis_data/pand/org_rel)] , IsHidden = "True" ;
 
 	//de resultaten van bovenstaande analyse wordt als snel fss bestand weggeschreven
 	unit<uint32> Gasloos_writer := BAG/import/pand, Storagename = "%HestiaDataDir%/infra/Gasnetten/Gasloos.fss", IsHidden = "True"
@@ -245,7 +245,6 @@ container Gasnetten
 	{
 		attribute<bool> Gasloos;
 	}
-	//indien recalculate = true, wordt een nieuwe analyse gemaakt van de aanwezigheid van gasaansluitingen, anders wordt het invoerbestand gebruikt
-	parameter<bool> recalculate := false, IsHidden = "True";
-	attribute<bool> Gasloos (BAG/import/pand) := = recalculate ?  'Gasloos_result' : 'Gasloos_reader/Gasloos';
+	//indien HerberekenStartsituatie = true, wordt een nieuwe analyse gemaakt van de aanwezigheid van gasaansluitingen, anders wordt het invoerbestand gebruikt
+	attribute<bool> Gasloos (BAG/import/pand) := = Invoer/HerberekenStartsituatie ?  'Gasloos_result' : 'Gasloos_reader/Gasloos';
 }
