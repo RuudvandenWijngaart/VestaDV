@@ -69,9 +69,9 @@ container VergelijkingReferentieverbruik
 		attribute<Classifications/WoningType>	WoningtypeHestia (.) := 
 			  strcount(Woningtype, 'vrijstaand')       > 0 ? Classifications/WoningType/V/vrijstaand
 			: strcount(Woningtype, '2 onder 1 kap')    > 0 ? Classifications/WoningType/V/twee_onder_1_kap
-			: strcount(Woningtype, 'galerij')          > 0 ? Classifications/WoningType/V/meergezinspand_laag_midden // Of hoog?
-			: strcount(Woningtype, 'maisonnette')      > 0 ? Classifications/WoningType/V/meergezinspand_laag_midden // Of hoog?
-			: strcount(Woningtype, 'portiek')          > 0 ? Classifications/WoningType/V/meergezinspand_laag_midden // Of hoog?
+			: strcount(Woningtype, 'galerij')          > 0 ? Classifications/WoningType/V/meergezinspand_laag_midden //OPM: Of hoog?
+			: strcount(Woningtype, 'maisonnette')      > 0 ? Classifications/WoningType/V/meergezinspand_laag_midden //OPM: Of hoog?
+			: strcount(Woningtype, 'portiek')          > 0 ? Classifications/WoningType/V/meergezinspand_laag_midden //OPM: Of hoog?
 			: strcount(Woningtype, 'rijwoning hoek')   > 0 ? Classifications/WoningType/V/hoekwoning
 			: strcount(Woningtype, 'rijwoning tussen') > 0 ? Classifications/WoningType/V/tussenwoning																				
 			: Classifications/WoningType/V/tussenwoning; // Bovenstaande classificatie omvat alle inputwaardes, dus deze waarde maakt niet uit. 
@@ -94,9 +94,11 @@ container VergelijkingReferentieverbruik
 			
 	}
 
-	// Classificatie naar bouwjaarklasse testwonignen om pakketten op te kunnen leggen
+	// Classificatie naar bouwjaarklasse testwoningen om pakketten op te kunnen leggen
 	attribute<class/BouwjaarWoningTestWoningen> BouwjaarklasseTestwoningen     (BO) := classify(bouwjaar, class/BouwjaarWoningTestWoningen/classbreak);
 	attribute<class/WoningTypeBouwjaarKlasseTW> WoningTypeBouwjaarKlasseTW_rel (BO) := combine_data(class/WoningTypeBouwjaarKlasseTW, Woningtype_rel, BouwjaarklasseTestwoningen);
+
+	attribute<classifications/schillabel> AfgemeldEnergielabel (BO) := BeginSituatie/StartingStateComponenten/Woning/results/schillabel_rel;
 
 	// WBS_rel voor uitvoer. Gebaseerd op label startsituatie
 	attribute<classifications/combines/WBS> WBS_rel (BO) := combine_data(classifications/combines/WBS, combine_data(classifications/combines/WB, woningtype_rel, classify(bouwjaar, classifications/bouwjaarwoning/classbreak)), energielabel_rel);
@@ -104,7 +106,7 @@ container VergelijkingReferentieverbruik
 	container UitgangsSituatie
 	{
 		container Functioneel       := BO/Functioneel;
-		container Referentieverbruik := Templates/RV_referentieverbruik(energielabel_rel);
+		container Referentieverbruik := Templates/RV_referentieverbruik(AfgemeldEnergielabel);
 	}
 	container LaagTemperatuurGeschikt   := Templates/IsolatiepakketOplegT('LaagTemp');
 	container StandaardEnStreefwaarden  := Templates/IsolatiepakketOplegT('Standaard');
@@ -122,7 +124,7 @@ container VergelijkingReferentieverbruik
 		attribute<GJ_yr> RV_LaagTemperatuurGeschikt  (classifications/combines/WBS) := sum(LaagTemperatuurGeschikt/Functioneel/RV, WBS_rel);
 		attribute<GJ_yr> RV_StandaardEnStreefwaarden (classifications/combines/WBS) := sum(StandaardEnStreefwaarden/Functioneel/RV, WBS_rel);
 		
-		attribute<GJ_yr> RV_UitgangsSituatie_Referentieverbuik         (classifications/combines/WBS) := sum(UitgangsSituatie/Referentieverbruik/RV, WBS_rel); // Verschillen met RV_uitgangssituatie. komt door klimaat ed.? Uitzoeken!
+		attribute<GJ_yr> RV_UitgangsSituatie_Referentieverbuik         (classifications/combines/WBS) := sum(UitgangsSituatie/Referentieverbruik/RV, WBS_rel); //OPM: Verschillen met RV_uitgangssituatie. Komt door klimaat ed., maar ook vooral doordat energielabel dat hier gebruikt wortd afwijkt van schillabel dat gebruikt wordt bij fitfactor
 		attribute<GJ_yr> RV_LaagTemperatuurGeschikt_Referentieverbuik  (classifications/combines/WBS) := sum(LaagTemperatuurGeschikt/Referentieverbruik/RV, WBS_rel);
 		attribute<GJ_yr> RV_StandaardEnStreefwaarden_Referentieverbuik (classifications/combines/WBS) := sum(StandaardEnStreefwaarden/Referentieverbruik/RV, WBS_rel);
 		
@@ -160,16 +162,16 @@ container VergelijkingReferentieverbruik
 				,Classifications/IsolatieNiveau
 				);
 			
-			container IsolatieNiveaus := for_each_ind(
+			container IsolatieNiveaus := for_each_ind( //OPM: gaat nu op NENlabel. Kijken hoe we dat willen.
 				'nedv'
 				,Classifications/bouwdeel/name
-				,replace('IsolatieNiveausPakket/@BD@ > BO/Bouwdelen/Isolatie/@BD@ ? IsolatieNiveausPakket/@BD@ : BO/Bouwdelen/Isolatie/@BD@','@BD@',Classifications/bouwdeel/name)
+				,replace('AfgemeldEnergielabel < NEN_energielabel && AfgemeldEnergielabel != Classifications/Schillabel/V/n && IsolatieNiveausPakket/@BD@ > BO/Bouwdelen/Isolatie/@BD@ ? IsolatieNiveausPakket/@BD@ : BO/Bouwdelen/Isolatie/@BD@','@BD@',Classifications/bouwdeel/name)
 				,BO
 				,Classifications/IsolatieNiveau
 				);
 			
 			container Functioneel        := Templates/BerekenFunctioneel(BO, BO, id(BO), IsolatieNiveaus);
-			container Referentieverbruik := Templates/RV_referentieverbruik(NEN_energielabel); // Gaat nu op NEN energielabel. Dat met volgens mij opok zo blijven, maar even checken
+			container Referentieverbruik := Templates/RV_referentieverbruik(NEN_energielabel); //OPM: Gaat nu op NEN energielabel. Dat met volgens mij opok zo blijven, maar even checken
 		}
 	
 		Template RV_referentieverbruik
