@@ -1,0 +1,138 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) Hestia 2021 - PBL & TNO                                        //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//       In deze configuratiefile worden de brondata geconfigureerd.                    //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+container Overheveling
+{
+	container Class : IsHidden = "True"
+	{
+		unit<uint8> Bouwsoort : nrofrows = 2
+		{
+			attribute<string> label : ['Eengezins','Meergezins'], DialogType = "LabelText";
+			attribute<string> Excel_code : ['Egz','Mgz'];
+			container V := for_each_nedv(label, string(id(.))+'[..]', void, .);
+		}
+		
+		unit<uint8> BouwjaarWoning : nrofrows = 6
+		{
+			attribute<units/yr_uint16> ClassBreak : [ 0, 1930,  1959,  1980, 2000];
+			attribute<string>   name       : ['v1931','v1959','v1980','v2000', 'n2000'];
+
+			attribute<string> Excel_code:
+			[
+				 '<=30'
+				,'31-59'
+				,'60-80'
+				,'81-00'
+				,'>=01'
+			];
+
+			attribute<string> label:
+			[
+				 'Tot en met 1930 '		
+				,'van 1931 t/m 1959'	
+				,'van 1960 t/m 1980'
+				,'van 1981 t/m 2000'
+				,'na 2000'
+			];
+
+			container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
+			parameter<.> onbekend := V/v1992;
+		}
+		
+		unit<uint8> muttype : nrofrows = 7
+		{
+			attribute<string> label : ['WoningVoorraad', 'Nieuwbouw', 'Pa', 'Onttrekking', 'PartHuurNaarKoop','WoonCorpNaarKoop','PartHuurNaarWoonCorp'], DialogType = "LabelText"; //Wat is PA?
+			attribute<string> Excel_code : ['Wov', 'Nb', 'Pa', 'Ont', 'Ph>Kp','Sh>Kp','SalAb'];
+			container V := for_each_nedv(label, string(id(.))+'[..]', void, .);
+		}
+		
+		unit<uint32> jaren := range(uint8, 2012, 2052)
+		{
+			attribute<string> label := string(jaar), DialogType = "LabelText";
+			attribute<yr_uint16>   jaar := id(.)[yr_uint16];
+			attribute<string> headertext := '_' + label;
+			container V := for_each_nedv('yr' + label, string(id(.))+'[..]', void, .);
+		}
+		
+		container combines
+		{
+			unit<uint32> BouwSoortBouwJaarKlasseMutatieTypeEigendom := combine(Bouwsoort, BouwJaarWoning, muttype, Classifications/Eigendom);
+			unit<uint32> BouwSoortBouwJaarKlasse := combine(Bouwsoort, BouwJaarWoning)
+			{
+				attribute<string> label := Bouwsoort/label[first_rel] + '_' + BouwjaarWoning/name[second_rel], DialogType = "LabelText";
+				
+				container V := for_each_nedv(label, string(id(.))+'[..]', void, .);
+			}
+			
+			unit<uint32> BouwSoortBouwJaarKlasseEigendom := combine(Bouwsoort, BouwJaarWoning, Classifications/Eigendom)
+			{
+				attribute<string> label := Bouwsoort/label[first_rel] + '_' + BouwjaarWoning/name[second_rel] + '_' + Classifications/Eigendom/label[third_rel], DialogType = "LabelText";
+				attribute<string> BouwSoortBouwjaarKlasse_label := Bouwsoort/label[first_rel] + '_' + BouwjaarWoning/name[second_rel];
+				attribute<BouwSoortBouwJaarKlasse> BouwSoortBouwJaarKlasse_rel := rlookup(BouwSoortBouwjaarKlasse_label, BouwSoortBouwJaarKlasse/label);
+
+				container V := for_each_nedv(label, string(id(.))+'[..]', void, .);
+			}
+		}
+	}
+
+	unit<uint32> src
+		:   StorageName     = "%HestiaDataDir%/Syswov/2023_prognose.csv"
+		,   StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True"
+		,   IsHidden        = "True"
+		{
+			attribute<string> key := VORM+'_'+BWJR+'_'+HUKO+'_'+STAT;
+		}
+
+	unit<uint32> data := Class/combines/BouwSoortBouwJaarKlasseMutatieTypeEigendom
+	{
+		attribute<Class/Bouwsoort>          Bouwsoort_rel      := first_rel;
+		attribute<Class/BouwjaarWoning>     BouwjaarKlasse_rel := second_rel;		
+		attribute<Class/muttype>            Mutatietype_rel    := third_rel;		
+		attribute<Classifications/Eigendom> Eigendom_rel       := fourth_rel;
+		
+		attribute<string> BouwsoortName      := Class/Bouwsoort/label[Bouwsoort_rel];
+		attribute<string> BouwjaarKlasseName := Class/BouwjaarWoning/name[BouwjaarKlasse_rel];
+		attribute<string> EigendomName       := Classifications/Eigendom/label[Eigendom_rel];
+		attribute<string> MutatietypeName    := Class/muttype/label[Mutatietype_rel];
+		attribute<string> name               := BouwsoortName + '_' +BouwjaarKlasseName+ '_' +EigendomName+ '_' +MutatietypeName, DialogType = "LabelText";
+		
+		attribute<string> BouwsoorBouwjaarklasseName            := BouwsoortName + '_' +BouwjaarKlasseName, DialogType = "LabelText";
+		attribute<string> BouwsoorBouwjaarklasseMutatietypeName := BouwsoorBouwjaarklasseName + '_' +MutatietypeName, DialogType = "LabelText";
+		
+		attribute<string> BouwsoortKeyName      := Class/Bouwsoort/excel_code[Bouwsoort_rel];
+		attribute<string> BouwjaarKlasseKeyName := Class/BouwjaarWoning/excel_code[BouwjaarKlasse_rel];
+		attribute<string> EigendomKeyName       := 
+			Eigendom_rel == Classifications/Eigendom/V/koop ? 'Koop' :
+			Eigendom_rel == Classifications/Eigendom/V/PartHuur ? 'ParH' :
+			'SocH';
+		attribute<string> MutatietypeKeyName    := Class/muttype/excel_code[Mutatietype_rel];
+		attribute<string> Keyname               := BouwsoortKeyName + '_' +BouwjaarKlasseKeyName+'_' +EigendomKeyName+ '_' +MutatietypeKeyName, DialogType = "LabelText";
+		
+		attribute<src>                                    data_rel                    := rlookup(uppercase(Keyname), uppercase(src/key));
+		attribute<Class/combines/BouwSoortBouwJaarKlasse> BouwSoortBouwJaarKlasse_rel := rlookup(uppercase(BouwsoorBouwjaarklasseName), uppercase(Class/combines/BouwSoortBouwJaarKlasse/label));
+
+		container nrAansl_yr_BouwSoortBouwjaarKlasse := for_each_ind(
+		'nedv',
+		Class/jaren/headertext,
+		'sum(nrAansl_yr/' +Class/jaren/headertext +',BouwSoortBouwJaarKlasse_rel)[BouwSoortBouwJaarKlasse_rel]',
+		.,
+		Units/nrAsl);
+		
+		container nrAansl_yr := for_each_ind(
+		'nedv',
+		Class/jaren/headertext,
+		'src/' +Class/jaren/headertext +'[Units/nrAsl][data_rel]',
+		.,
+		Units/nrAsl);
+	}
+}
