@@ -59,7 +59,7 @@ container VergelijkingReferentieverbruik
 		
 		unit<uint8> PakketSoort : nrofrows = 2
 		{
-			attribute<string> name: ['Standaard', 'LaagTemp']; 
+			attribute<string> name: ['Standaard', 'WarmtenetGeschikt']; 
 			attribute<string> label := name;
 			container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 		}
@@ -91,7 +91,6 @@ container VergelijkingReferentieverbruik
 			,class/WoningTypeBouwjaarKlasseTWPakketSoort
 			,Classifications/IsolatieNiveau
 			);
-			
 	}
 
 	// Classificatie naar bouwjaarklasse testwoningen om pakketten op te kunnen leggen
@@ -100,44 +99,50 @@ container VergelijkingReferentieverbruik
 
 	attribute<classifications/schillabel> AfgemeldEnergielabel (BO) := BeginSituatie/StartingStateComponenten/Woning/results/schillabel_rel;
 
-	// WBS_rel voor uitvoer. Gebaseerd op label startsituatie
-	attribute<classifications/combines/WBS> WBS_rel (BO) := combine_data(classifications/combines/WBS, combine_data(classifications/combines/WB, woningtype_rel, classify(bouwjaar, classifications/bouwjaarwoning/classbreak)), energielabel_rel);
+	// WBS_rel voor uitvoer. Gebaseerd op afgemeld energielabel
+	attribute<classifications/combines/WBS> WBS_rel (BO) := combine_data(classifications/combines/WBS, combine_data(classifications/combines/WB, woningtype_rel, classify(bouwjaar, classifications/bouwjaarwoning/classbreak)), AfgemeldEnergielabel);
 
 	container UitgangsSituatie
 	{
 		container Functioneel       := BO/Functioneel;
 		container Referentieverbruik := Templates/RV_referentieverbruik(AfgemeldEnergielabel);
+		
+	//	attribute<GJ_yr> RV_uitganssituatie_vanuit_vivet_als_gedrag_is_een (BO) := (Referentieverbruik/RV + Functioneel/warmtewinst/totaal) * /Invoer/DefaultInstellingen/Basis/RuimtelijkeVraag/Gedrag/RV * Functioneel_base/Klimaateffect  * BeginSituatie/StartingStateComponenten/Woning/results/warmteverlies_theoretisch_startjaar/TemperatuurCorrectie/factor * Functioneel/Correction_RV - Functioneel/warmtewinst/totaal;
+
 	}
-	container LaagTemperatuurGeschikt   := Templates/IsolatiepakketOplegT('LaagTemp');
+	container WarmtenetGeschikt   := Templates/IsolatiepakketOplegT('WarmtenetGeschikt');
 	container StandaardEnStreefwaarden  := Templates/IsolatiepakketOplegT('Standaard');
 
 	container outputs
 	{
-		// per woningtype/bouwjaarklasse/NENlabelsprong. Dus combines maken met doellabel
-			// aantal woningen
-			// Warmtevraag volgend vivet
-			// Warmtevraag volgens Hestia 
-		// Waarschijnlijk outputtemplate maken, met mogelijke uitvoer voor NEN en NTA, misschine zelfs Hestia labels
-		attribute<nrAsl> AantalWoningen              (classifications/combines/WBS) := sum(nrAansluitingen, WBS_rel);
+		attribute<string> Woningtype              (classifications/combines/WBS) := classifications/combines/WB/LabelWoningtype[classifications/combines/WBS/nr_1];
+		attribute<string> Bouwjaarklasse          (classifications/combines/WBS) := classifications/combines/WB/LabelBouwjaar[classifications/combines/WBS/nr_1];
+		attribute<string> Startlabel             (classifications/combines/WBS) := classifications/combines/WBS/LabelS;
+		
+		attribute<nrAsl> AantalWoningen                                  (classifications/combines/WBS) := sum(nrAansluitingen, WBS_rel);
+		attribute<nrAsl> AantalWoningenAangepast_WarmtenetGeschikt        (classifications/combines/WBS) := sum(WarmtenetGeschikt/BouwdelenAangepast/WoningAangepast[float64] * 1[nrAsl], WBS_rel);
+		attribute<nrAsl> AantalWoningenAangepast_StandaardEnStreefwaarden (classifications/combines/WBS) := sum(StandaardEnStreefwaarden/BouwdelenAangepast/WoningAangepast[float64] * 1[nrAsl], WBS_rel);
 		
 		attribute<GJ_yr> RV_UitgangsSituatie         (classifications/combines/WBS) := sum(UitgangsSituatie/Functioneel/RV, WBS_rel);
-		attribute<GJ_yr> RV_LaagTemperatuurGeschikt  (classifications/combines/WBS) := sum(LaagTemperatuurGeschikt/Functioneel/RV, WBS_rel);
+		attribute<GJ_yr> RV_WarmtenetGeschikt        (classifications/combines/WBS) := sum(WarmtenetGeschikt/Functioneel/RV, WBS_rel);
 		attribute<GJ_yr> RV_StandaardEnStreefwaarden (classifications/combines/WBS) := sum(StandaardEnStreefwaarden/Functioneel/RV, WBS_rel);
 		
-		attribute<GJ_yr> RV_UitgangsSituatie_Referentieverbuik         (classifications/combines/WBS) := sum(UitgangsSituatie/Referentieverbruik/RV, WBS_rel); //OPM: Verschillen met RV_uitgangssituatie. Komt door klimaat ed., maar ook vooral doordat energielabel dat hier gebruikt wortd afwijkt van schillabel dat gebruikt wordt bij fitfactor
-		attribute<GJ_yr> RV_LaagTemperatuurGeschikt_Referentieverbuik  (classifications/combines/WBS) := sum(LaagTemperatuurGeschikt/Referentieverbruik/RV, WBS_rel);
-		attribute<GJ_yr> RV_StandaardEnStreefwaarden_Referentieverbuik (classifications/combines/WBS) := sum(StandaardEnStreefwaarden/Referentieverbruik/RV, WBS_rel);
+		attribute<GJ_yr> RV_UitgangsSituatie_Referentieverbuik         (classifications/combines/WBS) := sum(UitgangsSituatie/Referentieverbruik/RV, WBS_rel); //OPM: Dit is gelijk aan /BeginSituatie/StartingStateComponenten/Woning/results/warmteverlies_theoretisch_startjaar/Gemeten_RV_i. Verschilt met RV_uitgangssituatie doordat de binnentemperatuurscorrectiefactor niet 
 		
-		attribute<GJ_yr> Besparing_LaagTemperatuurGeschikt  (classifications/combines/WBS) := RV_UitgangsSituatie - RV_LaagTemperatuurGeschikt;
-		attribute<GJ_yr> Besparing_StandaardEnStreefwaarden (classifications/combines/WBS) := RV_UitgangsSituatie - RV_StandaardEnStreefwaarden;
+		attribute<GJ_yr> RV_WarmtenetGeschikt_Referentieverbuik_Pakketlabel  (classifications/combines/WBS) := sum(WarmtenetGeschikt/Referentieverbruik_Pakketlabel/RV, WBS_rel);
+		attribute<GJ_yr> RV_WarmtenetGeschikt_Referentieverbuik_Hestialabel  (classifications/combines/WBS) := sum(WarmtenetGeschikt/Referentieverbruik_Hestialabel/RV, WBS_rel);
 		
-		attribute<GJ_yr> Besparing_LaagTemperatuurGeschikt_Referentieverbuik  (classifications/combines/WBS) := RV_UitgangsSituatie - RV_LaagTemperatuurGeschikt_Referentieverbuik;
-		attribute<GJ_yr> Besparing_StandaardEnStreefwaarden_Referentieverbuik (classifications/combines/WBS) := RV_UitgangsSituatie - RV_StandaardEnStreefwaarden_Referentieverbuik;
+		attribute<GJ_yr> RV_StandaardEnStreefwaarden_Referentieverbuik_Pakketlabel (classifications/combines/WBS) := sum(StandaardEnStreefwaarden/Referentieverbruik_Pakketlabel/RV, WBS_rel);		
+		attribute<GJ_yr> RV_StandaardEnStreefwaarden_Referentieverbuik_Hestialabel (classifications/combines/WBS) := sum(StandaardEnStreefwaarden/Referentieverbruik_Hestialabel/RV, WBS_rel);
+		/*
+		attribute<GJ_yr> Besparing_WarmtenetGeschikt_Pakketlabel  (classifications/combines/WBS) := RV_UitgangsSituatie - RV_WarmtenetGeschikt;
+		attribute<GJ_yr> Besparing_StandaardEnStreefwaarden_Pakketlabel (classifications/combines/WBS) := RV_UitgangsSituatie - RV_StandaardEnStreefwaarden;
 		
-		// per woningtype/bouwjaarklasse/NTAlabelsprong.Dus combines maken met doellabel
-			// aantal woningen
-			// Warmtevraag volgend vivet
-			// Warmtevraag volgens Hestia 
+		attribute<GJ_yr> Besparing_WarmtenetGeschikt_Referentieverbuik_Pakketlabel  (classifications/combines/WBS) := RV_UitgangsSituatie - RV_WarmtenetGeschikt_Referentieverbuik_Pakketlabel;
+		attribute<GJ_yr> Besparing_WarmtenetGeschikt_Referentieverbuik_Hestialabel  (classifications/combines/WBS) := RV_UitgangsSituatie - RV_WarmtenetGeschikt_Referentieverbuik_Hestialabel;
+		attribute<GJ_yr> Besparing_StandaardEnStreefwaarden_Referentieverbuik_Pakketlabel (classifications/combines/WBS) := RV_UitgangsSituatie - RV_StandaardEnStreefwaarden_Referentieverbuik_Pakketlabel;
+		attribute<GJ_yr> Besparing_StandaardEnStreefwaarden_Referentieverbuik_Hestialabel (classifications/combines/WBS) := RV_UitgangsSituatie - RV_StandaardEnStreefwaarden_Referentieverbuik_Hestialabel;
+		*/
 	}
 
 	container Templates
@@ -147,12 +152,15 @@ container VergelijkingReferentieverbruik
 			// Start inputs
 			parameter<string> Pakketsoort_str;
 			// End inputs
-			
+						
 			attribute<class/PakketSoort>                           PakketSoort                               (BO) := const(rlookup(Pakketsoort_str, class/PakketSoort/name), BO);
 			attribute<class/WoningTypeBouwjaarKlasseTWPakketSoort> WoningTypeBouwjaarKlasseTWPakketSoort_rel (BO) := combine_data(class/WoningTypeBouwjaarKlasseTWPakketSoort, WoningTypeBouwjaarKlasseTW_rel, PakketSoort);
 			
-			attribute<classifications/schillabel> NTA_energielabel (BO) := class/WoningTypeBouwjaarKlasseTWPakketSoort/NTA_energielabel[WoningTypeBouwjaarKlasseTWPakketSoort_rel];
-			attribute<classifications/schillabel> NEN_energielabel (BO) := class/WoningTypeBouwjaarKlasseTWPakketSoort/NEN_energielabel[WoningTypeBouwjaarKlasseTWPakketSoort_rel];
+			attribute<classifications/schillabel> NTA_energielabel_pakket (BO) := class/WoningTypeBouwjaarKlasseTWPakketSoort/NTA_energielabel[WoningTypeBouwjaarKlasseTWPakketSoort_rel];
+			attribute<classifications/schillabel> NEN_energielabel_pakket (BO) := class/WoningTypeBouwjaarKlasseTWPakketSoort/NEN_energielabel[WoningTypeBouwjaarKlasseTWPakketSoort_rel];
+			
+			attribute<bool> LabelSlechterDanPakketlabel (BO) := AfgemeldEnergielabel > NEN_energielabel_pakket; // OPM: > ipv < omdat een beter label een kleiner getal heeft in de classificatie
+			attribute<bool> LabelBekend					(BO) := AfgemeldEnergielabel != Classifications/Schillabel/V/n;
 			
 			container IsolatieNiveausPakket := for_each_ind(
 				'nedv'
@@ -162,16 +170,32 @@ container VergelijkingReferentieverbruik
 				,Classifications/IsolatieNiveau
 				);
 			
-			container IsolatieNiveaus := for_each_ind( //OPM: gaat nu op NENlabel. Kijken hoe we dat willen.
+			container IsolatieNiveaus := for_each_ind( //OPM: gaat nu op NENlabel. Daarnaast worden woningen zonder label nu niet meegenomen. Kijken hoe we dat anders operationaliseren, als we dat wel willen.
 				'nedv'
 				,Classifications/bouwdeel/name
-				,replace('AfgemeldEnergielabel < NEN_energielabel && AfgemeldEnergielabel != Classifications/Schillabel/V/n && IsolatieNiveausPakket/@BD@ > BO/Bouwdelen/Isolatie/@BD@ ? IsolatieNiveausPakket/@BD@ : BO/Bouwdelen/Isolatie/@BD@','@BD@',Classifications/bouwdeel/name)
+				,replace('LabelSlechterDanPakketlabel && LabelBekend && IsolatieNiveausPakket/@BD@ > BO/Bouwdelen/Isolatie/@BD@ ? IsolatieNiveausPakket/@BD@ : BO/Bouwdelen/Isolatie/@BD@','@BD@',Classifications/bouwdeel/name)
 				,BO
 				,Classifications/IsolatieNiveau
 				);
+				
+			container BouwdelenAangepast := for_each_ind( //OPM: gaat nu op NENlabel. Daarnaast worden woningen zonder label nu niet meegenomen. Kijken hoe we dat anders operationaliseren, als we dat wel willen.
+				'nedv'
+				,Classifications/bouwdeel/name
+				,replace('IsolatieNiveaus/@BD@ != BO/Bouwdelen/Isolatie/@BD@ ? True : False','@BD@',Classifications/bouwdeel/name)
+				,BO
+				,Bool
+				)
+				{
+					attribute<bool> WoningAangepast (BO) := ='or('+AsItemList(Classifications/bouwdeel/name)+')';
+				}
 			
-			container Functioneel        := Templates/BerekenFunctioneel(BO, BO, id(BO), IsolatieNiveaus);
-			container Referentieverbruik := Templates/RV_referentieverbruik(NEN_energielabel); //OPM: Gaat nu op NEN energielabel. Dat met volgens mij opok zo blijven, maar even checken
+			container Functioneel                     := Templates/BerekenFunctioneel(BO, BO, id(BO), IsolatieNiveaus);
+			
+			attribute<classifications/schillabel> Doellabel_pakket         (BO) := LabelSlechterDanPakketlabel ? NEN_energielabel_pakket : AfgemeldEnergielabel;
+			attribute<classifications/schillabel> Doellabel_Hestiamethode  (BO) := LabelSlechterDanPakketlabel ? Functioneel/schillabel_rel : AfgemeldEnergielabel;
+
+			container Referentieverbruik_Pakketlabel := Templates/RV_referentieverbruik(Doellabel_pakket);    //OPM: Gaat op NEN energielabel behorend bij maatregelepakket. 
+			container Referentieverbruik_Hestialabel := Templates/RV_referentieverbruik(Doellabel_Hestiamethode); //OPM: Gaat op Hestia energielabel behorend bij maatregelpakket.
 		}
 	
 		Template RV_referentieverbruik
@@ -179,6 +203,8 @@ container VergelijkingReferentieverbruik
 			// Start inputs
 			attribute<classifications/schillabel> energielabel (BO);
 			// End inputs
+		
+
 		
 			attribute<GJ_yr> RV_Basevalues (BO) := =
 				'nrAansluitingen_i * merge(energielabel, GJ_yr_asl,'
@@ -194,7 +220,7 @@ container VergelijkingReferentieverbruik
 				attribute<ratio>                                                         Verschilfactor (BO) := Invoer/Kengetallen/Bebouwing/Woning/Verschilfactordata/WK_W_E/Verschilfactor[WK_W_E_rel];
 			}
 			
-			attribute<GJ_yr> RV (BO) := RV_Basevalues * gemeten_correctie/Verschilfactor;
+			attribute<GJ_yr> RV (BO) := nrAansluitingen * 1d/1[nrAsl] *  RV_Basevalues * gemeten_correctie/Verschilfactor;
 		}
 		
 		Template BerekenFunctioneel
@@ -213,7 +239,7 @@ container VergelijkingReferentieverbruik
 			attribute<GJ_yr> EA (BOdomain) := PrevState/Functioneel_base/EA[PrevState_rel];
 			attribute<GJ_yr> TW (BOdomain) := PrevState/Functioneel_base/TW[PrevState_rel];
 			attribute<GJ_yr> KD (BOdomain) := PrevState/Functioneel_base/KD[PrevState_rel];
-			attribute<GJ_yr> RV (BOdomain) := (RV_per_Bouwdeel_now/Totaal  + Vrv_VT) * Correction_RV - warmtewinst/totaal;
+			attribute<GJ_yr> RV (BOdomain) := nrAansluitingen * 1d/1[nrAsl] * (RV_per_Bouwdeel_now/Totaal  + Vrv_VT) * Correction_RV - warmtewinst/totaal;
 			
 			attribute<GJ_yr> Vrv_VT (BOdomain) :=
 				  Invoer/Kengetallen/OverigeInstallaties/VT/Installatietypes/V_RV_asl[PrevState/InstallatiePerProduct/VT[PrevState_rel]]
