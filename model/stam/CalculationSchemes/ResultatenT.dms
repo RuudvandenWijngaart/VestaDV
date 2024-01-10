@@ -305,7 +305,7 @@ template ResultatenT
 			attribute<GJ_yr> Omgeving_tot := sum(Installatie_x_Product/Omgeving_tot, Installatie_x_Product/Installatie_x_ProductType_rel);
 			
 			unit<uint32> Sparse := select_with_org_rel(
-					Installatie_x_ProductType/ProductType_rel != Classifications/ProductType/V/KD && 
+					//Installatie_x_ProductType/ProductType_rel != Classifications/ProductType/V/KD && 
 					Installatie_x_ProductType/Installatie_rel != Classifications/Installatie/V/geen && 
 					Classifications/Installatie/ActieveGebouwOptie[Installatie_x_ProductType/Installatie_rel]
 					)
@@ -317,11 +317,51 @@ template ResultatenT
 				attribute<GJ_yr>  Input_tot    := Installatie_x_ProductType/Input_tot[org_rel];
 				attribute<GJ_yr>  Omgeving_tot := Installatie_x_ProductType/Omgeving_tot[org_rel];
 			}
-			unit<uint32> long_sparse := union_unit(Sparse, Sparse, Sparse)
+			unit<uint32> long_sparse := union_unit(Sparse, Sparse, Sparse, OverigeProcessen/result)
 			{
-				attribute<string> name  := union_data(.,'Product_'+Sparse/name, 'Input_'+Sparse/name_input, 'Omgeving_'+Sparse/name);
-				attribute<GJ_yr>  GJ    := union_data(.,Sparse/Product_tot, Sparse/Input_tot, Sparse/Omgeving_tot);
+				attribute<string> name  := union_data(.,'Product_'+Sparse/name, 'Input_'+Sparse/name_input, 'Omgeving_'+Sparse/name, OverigeProcessen/result/name);
+				attribute<GJ_yr>  GJ    := union_data(.,Sparse/Product_tot, Sparse/Input_tot, Sparse/Omgeving_tot, OverigeProcessen/result/GJ);
 				attribute<PJ_yr>  PJ    := GJ / 1000000[units/GJ / units/PJ];
+			}
+		}
+		container OverigeProcessen
+		{
+			//opbrengst dakinstallatie
+			parameter<string> name_Product_ZonB_TW := 'Product_ZonB_TW';
+			parameter<GJ_yr>  GJ_Product_ZonB_TW   := sum(BO/Func2Meter/ZonB/Oj_TW);
+			parameter<PJ_yr>  PJ_Product_ZonB_TW   := GJ_Product_ZonB_TW / 1000000[units/GJ / units/PJ];
+			parameter<string> name_Product_ZonPV_E := 'name_Product_ZonPV_E';
+			parameter<GJ_yr>  GJ_Product_ZonPV_E   := sum(BO/Func2Meter/eEffect/ZonPV/Oj_elek);
+			parameter<PJ_yr>  PJ_Product_ZonPV_E   := GJ_Product_ZonPV_E / 1000000[units/GJ / units/PJ];
+
+			//energieverbruik koken
+			parameter<string> name_Input_KK_E      := 'Input_KK_E';
+			parameter<GJ_yr>  GJ_Input_KK_E        := sum(BO/Func2Meter/Koken/Vj_elek);
+			parameter<PJ_yr>  PJ_Input_KK_E        := GJ_Input_KK_E / 1000000[units/GJ / units/PJ];
+			parameter<string> name_Input_KK_G      := 'Input_KK_G';
+			parameter<GJ_yr>  GJ_Input_KK_G        := sum(BO/Func2Meter/Koken/Vj_gas);
+			parameter<PJ_yr>  PJ_Input_KK_G        := GJ_Input_KK_G / 1000000[units/GJ / units/PJ];
+
+			//elektriciteitsverbruik ventilatie
+			parameter<string> name_Input_VT_E      := 'Input_VT_E';
+			parameter<GJ_yr>  GJ_Input_VT_E        := sum(BO/Func2Meter/eEffect/Ventilatie/Vj_elek);
+			parameter<PJ_yr>  PJ_Input_VT_E        := GJ_Input_VT_E / 1000000[units/GJ / units/PJ];
+
+			// elektriciteitsverbruik hulpenergie
+			parameter<string> name_Input_hulp_E    := 'Input_hulp_E';
+			parameter<GJ_yr>  GJ_Input_hulp_E      := sum(BO/Func2Meter/eEffect/volume/Vj_elek + BO/Func2Meter/eEffect/capaciteit/Vj_elek);
+			parameter<PJ_yr>  PJ_Input_hulp_E      := GJ_Input_hulp_E / 1000000[units/GJ / units/PJ];
+
+			unit<uint32> result : nrofrows = 6
+			{
+				attribute<string> name : [ 'Product_ZonB_TW', 'Product_ZonPV_E', 'Input_KK_E', 'Input_KK_G', 'Input_VT_E', 'Input_hulp_E' ];
+				attribute<GJ_yr>  GJ   := 
+					name == 'Product_ZonB_TW' ? GJ_Product_ZonB_TW : 
+					name == 'Product_ZonPV_E' ? GJ_Product_ZonPV_E : 
+					name == 'Input_KK_E'      ? GJ_Input_KK_E : 
+					name == 'Input_KK_G'      ? GJ_Input_KK_G : 
+					name == 'Input_VT_E'      ? GJ_Input_VT_E : 
+					name == 'Input_hulp_E'    ? GJ_Input_hulp_E : (0/0)[GJ_yr];
 			}
 		}
 		unit<uint32> Installatie_x_Product_x_Input   := Installatie_x_Product
