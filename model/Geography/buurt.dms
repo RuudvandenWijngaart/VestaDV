@@ -24,6 +24,8 @@ unit<uint32> Buurt:
 	,	StorageReadOnly = "True";
 	attribute<string>    BU_CODE;
 	attribute<uint32>    code          := uint32(substr(BU_CODE,2,8));
+	
+	attribute<string> Label := BU_NAAM;
 
 	// bepalen centroide en oppervlakte o.b.v. buurtpolygoon
 	attribute<rdc_meter> point         := centroid_or_mid(geometry);
@@ -90,13 +92,12 @@ unit<uint32> Buurt2022:
 	DialogData      = "geometry",
 	DialogType      = "Map",
 	StorageReadOnly = "True"
-//	url             = "%sourceDataProjDir%/hulpbestanden/buurt/20240516_buurtgrenzen_update_WP.txt"
-
 {
 	attribute<rdc_meter> geometry (poly)
 	:	label           = "De CBS buurtkaart 2022"
 	,	StorageName     = "%SourceDataProjDir%/hulpbestanden/buurt/buurten_2022_v2.shp"
 	,	StorageReadOnly = "True";
+	attribute<string> Label := BU_NAAM;
 }
 
 unit<uint32> Buurt2022x2023 := overlay_polygon(ipolygon(Buurt2022/geometry), ipolygon(Buurt2023/geometry)), DialogType = "Map", DialogData = "rdc_geometry"
@@ -104,6 +105,31 @@ unit<uint32> Buurt2022x2023 := overlay_polygon(ipolygon(Buurt2022/geometry), ipo
 	attribute<rdc_meter> rdc_geometry (poly) := dpolygon(geometry);
 	attribute<Float64> AreaWeight := area(rdc_geometry, Float64);
 	
+	attribute<string> Label := first_rel->Label + '->' + second_rel->Label;
+
 	attribute<Float64> AreaFractionOf_2022 := AreaWeight / sum(AreaWeight, first_rel )[first_rel ];
-	attribute<Float64> AreaFractionOf_2023 := AreaWeight / sum(AreaWeight, second_rel)[second_rel];	
+	attribute<Float64> AreaFractionOf_2023 := AreaWeight / sum(AreaWeight, second_rel)[second_rel];
+
+	unit<uint32> OSM_dynapoints := Invoer/RuimtelijkeData/OSM/DynaPoints;
+	attribute<.> per_dynapoint(OSM_dynapoints) := point_in_polygon(OSM_dynapoints/point, rdc_geometry);
+	attribute<UInt32> OSM_dyna_point_count := pcount(per_dynapoint);
+	attribute<Float64> OSM_Weight := Float64(OSM_dyna_point_count);
+	attribute<Float64> OSM_FractionOf_2022 := OSM_Weight / sum(OSM_Weight, first_rel )[first_rel ];
+	attribute<Float64> OSM_FractionOf_2023 := OSM_Weight / sum(OSM_Weight, second_rel)[second_rel];
+	
+	unit<uint32> VBO := /Invoer/RuimtelijkeData/BAG/import/vbo;
+	attribute<.> per_VBO(VBO) := point_in_polygon(VBO/geometry, rdc_geometry);
+	attribute<bool> SelectedVBO(VBO) := IsDefined(vbo/pand_rel); 
+	attribute<bool> IsWoning(VBO) := IsDefined(VBO/gebruiksdoelen/woon);
+	attribute<Float64> VBO_weight := sum(Float64(SelectedVBO) * 
+		(Float64(and(IsWoning, IsDefined(VBO/oppervlak_filters/wonen)))+ Float64(and(not(IsWoning), IsDefined(VBO/oppervlak_filters/utiliteit))) * Float64(vbo/oppervlakte) / 130[m2])
+		, per_VBO
+		);
+		
+	attribute<Float64> VBO_FractionOf_2022 := VBO_Weight / sum(VBO_Weight, first_rel )[first_rel ];
+	attribute<Float64> VBO_FractionOf_2023 := VBO_Weight / sum(VBO_Weight, second_rel)[second_rel];
+	
+	attribute<Float64> Length_FractionOf_2022 := MakeDefined(OSM_FractionOf_2022, AreaFractionOf_2022); // use area fraction when sum OSM_Weight for 2022  is zero, such as in water areas
+	attribute<Float64> OS_FractionOf_2022     := MakeDefined(VBO_FractionOf_2022, AreaFractionOf_2022); // use area fraction when sum VBO_Weight for 2022  is zero, such as in water areas
+	attribute<Float64> OS_FractionOf_2023     := MakeDefined(VBO_FractionOf_2023, AreaFractionOf_2023); // use area fraction when sum VBO_Weight for 2022  is zero, such as in water areas
 }
