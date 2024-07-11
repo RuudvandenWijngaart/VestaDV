@@ -309,13 +309,13 @@ container WarmteBronnen
 	container WKO: Descr = "zie FO $3.4"
 	{
 		unit<uint32> ContourSet:
-			StorageName     = "%sourceDataProjDir%/Aanbod/WKO/20180802_WKO_potentiecontour.dbf",
+			StorageName     = "%sourceDataProjDir%/Aanbod/WKO/20240610_WKO_potentiecontour.dbf",
 			StorageReadOnly = "True",
-			url             = "%sourceDataProjDir%/Aanbod/WKO/20180802_metadata_wko_contour.txt",
+			url             = "%sourceDataProjDir%/Aanbod/WKO/20240610_update_WKO_potentieontour_WP.txt",
 			DialogType      = "Map",
 			DialogData      = "geometry"
 		{
-			attribute<rdc_meter> geometry(poly) : StorageName = "%sourceDataProjDir%/Aanbod/WKO/20180802_WKO_potentiecontour.shp", StorageReadOnly = "True";
+			attribute<rdc_meter> geometry(poly) : StorageName = "%sourceDataProjDir%/Aanbod/WKO/20240610_WKO_potentiecontour.shp", StorageReadOnly = "True";
 			attribute<string>    WKO;
 			attribute<bool>      Geschikt := WKO == 'geschikt' || WKO == 'zeer geschikt';
 		}
@@ -332,13 +332,13 @@ container WarmteBronnen
 	container TEO: Descr = "zie FO $3.4"
 	{
 		unit<uint32> ContourSet:
-			StorageName     = "%sourceDataProjDir%/Aanbod/WKO/20200211_TEO_potentiecontour.dbf",
+			StorageName     = "%sourceDataProjDir%/Aanbod/WKO/20240528_TEO_potentiecontour.dbf",
 			StorageReadOnly = "True",
-			url             = "%sourceDataProjDir%/Aanbod/WKO/20200211_TEO_potentiecontour.pdf",
+			url             = "%sourceDataProjDir%/Aanbod/WKO/20240528_TEO_potentiecontour.pdf",
 			DialogType      = "Map",
 			DialogData      = "geometry"
 		{
-			attribute<rdc_meter> geometry(poly) : StorageName = "%sourceDataProjDir%/Aanbod/WKO/20200211_TEO_potentiecontour.shp", StorageReadOnly = "True";
+			attribute<rdc_meter> geometry(poly) : StorageName = "%sourceDataProjDir%/Aanbod/WKO/20240528_TEO_potentiecontour.shp", StorageReadOnly = "True";
 			attribute<uint32>    hulp;
 			attribute<bool>      Geschikt := const(true, .);
 		}
@@ -531,79 +531,156 @@ container WarmteBronnen
 				attribute<Classifications/CategorieKl> Categorie_rel := rlookup(Categorie, Classifications/CategorieKl/label);
 			}
 	}
+	
+	container Lijnbronnen
+	{
+		unit<uint32> LijnenSet :
+				StorageName     = "%sourceDataProjDir%/aanbod/Lijnbronnen.shp",
+				StorageReadOnly = "True",
+				StorageType 	= "gdal.vect",
+				DialogType      = "Map",
+				DialogData      = "geometry"
+			{
+				attribute<rdc_meter> geometry (arc);
+				attribute<string>    bron_naam;
+				attribute<bool>      Geschikt 			:= const(true,.);
+				parameter<units/m> 	 maxDistToArc 		:= 10000[units/m];
+				unit<uint32> 		 gem_connect   		:= connect(geometry, centroid_or_mid(Geography/RegioIndelingen/gemeente/Geometry), maxDistToArc * maxDistToArc);
+				attribute<units/m>   arc_dist   	(Geography/RegioIndelingen/gemeente)	:= dist_info(geometry, centroid_or_mid(Geography/RegioIndelingen/gemeente/Geometry))[m];
+				unit<uint32> Gemeenten_dichtbij_genoeg := select_with_org_rel(arc_dist < maxDistToArc);
+
+				unit<uint32> LijnBronPointSet := sequence2points(geometry);
+				unit<uint32> Gemeenten_rel := point_in_all_polygons(LijnBronPointSet/point, Geography/RegioIndelingen/gemeente/Geometry);
+
+				attribute<bool> gemeenteIsDichtbij (Geography/RegioIndelingen/gemeente) := arc_dist < maxDistToArc;
+
+				//attribute<Geography/RegioIndelingen/gemeente> gem_rel_P      := point_in_polygon(point, Geography/RegioIndelingen/gemeente/Geometry);
+				//attribute<Geography/RegioIndelingen/gemeente> target_gem_rel := 
+			}
+			
+			
+		unit<uint32> GeschikteLijnen := select_with_org_rel(LijnenSet/Geschikt)
+			{
+				attribute<rdc_meter> 			geometry	(arc)	:= LijnenSet/geometry[org_rel];
+				attribute<MetaData/TypeInfo>  	BronType_rel      	:= const(rlookup('Industrie', MetaData/TypeInfo/Type),.);
+				attribute<string>    			Label               := LijnenSet/bron_naam[org_rel];
+				
+				unit<uint32> LijnBronPointSet := sequence2points(LijnenSet/geometry[org_rel]);
+				unit<uint32> Gemeenten_rel := point_in_all_polygons(LijnBronPointSet/point, Geography/RegioIndelingen/gemeente/Geometry);
+				
+				container K_GJ  := for_each_nedv(classifications/Rekenstap/name, 'MetaData/TypeInfo/K_GJ/'+classifications/Rekenstap/name+'[BronType_rel]', ., Eur_GJ);
+				container Km_GJ := for_each_nedv(classifications/Rekenstap/name, 'MetaData/TypeInfo/Km_GJ/'+classifications/Rekenstap/name+'[BronType_rel]', ., Eur_GJ);
+				
+				attribute<celsius> 	T_bron	:= LijnenSet/T_bron[org_rel][units/celsius];
+				attribute<MW>   	MWth    := LijnenSet/MWth[org_rel][MW];
+				
+				attribute<kg_GJ>   CO2_2010  := value(MetaData/TypeInfo/CO2_2010[BronType_rel],kg_GJ);
+				attribute<kg_GJ>   CO2_2020  := value(MetaData/TypeInfo/CO2_2020[BronType_rel],kg_GJ);
+				attribute<kg_GJ>   CO2_2030  := value(MetaData/TypeInfo/CO2_2030[BronType_rel],kg_GJ);
+				attribute<kg_GJ>   CO2_2040  := value(MetaData/TypeInfo/CO2_2040[BronType_rel],kg_GJ);
+				attribute<kg_GJ>   CO2_2050  := value(MetaData/TypeInfo/CO2_2050[BronType_rel],kg_GJ);
+				attribute< g_GJ>   NOx_2010  := value(MetaData/TypeInfo/NOx_2010[BronType_rel],g_GJ );
+				attribute< g_GJ>   NOx_2020  := value(MetaData/TypeInfo/NOx_2020[BronType_rel],g_GJ );
+				attribute< g_GJ>   NOx_2030  := value(MetaData/TypeInfo/NOx_2030[BronType_rel],g_GJ );
+				attribute< g_GJ>   NOx_2040  := value(MetaData/TypeInfo/NOx_2040[BronType_rel],g_GJ );
+				attribute< g_GJ>   NOx_2050  := value(MetaData/TypeInfo/NOx_2050[BronType_rel],g_GJ );
+				attribute< g_GJ>   SO2_2010  := value(MetaData/TypeInfo/SO2_2010[BronType_rel],g_GJ );
+				attribute< g_GJ>   SO2_2020  := value(MetaData/TypeInfo/SO2_2020[BronType_rel],g_GJ );
+				attribute< g_GJ>   SO2_2030  := value(MetaData/TypeInfo/SO2_2030[BronType_rel],g_GJ );
+				attribute< g_GJ>   SO2_2040  := value(MetaData/TypeInfo/SO2_2040[BronType_rel],g_GJ );
+				attribute< g_GJ>   SO2_2050  := value(MetaData/TypeInfo/SO2_2050[BronType_rel],g_GJ );
+				attribute< g_GJ>   VOS_2010  := value(MetaData/TypeInfo/VOS_2010[BronType_rel],g_GJ );
+				attribute< g_GJ>   VOS_2020  := value(MetaData/TypeInfo/VOS_2020[BronType_rel],g_GJ );
+				attribute< g_GJ>   VOS_2030  := value(MetaData/TypeInfo/VOS_2030[BronType_rel],g_GJ );
+				attribute< g_GJ>   VOS_2040  := value(MetaData/TypeInfo/VOS_2040[BronType_rel],g_GJ );
+				attribute< g_GJ>   VOS_2050  := value(MetaData/TypeInfo/VOS_2050[BronType_rel],g_GJ );
+				attribute< g_GJ>   TS_2010   := value(MetaData/TypeInfo/TS_2010 [BronType_rel],g_GJ );
+				attribute< g_GJ>   TS_2020   := value(MetaData/TypeInfo/TS_2020 [BronType_rel],g_GJ );
+				attribute< g_GJ>   TS_2030   := value(MetaData/TypeInfo/TS_2030 [BronType_rel],g_GJ );
+				attribute< g_GJ>   TS_2040   := value(MetaData/TypeInfo/TS_2040 [BronType_rel],g_GJ );
+				attribute< g_GJ>   TS_2050   := value(MetaData/TypeInfo/TS_2050 [BronType_rel],g_GJ );
+			}
+
+		template BronSelectie: IsHidden = "True"
+		{
+			// begin case parameters
+			parameter<string> RekenstapName;
+			// end case parameters
+
+			parameter<classifications/Rekenstap> Rekenstap_rel 		:= rlookup(RekenstapName, classifications/Rekenstap/name);
+			parameter<units/yr_uint16>           Jaar          		:= classifications/Rekenstap/jaar[Rekenstap_rel];
+			parameter<classifications/Rekenstap> PrevRekenstap_rel 	:= sub_or_null(Rekenstap_rel,1[uint8]);
+			parameter<units/yr_uint16>           ZichtJaar     		:= Classifications/ZichtJaar/Jaar[classify(Jaar, Classifications/ZichtJaar/Jaar)];
+
+			unit<uint32> WarmteBronnen := GeschikteLijnen;
+
+			attribute<bool> InGemeente  (GeschikteLijnen) := any(Invoer/RuimtelijkeData/StudieGebied/selected_per_gemeente[GeschikteLijnen/Gemeenten_rel/second_rel][invert(GeschikteLijnen/Gemeenten_rel/first_rel)],GeschikteLijnen/LijnBronPointSet/sequence_rel);
+
+
+			unit<uint32> BronElementen := select_with_org_rel(
+					InGemeente                   // ruimtelijke selectie
+					//&& WarmteBronnen/ingebruik <= Jaar && (WarmteBronnen/uitgebruik == 0w || WarmteBronnen/uitgebruik > Jaar) // tijdselectie
+					&& WarmteBronnen/T_bron >= 70[celsius] //temperatuurselectie
+					&& WarmteBronnen/MWth > 0[mw] // capaciteitselectie
+				) 
+				, DialogType = "Map"
+				, DialogData = "geometry"
+			{
+				attribute<string>    Label               := GeschikteLijnen/Label[org_rel];
+				attribute<rdc_meter> geometry     (arc)  := GeschikteLijnen/geometry[org_rel];
+				
+				attribute<MetaData/TypeInfo>  	 BronType_rel			:= GeschikteLijnen/BronType_rel[org_rel];
+				attribute<MetaData/TypeInfoList> TypeInfoList_rel 	:= MetaData/TypeInfo/TypeInfoList_rel[BronType_rel];
+
+				attribute<celsius>   T_bron             := makedefined(Warmtebronnen/T_bron[org_rel], MetaData/TypeInfo/Temp_default[BronType_rel]);
+				attribute<ratio>     P_vol              := MetaData/TypeInfo/Pvol_default[BronType_rel];
+				attribute<ratio>     P_cap              := MetaData/TypeInfo/Pcap_default[BronType_rel];
+				attribute<Eur_kW>    Ki_kW_min          := MetaData/TypeInfo/Ki_kW_min[BronType_rel];
+				attribute<Eur_kW>    Ki_kW_max          := MetaData/TypeInfo/Ki_kW_max[BronType_rel];
+				attribute<_yr>  	 Rj_Onderhoud 		:= value(MetaData/TypeInfo/JaarKosten[BronType_rel], _yr);
+				attribute<MW>        MWth_max           := makedefined(Warmtebronnen/MWth[org_rel], MetaData/TypeInfo/MWth_default[BronType_rel]);
+				attribute<MW>        MWth_min           := MetaData/TypeInfo/MWth_min[BronType_rel][MW];
+				
+				attribute<Eur_GJ>                K_GJ             := = 'WarmteBronnen/K_GJ/' +RekenstapName+'[org_rel]';
+				attribute<Eur_GJ>                Km_GJ            := = 'WarmteBronnen/Km_GJ/'+RekenstapName+'[org_rel]';
+				attribute<kg_GJ>                 CO2_GJ           := ='WarmteBronnen/CO2_'+string(ZichtJaar)+'[org_rel]';
+				attribute<G_GJ>                  NOx_GJ           := ='WarmteBronnen/NOx_'+string(ZichtJaar)+'[org_rel]';
+				attribute<G_GJ>                  SO2_GJ           := ='WarmteBronnen/SO2_'+string(ZichtJaar)+'[org_rel]';
+				attribute<G_GJ>                  VOS_GJ           := ='WarmteBronnen/VOS_'+string(ZichtJaar)+'[org_rel]';
+				attribute<G_GJ>                  TS_GJ            := ='WarmteBronnen/TS_' +string(ZichtJaar)+'[org_rel]';
+			}
+			
+			unit<uint32> Bronnen := unique(BronElementen/geometry)
+			,	DialogType = "Map"
+			,	DialogData = "geometry"
+			{
+				attribute<string>                label                             := AsItemList(BronElementen/label, per_BronElementen), DialogType = "labelText";
+
+				attribute<.>                     per_BronElementen (BronElementen) := rlookup(BronElementen/geometry, Values); //todo: values is gesorteerd en daarom geeft lookup null
+				attribute<MetaData/TypeInfoList> TypeInfoList_rel                  := modus_weighted(BronElementen/TypeInfoList_rel, BronElementen/MWth_max, per_BronElementen);
+
+				attribute<rdc_meter>             geometry   (arc)     := Values;
+				attribute<units/celsius>         T_bron       := sum(BronElementen/T_bron       * BronElementen/MWth_max, per_BronElementen) / sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<ratio>                 P_vol        := sum(BronElementen/P_vol        * BronElementen/MWth_max, per_BronElementen) / sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<ratio>                 P_cap        := sum(BronElementen/P_cap        * BronElementen/MWth_max, per_BronElementen) / sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<Eur_kW>                Ki_kW_min    := sum(BronElementen/Ki_kW_min    * BronElementen/MWth_max, per_BronElementen) / sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<Eur_kW>                Ki_kW_max    := sum(BronElementen/Ki_kW_max    * BronElementen/MWth_max, per_BronElementen) / sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<MW>                    MWth_max     := sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<MW>                    MWth_min     := sum(BronElementen/MWth_min, per_BronElementen);
+				attribute<_yr>                   Rj_Onderhoud := sum(BronElementen/Rj_Onderhoud * BronElementen/MWth_max, per_BronElementen) / sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<Eur_GJ>                K_GJ         := sum(BronElementen/K_GJ         * BronElementen/MWth_max, per_BronElementen) / sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<Eur_GJ>                Km_GJ        := sum(BronElementen/Km_GJ        * BronElementen/MWth_max, per_BronElementen) / sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<kg_GJ >                CO2_GJ       := sum(BronElementen/CO2_GJ       * BronElementen/MWth_max, per_BronElementen) / sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<G_GJ >                 NOx_GJ       := sum(BronElementen/NOx_GJ       * BronElementen/MWth_max, per_BronElementen) / sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<G_GJ >                 SO2_GJ       := sum(BronElementen/SO2_GJ       * BronElementen/MWth_max, per_BronElementen) / sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<G_GJ >                 VOS_GJ       := sum(BronElementen/VOS_GJ       * BronElementen/MWth_max, per_BronElementen) / sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<G_GJ >                 TS_GJ        := sum(BronElementen/TS_GJ        * BronElementen/MWth_max, per_BronElementen) / sum(BronElementen/MWth_max, per_BronElementen);
+				attribute<m>                     cumulDist    := const(0[m], .);
+				attribute<MW>                    cumulP       := const(0[MW], .);
+				attribute<Bronnen>               Bronnen_rel  := id(.);
+			}
+		}
+		// Vooralsnog per ZichtJaar, zou ook per rekenstap kunnnen.
+		container BronSelecties := for_each_ne(Classifications/Rekenstap/name, 'BronSelectie('+Quote(Classifications/Rekenstap/name)+')');
+	}
 }
-
-// 		unit<uint32> bron
-// 		:	StorageName     = "%sourceDataProjDir%/aanbod/puntbronnen/20190802_MT_puntbronnen.dbf"
-// 		,	StorageReadOnly = "True"
-// 		,	DialogType      = "Map"
-// 		,	DialogData      = "P"
-// 		,	Source          = "%sourceDataProjDir%/aanbod/puntbronnen/20180724_metadata_puntbronnen.txt"
-// 		{
-// 			attribute<rdc_meter> P: StorageName = "%sourceDataProjDir%/aanbod/puntbronnen/20190802_MT_puntbronnen.shp", StorageReadOnly = "True";
-// 			attribute<string>    bron_naam;
-
-// 			attribute<string>                Type := makedefined(Type_bron , 'Onbekend');
-// 			attribute<MetaData/TypeInfo>     TypeInfo_rel     := rlookup(Type_bron, MetaData/TypeInfo/Type);
-// 			attribute<MetaData/TypeInfoList> TypeInfoList_rel := MetaData/TypeInfo/TypeInfoList_rel[TypeInfo_rel];
-
-// 			attribute<string> status;
-// 			attribute<yr_uint16> ingebruik	:=	((status == "Optie B") || (status == "Optie C")) ? 1999[yr_uint16] : 2029[yr_uint16];
-// 			attribute<yr_uint16> uitgebruik	:=	(status == "Optie C") ? 2019[yr_uint16] : 0w;
-
-// 			attribute<MW>      MWth_max;
-// 			
-// 			attribute<MW>      MWth_min  := value(MetaData/TypeInfo/MWth_min[TypeInfo_rel],MW);
-// 			attribute<Eur_kW>  Ki_kW_min := value(MetaData/TypeInfo/Ki_kW_min[TypeInfo_rel], Eur / kW);
-// 			attribute<Eur_kW>  Ki_kW_max := value(MetaData/TypeInfo/Ki_kW_max[TypeInfo_rel], Eur / kW);
-// 			
-// 			attribute<_yr>  Rj_Onderhoud := value(MetaData/TypeInfo/JaarKosten[ TypeInfo_rel ], _yr);
-// 			attribute<Eur_GJ>  K_GJ10    :=       MetaData/TypeInfo/K_GJ10[TypeInfo_rel];
-// 			attribute<Eur_GJ>  K_GJ20    :=       MetaData/TypeInfo/K_GJ20[TypeInfo_rel];
-// 			attribute<Eur_GJ>  K_GJ30    :=       MetaData/TypeInfo/K_GJ30[TypeInfo_rel];
-// 			attribute<Eur_GJ>  K_GJ40    :=       MetaData/TypeInfo/K_GJ40[TypeInfo_rel];
-// 			attribute<Eur_GJ>  K_GJ50    :=       MetaData/TypeInfo/K_GJ50[TypeInfo_rel];
-// 			attribute<Eur_GJ>  Km_GJ10   :=       MetaData/TypeInfo/Km_GJ10[TypeInfo_rel];
-// 			attribute<Eur_GJ>  Km_GJ20   :=       MetaData/TypeInfo/Km_GJ20[TypeInfo_rel];
-// 			attribute<Eur_GJ>  Km_GJ30   :=       MetaData/TypeInfo/Km_GJ30[TypeInfo_rel];
-// 			attribute<Eur_GJ>  Km_GJ40   :=       MetaData/TypeInfo/Km_GJ40[TypeInfo_rel];
-// 			attribute<Eur_GJ>  Km_GJ50   :=       MetaData/TypeInfo/Km_GJ50[TypeInfo_rel];
-// 			attribute<kg_GJ>   CO2_2010  := value(MetaData/TypeInfo/CO2_2010[TypeInfo_rel],kg_GJ);
-// 			attribute<kg_GJ>   CO2_2020  := value(MetaData/TypeInfo/CO2_2020[TypeInfo_rel],kg_GJ);
-// 			attribute<kg_GJ>   CO2_2030  := value(MetaData/TypeInfo/CO2_2030[TypeInfo_rel],kg_GJ);
-// 			attribute<kg_GJ>   CO2_2040  := value(MetaData/TypeInfo/CO2_2040[TypeInfo_rel],kg_GJ);
-// 			attribute<kg_GJ>   CO2_2050  := value(MetaData/TypeInfo/CO2_2050[TypeInfo_rel],kg_GJ);
-// 			attribute< g_GJ>   NOx_2010  := value(MetaData/TypeInfo/NOx_2010[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   NOx_2020  := value(MetaData/TypeInfo/NOx_2020[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   NOx_2030  := value(MetaData/TypeInfo/NOx_2030[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   NOx_2040  := value(MetaData/TypeInfo/NOx_2040[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   NOx_2050  := value(MetaData/TypeInfo/NOx_2050[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   SO2_2010  := value(MetaData/TypeInfo/SO2_2010[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   SO2_2020  := value(MetaData/TypeInfo/SO2_2020[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   SO2_2030  := value(MetaData/TypeInfo/SO2_2030[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   SO2_2040  := value(MetaData/TypeInfo/SO2_2040[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   SO2_2050  := value(MetaData/TypeInfo/SO2_2050[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   VOS_2010  := value(MetaData/TypeInfo/VOS_2010[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   VOS_2020  := value(MetaData/TypeInfo/VOS_2020[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   VOS_2030  := value(MetaData/TypeInfo/VOS_2030[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   VOS_2040  := value(MetaData/TypeInfo/VOS_2040[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   VOS_2050  := value(MetaData/TypeInfo/VOS_2050[TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   TS_2010   := value(MetaData/TypeInfo/TS_2010 [TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   TS_2020   := value(MetaData/TypeInfo/TS_2020 [TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   TS_2030   := value(MetaData/TypeInfo/TS_2030 [TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   TS_2040   := value(MetaData/TypeInfo/TS_2040 [TypeInfo_rel],g_GJ );
-// 			attribute< g_GJ>   TS_2050   := value(MetaData/TypeInfo/TS_2050 [TypeInfo_rel],g_GJ );
-// 			attribute<string>  Eigenaar;
-// 			attribute<string>  Brandstof;
-
-// 			// aspects
-// 			attribute<string>  label           := bron_naam,                            DialogType = "labelText";
-// 			attribute<float64> SymbolWorldSize := sqrt(MWth_max * 100000[1 / MW]), DialogType = "SymbolWorldSize";
-// 			parameter<int16>   SymbolIndex     := 44s,                             DialogType = "SymbolIndex";
-
-// 			attribute<Geography/RegioIndelingen/gemeente>  gem_rel_P      := point_in_polygon(P, Geography/RegioIndelingen/gemeente/Geometry);
-// 			attribute<Geography/RegioIndelingen/gemeente>  target_gem_rel := MakeDefined(rlookup(targetGMC,Geography/RegioIndelingen/gemeente/GM_CODE),gem_rel_P);
-
-// 			// in StudieGebied
-// 			attribute<bool> inStudieGebied := Invoer/RuimtelijkeData/StudieGebied/selected_per_gemeente[target_gem_rel];
-// 		}
