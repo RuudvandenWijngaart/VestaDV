@@ -263,6 +263,38 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 	
 	container buislengte 
 	{
+		unit<uint32> OSM_wegen := select(OSM/Read_Final_Network/rank > 0b)
+		{
+			attribute<rdc_meter> geometry(arc) := collect_by_cond(OSM_wegen, OSM/Read_Final_Network/geometry);
+			attribute<rdc_meter> road_polygons(poly) := bg_buffer_linestring(geometry, 1[m], 0b);
+			attribute<float64>   area := area(road_polygons, float64);
+			
+		}
+		unit<uint32> wegen_per_buurt := bg_overlay_polygon(OSM_wegen/road_polygons, Studiegebied/buurt/geometry)
+		{
+			attribute<float64> area := area(geometry, float64);
+		}
+		
+		unit<uint32> calculate := Studiegebied/buurt
+		{
+			
+			attribute<Geography/rdc_meter> geometry (poly) := Studiegebied/buurt/Geometry;
+			attribute<string>              BU_CODE         := Studiegebied/buurt/BU_CODE;
+			
+			attribute<float64> area := sum(wegen_per_buurt/area, wegen_per_buurt/second_rel);
+/*
+			attribute<m>       L_dist_input    ; 
+			attribute<nrPand>  nrAansluitingen ;
+
+			attribute<m>       L_aansl         ;
+			attribute<m>       L_aansl         ;
+			attribute<m>       L_dist          ; 
+			attribute<nrPand>  nrPanden        ; 
+			attribute<m_pand>  L_aansl_pand     := max_elem(L_aansl / nrPanden, 1[m_pand]);
+			attribute<float64> Niet_aangesloten := float64(nrPanden) - float64(nrAansluitingen);
+*/			
+		}
+		
 		unit<uint32> buislengte_input
 		:	StorageName     = "%SourceDataProjDir%/infra/20200220_buislengte.csv"
 		,	StorageType     = "gdal.vect"
@@ -270,8 +302,6 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 		,	url             = "%SourceDataProjDir%/infra/20190618_metadata_buislengte.pdf";
 
 		unit<uint32> per_buurt := Studiegebied/buurt, using = "buislengte_input"
-		,	DialogType = "map"
-		,	DialogData = "geometry"
 		{
 			attribute<Geography/rdc_meter> geometry (poly) := Studiegebied/buurt/Geometry;
 			attribute<string>              BU_CODE         := Studiegebied/buurt/BU_CODE;
