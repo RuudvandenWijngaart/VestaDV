@@ -1,11 +1,9 @@
 container OSM
 {  
 	parameter<string> file_date := '20240524';  // 20_09_2022  20240524
-	parameter<string> localdir  := '%SourceDataProjDir%/OSM/Snapshots/Netwerk_'+file_date;
+	// parameter<string> localdir  := '%SourceDataProjDir%/OSM/Snapshots/Netwerk_'+file_date;
 	parameter<string> dir       := '%SourceDataProjDir%/OSM/'+file_date;
 
-	parameter<String> Generate_Roads             := 'Ready', ExplicitSuppliers = "Merge_SourceData";
-	
 	unit<uint32> Regios : nrofrows = 12
 	{
 		unit<uint32> Elements  := Range(uint32, 0, nrAttr*#.)
@@ -151,21 +149,12 @@ container OSM
 		}
 	}
 
-	unit<uint32>  Merge_SourceData := ='union_unit('+AsList('Prepare_SourceData/'+Regios/name+'/Read_Roads_shp', ',')+')'
-	,   StorageName = "=localdir+'/Final_Network_'+file_date+'.fss'"
+	unit<uint32>  Road_Network := ='union_unit('+AsList('Prepare_SourceData/'+Regios/name+'/Read_Roads_shp', ',')+')'
 	{
 		attribute<rdc_meter>         geometry (arc)                   := ='union_data(., '+AsList('Prepare_SourceData/'+Regios/name+'/Read_Roads_shp/geometry_rd', ',')+')';
 		attribute<wegtype>           wegtype_rel                      := ='union_data(., '+AsList('Prepare_SourceData/'+Regios/name+'/Read_Roads_shp/wegtype_rel', ',')+')';
+		attribute<float64>           length                           := mls_length(geometry, float64);
+		attribute<string>            wegtype_label                    := wegtype/label[wegtype_rel];
 	}
-	
-	unit<uint32> Read_Final_Network
-	:   StorageName = "=localdir+'/Final_Network_'+file_date+'.fss'"
-	,   StorageReadOnly = "true"
-	{
-		attribute<rdc_meter>    geometry (arc);
-		attribute<float64>      length        := mls_length(geometry, float64);
-		attribute<wegtype>      wegtype_rel;
-		attribute<string>       wegtype_label := wegtype/label[wegtype_rel];
-	}
-	unit<uint32> dynapoints := dyna_point(first_point(Read_Final_Network/geometry), last_point(Read_Final_Network/geometry), 10.0[units/m]);
+	unit<uint32> dynapoints := dyna_point(first_point(Road_Network/geometry), last_point(Road_Network/geometry), 10.0[units/m]);
 }
