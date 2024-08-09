@@ -32,11 +32,11 @@ container Bebouwing :=
 			unit<uint8>  ModelObjectKeyDomein  := Classifications/combines/WoningtypeBouwjaarBestaand;
 			unit<uint8> WoningtypeBouwjaarBestaandRapportageDomein := Classifications/combines/WoningtypeBouwjaarBestaandRapportage;
 
-			attribute<string>                                    code      := BAG/vbo_woonfunctie_studiegebied/identificatie;
+			attribute<uint64>                                    code      := BAG/vbo_woonfunctie_studiegebied/vbo_bag_nr;
 			attribute<Invoer/RuimtelijkeData/StudieGebied/buurt> buurt_rel := BAG/vbo_woonfunctie_studiegebied/buurt_rel;
 
 			attribute<nrAsl>                nrAansluitingen_i := impl/nrWon;
-			attribute<m2>                   Oppervlakte_i     := median(BAG/vbo_woonfunctie_studiegebied/oppervlakte[m2], interval(50[m2], 200[m2]));
+			attribute<m2>                   Oppervlakte_i     := median(BAG/vbo_woonfunctie_studiegebied/oppervlakte_corr[m2], interval(50[m2], 200[m2]));
 
 			attribute<BebouwingsTypeDomein> BebouwingsType := impl/WoningType, isHidden = "True";
 			attribute<ModelObjectKeyDomein> ModelObjectKey := combine_data(ModelObjectKeyDomein, BebouwingsType, impl/BouwjaarWoningBestaand_rel);
@@ -56,16 +56,16 @@ container Bebouwing :=
 			}
 
 			unit<uint32> EnergieLabelData := RuimtelijkeData/EnergieLabel/Data;
-			attribute<Classifications/SchilLabel> SchilLabel_rel := rjoin(code, EnergieLabelData/VBO_id, EnergieLabelData/schillabel_rel);
+			attribute<Classifications/SchilLabel>      SchilLabel_rel                   := rjoin(code, EnergieLabelData/vbo_bag_nr, EnergieLabelData/schillabel_rel);
 			attribute<Classifications/RVOEnergieLabel> RVOLabel_inclusief_voorlopig_rel := 
 				MakeDefined(
 					SchilLabel_rel
-					, rjoin(code, RuimtelijkeData/EnergieLabel/Data_voorlopig/VBO_id, RuimtelijkeData/EnergieLabel/Data_voorlopig/schillabel_rel)
+					, rjoin(code, RuimtelijkeData/EnergieLabel/Data_voorlopig/vbo_bag_nr, RuimtelijkeData/EnergieLabel/Data_voorlopig/schillabel_rel)
 				)[Classifications/RVOEnergieLabel];
 			attribute<uint8> ellabel_type := 
 					isDefined(SchilLabel_rel) 
 						? 1b
-						: isDefined(rjoin(code, RuimtelijkeData/EnergieLabel/Data_voorlopig/VBO_id, RuimtelijkeData/EnergieLabel/Data_voorlopig/schillabel_rel))
+						: isDefined(rjoin(code, RuimtelijkeData/EnergieLabel/Data_voorlopig/vbo_bag_nr, RuimtelijkeData/EnergieLabel/Data_voorlopig/schillabel_rel))
 							? 2b
 							: 0b;
 
@@ -96,7 +96,7 @@ container Bebouwing :=
 			unit<uint8>  BouwjaarDomein       := Classifications/BouwjaarUtilBestaand;
 			unit<uint8>  ModelObjectKeyDomein := Classifications/combines/UtiltypeBouwjaarBestaand;
 
-			attribute<string> code     := BAG/vbo_utiliteit_studiegebied/identificatie;
+			attribute<uint64> code     := BAG/vbo_utiliteit_studiegebied/vbo_bag_nr;
 			attribute<string> postcode := BAG/vbo_utiliteit_studiegebied/postcode;
 
 			attribute<Invoer/RuimtelijkeData/StudieGebied/buurt> buurt_rel := BAG/vbo_utiliteit_studiegebied/buurt_rel, isHidden = "True";
@@ -215,12 +215,13 @@ container Bebouwing :=
 				attribute<uint32> aantal := pcount(Type_rel);
 			}
 
-			container GlTbTabel_Groep_Type := for_each_nedv(
-				  Type_BestaandeGlTb/Values
-				, 'sum(Type_rel == ' + string(id(Type_BestaandeGlTb)) + '[Type_BestaandeGlTb] ?  Opp_M2 : 0[m2]  ,Groep_rel)'
-				, Groep_BestaandeGlTb
-				, m2
-			)
+			container GlTbTabel_Groep_Type := 
+				for_each_nedv(
+					  Type_BestaandeGlTb/Values
+					, 'sum(Type_rel == ' + string(id(Type_BestaandeGlTb)) + '[Type_BestaandeGlTb] ?  Opp_M2 : 0[m2]  ,Groep_rel)'
+					, Groep_BestaandeGlTb
+					, m2
+				)
 			{
 				attribute<string> label (Groep_BestaandeGlTb) := Groep_BestaandeGlTb/label;
 			}
