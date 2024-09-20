@@ -239,6 +239,36 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 
 			attribute<m>       L_dist_input     := rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Hoofdleiding_lengte_m)[m];
 			attribute<nrPand>  nrAansluitingen  := rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Aansluitingen)[units/nrPand];
+			container DEBUG {
+			
+				attribute<uint32> nrWoonVBO  (..) := pcount(/Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/Buurt_rel);
+				attribute<uint32> nrUtilVBO  (..) := pcount(/Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/Buurt_rel);
+				
+				unit<uint32> functionele_vbo := union_unit(/Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied, /Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied)
+				{
+					attribute<Studiegebied/buurt> buurt_rel := union_data(., /Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/buurt_rel, /Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/buurt_rel);
+					attribute<uint32> pand_rel  := union_data(., /Invoer/RuimtelijkeData/BAG/vbo_woonfunctie_studiegebied/pand_rel, /Invoer/RuimtelijkeData/BAG/vbo_utiliteit_studiegebied/pand_rel);
+					unit<uint32> pand_voorkomens := unique(point_xy(buurt_rel, pand_rel))
+					{
+						attribute<Studiegebied/buurt> buurt_rel := pointcol(values)[Studiegebied/buurt];
+					}
+				}
+				attribute<uint32> nr_Pand(..) := pcount(functionele_vbo/pand_voorkomens/buurt_rel);
+
+				attribute</Geography/RegioIndelingen/Buurt2020x2023> xtab_rel(..) := rlookup(BU_CODE, /Geography/RegioIndelingen/Buurt2020x2023/BU_CODE); // guaranteed same_rel
+				attribute<bool> is_same        (..):= xtab_rel->VBO_FractionOf_2023 >= 0.999 && xtab_rel->VBO_FractionOf_2020 >= 0.999;
+				attribute<bool> is_large       (..):= nrAansluitingen > 100.0;
+				attribute<bool> is_comparable  (..):= is_same && is_large;
+			}
+			
+			unit<uint32> selectedBuurten := select_with_attr_by_cond(DEBUG, DEBUG/is_comparable)
+			{
+				attribute<Geography/rdc_meter> geometry(poly) := collect_by_cond(selectedBuurten, ../geometry);
+				attribute<nrPand> nrAansluitingen := collect_by_cond(selectedBuurten, ../nrAansluitingen);
+				
+				attribute<Float64> verschilkaart := Float64(nr_Pand) - nrAansluitingen;
+				attribute<Float64> AbsVerschil := abs(verschilkaart);
+			}
 
 			attribute<m>       L_aansl          := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Aansluit_lengte_m)[m], nrPanden * 1[m_pand]), Descr = "invoer lengte aansluitleidingen per buurt";
 			attribute<m>       L_dist           := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Hoofdleiding_lengte_m)[m], 500[m])          , Descr = "invoer lengte distributieleidingen per buurt";
