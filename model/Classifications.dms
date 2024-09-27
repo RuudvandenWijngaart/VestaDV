@@ -1039,7 +1039,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		);
 	}
 
-	unit<uint8> GebiedsOptie : nrofrows = 15 // volgorde niet hier instellen maar in SpecifiekeInstellingen/VoorkEuren/BaseLine/WarmteOpties
+	unit<uint8> GebiedsOptie : nrofrows = 18 // volgorde niet hier instellen maar in SpecifiekeInstellingen/VoorkEuren/BaseLine/WarmteOpties
 	{
 		attribute<string> name:
 		[
@@ -1047,7 +1047,10 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			,'GeoThermie'
 			,'WijkWKK'
 			,'BioWKK'
-			,'WKO'
+			,'WKO15_15'
+			,'WKO15_50'
+			,'WKO15_70'
+			,'Lt15_15'
 			,'Lt15_30'
 			,'Lt15_50'
 			,'Lt15_70'
@@ -1061,23 +1064,28 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		];
 		attribute<WarmteOptie> WarmteOptie_rel := rlookup(name, WarmteOptie/name); // WarmteOptie is een zelfstandige gebouw-optie of een gebiedsoptie.
 		attribute<GebouwOptie> GebouwOptie_rel :=
-			id(.) == V/WKO ? GebouwOptie/V/Gebied_mk :
+			id(.) == V/WKO15_15 ? GebouwOptie/V/Gebied_mk :
+			id(.) == V/WKO15_50 ? GebouwOptie/V/Gebied_mk :
+			id(.) == V/WKO15_70 ? GebouwOptie/V/Gebied_mk :
 			id(.) == V/WaterstofWP ? GebouwOptie/V/H2WP :
 			id(.) == V/WaterstofHR ? GebouwOptie/V/H2R :
 			GebouwOptie/V/Gebied_zk;
 		attribute<GebouwOptie> GebouwOptie_rel_u :=
-			id(.) == V/WKO ? GebouwOptie/V/Gebied_mk :
+			id(.) == V/WKO15_15 ? GebouwOptie/V/Gebied_mk :
+			id(.) == V/WKO15_50 ? GebouwOptie/V/Gebied_mk :
+			id(.) == V/WKO15_70 ? GebouwOptie/V/Gebied_mk :
 			id(.) == V/WaterstofWP ? GebouwOptie/V/H2WPu :
 			id(.) == V/WaterstofHR ? GebouwOptie/V/H2Ru :
 			GebouwOptie/V/Gebied_zk;
 			
 		attribute<string> code             := string(id(.));
-		attribute<bool>   IsPlanRegioOptie : [ true, true, true, true, false, false, false, false, false, false, false, false, true, true, true]; //, false ];
+		attribute<bool>   IsPlanRegioOptie : [ true, true, true, true, false, false, false, false, false, false, false, false, false, false, false, true, true, true]; //, false ];
 		attribute<bool>   IsMT : [ true, true, true, true, false, 
-			false, false, false, false, false, false, 
+			false, false, false, false, false, false, false, false, false,
 			false, false, false, false]; //, false ];
 		attribute<bool>   IsH2 := id(.) == V/WaterstofHR || id(.) == V/WaterstofWP;
 		attribute<bool>   IsLT := not(IsMT) && not(IsH2);
+		attribute<bool>   HeeftKoude := id(.) == V/WKO15_15 || id(.) == V/WKO15_50 || id(.) == V/WKO15_70;
 
 		attribute<string> label := name, DialogType = "LabelText";
 		attribute<uint32> Color : DialogType = "BrushColor",
@@ -1087,6 +1095,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			,rgb(128,128,  0)
 			,rgb(  0,255,128)
 			,rgb(  0,150,  0)
+			,rgb(255,115,  0) // oranje
 			,rgb(255,130,  0) // oranje
 			,rgb(255,155,  0) // geel
 			,rgb(255,180,  0) // geel
@@ -1111,6 +1120,7 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 		attribute<bool>   IsMT            := union_data(., const(false, GebouwOptie), GebiedsOptie/IsMT);
 		attribute<bool>   IsLT            := union_data(., const(false, GebouwOptie), GebiedsOptie/IsLT);
 		attribute<bool>   IsH2            := union_data(., const(false, GebouwOptie), GebiedsOptie/IsH2);
+		attribute<bool>   HeeftKoude      := union_data(., const(false, GebouwOptie), GebiedsOptie/HeeftKoude);
 
 		container V := for_each_nedv(name, 'value('+string(id(.))+', ..)', void, .);
 		attribute<string> LabelText := name;
@@ -1537,21 +1547,4 @@ container Classifications: Using = "Units", KeepData = "True", IsHidden = "True"
 			];
 		}
 	}
-	unit<uint8> vbo_status : nrofrows = 8
-	{
-		attribute<string>    label       : ['Niet gerealiseerd verblijfsobject','Verblijfsobject buiten gebruik','Verblijfsobject gevormd','Verblijfsobject in gebruik','Verblijfsobject in gebruik (niet ingemeten)','Verblijfsobject ingetrokken','Verblijfsobject ten onrechte opgevoerd','Verbouwing verblijfsobject'], DialogType = "LabelText";
-		attribute<string>    name        := replace(label, ' ', '_', '-', '_', '(', '', ')', '');
-		attribute<bool>      IsVoorraad      : [FALSE, TRUE,  FALSE, TRUE,  TRUE,  FALSE, FALSE, TRUE];
-		
-		container V := for_each_nedv(name, String(ID(.))+'[..]', void, .);
-	}
-	unit<uint8> pand_status : nrofrows = 10
-	{
-		attribute<string>    label      : ['Bouw gestart','Bouwvergunning verleend','Niet gerealiseerd pand','Pand buiten gebruik','Pand gesloopt','Pand in gebruik','Pand in gebruik (niet ingemeten)','Sloopvergunning verleend','Pand ten onrechte opgevoerd','Verbouwing pand'], DialogType = "LabelText";
-		attribute<string>    name       := replace(label, ' ', '_', '-', '_', '(', '', ')', '');
-		attribute<bool>      IsVoorraad      : [FALSE,  FALSE, FALSE, TRUE,  FALSE, TRUE,  TRUE,  FALSE, FALSE, TRUE];
-		
-		container V := for_each_nedv(name, String(ID(.))+'[..]', void, .);
-	}
-	
 }

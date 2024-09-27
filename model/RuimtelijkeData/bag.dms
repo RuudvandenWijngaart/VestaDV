@@ -66,131 +66,95 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 		}
 	}
 
-	container import : using = "classifications;typeringen"
+	container import
 	{
-		unit<uint32> vbo_src
+		unit<uint32> vbo
 		:	StorageName     = "= SourceDir + '/vbo.fss'"
 		,	StorageReadOnly = "True"
+		,	DialogType      = "Map"
+		,	DialogData      = "geometry"
 		{
 			attribute<geography/rdc_mm>    geometry_mm;
-			attribute<geography/rdc_meter> geometry                     := geometry_mm[geography/rdc_meter];
+			attribute<geography/rdc_meter> geometry := geometry_mm[geography/rdc_meter];
 			attribute<string>              identificatie;
 			attribute<string>              nummeraanduiding_id;
 			attribute<int32>               oppervlakte;
-			attribute<m2>                  oppervlakte_corr             := impl/IsRareOppervlakte ? null_d : oppervlakte[m2];
-			// attribute<string>              pand_id_geom;
-			attribute<string>              pand_id;
 
-			attribute<bool>                vbo_selection_condition      := impl/IsBinnenNL && impl/IsVoorraad && impl/IsActief;
-			
-			container meta := meta_src_template(., vbo_status);
+			container oppervlak_filters
+			{
+				attribute<bool> rare_waarden  (vbo) := Oppervlakte = 1i || Oppervlakte = 999999i || Oppervlakte = 99999i || Oppervlakte = 9999i;
+
+				attribute<Units/m2> wonen     (vbo) := (rare_waarden || (Oppervlakte > 10000i && pand_bouwlagen_fictief > 10f))
+					? (0 / 0)[Units/m2]
+					: Oppervlakte[Units/m2]
+				,	FreeData = "False"
+				,	Descr =
+					"Correctie van oppervlaktes deels op basis van document: http://www.cbs.nl/nl-NL/menu/themas/bouwen-wonen/methoden/dataverzameling/korte-onderzoeksbeschrijvingen/2015-kenmerken-woningen-kob.htm"
+					"Aanvulling van OV op oppervlakte in relatie tot pand footprint (verdacht groot) en op 99999";
+
+				attribute<Units/m2> utiliteit (vbo) := (rare_waarden || (Oppervlakte > 160000i && pand_bouwlagen_fictief > 45f))
+						? (0 / 0)[Units/m2]
+						: Oppervlakte[Units/m2]
+				,	FreeData = "False"
+				,	Descr    = "Grootste kantoorgebouw van Nederland bedraagt 160.000m2 Rotterdam Kop van Zuid, aantal bouwlagen in Nederland maximaal 44";
+			}
+
 			container gebruiksdoelen :=
 				for_each_ndv(
 					typeringen/gebruiksdoel/name
-					, vbo_src
+					, vbo
 					, bool
 				);
-				
-			unit<uint32> impl := .
-			{
-					attribute<float64>    x                           := PointCol(geometry);
-					attribute<float64>    y                            := PointRow(geometry);
-					
-					attribute<bool>       IsBinnenNL                   := x < 300000d && x > 0d && y < 620000d && y > 300000d;
-					attribute<bool>       IsVoorraad                   := vbo_status/isVoorraad[meta/status_rel];
-					attribute<bool>       IsActief                     := meta/begindatum_edit < int32(string(SnapShotYear)+'0101') && meta/einddatum_edit >= int32(string(SnapShotYear)+'0101');
-					attribute<bool>       IsRareOppervlakte            := Oppervlakte = 1i || Oppervlakte = 999999i || Oppervlakte = 99999i || Oppervlakte = 9999i;
-			}
-		}
-		
-		unit<uint32> vbo := select_with_attr_by_cond(vbo_src, vbo_src/vbo_selection_condition)
-		, Descr = "selectie van objecten die voldoen aan de CBS-voorraad definitie"
-		{
-			attribute<uint64>             vbo_bag_nr               := uint64(identificatie);
-			attribute<uint64>             pand_bag_nr              := uint64(pand_id);
-			// attribute<uint64>             pand_bag_nr_geom         := uint64(pand_id_geom);
-			attribute<pand>               pand_rel                 := rlookup(pand_bag_nr, pand/pand_bag_nr);
-			// attribute<pand>               pand_rel_geom            := point_in_polygon(geometry, pand/geometry);
-			// attribute<pand>               pand_rel_augm            := IsNull(pand_rel) ? pand_rel_geom : pand_rel; //dit scheelt 300 van de 37000 nulls.
-			attribute<float32>            pand_bouwlagen_fictief   := pand/bouwlagen_fictief[pand_rel];
-			attribute<yr>                 bouwjaar                 := pand_rel -> bouwjaar_corr;
-			attribute<WoningtypeSnapshot> woonpand_type            := pand_rel -> woonpand_type;
-			container                     gebruiksdoelen           := collect_attr_by_cond(vbo_src/gebruiksdoelen, vbo, vbo_src/vbo_selection_condition);
-			attribute<uint16>             gebruiksdoelcombinatie   := =AsList(string(typeringen/gebruiksdoel/impl/BitValue)+ 'w * uint16(gebruiksdoelen/' + typeringen/gebruiksdoel/name + ')',' + '), IsHidden = "True";
-			attribute<string>             label                    := rjoin(nummeraanduiding_id, nummeraanduiding/identificatie, nummeraanduiding/adres_key);
-			attribute<string>             postcode                 := rjoin(nummeraanduiding_id, nummeraanduiding/identificatie, nummeraanduiding/postcode);
-			
-			container oppervlak_filters
-			{
-				attribute<m2> wonen         (..) :=  Oppervlakte_corr > 10000[m2] && pand_bouwlagen_fictief > 10f ? null_d : Oppervlakte_corr
-				,	Descr = "Correctie van oppervlaktes deels op basis van document: http://www.cbs.nl/nl-NL/menu/themas/bouwen-wonen/methoden/dataverzameling/korte-onderzoeksbeschrijvingen/2015-kenmerken-woningen-kob.htm"
-							"Aanvulling van OV op oppervlakte in relatie tot pand footprint (verdacht groot) en op 99999";
-				attribute<m2> utiliteit     (..) := Oppervlakte_corr > 160000[m2] && pand_bouwlagen_fictief > 45f ? null_d : Oppervlakte_corr
-				,	Descr    = "Grootste kantoorgebouw van Nederland bedraagt 160.000m2 Rotterdam Kop van Zuid, aantal bouwlagen in Nederland maximaal 44";
-			}
+			attribute<uint16> gebruiksdoelcombinatie   := =AsList(string(typeringen/gebruiksdoel/impl/BitValue)+ 'w * uint16(gebruiksdoelen/' + typeringen/gebruiksdoel/name + ')',' + '), IsHidden = "True";
+
+			// pand gerelateerde data
+			attribute<string>  pand_id_geom;
+			attribute<string>  pand_id                := pand_id_geom;
+			attribute<pand>    pand_rel               := rlookup(pand_id, pand/identificatie);
+			attribute<float32> pand_bouwlagen_fictief := pand/bouwlagen_fictief[pand_rel];
 			
 			// relatie naar buurt voor o.a. ruimtelijke selectie
 			attribute<RegioIndelingen/buurt>    buurt_rel    := point_in_polygon(geometry, RegioIndelingen/buurt/geometry);
 			attribute<RegioIndelingen/gemeente> gemeente_rel := RegioIndelingen/buurt/gemeente_rel[buurt_rel];
 		}
 
-		unit<uint32> pand_src
+		unit<uint32> pand
 		:	StorageName     = "= SourceDir + '/pand.fss'"
+		,	DialogType      = "Map"
+		,	DialogData      = "geometry"
 		,	StorageReadOnly = "True"
 		{
-			attribute<rdc_mm>              geometry_mm (poly);
-			attribute<rdc_meter>           geometry    (poly) := geometry_mm[rdc_meter];
+			attribute<geography/rdc_mm>    geometry_mm (poly);
+			attribute<geography/rdc_meter> geometry    (poly) := geometry_mm[geography/rdc_meter];
 			attribute<string>              identificatie;
-			attribute<uint16>              AHN_hoogte;
-			attribute<uint16>              bouwjaar;
-			attribute<bool>                pand_selection_condition     := impl/IsVoorraad && impl/IsActief && impl/IsNietTeGroot && impl/IsBinnenNL;
-			
-			container meta := meta_src_template(., pand_status);
-		
-			unit<uint32> impl := .
-			{
-				attribute<rdc_meter>  NW                           := lower_bound(geometry);
-				attribute<rdc_meter>  SE                           := upper_bound(geometry);
-				attribute<float64>    X_ext                        := sub_or_null(PointCol(SE),PointCol(NW));
-				attribute<float64>    Y_ext                        := sub_or_null(PointRow(SE),PointRow(NW));
-				
-				attribute<float64>    lower_x                      := pointCol(NW);
-				attribute<float64>    upper_x                      := pointCol(SE);
-				attribute<float64>    lower_y                      := pointRow(NW);
-				attribute<float64>    upper_y                      := pointRow(SE);
-				
-				attribute<bool>       IsVoorraad                   := pand_status/isVoorraad[meta/status_rel];
-				attribute<bool>       IsActief                     := meta/begindatum_edit < int32(string(SnapShotYear)+'0101') && meta/einddatum_edit >= int32(string(SnapShotYear)+'0101');
-				attribute<bool>       IsNietTeGroot                := X_ext < 1000d && Y_ext < 1000d; //panden met een grotere x/y range dan 1km eruit
-				attribute<bool>       IsBinnenNL                   := lower_x < 300000d && lower_x > 0d
-																				&& upper_x < 300000d && upper_x > 0d
-																				&& lower_y < 620000d && lower_y > 300000d
-																				&& upper_y < 620000d && upper_y > 300000d; 
-			}
-		}
-		
-		unit<uint32> pand := select_with_attr_by_cond(pand_src, pand_src/pand_selection_condition)
-		, Descr = "selectie van panden die voldoen aan de CBS-voorraad definitie"
-		{
-			attribute<WoningtypeSnapshot>  woonpand_type       := AfleidingPandtype/Results/WP5_rel;
-			attribute<uint64>              pand_bag_nr         := uint64(identificatie);
-			parameter<uint32>              PenColor            := rgb(7,243,243), DialogType = "PenColor";
-			parameter<int16>               PenWidth            := 1s            , DialogType = "PenWidth";
-			parameter<uint32>              BrushColor          := rgb(7,7,243)  , DialogType = "BrushColor";
-			attribute<float32>             verdiepingen_float  := float32(AHN_hoogte) / float32(verdiepinghoogte_cm);
-			attribute<uint32>              vbo_count           := pcount(vbo/pand_rel);
-			attribute<yr>                  bouwjaar_corr       := (bouwjaar <= 1005w || bouwjaar[yr] > SnapShotYear) ? null_d : bouwjaar[yr], Descr = "Correctie van bouwjaren op basis van document", url   = "http://www.cbs.nl/nl-NL/menu/themas/bouwen-wonen/methoden/dataverzameling/korte-onderzoeksbeschrijvingen/2015-kenmerken-woningen-kob.htm";
-			attribute<uint8>               nr_verdiepingen     := uint8(round(verdiepingen_float));
-			attribute<m2>                  footprint           := area(geometry, m2);
-			attribute<m2>                  vbo_oppervlak       := sum(vbo/Oppervlakte_corr, vbo/pand_rel)[m2];
-			attribute<float32>             bouwlagen_fictief   := float32(vbo_oppervlak / footprint);
-			attribute<uint32>              nr_woningen         := pcount(vbo_woonfunctie_studiegebied/pand_rel);
-			
-			#include<AfleidingPandtype.dms>
-			
+
+			parameter<uint32> PenColor   := rgb(7,243,243), DialogType = "PenColor";
+			parameter<int16>  PenWidth   := 1s            , DialogType = "PenWidth";
+			parameter<uint32> BrushColor := rgb(7,7,243)  , DialogType = "BrushColor";
+
+			attribute<uint16>   AHN_hoogte;
+			parameter<uint16>   verdiepinghoogte_cm := 280w;
+			attribute<float32>  verdiepingen_float  : = float32(AHN_hoogte) / float32(verdiepinghoogte_cm);
+			attribute<uint32>   vbo_count           := pcount(vbo/pand_rel);
+
+			attribute<uint16>   bouwjaar;
+			attribute<units/yr> bouwjaar_gecorrigeerd :=
+				(bouwjaar <= 1000w || bouwjaar[units/yr] > SnapShotYear)
+					? (0 / 0)[Units/yr]
+					: bouwjaar[Units/yr]
+			,	Descr = "Correctie van bouwjaren op basis van document"
+			,	url   = "http://www.cbs.nl/nl-NL/menu/themas/bouwen-wonen/methoden/dataverzameling/korte-onderzoeksbeschrijvingen/2015-kenmerken-woningen-kob.htm";
+
+			attribute<uint8>                         nr_verdiepingen   := uint8(round(verdiepingen_float));
+			attribute<typeringen/WoningtypeSnapshot> woonpand_type;
+			attribute<units/m2>                      footprint         := area(geometry, m2);
+			attribute<units/m2>                      vbo_oppervlak     := sum(vbo/Oppervlakte, vbo/pand_rel)[units/m2];
+			attribute<float32>                       bouwlagen_fictief := float32(vbo_oppervlak / footprint);
+			attribute<uint32>                        nr_woningen       := pcount(vbo_woonfunctie_studiegebied/pand_rel);
+
 			attribute<bool> HeeftGreenvisAansluiting := sum_uint32(vbo/gebruiksdoelcombinatie != typeringen/gebruiksdoel/impl/BitValue[typeringen/gebruiksdoel/V/overige_gebruiks], vbo/pand_rel) > 0 
 				|| area(geometry, float64) > 50.0;
-				
+			
 			attribute<bool> HeeftVestaAansluiting := 
 				sum_uint32(vbo/gebruiksdoelen/woon
 						&& vbo/oppervlak_filters/wonen >=  10[Units/m2]
@@ -225,38 +189,9 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 				//)
 				;
 		}
-		
-		template meta_src_template // Voor het inlezen van de generieke BAG attributen
-		{
-			unit<uint32> domain;
-			unit<uint8>  statustype;
-			// end case parameters
-
-			attribute<string>     STATUS                 (domain);
-			attribute<statustype> status_rel             (domain) := rlookup(lowercase(STATUS), lowercase(statustype/label));
-
-			attribute<int32>      BEGINDATUM             (domain);
-			attribute<int32>      EINDDATUM              (domain);
-			attribute<uint32>     VOORKOMENIDENTIFICATIE (domain); //een identificatienummer kan meerdere keren voorkomen. Dit is een volgnummer dat de versie weergeeft.
-
-			attribute<string>     TIJDSTIPREGISTRATIE    (domain);
-			attribute<string>     EINDREGISTRATIE        (domain);
-
-			attribute<int32>      DOCUMENTDATUM          (domain);
-			attribute<string>     DOCUMENTNUMMER         (domain);
-
-			attribute<bool>       IS_GECONSTATEERD       (domain);
-			
-			attribute<int32>      TIJDSTIPREGISTRATIE_edit        (domain) := int32(replace(substr(TIJDSTIPREGISTRATIE,0,10),'-',''));
-			attribute<int32>      EINDREGISTRATIE_edit            (domain) := int32(replace(substr(EINDREGISTRATIE,0,10),'-',''));
-			attribute<int32>      begindatum_maxdatum             (domain) := BEGINDATUM == 0i ? MaxDatum : BEGINDATUM;
-			attribute<int32>      einddatum_maxdatum              (domain) := EINDDATUM == 0i ? MaxDatum : EINDDATUM;
-			attribute<int32>      begindatum_edit                 (domain) := begindatum_maxdatum < 19600101i ? TIJDSTIPREGISTRATIE_edit : begindatum_maxdatum;
-			attribute<int32>      einddatum_edit                  (domain) := einddatum_maxdatum < 19600101i ? EINDREGISTRATIE_edit : einddatum_maxdatum;
-		}
 	}
 
-	unit<uint32> vbo_woonfunctie_studiegebied := select_with_org_rel( 
+	unit<uint32> vbo_woonfunctie_studiegebied := subset(
 			import/vbo/gebruiksdoelen/woon
 		&& Studiegebied/selected_per_gemeente[import/vbo/gemeente_rel]
 		&& IsDefined(import/vbo/pand_rel)
@@ -264,39 +199,47 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 		&& import/vbo/oppervlak_filters/wonen < 1000[Units/m2]
 		)
 	{
-		attribute<rdc_meter>                              geometry                   := org_rel -> geometry;
-		attribute<import/pand>                            pand_rel                   := org_rel -> pand_rel;
-		attribute<yr>                                     bouwjaar                   := org_rel -> bouwjaar;
-		attribute<uint64>                                 vbo_bag_nr                 := org_rel -> vbo_bag_nr;
-		attribute<m2>                                     oppervlakte_corr           := org_rel -> oppervlakte_corr;
+		attribute<string>                                 identificatie              := import/vbo/identificatie[nr_OrgEntity];
+		attribute<string>                                 label                      := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/adres_key);
+
+		attribute<rdc_meter>                              geometry                   := import/vbo/geometry[nr_OrgEntity];
+		attribute<string>                                 postcode                   := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/postcode);
+
+		attribute<Units/m2>                               oppervlakte                := import/vbo/oppervlak_filters/wonen[nr_OrgEntity];
+		attribute<string>                                 pand_id                    := import/vbo/pand_id[nr_OrgEntity];
+		attribute<import/pand>                            pand_rel                   := import/vbo/pand_rel[nr_OrgEntity];
 		attribute<units/pand_asl>                         pand_aandeel               := 1.0 / value(import/pand/nr_woningen[pand_rel],units/asl_pand);
-		attribute<Classifications/BouwjaarWoningBestaand> BouwjaarWoningBestaand_rel := isNull(bouwjaar) ? Classifications/BouwjaarWoningBestaand/onbekend : classify(bouwjaar,Classifications/BouwjaarWoningBestaand/ClassBreak);
-		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := org_rel -> woonpand_type;
-		attribute<classifications/WoningtypeBestaand>     WoningtypeBestaand_rel     := (WoningtypeSnapshot_rel == typeringen/WoningtypeSnapshot/V/meergezinspand && nr_verdiepingen > 4b)
-																							? classifications/WoningtypeBestaand/V/meergezinspand_hoog
-																							: WoningtypeSnapshot_rel[classifications/WoningtypeBestaand];
-		attribute<uint8>                                  nr_verdiepingen             := pand_rel -> import/pand/nr_verdiepingen;
-		attribute<typeringen/gebruiksdoel>                gebruiksdoel                := const(Invoer/RuimtelijkeData/BAG/typeringen/gebruiksdoel/V/woon,.);
+ 
 		attribute<Studiegebied/buurt>                     buurt_rel                  := point_in_polygon(geometry, Studiegebied/buurt/geometry);
+
+		attribute<Units/yr>                               bouwjaar                   := rjoin(pand_id, import/pand/identificatie, import/pand/bouwjaar_gecorrigeerd);
+		attribute<Classifications/BouwjaarWoningBestaand> BouwjaarWoningBestaand_rel := isNull(bouwjaar) ? Classifications/BouwjaarWoningBestaand/onbekend : classify(bouwjaar,Classifications/BouwjaarWoningBestaand/ClassBreak);
+
+		attribute<typeringen/WoningtypeSnapshot>          WoningtypeSnapshot_rel     := rjoin(pand_id, import/pand/identificatie, import/pand/woonpand_type);
+
+		attribute<classifications/WoningtypeBestaand>     WoningtypeBestaand_rel     :=
+			(WoningtypeSnapshot_rel == typeringen/WoningtypeSnapshot/V/meergezinspand && nr_verdiepingen > 4b)
+				? classifications/WoningtypeBestaand/V/meergezinspand_hoog
+				: WoningtypeSnapshot_rel[classifications/WoningtypeBestaand]
+		;
+
+		attribute<uint8>                                  nr_verdiepingen             := rjoin(pand_id, import/pand/identificatie, import/pand/nr_verdiepingen);
 		
-		container labelsprong_opgelegd := 
-			for_each_nedv(
-				classifications/ZichtJaar/name
-				,'rjoin(identificatie, energielabel/opgelegd/identificatie, energielabel/opgelegd/'+classifications/ZichtJaar/name+')'
-				, .
-				, string
-			);
+		attribute<typeringen/gebruiksdoel>                gebruiksdoel                := const(Invoer/RuimtelijkeData/BAG/typeringen/gebruiksdoel/V/woon,.);
+		
+		container labelsprong_opgelegd := for_each_nedv(classifications/ZichtJaar/name
+		,	'rjoin(identificatie, energielabel/opgelegd/identificatie, energielabel/opgelegd/'+classifications/ZichtJaar/name+')'
+		,	., string);
 	}
 
-	container Tabel_Woningtype_Bouwjaar := 
-		for_each_nedv(
-			classifications/BouwjaarWoningBestaand/name
-			,'sum(vbo_woonfunctie_studiegebied/BouwjaarWoningBestaand_rel == ' + string(id(classifications/BouwjaarWoningBestaand)) + '[Classifications/BouwjaarWoningBestaand] ? 1 : 0  ,vbo_woonfunctie_studiegebied/WoningtypeBestaand_rel)'
-			,classifications/WoningtypeBestaand
-			,uint32
-		);
+	container Tabel_Woningtype_Bouwjaar := for_each_nedv(
+		 classifications/BouwjaarWoningBestaand/name
+		,'sum(vbo_woonfunctie_studiegebied/BouwjaarWoningBestaand_rel == ' + string(id(classifications/BouwjaarWoningBestaand)) + '[Classifications/BouwjaarWoningBestaand] ? 1 : 0  ,vbo_woonfunctie_studiegebied/WoningtypeBestaand_rel)'
+		,classifications/WoningtypeBestaand
+		,uint32
+	);
 
-	unit<uint32> vbo_woonfunctie_studiegebied_export := select_with_attr_by_cond(import/vbo,
+	unit<uint32> vbo_woonfunctie_studiegebied_export := Subset(
 			import/vbo/gebruiksdoelen/woon
 		&& Studiegebied/selected_per_gemeente[import/vbo/gemeente_rel]
 		&& IsDefined(import/vbo/pand_rel)
@@ -305,8 +248,11 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 		)
 	,	DialogType = "Map"
 	,	DialogData = "locatie"
+	,	FreeData   = "False"
+	,	KeepData   = "True"
 	{
-		attribute<rdc_meter> locatie       := geometry;
+		attribute<string>    identificatie := import/vbo/identificatie[nr_OrgEntity];
+		attribute<rdc_meter> locatie       := value(import/vbo/geometry[nr_OrgEntity],rdc_meter);
 	}
 
 	parameter<string> vbo_utiliteit_industrie_sub_expr := 
@@ -315,7 +261,7 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 		: SpecifiekeInstellingen/BAG/IndustrieDoetMee == 2b ? 'true' 
 		: 'unknown_IndustrieDoetMee_code';
 
-	unit<uint32> vbo_utiliteit_studiegebied := ='select_with_org_rel('
+	unit<uint32> vbo_utiliteit_studiegebied:= ='Subset ('
 			'!import/vbo/gebruiksdoelen/woon '
 		' && Studiegebied/selected_per_gemeente[import/vbo/gemeente_rel]'
 		' && IsDefined(import/vbo/pand_rel)'
@@ -325,24 +271,26 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 	,	DialogType = "Map"
 	,	DialogData = "locatie"
 	{
-		attribute<uint64>                               vbo_bag_nr            := import/vbo/vbo_bag_nr[org_rel];
-		attribute<string>                               label                 := import/vbo/label[org_rel];
-		attribute<string>                               postcode              := import/vbo/postcode[org_rel];
-		attribute<rdc_meter>                            geometry              := import/vbo/geometry[org_rel];
-		attribute<rdc_meter>                            locatie               := geometry;
-		attribute<Units/m2>                             oppervlakte           := import/vbo/oppervlak_filters/utiliteit[org_rel];
-		attribute<units/yr>                             bouwjaar              := import/vbo/bouwjaar[org_rel];
+		attribute<string>                               identificatie            := import/vbo/identificatie[nr_OrgEntity];
+		attribute<string>                               label                    := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/adres_key);
 
-		// attribute<string>                               pand_id                  := import/vbo/pand_id[nr_OrgEntity];
-		// attribute<import/pand>                          pand_rel                 := import/vbo/pand_rel[nr_OrgEntity];
+		attribute<rdc_meter>                            locatie                  := value(import/vbo/geometry[nr_OrgEntity],rdc_meter);
+		attribute<rdc_meter>                            geometry                 := locatie;
+		attribute<string>                               postcode                 := rjoin(import/vbo/nummeraanduiding_id[nr_OrgEntity], import/nummeraanduiding/identificatie, import/nummeraanduiding/postcode);
+
+		attribute<Units/m2>                             oppervlakte              := import/vbo/oppervlak_filters/utiliteit[nr_OrgEntity];
+		attribute<string>                               pand_id                  := import/vbo/pand_id[nr_OrgEntity];
+		attribute<import/pand>                          pand_rel                 := import/vbo/pand_rel[nr_OrgEntity];
+
 		attribute<Studiegebied/buurt>                   buurt_rel                := point_in_polygon(geometry, Studiegebied/buurt/geometry);
 
+		attribute<units/yr>                             bouwjaar                 := rjoin(pand_id, import/pand/identificatie, import/pand/bouwjaar_gecorrigeerd);
 		attribute<Classifications/BouwjaarUtilBestaand> BouwjaarUtilBestaand_rel := isNull(bouwjaar) ? Classifications/BouwjaarUtilBestaand/V/onbekend :classify(bouwjaar,Classifications/BouwjaarUtilBestaand/ClassBreak);
 
 		container gebruiksdoelen :=
 			for_each_nedv(
 				Classifications/UtilTypeBestaand/name
-				,'import/vbo/gebruiksdoelen/' + Classifications/UtilTypeBestaand/name + '[org_rel]'
+				,'import/vbo/gebruiksdoelen/' + Classifications/UtilTypeBestaand/name + '[Nr_OrgEntity]'
 				, vbo_utiliteit_studiegebied
 				, bool
 			);
@@ -357,12 +305,13 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 					, m2
 				);
 
-			attribute<m2>    oppervlakte_gemiddeld_per_vbo (Classifications/UtilTypeBestaand) := ='union_data(Classifications/UtilTypeBestaand, '+  AsItemList('Oppervlaktes_gemiddeld_per_vbo/' + Classifications/UtilTypeBestaand/name) + ')';
+			attribute<m2>    oppervlakte_gemiddeld_per_vbo (Classifications/UtilTypeBestaand):= ='union_data(Classifications/UtilTypeBestaand, '+  AsItemList('Oppervlaktes_gemiddeld_per_vbo/' + Classifications/UtilTypeBestaand/name) + ')';
 			attribute<uint8> gebruiksdoel_index_calc       (Classifications/UtilTypeBestaand) := index(-oppervlakte_gemiddeld_per_vbo) // 0: index van hoogste oppervlakte, 1: index van een na hoogste oppervlakte, etc.
 			{
 				attribute<string> name (Classifications/UtilTypeBestaand) := Classifications/UtilTypeBestaand/name[gebruiksdoel_index];
 			}
-			attribute<uint8> gebruiksdoel_index            (Classifications/UtilTypeBestaand) : [9,4,5,7,2,0,6,1,3,8];// 0: index van hoogste oppervlakte, 1: index van een na hoogste oppervlakte, etc. Berekende index is losgekoppeld
+			attribute<uint8> gebruiksdoel_index            (Classifications/UtilTypeBestaand):// 0: index van hoogste oppervlakte, 1: index van een na hoogste oppervlakte, etc. Berekende index is losgekoppeld
+				[9,4,5,7,2,0,6,1,3,8];
 			attribute<string> name                         (Classifications/UtilTypeBestaand) := Classifications/UtilTypeBestaand/name[gebruiksdoel_index];
 		}
 
@@ -376,7 +325,8 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 		,	Units/m2
 	);
 
-	unit<uint32> vbo_utiliteit_studiegebied_export:= select_with_org_rel(
+	unit<uint32> vbo_utiliteit_studiegebied_export:= Subset
+		(
 			!import/vbo/gebruiksdoelen/woon 
 		&&	Studiegebied/selected_per_gemeente[import/vbo/gemeente_rel]
 		&&	IsDefined(import/vbo/pand_rel)
@@ -387,9 +337,9 @@ container BAG: url="%sourceDataProjDir%/BAG/20190114_actualisatie_BAG_FvdM.txt"
 	,	DialogType = "Map"
 	,	DialogData = "locatie"
 	{
-		attribute<string>                                identificatie           := import/vbo/identificatie[org_rel];
-		attribute<string>                                id                      := import/vbo/identificatie[org_rel];
-		attribute<rdc_meter>                             locatie                 := import/vbo/geometry[org_rel];
+		attribute<string>                                identificatie           := import/vbo/identificatie[nr_OrgEntity];
+		attribute<string>                                id                      := import/vbo/identificatie[nr_OrgEntity];
+		attribute<rdc_meter>                             locatie                 := value(import/vbo/geometry[nr_OrgEntity],rdc_meter);
 	}
 
 	unit<uint32> gebruiksdoelcombinatie := unique(import/vbo/gebruiksdoelcombinatie), IsHidden = "True"
