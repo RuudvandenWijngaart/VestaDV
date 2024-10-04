@@ -263,25 +263,104 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 	
 	container buislengte 
 	{
-		unit<uint32> buislengte_input
+		unit<uint32> vesta_pand := select( BAG/import/pand/HeeftVestaAansluiting )
+		{
+			attribute<rdc_meter> geometry(poly) := collect_by_cond(vesta_pand, BAG/import/pand/geometry);
+			attribute<rdc_meter> point := centroid_or_mid(geometry);
+			attribute<Studiegebied/buurt> buurt_rel := point_in_polygon(point, Studiegebied/buurt/geometry);
+		}
+		unit<uint32> OSM_wegen := select(OSM/Road_Network/rank > 0b)
+		{
+			
+			attribute<rdc_meter> geometry(arc) := collect_by_cond(OSM_wegen, OSM/Road_Network/geometry);
+			container connect_info := connect_info(geometry, vesta_pand/point, sqr(80.0));
+			attribute<nrAsl> nrAansluitingen := pcount(connect_info/Arc_rel)[nrAsl];
+			attribute<m> length := mls_length(geometry, m);
+			attribute<m_asl> distributie_per_aansl :=  length / nrAansluitingen;
+			attribute<bool> tel_deze_mee := distributie_per_aansl  <= 100[m_asl]; // ten minste 1 aansluiting per 100m.
+		}
+		unit<uint32> OSM_wegen_met_aansluitingen := select(OSM_wegen/tel_deze_mee)
+		{
+			attribute<rdc_meter> geometry(arc) := collect_by_cond(OSM_wegen_met_aansluitingen, OSM_wegen/geometry);
+			attribute<m>         arc_length := mls_length(geometry, m);
+			attribute<rdc_meter> road_polygons(poly) := bg_buffer_linestring(geometry, 1[m], 0b);
+			attribute<m2>        area := area(road_polygons, m2);
+		}
+		
+		unit<uint32> wegen_per_buurt := bg_overlay_polygon(OSM_wegen_met_aansluitingen/road_polygons, Studiegebied/buurt/geometry)
+		{
+			attribute<m2> area := area(geometry, m2);
+		}
+		
+		unit<uint32> buislengte_calculate := Studiegebied/buurt
+		,	StorageName     = "%SourceDataProjDir%/infra/20240101_buislengte.csv"
+		,	StorageType     = "gdalwrite.vect"
+		,	StorageReadOnly = "False"
+		,	url             = "%SourceDataProjDir%/infra/20240101_metadata_buislengte.pdf"
+		{
+			
+			attribute<Geography/rdc_meter> geometry (poly) := Studiegebied/buurt/Geometry;
+			attribute<string>              BU_CODE         := Studiegebied/buurt/BU_CODE;
+			
+			attribute<m2>      weg_area        := sum(wegen_per_buurt/area, wegen_per_buurt/second_rel);
+
+			attribute<m>       L_dist_input    := weg_area / 2[m];
+			attribute<nrPand>  nrPanden        := pcount(vesta_pand/buurt_rel)[nrPand]; // TODO: tel niet mee als er geen aansluiting is
+			attribute<nrAsl >  nrAansluitingen := sum_uint32(IsDefined(OSM_wegen/connect_info/Arc_rel), vesta_pand/buurt_rel)[nrAsl]; // TODO: tel niet mee als er geen aansluiting is
+			attribute<m>       L_aansl         := sum(OSM_wegen/connect_info/dist[m]*Float64(IsDefined(OSM_wegen/connect_info/Arc_rel)), vesta_pand/buurt_rel);
+//			attribute<m>       L_dist          ; 
+			attribute<m_asl>   L_aansl_pand     := max_elem(L_aansl / nrAansluitingen, 1[m_asl]);
+			attribute<nrPand>  Niet_aangesloten := nrPanden - nrAansluitingen * 1[nrPand / nrAsl];
+		}
+		
+		unit<uint32> buislengte_input_2020
 		:	StorageName     = "%SourceDataProjDir%/infra/20200220_buislengte.csv"
 		,	StorageType     = "gdal.vect"
 		,	StorageReadOnly = "True"
-		,	url             = "%SourceDataProjDir%/infra/20190618_metadata_buislengte.pdf";
+		,	url             = "%SourceDataProjDir%/infra/20190618_metadata_buislengte.pdf"
+		{
+			attribute<m>       L_dist_input     := Hoofdleiding_lengte_m[m];
+			attribute<m>       L_Aansl          := Aansluit_lengte_m[m];
+			attribute<nrPand>  nrAansluitingen  := Aansluitingen[units/nrPand];
+		}
 
-		unit<uint32> per_buurt := Studiegebied/buurt, using = "buislengte_input"
-		,	DialogType = "map"
-		,	DialogData = "geometry"
+		unit<uint32> buislengte_input
+		:	StorageName     = "%SourceDataProjDir%/infra/20240101_buislengte.csv"
+		,	StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True"
+		,	url             = "%SourceDataProjDir%/infra/20240101_metadata_buislengte.pdf"
+		{
+			attribute<nrPand> nrAansluitingen;
+			attribute<m>      L_dist_input;
+			attribute<m>      L_Aansl;
+		}
+		
+
+		unit<uint32> per_buurt_2020 := Studiegebied/buurt
 		{
 			attribute<Geography/rdc_meter> geometry (poly) := Studiegebied/buurt/Geometry;
 			attribute<string>              BU_CODE         := Studiegebied/buurt/BU_CODE;
 
-			attribute<m>       L_dist_input     := rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Hoofdleiding_lengte_m)[m];
-			attribute<nrPand>  nrAansluitingen  := rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Aansluitingen)[units/nrPand];
+			attribute<m>       L_dist_input     := rjoin(BU_CODE, buislengte_input_2020/BU_CODE, buislengte_input_2020/Hoofdleiding_lengte_m[m]);
+			attribute<nrPand>  nrAansluitingen  := rjoin(BU_CODE, buislengte_input_2020/BU_CODE, buislengte_input_2020/Aansluitingen[units/nrPand]);
 
-			attribute<m>       L_aansl          := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Aansluit_lengte_m)[m], nrPanden * 1[m_pand]), Descr = "invoer lengte aansluitleidingen per buurt";
-			attribute<m>       L_dist           := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Hoofdleiding_lengte_m)[m], 500[m])          , Descr = "invoer lengte distributieleidingen per buurt";
-			attribute<nrPand>  nrPanden         := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/Panden)[units/nrPand], 1[units/nrPand])   , Descr = "invoer aantal panden per buurt";
+			attribute<m>       L_aansl          := max_elem(rjoin(BU_CODE, buislengte_input_2020/BU_CODE, buislengte_input_2020/Aansluit_lengte_m[m]), nrPanden * 1[m_pand]), Descr = "invoer lengte aansluitleidingen per buurt";
+			attribute<m>       L_dist           := max_elem(rjoin(BU_CODE, buislengte_input_2020/BU_CODE, buislengte_input_2020/Hoofdleiding_lengte_m[m]), 500[m])          , Descr = "invoer lengte distributieleidingen per buurt";
+			attribute<nrPand>  nrPanden         := max_elem(rjoin(BU_CODE, buislengte_input_2020/BU_CODE, buislengte_input_2020/Panden[units/nrPand]), 1[units/nrPand])   , Descr = "invoer aantal panden per buurt";
+			attribute<m_pand>  L_aansl_pand     := max_elem(L_aansl / nrPanden, 1[m_pand])                                                                        , Descr = "invoer gemiddelde lengte aansluitleidingen per pand";
+			attribute<float64> Niet_aangesloten := float64(nrPanden) - float64(nrAansluitingen);
+		}
+		unit<uint32> per_buurt := Studiegebied/buurt
+		{
+			attribute<Geography/rdc_meter> geometry (poly) := Studiegebied/buurt/Geometry;
+			attribute<string>              BU_CODE         := Studiegebied/buurt/BU_CODE;
+
+			attribute<m>       L_dist_input     := rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/L_dist_input[m]);
+			attribute<nrPand>  nrAansluitingen  := rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/nrAansluitingen[units/nrPand]);
+
+			attribute<m>       L_aansl          := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/L_aansl[m]), nrAansluitingen * 1[m_pand]), Descr = "invoer lengte aansluitleidingen per buurt";
+			attribute<m>       L_dist           := max_elem(L_dist_input, 500[m])          , Descr = "invoer lengte distributieleidingen per buurt";
+			attribute<nrPand>  nrPanden         := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/nrPanden[units/nrPand]), 1[units/nrPand])   , Descr = "invoer aantal panden per buurt";
 			attribute<m_pand>  L_aansl_pand     := max_elem(L_aansl / nrPanden, 1[m_pand])                                                                        , Descr = "invoer gemiddelde lengte aansluitleidingen per pand";
 			attribute<float64> Niet_aangesloten := float64(nrPanden) - float64(nrAansluitingen);
 		}
