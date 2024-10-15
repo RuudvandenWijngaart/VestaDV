@@ -1,0 +1,67 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2020 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+
+container MTkentallen :=
+	for_each_nedvn(
+		 src/MT_Warmtenetten/Naam
+		,src/MT_Warmtenetten/waarde+"[" + src/MT_Warmtenetten/eenheid + "]"
+		, void
+		, src/MT_Warmtenetten
+		, src/MT_Warmtenetten/eenheid
+	), StorageReadOnly = "True"
+	{
+
+
+	template Kosten_MT
+		{
+			//parameters
+			parameter<ratio> CurveMTnet;
+			parameter<ratio> CurveOenM;
+			parameter<ratio> CurveInpand;
+
+			// ============= Factoren voor inpandige distributieleidingen woningen en utiliteit
+			parameter<Eur_asl> Ki_id_geenBlok  := CurveInpand * Ki_id_geenBlok_i    , Descr = "inpandig leidingwerk meergezins zonder blokverwarming";
+			parameter<Eur_asl> Ki_id_metBlok   := CurveInpand * Ki_id_metBlok_i    , Descr = "inpandig leidingwerk meergezins met blokverwarming";
+			parameter<Eur_asl> Ki_id_grondgeb  := CurveInpand * Ki_id_grondgeb_i   ;
+			parameter<Eur_asl> Ki_id_meergezin := Schuiven/VerketelingMin * Ki_id_metBlok + Schuiven/VerketelingMax * Ki_id_geenBlok;
+			parameter<Eur_asl> Ki_afleverset   := CurveInpand * Ki_afleverset_i    ;
+			parameter<Eur_kw>  Ki_blokverw     := CurveInpand * Ki_blokverw_i , Descr = "te vergoeden afschrijving voor gasketels blokverwarming";
+			parameter<Eur_kw>  KetelVergoeding := Ki_blokverw * Constanten/afschrijving_resterend;
+
+			parameter<Eur_asl> K_Ov            := CurveOenM   * K_Ov_i , Descr = "tarief ongeriefsvergoeding";
+			parameter<Eur_asl> K_Pm_min        := CurveOenM   * K_Pm_min_i , Descr = "tarief projectmanagement minimaal";
+			parameter<Eur_asl> K_Pm_max        := CurveOenM   * K_Pm_max_i , Descr = "tarief projectmanagement maximaal";
+			parameter<Eur_kW>  K_Wmtr_min_var  := CurveInpand * K_Wmtr_min_var_i  , Descr = "variabele kosten warmtemeters glastuinbouw en utiliteit minimum";
+			parameter<Eur_kW>  K_Wmtr_max_var  := CurveInpand * K_Wmtr_max_var_i  , Descr = "variabele kosten warmtemeters glastuinbouw en utiliteit maximum";
+			parameter<Eur_asl> K_Wmtr_min_vast := CurveInpand * K_Wmtr_min_vast_i , Descr = "vaste kosten warmtemeters glastuinbouw en utiliteit minimum";
+			parameter<Eur_asl> K_Wmtr_max_vast := CurveInpand * K_Wmtr_max_vast_i , Descr = "vaste kosten warmtemeters glastuinbouw en utiliteit maximum";
+			parameter<Eur_asl> K_Wmtr_vast     := Schuiven/KostenMin * K_Wmtr_min_vast + Schuiven/KostenMax * K_Wmtr_max_vast;
+			parameter<Eur_kW>  K_Wmtr_var      := Schuiven/KostenMin * K_Wmtr_min_var  + Schuiven/KostenMax * K_Wmtr_max_var;
+
+			// ============= Factoren voor inpandige distributieleidingen glastuinbouw
+			parameter<Eur_ha_yr> Ki_huur_CO2Inst := CurveInpand * Ki_huur_CO2Inst_i , Descr = "jaarlijkse huur CO2-installatie glastuinbouw";
+			parameter<Eur_ton>   K_CO2           :=               K_CO2_i   		, Descr = "prijs per ton voor CO2 inkoop in GLTB";
+			parameter<Eur>       K_Dienst_Gwarm  := CurveInpand * K_Dienst_Gwarm_i  , Descr = "Dienstleidingen bij verwarmde groenteGLTB";
+			parameter<Eur>       K_Dienst_BOwarm := CurveInpand * K_Dienst_BOwarm_i , Descr = "Dienstleidingen bij verwarmde bloemenGLTB of overigeGLTB";
+
+			parameter<m>         GroenteKasLengteFactor :=     2.0 * Sqrt(GemOppGroente_i), Descr  = "noemer in F 50 en F 48";
+			attribute<Eur_m2>    K_dienstleiding_m2 (Classifications/GlTB) :=
+					   id(Classifications/GlTB) == Classifications/GLTB/V/bloemen_verwarmd ? Kostenkentallen/K_Dienst_Gwarm / GemOppGroente_i
+					:  id(Classifications/GlTB) == Classifications/GLTB/V/groente_verwarmd 
+					|| id(Classifications/GlTB) == Classifications/GLTB/V/overig_verwarmd  ? Kostenkentallen/K_Dienst_BOwarm / GemOppbloemen_overig_i
+					: 0.0[Eur_m2];
+
+			// ============= Factoren voor wijkdistributie
+			parameter<Eur_kW> K_os_min  := CurveMTnet * K_os_min_i  , Descr = "minimumkosten van een onderstation per kW";
+			parameter<Eur_kW> K_os_Max  := CurveMTnet * K_os_Max_i  , Descr = "maximumkosten van een onderstation per kW";
+			parameter<Eur_kW> K_WOS_min := CurveMTnet * K_WOS_min_i , Descr = "Minimale investeringskosten warmteoverdrachtstation";
+			parameter<Eur_kW> K_WOS_max := CurveMTnet * K_WOS_max_i , Descr = "Maximale investeringskosten warmteoverdrachtstation";
+			parameter<Eur_kW> K_WOS     := Schuiven/KostenMin * K_WOS_min + Schuiven/KostenMax * K_WOS_max;
+			parameter<Eur_kW> K_OS      := Schuiven/KostenMin * K_os_min  + Schuiven/KostenMax * K_os_max;
+		}
+
+	}
