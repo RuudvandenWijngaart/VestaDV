@@ -53,6 +53,9 @@ template BebouwingsComponentT
 
 		unit<uint32>    ModelObjectDomain := ModelObject;
 		attribute<Invoer/SpecifiekeInstellingen/PlanRegio> PlanRegio_rel (BO) := BO/buurt_rel;
+		//attribute<Geography/RegioIndelingen/wijk> 		   Wijk_rel 	 (BO) := BO/Wijk_rel;
+		//attribute<Geography/RegioIndelingen/gemeente> 	   Gemeente_rel  (BO) := BO/Gemeente_rel;
+
 		attribute<ModelObject>                             Model_rel     (BO) := rlookup(BO/ModelObjectKey, ModelObject/ModelObjectKey), KeepData = "True";
 		attribute<PrevObject>                              PrevObject_rel(BO) := rlookup(BO/code, PrevObject/code);
 
@@ -243,6 +246,31 @@ template BebouwingsComponentT
 			container DragerSpecifiekeOpties := SpecifiekeInstellingen/RuimtelijkeVraag/Drager;
 
 			attribute<ratio> Klimaateffect (..) := KlimaatFactorMap[gridm100_rel];
+			
+			container LokalePraktijkFactor
+			{
+				attribute<Geography/RegioIndelingen/gemeente> 	Gemeente_rel	(...)	:= BO/Gemeente_rel;
+				attribute<Geography/RegioIndelingen/wijk> 		Wijk_rel 		(...)	:= BO/Wijk_rel;
+				attribute<Geography/RegioIndelingen/buurt> 		Buurt_rel 		(...)	:= BO/buurt_geom_rel;
+				attribute<Classifications/woningtypeBestaand> 	Woningtype_rel	(...) 	:= BO/BebouwingsType;
+				
+				attribute<string> 								Gemeente_code			(...)	:= Geography/RegioIndelingen/gemeente/GM_code[Gemeente_rel];
+				attribute<string> 								Wijk_code				(...)	:= Geography/RegioIndelingen/wijk/name[Wijk_rel];
+				attribute<string> 								Buurt_code				(...)	:= Geography/RegioIndelingen/buurt/BU_code[Buurt_rel];
+				attribute<string> 								Woningtype_code			(...)	:= string(Woningtype_rel);
+				attribute<string> 								BuurtWoningtype_code	(...)	:= Buurt_code + "_" + Woningtype_code;
+				
+				attribute<ratio>								VerschilFactor			(...)	:= MakeDefined(factoren/GWBW, MakeDefined(factoren/GWB, MakeDefined(factoren/GW, factoren/G)));
+				
+				container factoren
+				{
+					attribute<ratio> GWBW	(....) := rjoin(BuurtWoningtype_code, Invoer/RuimtelijkeData/LokalePraktijkFactor/data/BuurtWoningTypeCode, Invoer/RuimtelijkeData/LokalePraktijkFactor/data/LokalePraktijkFactor);
+					attribute<ratio> GWB 	(....) := rjoin(Buurt_code, Invoer/RuimtelijkeData/LokalePraktijkFactor/data/BuurtCode, Invoer/RuimtelijkeData/LokalePraktijkFactor/data/LokalePraktijkFactor);
+					attribute<ratio> GW 	(....) := rjoin(Wijk_code, Invoer/RuimtelijkeData/LokalePraktijkFactor/data/WijkCode, Invoer/RuimtelijkeData/LokalePraktijkFactor/data/LokalePraktijkFactor);
+					attribute<ratio> G 		(....) := rjoin(Gemeente_code, Invoer/RuimtelijkeData/LokalePraktijkFactor/data/gemeenteCode, Invoer/RuimtelijkeData/LokalePraktijkFactor/data/LokalePraktijkFactor);
+				}
+			
+			}
 
 			attribute<GJ_yr> TW(..) := (nrAansluitingen * ModelObject/V_TW_asl [Model_rel] + Oppervlakte * ModelObject/V_TW_opp [Model_rel]) * DragerSpecifiekeOpties/TapWater;
 			attribute<GJ_yr> K (..) := =
@@ -257,16 +285,31 @@ template BebouwingsComponentT
 			attribute<GJ_yr> EA(..) := (nrAansluitingen * ModelObject/V_EA_asl [Model_rel] + Oppervlakte * ModelObject/V_EA_opp [Model_rel]) * DragerSpecifiekeOpties/ElektrischeApparatuur;
 
 			// TODO_OV, OPTIMIZE, V_RV_asl/@SL@ alleen meenemen indien niet allemaal 0, zoals bij utiliteiten wel het geval is
-			container RV_raw := for_each_nedv(Classifications/Schillabel/name
+			container RV_raw := = strcount(BCName, "Woning") > 0 
+			?
+			"
+			for_each_nedv(Classifications/Schillabel/name
+			 , replace(
+				'(nrAansluitingen * ModelObject/V_RV_asl/@SL@[Model_rel] + Oppervlakte * ModelObject/V_RV_opp/@SL@[Model_rel])'
+					'* DragerSpecifiekeOpties/RuimteVerwarming'
+					'* Klimaateffect'
+					'/ LokalePraktijkFactor/VerschilFactor'
+				,'@SL@', Classifications/Schillabel/name)
+			 ,..
+			 , GJ_yr)
+			"
+			:
+			"
+			for_each_nedv(Classifications/Schillabel/name
 			 , replace(
 				'(nrAansluitingen * ModelObject/V_RV_asl/@SL@[Model_rel] + Oppervlakte * ModelObject/V_RV_opp/@SL@[Model_rel])'
 					'* DragerSpecifiekeOpties/RuimteVerwarming'
 					'* Klimaateffect'
 				,'@SL@', Classifications/Schillabel/name)
 			 ,..
-			 , GJ_yr
-			);
-			
+			 , GJ_yr)
+			";
+
 			container RV := RV_raw
 			{			
 				attribute<GJ_yr> A (...) := not(Startlabel_rel == Classifications/Schillabel/V/N) && Startlabel_rel > Classifications/Schillabel/V/A ? min_elem(StartlabelRV, RV_raw/A) : RV_raw/A;
