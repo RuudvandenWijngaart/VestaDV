@@ -36,24 +36,20 @@ set ITEMS=%ITEM1% %ITEM2% %ITEM3% %ITEM4% %ITEM5%
 "%exe_path%" /L"%log_dir%\S2e_D_Geo_contour.txt" "%prj_dir%\Runs\S2e_D_Geo_contour.dms" %ITEMS%
 "%exe_path%" /L"%log_dir%\S2f_D_Geo_overal.txt"  "%prj_dir%\Runs\S2f_D_Geo_overal.dms"  %ITEMS%
 
-"%exe_path%" /L"%log_dir%\S3a_B_LT30_30.txt"     "%prj_dir%\Runs\S3a_B_LT30_30.dms"     %ITEMS%
-"%exe_path%" /L"%log_dir%\S3b_B_LT30_70.txt"     "%prj_dir%\Runs\S3b_B_LT30_70.dms"     %ITEMS%
-"%exe_path%" /L"%log_dir%\S3c_B_BuurtWKO.txt"    "%prj_dir%\Runs\S3c_B_BuurtWKO.dms"    %ITEMS%
-"%exe_path%" /L"%log_dir%\S3d_B_WKO.txt"         "%prj_dir%\Runs\S3d_B_WKO.dms"         %ITEMS%
-"%exe_path%" /L"%log_dir%\S3e_B_TEO.txt"         "%prj_dir%\Runs\S3e_B_TEO.dms"         %ITEMS%
-"%exe_path%" /L"%log_dir%\S3f_D_LT30_70.txt"     "%prj_dir%\Runs\S3f_D_LT30_70.dms"     %ITEMS%
-"%exe_path%" /L"%log_dir%\S3g_D_BuurtWKO.txt"    "%prj_dir%\Runs\S3g_D_BuurtWKO.dms"    %ITEMS%
-"%exe_path%" /L"%log_dir%\S3h_D_TEO.txt"         "%prj_dir%\Runs\S3h_D_TEO.dms"         %ITEMS%
+"%exe_path%" /L"%log_dir%\S3a_B_LT15_15.txt"     "%prj_dir%\Runs\S3a_B_LT15_15.dms"     %ITEMS%
+"%exe_path%" /L"%log_dir%\S3b_B_WKO15_15.txt"    "%prj_dir%\Runs\S3b_B_WKO15_15.dms"    %ITEMS%
+"%exe_path%" /L"%log_dir%\S3c_B_WKO15_70.txt"    "%prj_dir%\Runs\S3c_B_WKO15_70.dms"    %ITEMS%
+"%exe_path%" /L"%log_dir%\S3d_B_WKO15_50.txt"    "%prj_dir%\Runs\S3d_B_WKO15_50.dms"    %ITEMS%
+"%exe_path%" /L"%log_dir%\S3e_B_TEO_15_15.txt"   "%prj_dir%\Runs\S3e_B_TEO_15_15.dms"   %ITEMS%
+"%exe_path%" /L"%log_dir%\S3f_D_LT15_70.txt"     "%prj_dir%\Runs\S3f_D_LT15_70.dms"     %ITEMS%
+"%exe_path%" /L"%log_dir%\S3g_D_WKO15_15.txt"    "%prj_dir%\Runs\S3g_D_WKO15_15.dms"    %ITEMS%
+"%exe_path%" /L"%log_dir%\S3h_D_WKO15_70.txt"    "%prj_dir%\Runs\S3h_D_WKO15_70.dms"    %ITEMS%
 
 "%exe_path%" /L"%log_dir%\S4a_GG_B_hWP.txt"      "%prj_dir%\Runs\S4a_GG_B_hWP.dms"      %ITEMS%
-"%exe_path%" /L"%log_dir%\S4b_GG_B_HR.txt"       "%prj_dir%\Runs\S4b_GG_B_HR.dms"       %ITEMS%
-"%exe_path%" /L"%log_dir%\S4c_GG_D_hWP.txt"      "%prj_dir%\Runs\S4c_GG_D_hWP.dms"      %ITEMS%
-"%exe_path%" /L"%log_dir%\S4d_GG_D_HR.txt"       "%prj_dir%\Runs\S4d_GG_D_HR.dms"       %ITEMS%
+"%exe_path%" /L"%log_dir%\S4b_GG_D_hWP.txt"      "%prj_dir%\Runs\S4b_GG_D_hWP.dms"      %ITEMS%
 
 "%exe_path%" /L"%log_dir%\S5a_H2_B_hWP.txt"      "%prj_dir%\Runs\S5a_H2_B_hWP.dms"      %ITEMS%
-"%exe_path%" /L"%log_dir%\S5b_H2_B_HR.txt"       "%prj_dir%\Runs\S5b_H2_B_HR.dms"       %ITEMS%
-"%exe_path%" /L"%log_dir%\S5c_H2_D_hWP.txt"      "%prj_dir%\Runs\S5c_H2_D_hWP.dms"      %ITEMS%
-"%exe_path%" /L"%log_dir%\S5d_H2_D_HR.txt"       "%prj_dir%\Runs\S5d_H2_D_HR.dms"       %ITEMS%
+"%exe_path%" /L"%log_dir%\S5b_H2_D_hWP.txt"      "%prj_dir%\Runs\S5b_H2_D_hWP.dms"      %ITEMS%
 
 "%exe_path%" /L"%log_dir%\S1_WP.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S1_WP/Hoofdindicatoren/export_csv/result
 "%exe_path%" /L"%log_dir%\S1_WP.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S1_WP/NationaleKosten/export_csv/result

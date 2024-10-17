@@ -1,0 +1,76 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//                                                                                      //
+//                   (C) VESTA 2020 - Planbureau voor de Leefomgeving                   //
+//                                                                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+
+container LTkentallen :=
+	for_each_nedvn(
+		 src/LT_Warmtenetten/Naam
+		,src/LT_Warmtenetten/waarde+"[" + src/LT_Warmtenetten/eenheid + "]"
+		, void
+		, src/LT_Warmtenetten
+		, src/LT_Warmtenetten/eenheid
+	), StorageReadOnly = "True"
+	{
+
+
+		template Kosten_LT
+		{
+			//begin case parameters
+			parameter<ratio> CurveInpandig;
+			parameter<ratio> CurveEWPww;
+			parameter<ratio> CurveLTnet;
+			parameter<ratio> CurveMTnet;
+			//end case parameters
+
+			parameter<Eur_asl>  Ki_afleverset           := CurveInpandig *   Ki_afleverset_i    		, Descr = "Investeringskosten afleverset (warmtewisselaar + meter)";
+			parameter<Eur_asl>  Ki_inpand_laag          := CurveInpandig *   Ki_inpand_laag_i    		, Descr = "Investeringskosten extra inpandige buizen";
+			parameter<Eur_asl>  Ki_inpand_hoog_metblok  := CurveInpandig *    Ki_inpand_hoog_metblok_i	, Descr = "Investeringskosten extra inpandige buizen";
+			parameter<Eur_asl>  Ki_inpand_hoog_geenblok := CurveInpandig *   Ki_inpand_hoog_geenblok_i  , Descr = "Investeringskosten extra inpandige buizen";
+			parameter<Eur_m2>   Ki_id_ugroot            := CurveInpandig *      Ki_id_ugroot_i     		, Descr = "Investeringskosten extra inpandige buizen bij utiliteit groter dan 7500 m2";
+			parameter<Eur_m2>   Ki_id_uklein            := CurveInpandig *     Ki_id_uklein_i     		, Descr = "Investeringskosten extra inpandige buizen bij utiliteit kleiner dan 100 m2";
+
+			parameter<Eur_kW>   Ki_uitkoppel            := CurveLTnet    *      Ki_uitkoppel_i	, Descr = "Extra uitkoppelkosten op gebouwniveau, kosten bij de bron afgeleid van bronnenbestand";
+			parameter<Eur>      Ki_Buffer               := CurveLTnet    *   Ki_Buffer_i      , Descr = "Voorlopige investeringskosten per gebouw voor aanleg buffervat voor seizoensopslag en dagopslag";
+			parameter<Eur>      Ki_Buffer_min           := CurveLTnet    * Ki_Buffer_min_i      , Descr = "Minimale investering voor warmtebuffer bij de bron";
+
+			parameter<Eur_kW>   Ki_WOS_min              := CurveLTnet    * Ki_WOS_min_i  		, Descr = "minimale Investeringskosten warmteoverdrachtstation";
+			parameter<Eur_kW>   Ki_WOS_max              := CurveLTnet    * Ki_WOS_max_i  		, Descr = "maximale Investeringskosten warmteoverdrachtstation";
+			parameter<Eur_kW>   Ki_eWP_coll_min         := CurveLTnet    *  Ki_eWP_coll_min_i  	, Descr = "minimale Investeringskosten warmtepomp collectief als hulpvoorziening";
+			parameter<Eur_kW>   Ki_eWP_coll_max         := CurveLTnet    *  Ki_eWP_coll_max_i	, Descr = "maximale Investeringskosten warmtepomp collectief als hulpvoorziening";
+			parameter<Eur_kW>   Ki_eWP_coll             := Schuiven/KostenMin * Ki_eWP_coll_min + Schuiven/KostenMax * Ki_eWP_coll_max;
+			parameter<Eur_kW>   Ki_WOS                  := Schuiven/KostenMin * Ki_WOS_min      + Schuiven/KostenMax * Ki_WOS_max;
+
+			parameter<Eur>      Ki_WKO_vast_min         := CurveLTnet    * Ki_WKO_vast_min_i    , Descr = "minimale investeringskosten bron zonder distributiekosten";
+			parameter<Eur>      Ki_WKO_vast_max         := CurveLTnet    * Ki_WKO_vast_max_i    , Descr = "maximale investeringskosten bron zonder distributiekosten";
+			parameter<Eur_kW>   Ki_WKO_var_min          := CurveLTnet    *  Ki_WKO_var_min_i    , Descr = "minimale investeringskosten bron zonder distributiekosten";
+			parameter<Eur_kW>   Ki_WKO_var_max          := CurveLTnet    * Ki_WKO_var_max_i     , Descr = "maximale investeringskosten bron zonder distributiekosten";
+			parameter<Eur>      Ki_TEO_vast_min         := CurveLTnet    *  Ki_TEO_vast_min_i   , Descr = "minimale investeringskosten bron oppervlaktewater warmtewisselaar";
+			parameter<Eur>      Ki_TEO_vast_max         := CurveLTnet    * Ki_TEO_vast_max_i    , Descr = "maximale investeringskosten bron oppervlaktewater warmtewisselaar";
+			parameter<Eur_kW>   Ki_TEO_var_min          := CurveLTnet    *    Ki_TEO_var_min_i  , Descr = "minimale investeringskosten bron oppervlaktewater warmtewisselaar";
+			parameter<Eur_kW>   Ki_TEO_var_max          := CurveLTnet    *    Ki_TEO_var_max_i	, Descr = "maximale investeringskosten bron oppervlaktewater warmtewisselaar";
+
+			parameter<ratio>    R_Regeneratie           := R_Regeneratie_i[ratio]               , Descr = "extra investeringskosten voor regeneratiemechanisme bij WKO zonder TEO";
+
+			parameter<Eur>      Ki_WKO_vast             := Schuiven/KostenMin * Ki_WKO_vast_min + Schuiven/KostenMax * Ki_WKO_vast_max;
+			parameter<Eur_kW>   Ki_WKO_var              := Schuiven/KostenMin * Ki_WKO_var_min  + Schuiven/KostenMax * Ki_WKO_var_max;
+			parameter<Eur>      Ki_TEO_vast             := Schuiven/KostenMin * Ki_TEO_vast_min + Schuiven/KostenMax * Ki_TEO_vast_max;
+			parameter<Eur_kW>   Ki_TEO_var              := Schuiven/KostenMin * Ki_TEO_var_min  + Schuiven/KostenMax * Ki_TEO_var_max;
+
+			parameter<Eur_pand> Ki_dist_OS              :=      CurveLTnet    *  Ki_dist_OS_i ;
+
+			parameter<Eur>      Ki_booster_min          := CurveEWPww    *  Ki_booster_min_i	, Descr = "minimale Investeringskosten booster-warmtepomp voor warm tapwater, inclusief buffervat en verzwaarde elektriciteitsaansluiting en installatie en montagekosten";
+			parameter<Eur>      Ki_booster_max          := CurveEWPww    *  Ki_booster_max_i   	, Descr = "maximale Investeringskosten booster-warmtepomp voor warm tapwater, inclusief buffervat en verzwaarde elektriciteitsaansluiting en installatie en montagekosten";
+			parameter<Eur>      Ki_booster              := Schuiven/KostenMin * Ki_booster_min + Schuiven/KostenMax * Ki_booster_max;
+
+			parameter<Eur>      Ki_eWP_B                := CurveEWPww    *   Ki_eWP_B_i     , Descr = "Investeringskosten elektrische warmtepomp bij woningen schillabel B, inclusief buffervat en verzwaarde elektriciteitsaansluiting en installatie en montagekosten";
+			parameter<Eur>      Ki_eWP_CDE              := CurveEWPww    *   Ki_eWP_CDE_i	, Descr = "Investeringskosten elektrische warmtepomp bij woningen schillabel C, D of E, inclusief buffervat en verzwaarde elektriciteitsaansluiting en installatie en montagekosten";
+
+			//investeringskosten wijkdistributie
+			parameter<Eur_kW>   K_os_p_min              := CurveMTnet    *   K_os_p_min_i	, Descr = "minimale Investeringskosten onderstations in wijkdistributie";
+			parameter<Eur_kW>   K_os_p_max              := CurveMTnet    *  K_os_p_max_i  	, Descr = "maximale Investeringskosten onderstations in wijkdistributie";
+			parameter<Eur_kW>   Ki_onderstation         := K_os_p_min * Schuiven/KostenMin + K_os_p_max * Schuiven/KostenMax;
+		}
+	}
