@@ -354,6 +354,12 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 			attribute<nrPand>  Niet_aangesloten := nrPanden - nrAansluitingen * 1[nrPand / nrAsl];
 		}
 		
+		unit<uint32> CBS2019buurten_selectie_voor_doorrekening
+		:	StorageName     = "%SourceDataProjDir%/infra/2019 CBS buurten selectie voor doorrekening.gpkg"
+		,	StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True"
+		;
+		
 		unit<uint32> buislengte_input_2020
 		:	StorageName     = "%SourceDataProjDir%/infra/20200220_buislengte.csv"
 		,	StorageType     = "gdal.vect"
@@ -389,6 +395,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 			attribute<m>       L_dist           := max_elem(rjoin(BU_CODE, buislengte_input_2020/BU_CODE, buislengte_input_2020/Hoofdleiding_lengte_m[m]), 500[m])          , Descr = "invoer lengte distributieleidingen per buurt";
 			attribute<nrPand>  nrPanden         := max_elem(rjoin(BU_CODE, buislengte_input_2020/BU_CODE, buislengte_input_2020/Panden[units/nrPand]), 1[units/nrPand])   , Descr = "invoer aantal panden per buurt";
 			attribute<m_pand>  L_aansl_pand     := max_elem(L_aansl / nrPanden, 1[m_pand])                                                                        , Descr = "invoer gemiddelde lengte aansluitleidingen per pand";
+			attribute<m_pand>  L_dist_pand      := max_elem(L_dist  / nrPanden, 1[m_pand])                                                                        , Descr = "invoer gemiddelde lengte aansluitleidingen per pand";
 			attribute<float64> Niet_aangesloten := float64(nrPanden) - float64(nrAansluitingen);
 		}
 		unit<uint32> per_buurt := Studiegebied/buurt
@@ -422,17 +429,26 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 			
 			unit<uint32> selectedBuurten := select_with_attr_by_cond(DEBUG, DEBUG/is_comparable)
 			{
-				attribute<Geography/rdc_meter> geometry(poly) := collect_by_cond(selectedBuurten, ../geometry);
-				attribute<nrPand> nrAansluitingen := collect_by_cond(selectedBuurten, ../nrAansluitingen);
+				attribute<CBS2019buurten_selectie_voor_doorrekening> CBS2019buurten_selectie_voor_doorrekening_rel := rlookup(BU_CODE, CBS2019buurten_selectie_voor_doorrekening/BU_CODE);
+				attribute<bool> was_selected_voor_doorrekeneing := IsDefined(CBS2019buurten_selectie_voor_doorrekening_rel);
 				
+				attribute<Geography/rdc_meter> geometry(poly) := collect_by_cond(selectedBuurten, ../geometry);
+				attribute<string> BU_CODE         := collect_by_cond(selectedBuurten, ../BU_CODE);
+				attribute<nrPand> nrAansluitingen := collect_by_cond(selectedBuurten, ../nrAansluitingen);
+				attribute<nrPand> nrAansluitingen2020 := collect_by_cond(selectedBuurten, per_buurt_2020/nrPanden);
 				attribute<Float64> verschilkaart := Float64(nr_Pand) - nrAansluitingen;
-				attribute<Float64> AbsVerschil := abs(verschilkaart);
+				attribute<Float64> AbsVerschil   := abs(verschilkaart);
+				attribute<Float64> L_aansl_pand   := collect_by_cond(selectedBuurten, ../L_aansl_pand);
+				attribute<Float64> L_aansl_pand2020  := collect_by_cond(selectedBuurten, per_buurt_2020/L_aansl_pand);
+				attribute<Float64> L_dist_pand       := collect_by_cond(selectedBuurten, ../L_dist_pand);
+				attribute<Float64> L_dist_pand2020   := collect_by_cond(selectedBuurten, per_buurt_2020/L_dist_pand);
 			}
 
 			attribute<m>       L_aansl          := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/L_aansl[m]), nrAansluitingen * 1[m_pand]), Descr = "invoer lengte aansluitleidingen per buurt";
 			attribute<m>       L_dist           := max_elem(L_dist_input, 500[m])          , Descr = "invoer lengte distributieleidingen per buurt";
 			attribute<nrPand>  nrPanden         := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/nrPanden[units/nrPand]), 1[units/nrPand])   , Descr = "invoer aantal panden per buurt";
 			attribute<m_pand>  L_aansl_pand     := max_elem(L_aansl / nrPanden, 1[m_pand])                                                                        , Descr = "invoer gemiddelde lengte aansluitleidingen per pand";
+			attribute<m_pand>  L_dist_pand      := max_elem(L_dist / nrPanden, 1[m_pand])                                                                         , Descr = "invoer gemiddelde lengte diatributieleidingen per pand";
 			attribute<float64> Niet_aangesloten := float64(nrPanden) - float64(nrAansluitingen);
 		}
 	}
