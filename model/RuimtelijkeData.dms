@@ -117,6 +117,47 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 	#include <Sloop.dms>
 	#include <GlasTuinBouw.dms>
 	#include <Bebouwing.dms>
+	
+	container LokalePraktijkFactor
+	{
+		container class
+		{
+			unit<uint32> BW := combine_unit(Geography/RegioIndelingen/buurt, Classifications/woningtypeBestaand);
+			unit<uint32> GW := combine_unit(Geography/RegioIndelingen/gemeente, Geography/RegioIndelingen/wijk);
+			unit<uint32> GWB := combine_unit(GW, Geography/RegioIndelingen/buurt);
+			unit<uint32> GWBW := combine_unit(GWB, Classifications/woningtypeBestaand);
+		}
+		
+		unit<uint32> src
+		:	StorageName     = "%EnergieDataProjDir%/20241016_Lokale_Praktijkfactor_Referentieverbruik_2.csv"
+		,	StorageType     = "gdal.vect"
+		,	StorageReadOnly = "True";
+		
+		unit<uint32> data := src
+		{
+			attribute<string> 								GemeenteCode				:= src/gem2020;
+			attribute<string> 								WijkCode				:= src/wijk2020;
+			attribute<string> 								BuurtCode				:= src/buurt2020;
+			attribute<string> 								BuurtWoningTypeCode		:= BuurtCode + "_" + src/Woningtype;
+			
+			attribute<Geography/RegioIndelingen/gemeente>	Gemeente_rel 			:= rlookup(src/gem2020, Geography/RegioIndelingen/gemeente/GM_code);
+			attribute<Geography/RegioIndelingen/wijk> 		Wijk_rel 				:= rlookup(src/wijk2020, Geography/RegioIndelingen/wijk/name);
+			attribute<Geography/RegioIndelingen/buurt> 		Buurt_rel 				:= rlookup(src/buurt2020, Geography/RegioIndelingen/buurt/BU_code);
+			attribute<Classifications/woningtypeBestaand> 	Woningtype_rel 			:= rlookup(src/Woningtype[uint8], Classifications/woningtypeBestaand/id);
+			attribute<ratio>								LokalePraktijkFactor	:= src/verschilfactor[ratio], IntegrityCheck = "this > 0[ratio]";
+			
+			attribute<string>								GW_rel_str 				:= string(Gemeente_rel) + "_" + string(Wijk_rel);
+			attribute<class/BW> 							BW_rel					:= combine_data(class/BW, 	Buurt_rel, 	Woningtype_rel);
+
+			
+			//attribute<class/GW> 							GW_rel					:= combine_data(class/GW, 	Gemeente_rel, 	Wijk_rel);
+			//attribute<class/GWB> 							GWB_rel					:= combine_data(class/GWB, 	GW_rel, 		Buurt_rel);
+			//attribute<class/GWBW> 							GWBW_rel				:= combine_data(class/GWBW, GWB_rel, 		Woningtype_rel);
+		
+		}
+		
+	}
+	
 	container EnergieLabel
 	{
 		parameter<bool> HerberekenStartsituatie := False;
