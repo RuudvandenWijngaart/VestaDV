@@ -6,24 +6,25 @@ REM Bij nogmaals runnen worden bestanden gewoon overschreven
 
 REM aanpassingen voor machine specifieke paden
 Call path/set.bat
+SET errorhandler=^|^| ^(PAUSE ^&^& EXIT /B %errorlevel%^)
 
 set ITEM1=/LeidraadResultaten/zichtjaar/NLResults/Hoofdindicatoren/export_csv/result
 set ITEM2=/LeidraadResultaten/zichtjaar/NLResults/NationaleKosten/export_csv/result
 set ITEM3=/LeidraadResultaten/zichtjaar/NLResults/Aansluitingen/export_csv/result
-set ITEMS=%ITEM1% %ITEM2% %ITEM3%
+set ITEMS=%ITEM1% %ITEM2% %ITEM3% %errorhandler%
 
-"%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/NLResults/Hoofdindicatoren/export_csv/result
-"%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/NLResults/NationaleKosten/export_csv/result
-"%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/NLResults/Aansluitingen/export_csv/result
+"%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/NLResults/Hoofdindicatoren/export_csv/result  %errorhandler%
+"%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/NLResults/NationaleKosten/export_csv/result   %errorhandler%
+"%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/NLResults/Aansluitingen/export_csv/result     %errorhandler%
 
-"%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/NLResults/Hoofdindicatoren/export_csv/result
-"%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/NLResults/NationaleKosten/export_csv/result
-"%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/NLResults/Aansluitingen/export_csv/result
+"%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/NLResults/Hoofdindicatoren/export_csv/result %errorhandler%
+"%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/NLResults/NationaleKosten/export_csv/result  %errorhandler%
+"%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/NLResults/Aansluitingen/export_csv/result    %errorhandler%
 
 "%exe_path%" /L"%log_dir%\S1a_B_LuchtWP.txt"     "%prj_dir%\Runs\S1a_B_LuchtWP.dms"     %ITEMS%
 "%exe_path%" /L"%log_dir%\S1b_B_BodemWP.txt"     "%prj_dir%\Runs\S1b_B_BodemWP.dms"     %ITEMS%
 
-"%exe_path%" /L"%log_dir%\S1_WP.txt"       "%prj_dir%\Runs\Runfile.dms" /Vergelijking/Outputs/S1AofB/export_csv/result
+"%exe_path%" /L"%log_dir%\S1_WP.txt"              "%prj_dir%\Runs\Runfile.dms" /Vergelijking/Outputs/S1AofB/export_csv/result %errorhandler%
 
 "%exe_path%" /L"%log_dir%\S2a_B_Restwarmte.txt"  "%prj_dir%\Runs\S2a_B_Restwarmte.dms"  %ITEMS%
 "%exe_path%" /L"%log_dir%\S2b_B_Geo_contour.txt" "%prj_dir%\Runs\S2b_B_Geo_contour.dms" %ITEMS%
@@ -51,4 +52,5 @@ set ITEMS=%ITEM1% %ITEM2% %ITEM3%
 "%exe_path%" /L"%log_dir%\S5c_H2_D_hWP.txt"      "%prj_dir%\Runs\S5c_H2_D_hWP.dms"      %ITEMS%
 "%exe_path%" /L"%log_dir%\S5d_H2_D_HR.txt"       "%prj_dir%\Runs\S5d_H2_D_HR.dms"       %ITEMS%
 
-pause Totaal klaar
+echo Klaar met uitrekenen van alle varianten
+pause
