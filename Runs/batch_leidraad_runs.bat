@@ -6,79 +6,100 @@ REM Bij nogmaals runnen worden bestanden gewoon overschreven
 
 REM aanpassingen voor machine specifieke paden
 Call path/set.bat
+set FLAGS=/S1 /C2 /S3
+"%exe_path%" /L"%log_dir%\StatischAll.txt" %FLAGS% "%prj_dir%\Runs\Runfile.dms" /LeidraadResultaten/StartJaar/PlanRegioResults/Statisch/export_csv/result || call :error_handler
 
-"%exe_path%" /L"%log_dir%\StatischAll.txt" "%prj_dir%\Runs\Runfile.dms" /LeidraadResultaten/StartJaar/PlanRegioResults/Statisch/export_csv/result
+call :do_reference Startjaar
+call :do_reference Ref2030
+
+call :do_variant S1a_B_LuchtWP
+call :do_variant S1b_B_BodemWP
+
+"%exe_path%" /L"%log_dir%\S1AofB.txt" %FLAGS% "%prj_dir%\Runs\Runfile.dms" /Vergelijking/Outputs/S1AofB/export_csv/result || call :error_handler
+
+call :do_variant S2a_B_Restwarmte
+call :do_variant S2b_B_Geo_contour
+call :do_variant S2c_B_Geo_overal
+call :do_variant S2d_D_Restwarmte
+call :do_variant S2e_D_Geo_contour
+call :do_variant S2f_D_Geo_overal
+
+call :do_variant S3a_B_LT15_15
+call :do_variant S3b_B_WKO15_15
+call :do_variant S3c_B_WKO15_70
+call :do_variant S3d_B_WKO15_50
+call :do_variant S3e_B_TEO_15_15
+call :do_variant S3f_D_LT15_70
+call :do_variant S3g_D_WKO15_15
+call :do_variant S3h_D_WKO15_70
+
+call :do_variant S4a_GG_B_hWP
+call :do_variant S4b_GG_D_hWP
+
+call :do_variant S5a_H2_B_hWP
+call :do_variant S5b_H2_D_hWP
+
+call :do_runfile S1_WP
+call :do_runfile S2_MT
+call :do_runfile S3_LT
+call :do_runfile S4_GG
+call :do_runfile S5_H2
+
+call :do_runfile LN
+
+"%exe_path%" /L"%log_dir%\LN.txt" %FLAGS%  "%prj_dir%\Runs\Runfile.dms" /Vergelijking/Outputs/LN/Hulpvariabelen/export_csv/result || call :error_handler
+
+echo Klaar met uitrekenen van alle varianten per buurt
+pause
+exit /B
+
+:do_reference
+
+"%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\Runfile.dms" /LeidraadResultaten/%1/PlanRegioResults/Hoofdindicatoren/export_csv/result || call :error_handler
+"%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\Runfile.dms" /LeidraadResultaten/%1/PlanRegioResults/NationaleKosten/export_csv/result  || call :error_handler
+"%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\Runfile.dms" /LeidraadResultaten/%1/PlanRegioResults/Aansluitingen/export_csv/result    || call :error_handler
+
+exit /B
+
+:do_variant
 
 set ITEM1=/LeidraadResultaten/Zichtjaar/PlanRegioResults/Hoofdindicatoren/export_csv/result
 set ITEM2=/LeidraadResultaten/Zichtjaar/PlanRegioResults/NationaleKosten/export_csv/result
 set ITEM3=/LeidraadResultaten/Zichtjaar/PlanRegioResults/Aansluitingen/export_csv/result
 set ITEM4=/LeidraadResultaten/Zichtjaar/PlanRegioResults/Hulpvariabelen/export_csv/result
 set ITEM5=/LeidraadResultaten/Zichtjaar/PlanRegioResults/GevoeligheidsAnalyse/export_csv/result
-set ITEMS=%ITEM1% %ITEM2% %ITEM3% %ITEM4% %ITEM5%
+set ITEMS=%ITEM1% %ITEM2% %ITEM3% %ITEM4% %ITEM5% 
 
-"%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/PlanRegioResults/Hoofdindicatoren/export_csv/result
-"%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/PlanRegioResults/NationaleKosten/export_csv/result
-"%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/PlanRegioResults/Aansluitingen/export_csv/result
 
-"%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/PlanRegioResults/Hoofdindicatoren/export_csv/result
-"%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/PlanRegioResults/NationaleKosten/export_csv/result
-"%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/PlanRegioResults/Aansluitingen/export_csv/result
+REM "%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\%1.dms" %ITEM1% || call :error_handler
+REM "%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\%1.dms" %ITEM2% || call :error_handler
+REM "%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\%1.dms" %ITEM3% || call :error_handler
+REM "%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\%1.dms" %ITEM4% || call :error_handler
+REM "%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\%1.dms" %ITEM5% || call :error_handler
 
-"%exe_path%" /L"%log_dir%\S1a_B_LuchtWP.txt"     "%prj_dir%\Runs\S1a_B_LuchtWP.dms"     %ITEMS%
-"%exe_path%" /L"%log_dir%\S1b_B_BodemWP.txt"     "%prj_dir%\Runs\S1b_B_BodemWP.dms"     %ITEMS%
+"%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\%1.dms" %ITEMS% || call :error_handler
 
-"%exe_path%" /L"%log_dir%\S1AofB.txt"       "%prj_dir%\Runs\Runfile.dms" /Vergelijking/Outputs/S1AofB/export_csv/result
+exit /B
 
-"%exe_path%" /L"%log_dir%\S2a_B_Restwarmte.txt"  "%prj_dir%\Runs\S2a_B_Restwarmte.dms"  %ITEMS%
-"%exe_path%" /L"%log_dir%\S2b_B_Geo_contour.txt" "%prj_dir%\Runs\S2b_B_Geo_contour.dms" %ITEMS%
-"%exe_path%" /L"%log_dir%\S2c_B_Geo_overal.txt"  "%prj_dir%\Runs\S2c_B_Geo_overal.dms"  %ITEMS%
-"%exe_path%" /L"%log_dir%\S2d_D_Restwarmte.txt"  "%prj_dir%\Runs\S2d_D_Restwarmte.dms"  %ITEMS%
-"%exe_path%" /L"%log_dir%\S2e_D_Geo_contour.txt" "%prj_dir%\Runs\S2e_D_Geo_contour.dms" %ITEMS%
-"%exe_path%" /L"%log_dir%\S2f_D_Geo_overal.txt"  "%prj_dir%\Runs\S2f_D_Geo_overal.dms"  %ITEMS%
 
-"%exe_path%" /L"%log_dir%\S3a_B_LT15_15.txt"     "%prj_dir%\Runs\S3a_B_LT15_15.dms"     %ITEMS%
-"%exe_path%" /L"%log_dir%\S3b_B_WKO15_15.txt"    "%prj_dir%\Runs\S3b_B_WKO15_15.dms"    %ITEMS%
-"%exe_path%" /L"%log_dir%\S3c_B_WKO15_70.txt"    "%prj_dir%\Runs\S3c_B_WKO15_70.dms"    %ITEMS%
-"%exe_path%" /L"%log_dir%\S3d_B_WKO15_50.txt"    "%prj_dir%\Runs\S3d_B_WKO15_50.dms"    %ITEMS%
-"%exe_path%" /L"%log_dir%\S3e_B_TEO_15_15.txt"   "%prj_dir%\Runs\S3e_B_TEO_15_15.dms"   %ITEMS%
-"%exe_path%" /L"%log_dir%\S3f_D_LT15_70.txt"     "%prj_dir%\Runs\S3f_D_LT15_70.dms"     %ITEMS%
-"%exe_path%" /L"%log_dir%\S3g_D_WKO15_15.txt"    "%prj_dir%\Runs\S3g_D_WKO15_15.dms"    %ITEMS%
-"%exe_path%" /L"%log_dir%\S3h_D_WKO15_70.txt"    "%prj_dir%\Runs\S3h_D_WKO15_70.dms"    %ITEMS%
+:do_runfile
 
-"%exe_path%" /L"%log_dir%\S4a_GG_B_hWP.txt"      "%prj_dir%\Runs\S4a_GG_B_hWP.dms"      %ITEMS%
-"%exe_path%" /L"%log_dir%\S4b_GG_D_hWP.txt"      "%prj_dir%\Runs\S4b_GG_D_hWP.dms"      %ITEMS%
+set ITEM1=/Vergelijking/Outputs/%1/Hoofdindicatoren/export_csv/result
+set ITEM2=/Vergelijking/Outputs/%1/NationaleKosten/export_csv/result
+set ITEM3=/Vergelijking/Outputs/%1/Aansluitingen/export_csv/result
+set ITEM4=/Vergelijking/Outputs/%1/GevoeligheidsAnalyse/export_csv/result
+set ITEMS=%ITEM1% %ITEM2% %ITEM3% %ITEM4%
 
-"%exe_path%" /L"%log_dir%\S5a_H2_B_hWP.txt"      "%prj_dir%\Runs\S5a_H2_B_hWP.dms"      %ITEMS%
-"%exe_path%" /L"%log_dir%\S5b_H2_D_hWP.txt"      "%prj_dir%\Runs\S5b_H2_D_hWP.dms"      %ITEMS%
+REM "%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\Runfile.dms" %ITEM1% || call :error_handler
+REM "%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\Runfile.dms" %ITEM2% || call :error_handler
+REM "%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\Runfile.dms" %ITEM3% || call :error_handler
+REM "%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\Runfile.dms" %ITEM4% || call :error_handler
+"%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\Runfile.dms" %ITEMS% || call :error_handler
 
-"%exe_path%" /L"%log_dir%\S1_WP.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S1_WP/Hoofdindicatoren/export_csv/result
-"%exe_path%" /L"%log_dir%\S1_WP.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S1_WP/NationaleKosten/export_csv/result
-"%exe_path%" /L"%log_dir%\S1_WP.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S1_WP/Aansluitingen/export_csv/result
-"%exe_path%" /L"%log_dir%\S1_WP.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S1_WP/GevoeligheidsAnalyse/export_csv/result
+exit /B
 
-"%exe_path%" /L"%log_dir%\S2_MT.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S2_MT/Hoofdindicatoren/export_csv/result
-"%exe_path%" /L"%log_dir%\S2_MT.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S2_MT/NationaleKosten/export_csv/result
-"%exe_path%" /L"%log_dir%\S2_MT.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S2_MT/Aansluitingen/export_csv/result
-"%exe_path%" /L"%log_dir%\S2_MT.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S2_MT/GevoeligheidsAnalyse/export_csv/result
-
-"%exe_path%" /L"%log_dir%\S3_LT.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S3_LT/Hoofdindicatoren/export_csv/result
-"%exe_path%" /L"%log_dir%\S3_LT.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S3_LT/NationaleKosten/export_csv/result
-"%exe_path%" /L"%log_dir%\S3_LT.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S3_LT/Aansluitingen/export_csv/result
-"%exe_path%" /L"%log_dir%\S3_LT.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S3_LT/GevoeligheidsAnalyse/export_csv/result
-
-"%exe_path%" /L"%log_dir%\S4_GG.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S4_GG/Hoofdindicatoren/export_csv/result
-"%exe_path%" /L"%log_dir%\S4_GG.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S4_GG/NationaleKosten/export_csv/result
-"%exe_path%" /L"%log_dir%\S4_GG.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S4_GG/Aansluitingen/export_csv/result
-"%exe_path%" /L"%log_dir%\S4_GG.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S4_GG/GevoeligheidsAnalyse/export_csv/result
-
-"%exe_path%" /L"%log_dir%\S5_H2.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S5_H2/Hoofdindicatoren/export_csv/result
-"%exe_path%" /L"%log_dir%\S5_H2.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S5_H2/NationaleKosten/export_csv/result
-"%exe_path%" /L"%log_dir%\S5_H2.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S5_H2/Aansluitingen/export_csv/result
-"%exe_path%" /L"%log_dir%\S5_H2.txt"       "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/S5_H2/GevoeligheidsAnalyse/export_csv/result
-
-"%exe_path%" /L"%log_dir%\LN.txt"          "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/LN/Hoofdindicatoren/export_csv/result
-"%exe_path%" /L"%log_dir%\LN.txt"          "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/LN/NationaleKosten/export_csv/result
-"%exe_path%" /L"%log_dir%\LN.txt"          "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/LN/Aansluitingen/export_csv/result
-"%exe_path%" /L"%log_dir%\LN.txt"          "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/LN/GevoeligheidsAnalyse/export_csv/result
-"%exe_path%" /L"%log_dir%\LN.txt"          "%prj_dir%\Runs\Runfile.dms"       /Vergelijking/Outputs/LN/Hulpvariabelen/export_csv/result
-pause Totaal klaar
+:error_handler
+echo Laatste rekenstap gaf foutcode: %errorlevel%. 
+echo Het rekenproces zal worden voortgezet tenzij u het nu afbreekt met Ctrl-C.
+pause
+exit /B

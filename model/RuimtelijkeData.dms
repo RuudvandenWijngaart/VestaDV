@@ -376,11 +376,35 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 			attribute<m>      L_Aansl;
 		}
 		
+		unit<uint32> buurt2019_Greenvis := Geography/RegioIndelingen/Buurt2019
+		{
+			attribute<buislengte_input_2020> input_rel := rlookup(BU_CODE, buislengte_input_2020/BU_CODE);
+		
+			attribute<m>     		L_dist_input 		:= buislengte_input_2020/L_dist_input[input_rel];
+			attribute<m>     		L_aansl 			:= buislengte_input_2020/L_aansl[input_rel];
+			attribute<Units/nrPand>	nrAansluitingen		:= buislengte_input_2020/nrAansluitingen[input_rel];
+			attribute<Units/nrPand>	nrPanden			:= buislengte_input_2020/Panden[Units/nrPand][input_rel];
+
+		}
+		
+		unit<uint32> buurt2023_greenvis := Geography/RegioIndelingen/Buurt2023
+		{			
+			unit<uint32> xtab := /Geography/RegioIndelingen/Buurt2019x2023;
+			
+			attribute<m>     		L_dist_input 		:= sum(buurt2019_Greenvis/L_dist_input		[xtab/first_rel] * xtab/Length_FractionOf_2019, xtab/second_rel);
+			attribute<m>     		L_aansl        		:= sum(buurt2019_Greenvis/L_aansl       	[xtab/first_rel] * xtab/Length_FractionOf_2019, xtab/second_rel);
+			attribute<Units/nrPand>	nrAansluitingen	 	:= sum(buurt2019_Greenvis/nrAansluitingen	[xtab/first_rel] * xtab/OS_FractionOf_2019    , xtab/second_rel);
+			attribute<Units/nrPand> nrPanden     		:= sum(buurt2019_Greenvis/nrPanden    		[xtab/first_rel] * xtab/OS_FractionOf_2019    , xtab/second_rel);
+			
+
+		}
 
 		unit<uint32> per_buurt_2020 := Studiegebied/buurt
 		{
 			attribute<Geography/rdc_meter> geometry (poly) := Studiegebied/buurt/Geometry;
 			attribute<string>              BU_CODE         := Studiegebied/buurt/BU_CODE;
+			
+			attribute<buislengte_input_2020> input_rel := rlookup(BU_CODE, buislengte_input_2020/BU_CODE);
 
 			attribute<m>       L_dist_input     := rjoin(BU_CODE, buislengte_input_2020/BU_CODE, buislengte_input_2020/Hoofdleiding_lengte_m[m]);
 			attribute<nrPand>  nrAansluitingen  := rjoin(BU_CODE, buislengte_input_2020/BU_CODE, buislengte_input_2020/Aansluitingen[units/nrPand]);
@@ -391,6 +415,24 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 			attribute<m_pand>  L_aansl_pand     := max_elem(L_aansl / nrPanden, 1[m_pand])                                                                        , Descr = "invoer gemiddelde lengte aansluitleidingen per pand";
 			attribute<float64> Niet_aangesloten := float64(nrPanden) - float64(nrAansluitingen);
 		}
+		
+		
+		unit<uint32> per_buurt_greenvis := Studiegebied/buurt
+		{
+			attribute<Geography/rdc_meter> geometry (poly) := Studiegebied/buurt/Geometry;
+			attribute<string>              BU_CODE         := Studiegebied/buurt/BU_CODE;
+
+			attribute<m>       L_dist_input     := rjoin(BU_CODE, buurt2023_greenvis/BU_CODE, buurt2023_greenvis/L_dist_input[m]);
+			attribute<nrPand>  nrAansluitingen  := rjoin(BU_CODE, buurt2023_greenvis/BU_CODE, buurt2023_greenvis/nrAansluitingen[units/nrPand]);
+
+			attribute<m>       L_aansl          := max_elem(rjoin(BU_CODE, buurt2023_greenvis/BU_CODE, buurt2023_greenvis/L_aansl[m]), nrAansluitingen * 1[m_pand]), Descr = "invoer lengte aansluitleidingen per buurt";
+			attribute<m>       L_dist           := max_elem(L_dist_input, 500[m])          , Descr = "invoer lengte distributieleidingen per buurt";
+			attribute<nrPand>  nrPanden         := max_elem(rjoin(BU_CODE, buurt2023_greenvis/BU_CODE, buurt2023_greenvis/nrPanden[units/nrPand]), 1[units/nrPand])   , Descr = "invoer aantal panden per buurt";
+			attribute<m_pand>  L_aansl_pand     := max_elem(L_aansl / nrPanden, 1[m_pand])                                                                        , Descr = "invoer gemiddelde lengte aansluitleidingen per pand";
+			attribute<float64> Niet_aangesloten := float64(nrPanden) - float64(nrAansluitingen);
+		} 
+		
+		
 		unit<uint32> per_buurt := Studiegebied/buurt
 		{
 			attribute<Geography/rdc_meter> geometry (poly) := Studiegebied/buurt/Geometry;
@@ -404,7 +446,7 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 			attribute<nrPand>  nrPanden         := max_elem(rjoin(BU_CODE, buislengte_input/BU_CODE, buislengte_input/nrPanden[units/nrPand]), 1[units/nrPand])   , Descr = "invoer aantal panden per buurt";
 			attribute<m_pand>  L_aansl_pand     := max_elem(L_aansl / nrPanden, 1[m_pand])                                                                        , Descr = "invoer gemiddelde lengte aansluitleidingen per pand";
 			attribute<float64> Niet_aangesloten := float64(nrPanden) - float64(nrAansluitingen);
-		}
+		} 
 	}
 	#include <OSM.dms>
 	container infra
@@ -524,13 +566,6 @@ container RuimtelijkeData: Using = "Units;Geography;Model", FreeData = "False"
 
 			attribute<kw>    input_capaciteit_buurt        := buurt_rel->input_capaciteit_buurt, Descr = "invoer huidige opgestelde capaciteit aan MS-ruimtes ";
 
-			attribute<kw>    default_capaciteit_buurt      :=
-				= AsList('sum(BC/Bestaande' + /Classifications/BebouwingsSector/name + '/BO/AansluitCapaciteit/ASW_Eapp, BC/Bestaande' + /Classifications/BebouwingsSector/name + '/BO/PlanRegio_rel) 
-						  * TussenResultaten/StartJaar/Vermogens/GTF_' + /Classifications/BebouwingsSector/NcwRefBase + '_Enet  ', ' + ')
-			, Descr = "default huidige opgestelde capaciteit aan MS-ruimtes";
-			
-			attribute<kw>    capaciteit_buurt              := IsDefined(input_capaciteit_buurt) ? (input_capaciteit_buurt > default_capaciteit_buurt ? input_capaciteit_buurt : default_capaciteit_buurt) : default_capaciteit_buurt;
-			attribute<kW>    verschil_capaciteit_buurt     := capaciteit_buurt - default_capaciteit_buurt;
 
 			attribute<m>     input_lengte_LS_net           := buurt_rel->input_lengte_LS_buurt,     Descr = "invoer totale lengte van het LS-net per buurt";
 			attribute<m>     default_lengte_LS_net         := TussenResultaten/StartJaar/GebiedsAllocatie/RestWarmte/KostenBaten/KostenD/L_infra_e, Descr = "default totale lengte van het LS-net per buurt";
