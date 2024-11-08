@@ -94,8 +94,8 @@ container WarmteBronnen
 
 			attribute<bool> inStudieGebied := Invoer/RuimtelijkeData/StudieGebied/selected_per_gemeente[target_gem_rel];
 		}
-
-		template BronSelectie: IsHidden = "True"
+		
+		template PuntBronSelectie
 		{
 			// begin case parameters
 			parameter<string> RekenstapName;
@@ -169,12 +169,66 @@ container WarmteBronnen
 				attribute<Bronnen>               Bronnen_rel  := id(.);
 			}
 		}
+		
 		// Vooralsnog per ZichtJaar, zou ook per rekenstap kunnnen.
-		container BronSelecties := for_each_ne(Classifications/Rekenstap/name, 'BronSelectie('+Quote(Classifications/Rekenstap/name)+')');
+		container PuntBronSelecties := for_each_ne(Classifications/Rekenstap/name, 'PuntBronSelectie('+Quote(Classifications/Rekenstap/name)+')');
+		
+		unit<uint32> LijnenSet :
+				StorageName     = "%HestiaDataDir%/aanbod/Lijnbronnen.shp",
+				StorageReadOnly = "True",
+				StorageType 	= "gdal.vect",
+				DialogType      = "Map",
+				DialogData      = "geometry"
+		{
+			attribute<rdc_meter> geometry (arc);
+			attribute<string>    bron_naam;
+			attribute<bool>      Geschikt := const(true,.);
+		}
+		unit<uint32> GeschikteLijnen := select_with_org_rel(LijnenSet/Geschikt)
+		{
+			attribute<rdc_meter> geometry      (arc) := LijnenSet/geometry[org_rel];
+			attribute<Brontype>  BronType_rel        := const(Brontype/V/Industrie,.);
+			attribute<string>    Label               := 'IND_' + string(id(.));
+
+		}
+
+		template LijnBronSelectie: IsHidden = "True"
+		{
+			// begin case parameters
+			parameter<string> RekenjaarName;
+			// end case parameters
+
+			parameter<classifications/Rekenjaar> Rekenjaar_rel    := rlookup(RekenjaarName, classifications/Rekenjaar/name);
+			parameter<units/yr_uint16>           Jaar             := classifications/Rekenjaar/Values[Rekenjaar_rel];
+
+			unit<uint32> BronElementen := GeschikteLijnen 
+				, DialogType = "Map"
+				, DialogData = "geometry"
+			{
+				attribute<string>    Label               := GeschikteLijnen/Label;
+				attribute<rdc_meter> geometry     (arc)  := GeschikteLijnen/geometry;
+				attribute<Brontype>  BronType_rel        := GeschikteLijnen/BronType_rel;
+				attribute<celsius>   T_bron              := BronType/T_bron[BronType_rel];
+				attribute<ratio>     P_vol               := BronType/P_vol[BronType_rel];
+				attribute<ratio>     P_cap               := BronType/P_cap[BronType_rel];
+				attribute<Eur_kW>    Ki_cap_min          := BronType/Ki_cap_min[BronType_rel];
+				attribute<Eur_kW>    Ki_cap_max          := BronType/Ki_cap_max[BronType_rel];
+				attribute<_yr>       R_adm               := BronType/R_adm[BronType_rel];
+				attribute<_yr>       R_oh                := BronType/R_oh[BronType_rel];
+				attribute<MW>        MWth_max            := BronType/MWth_max[BronType_rel];
+				attribute<Eur_GJ>    K_GJ                := ='BronType/K_GJ/' +RekenjaarName+'[BronType_rel]';
+				attribute<Eur_GJ>    Km_GJ               := ='BronType/Km_GJ/'+RekenjaarName+'[BronType_rel]';
+			}
+		}
+		// Vooralsnog per ZichtJaar, zou ook per rekenstap kunnnen.
+		container LijnBronSelecties := for_each_ne(Classifications/Rekenjaar/name, 'LijnBronSelectie('+Quote(Classifications/Rekenjaar/name)+')');
+		
+		
+		container BronSelecties := for_each_ne(Classifications/Rekenjaar/name, 'BronCombinatie('+Quote(Classifications/Rekenstap/name)+')');
 
 		container linkset
 		{
-			// TODO BAS: REMVOE %SourceDataProjDir%/infra/20200114_CBS_bestaande_warmtenetten_Leeg.csv; wordt geregeld door HasStartingArcSet, dat op false staat in Default en Leidraad.
+			// TODO BAS: REMOVE %SourceDataProjDir%/infra/20200114_CBS_bestaande_warmtenetten_Leeg.csv; wordt geregeld door HasStartingArcSet, dat op false staat in Default en Leidraad.
 			
 			unit<uint32> src: StorageName = "%SourceDataProjDir%/infra/20200114_CBS_bestaande_warmtenetten_2019.csv" // bestand met bestaande warmtenetten
 			,	StorageType     = "gdal.vect"
