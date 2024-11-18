@@ -120,9 +120,14 @@ template KostenBatenT
 		}
 		
 		attribute<GJ_yr> V_WarmteVraag    (PlanRegio) := ='add('+AsItemList('sum(WarmteVraag/'+BCname+'/V_Warmte, WarmteVraag/'+BCname+'/BO/PlanRegio_rel)' )+')';
-		parameter<ratio> Verliesfactor 				  := classifications/gebiedsoptie/IsZLT[gebiedsoptie_rel] ? 0[ratio] : Efficiencies/Leidingverlies; 
-		attribute<GJ_yr> V_Warmte         (PlanRegio) := V_WarmteVraag / (1d - Verliesfactor * Leercurves/Verl/Curve);
-		attribute<GJ_yr> V_LeidingVerlies (PlanRegio) := V_Warmte - V_WarmteVraag;
+		
+		parameter<GJ_yr_asl> Verlies_asl :=
+				classifications/gebiedsoptie/IsZLT[gebiedsoptie_rel] ? Efficiencies/Leidingverlies_ZLT[GJ_yr_asl] : 
+				classifications/gebiedsoptie/IsLT[gebiedsoptie_rel]  ? Efficiencies/Leidingverlies_LT[GJ_yr_asl] : 
+				classifications/gebiedsoptie/IsMT[gebiedsoptie_rel]  ? Efficiencies/Leidingverlies_MT[GJ_yr_asl] : 999[GJ_yr_asl], IntegrityCheck = "this < 999[GJ_yr_asl]";
+
+		attribute<GJ_yr> V_LeidingVerlies (PlanRegio) := nrAansl_d * Verlies_asl;
+		attribute<GJ_yr> V_Warmte         (PlanRegio) := V_WarmteVraag + V_LeidingVerlies;
 		attribute<GJ_yr> V_WarmtePrimair  (PlanRegio) := V_Warmte;
 
 		container Bijstook

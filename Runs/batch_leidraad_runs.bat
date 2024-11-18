@@ -24,12 +24,12 @@ call :do_variant S2d_D_Restwarmte
 call :do_variant S2e_D_Geo_contour
 call :do_variant S2f_D_Geo_overal
 
-call :do_variant S3a_B_LT15_15
+call :do_variant S3a_B_LT30_30
 call :do_variant S3b_B_WKO15_15
 call :do_variant S3c_B_WKO15_70
 call :do_variant S3d_B_WKO15_50
 call :do_variant S3e_B_TEO_15_15
-call :do_variant S3f_D_LT15_70
+call :do_variant S3f_D_LT30_70
 call :do_variant S3g_D_WKO15_15
 call :do_variant S3h_D_WKO15_70
 

@@ -57,10 +57,19 @@ template WKOWoningData
 	//volumevraag jaarlijks aan het secundaire net (inclusief verrekening leidingverlies)
 	attribute<GJ_yr> V_Warmte_sec (BO) := V_RV_sec + V_TW_sec                                                      , Descr = "Aandeel van de eigen volumevraag naar warmte uit het secundaire net";
 	attribute<GJ_yr> V_Koude_sec  (BO) := V_Koude - V_id_Koude                                                     , Descr = "Aandeel van de eigen volumevraag naar koude uit het secundaire net";
-	parameter<ratio> Verliesfactor := T_sec < 25[Celsius] ? 0[ratio] : Efficiencies/Leidingverlies; 
-	attribute<GJ_yr> V_Wsec_netto (BO) := V_Warmte_sec / (1d - Verliesfactor * Leercurves/Verl/Curve), Descr ="Warmte te leveren aan het secundaire net met verrekening leidingverlies";
-	attribute<GJ_yr> V_Ksec_netto (BO) := V_Koude_sec / (1d - Verliesfactor * Leercurves/Verl/Curve) , Descr ="Koude te leveren aan het secundaire net met verrekening leidingverlies";
-	attribute<GJ_yr> V_wd_verlies (BO) := (V_warmte_sec - V_Wsec_netto) + (V_koude_sec - V_Ksec_netto);
+
+	parameter<GJ_yr_asl> Verlies_asl :=
+				classifications/gebiedsoptie/IsZLT[gebiedsoptie_rel] ? Efficiencies/Leidingverlies_ZLT * Leercurves/Verl/Curve : 
+				classifications/gebiedsoptie/IsLT[gebiedsoptie_rel]  ? Efficiencies/Leidingverlies_LT  * Leercurves/Verl/Curve : 
+				classifications/gebiedsoptie/IsMT[gebiedsoptie_rel]  ? Efficiencies/Leidingverlies_MT  * Leercurves/Verl/Curve : 999[GJ_yr_asl], IntegrityCheck = "this < 999[GJ_yr_asl]";
+
+	attribute<GJ_yr> Verlies_w (BO) := WarmteVraagComponent/nrAansluitingen * Verlies_asl;
+	attribute<GJ_yr> Verlies_k (BO) := WarmteVraagComponent/nrAansluitingen * Efficiencies/Leidingverlies_KD;
+
+
+	attribute<GJ_yr> V_Wsec_netto (BO) := V_Warmte_sec + Verlies_w, Descr ="Warmte te leveren aan het secundaire net met verrekening leidingverlies";
+	attribute<GJ_yr> V_Ksec_netto (BO) := V_Koude_sec  + Verlies_k, Descr ="Koude te leveren aan het secundaire net met verrekening leidingverlies";
+	attribute<GJ_yr> V_wd_verlies (BO) := Verlies_w + Verlies_k;
 	
 	//gelijktijdige capaciteitsvraag aan het secundaire net inclusief verrekening vermogensverlies)
 	parameter<ratio> Vermogensverlies  := =(T_sec <= 55[Celsius]) ? 'Efficiencies/Vermogenverlies_LT' : 'Efficiencies/Vermogenverlies_MT';
