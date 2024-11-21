@@ -34,9 +34,6 @@ call :do_variant S3h_D_WKO15_70
 call :do_variant S4a_GG_B_hWP
 call :do_variant S4b_GG_D_hWP
 
-call :do_variant S5a_H2_B_hWP
-call :do_variant S5b_H2_D_hWP
-
 echo Klaar met uitrekenen van alle varianten voor NL
 pause
 exit /B 0

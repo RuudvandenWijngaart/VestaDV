@@ -22,6 +22,7 @@ template LtWarmtenetImpl
 	parameter<bool>                        CollectieveWP     := (T_ow < T_sec), Descr = "Indien aflevertemperatuur hoger moet zijn dan de brontemperatuur is een collectieve warmtepomp nodig";
 	parameter<string>                      GebiedsOptie_name := 'LT' + string(T_ow) + '_' + string(T_sec);
 	parameter<Classifications/WarmteOptie> WarmteOptie_rel   := ='Classifications/WarmteOptie/V/'+GebiedsOptie_name;
+	parameter<float64>					   LTCurve			 := Classifications/Gebiedsoptie/isZLT[gebiedsoptie_rel] ? LeerCurves/ZLTnet/curve : LeerCurves/LTnet/curve;
 
 	container    bebouwing    := BeginStatus/Bebouwing;
 	unit<uint8>  WkoComponent := Classifications/WoonUtilComponent;
@@ -56,7 +57,7 @@ template LtWarmtenetImpl
 
 	// =========  Invoerkentallen over kosten en performance worden opgehaald en verwerkt met leercurves
 	container Efficiency      := Kengetallen/Efficiency/Efficiency_LT(T_ow, T_sec, Schuiven/EfficiencySchuif);
-	container Kostenkentallen := Kengetallen/LTkentallen/Kosten_LT(Leercurves/Inpand/Curve, Leercurves/eWPww/Curve, Leercurves/LTnet/Curve, Leercurves/MTnet/Curve);
+	container Kostenkentallen := Kengetallen/LTkentallen/Kosten_LT(Leercurves/Inpand/Curve, Leercurves/eWPww/Curve, LTCurve, Leercurves/MTnet/Curve);
 
 	// =========  Ophalen informatie over warmtebronnen
 	unit<uint32> BronSrc      := BeginStatus/LtWarmte/bron;
@@ -265,12 +266,12 @@ template LtWarmtenetImpl
 			attribute<Eur>   K_zijleiding   (BronCluster) := L_zijleiding * K_m_sec;
 			attribute<Eur_m> K_min_brondist (BronCluster) := P_bronnet > 0[MW] ? 400[Eur_m] + 210[Eur / m] * (P_bronnet * 1.0[1 / MW])^ 0.5 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
 			attribute<Eur_m> K_max_brondist (BronCluster) := P_bronnet > 0[MW] ? 800[Eur_m] + 200[Eur / m] * (P_bronnet * 1.0[1 / MW])^ 0.6 : 0[Eur_m], Source = "Functioneel Ontwerp 4.0 bijlage A.11";
-			attribute<Eur_m> K_m_brondist   (BronCluster) := (K_min_brondist * Schuiven/KostenMin + K_max_brondist * Schuiven/KostenMax) * Leercurves/LTnet/Curve;
+			attribute<Eur_m> K_m_brondist   (BronCluster) := (K_min_brondist * Schuiven/KostenMin + K_max_brondist * Schuiven/KostenMax) * LTCurve;
 		}
 
 		//Aanvullende kosten brongerelateerd
 		attribute<Eur>    Ki_ow_brondist  (BronCluster) := BronCluster/LengthProxy * secundairnet/K_m_brondist                  , Descr ="investeringskosten distributieleidingen om bronnen met elkaar te verbinden";
-		attribute<Eur>	  Ki_ow_uitkoppel (BronCluster) := leerCurves/LTnet/Curve * (Schuiven/KostenMin * BronCluster/Ki_kW_min + Schuiven/KostenMax * BronCluster/Ki_kW_max) * P_sec_primair;		
+		attribute<Eur>	  Ki_ow_uitkoppel (BronCluster) := LTCurve * (Schuiven/KostenMin * BronCluster/Ki_kW_min + Schuiven/KostenMax * BronCluster/Ki_kW_max) * P_sec_primair;		
 		attribute<Eur>    Ki_ow_buffer    (BronCluster) := max_elem((Kostenkentallen/Ki_buffer_min - Ki_buffer_gebouw) , 0[Eur]), Descr ="ondergrenscontrole investeringskosten buffervat bij primaire bron";
 		attribute<Eur>    Ki_ow           (BronCluster) := Ki_ow_brondist + Ki_ow_buffer + Ki_ow_uitkoppel                      , Descr ="investeringskosten opwekking";
 		attribute<Eur>    Oi_ow_EIA       (BronCluster) := Ki_ow * SpecifiekeInstellingen/Beleid/EIA/LT                         , Descr ="investeringssubsidie opwekking";
