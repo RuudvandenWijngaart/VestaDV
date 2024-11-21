@@ -7,7 +7,7 @@ REM Bij nogmaals runnen worden bestanden gewoon overschreven
 REM aanpassingen voor machine specifieke paden
 Call path/set.bat
 
-"%exe_path%" /L"%log_dir%\StatischAll.txt" "%prj_dir%\Runs\Runfile.dms" /LeidraadResultaten/StartJaar/PlanRegioResults/Statisch/export_csv/result
+REM "%exe_path%" /L"%log_dir%\StatischAll.txt" "%prj_dir%\Runs\Runfile.dms" /LeidraadResultaten/StartJaar/PlanRegioResults/Statisch/export_csv/result
 
 set ITEM1=/LeidraadResultaten/Zichtjaar/PlanRegioResults/Hoofdindicatoren/export_csv/result
 set ITEM2=/LeidraadResultaten/Zichtjaar/PlanRegioResults/NationaleKosten/export_csv/result
@@ -16,16 +16,18 @@ set ITEM4=/LeidraadResultaten/Zichtjaar/PlanRegioResults/Hulpvariabelen/export_c
 set ITEM5=/LeidraadResultaten/Zichtjaar/PlanRegioResults/GevoeligheidsAnalyse/export_csv/result
 set ITEMS=%ITEM1% %ITEM2% %ITEM3% %ITEM4% %ITEM5%
 
-"%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/PlanRegioResults/Hoofdindicatoren/export_csv/result
-"%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/PlanRegioResults/NationaleKosten/export_csv/result
-"%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/PlanRegioResults/Aansluitingen/export_csv/result
+REM "%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/PlanRegioResults/Hoofdindicatoren/export_csv/result
+REM "%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/PlanRegioResults/NationaleKosten/export_csv/result
+REM "%exe_path%" /L"%log_dir%\Ref2019All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Startjaar/PlanRegioResults/Aansluitingen/export_csv/result
 
-"%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/PlanRegioResults/Hoofdindicatoren/export_csv/result
-"%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/PlanRegioResults/NationaleKosten/export_csv/result
-"%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/PlanRegioResults/Aansluitingen/export_csv/result
+REM "%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/PlanRegioResults/Hoofdindicatoren/export_csv/result
+REM "%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/PlanRegioResults/NationaleKosten/export_csv/result
+REM "%exe_path%" /L"%log_dir%\Ref2030All.txt"        "%prj_dir%\Runs\Runfile.dms"     /LeidraadResultaten/Ref2030/PlanRegioResults/Aansluitingen/export_csv/result
 
 "%exe_path%" /L"%log_dir%\S1a_B_LuchtWP.txt"     "%prj_dir%\Runs\S1a_B_LuchtWP.dms"     %ITEMS%
-"%exe_path%" /L"%log_dir%\S1b_B_BodemWP.txt"     "%prj_dir%\Runs\S1b_B_BodemWP.dms"     %ITEMS%
+REM "%exe_path%" /L"%log_dir%\S1b_B_BodemWP.txt"     "%prj_dir%\Runs\S1b_B_BodemWP.dms"     %ITEMS%
+
+exit /b
 
 "%exe_path%" /L"%log_dir%\S1AofB.txt"       "%prj_dir%\Runs\Runfile.dms" /Vergelijking/Outputs/S1AofB/export_csv/result
 
