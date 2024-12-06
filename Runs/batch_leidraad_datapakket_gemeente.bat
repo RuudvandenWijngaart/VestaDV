@@ -40,13 +40,13 @@ exit /B
 
 :do_reference
 
-"%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\Runfile.dms" /LeidraadResultaten/%1/DataPakketExport/bestaand/generate_all || call :error_handler
+"%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\Runfile.dms" /LeidraadResultaten/%1/DataPakketExport/bestaand/generate_all_studiegebied || call :error_handler
 
 exit /B
 
 :do_variant
 
-"%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\%1.dms"  /LeidraadResultaten/zichtjaar/DataPakketExport/bestaand/generate_all || call :error_handler
+"%exe_path%" /L"%log_dir%\%1.txt" %FLAGS% "%prj_dir%\Runs\%1.dms"  /LeidraadResultaten/zichtjaar/DataPakketExport/bestaand/generate_all_studiegebied || call :error_handler
 
 exit /B
 
