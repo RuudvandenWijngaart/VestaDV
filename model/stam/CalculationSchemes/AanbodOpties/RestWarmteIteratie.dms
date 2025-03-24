@@ -15,9 +15,9 @@ template RestWarmteIteratie
 
 	unit<uint32> BronConnections := PrevState/BronConnections;
 
-	attribute<MW> MWth_capaciteit(Bronnen) := PrevState/MWth_capaciteit;
+	attribute<MW> MWth_max(Bronnen) := PrevState/MWth_max;
 
-	attribute<BronConnections> NewAssignment (PlanRegio) := capacitated_connect(BronConnections/point, MWth_capaciteit[BronConnections/Bronnen_rel], PlanRegio/point, Efficiencies/Hoofdbronvermogensaandeel * KostenBaten/CapaciteitsVraagD);
+	attribute<BronConnections> NewAssignment (PlanRegio) := capacitated_connect(BronConnections/point, MWth_max[BronConnections/Bronnen_rel], PlanRegio/point, Efficiencies/Hoofdbronvermogensaandeel * KostenBaten/CapaciteitsVraagD);
 	attribute<BronConnections> Assignment    (PlanRegio) := MakeDefined(PrevState/CurrConnection, NewAssignment)
 	{
 		attribute<Bronnen>                                         Bronnen_rel      (PlanRegio) := BronConnections/Bronnen_rel[Assignment];
@@ -46,7 +46,7 @@ template RestWarmteIteratie
 		attribute<Eur_yr> Kji_ow          (PlanRegio) := Ki_ow * NCW/ow28/AnnualisationFactor;
 		attribute<Eur_yr> Kmi_ow          (PlanRegio) := Ki_ow * NCW/mr28/AnnualisationFactor;
 		
-		attribute<Eur>    Oi_ow_EIA       (PlanRegio) := Ki_ow * SpecifiekeInstellingen/Beleid/EIA/ow[TypeInfoList_rel];
+		attribute<Eur>    Oi_ow_EIA       (PlanRegio) := Ki_ow * SpecifiekeInstellingen/Beleid/EIA/ow[Bronnen_rel->TypeInfoList_rel];
 		attribute<Eur_yr> Oji_ow_EIA      (PlanRegio) := Oi_ow_EIA * NCW/ow28/AnnualisationFactor;
 		attribute<Eur_yr> Omi_ow_EIA      (PlanRegio) := Oi_ow_EIA * NCW/mr28/AnnualisationFactor;
 
@@ -92,11 +92,11 @@ template RestWarmteIteratie
 	}
 
 	attribute<Eur_MW_yr>  Ranking         (PlanRegio) := Assignment/Mr// ranking niet op prijs per GJ maar op opbrengsten per MW capaciteit, itt FO v7a $7.
-		* float64((Bronnen/P_cap[Assignment/bronnen_rel] * KostenBaten/CapaciteitsVraagD) <= MWth_capaciteit[Assignment/Bronnen_rel]) // itt FO v7a $7.: te grote gebieden worden overgeslagen zodat kleinere gebieden toch aan de bEurt kunnen komen.
+		* float64((Bronnen/P_cap[Assignment/bronnen_rel] * KostenBaten/CapaciteitsVraagD) <= MWth_max[Assignment/Bronnen_rel]) // itt FO v7a $7.: te grote gebieden worden overgeslagen zodat kleinere gebieden toch aan de bEurt kunnen komen.
 		* float64(Not(PrevState/GebruikRestwarmte))  // Only select once
 		* float64(HasWarmteVraag); // don't selecte already allocated planregio
 
-	attribute<Eur_MW_yr>  Threshold_RAW (Bronnen) := -nth_element_weighted(-Ranking, MWth_capaciteit, Bronnen/P_cap[Assignment/Bronnen_rel] * KostenBaten/CapaciteitsVraagD, Assignment/Bronnen_rel);
+	attribute<Eur_MW_yr>  Threshold_RAW (Bronnen) := -nth_element_weighted(-Ranking, MWth_max, Bronnen/P_cap[Assignment/Bronnen_rel] * KostenBaten/CapaciteitsVraagD, Assignment/Bronnen_rel);
 	attribute<Eur_MW_yr>  Threshold     (Bronnen) := MakeDefined(threshold_RAW, 0[Eur_MW_yr]);
 	attribute<MW>         MWth_above    (Bronnen) := sum(float64(Ranking > Threshold[Assignment/Bronnen_rel]) * (Bronnen/P_cap[Assignment/Bronnen_rel] * KostenBaten/CapaciteitsVraagD), Assignment/Bronnen_rel);
 	attribute<MW>         MWth_at       (Bronnen) := sum(float64(Ranking = Threshold[Assignment/Bronnen_rel]) * (Bronnen/P_cap[Assignment/Bronnen_rel] * KostenBaten/CapaciteitsVraagD), Assignment/Bronnen_rel);
@@ -115,7 +115,7 @@ template RestWarmteIteratie
 	container NextState
 	{
 		parameter<float64> iterNR := PrevState/iterNR + 1.0;
-		attribute<MW> MWth_capaciteit (Bronnen) := PrevState/MWth_capaciteit - MWth_ExtraGebruik;
+		attribute<MW> MWth_max (Bronnen) := PrevState/MWth_max - MWth_ExtraGebruik;
 
 		attribute<bool> GebruikRestWarmte(PlanRegio) := ExtraGebruikRestWarmte || PrevState/GebruikRestWarmte,
 			IntegrityCheck = "not(any(ExtraGebruikRestWarmte && PrevState/GebruikRestWarmte))"
@@ -125,14 +125,16 @@ template RestWarmteIteratie
 			parameter<int16>  PenWidth          := 1s              , DialogType = "PenWidth";
 		}
 
-		attribute<Bronnen> CurrBron (PlanRegio) := ExtraGebruikRestWarmte ? Assignment/Bronnen_rel : PrevState/CurrBron;
+		attribute<Bronnen> CurrBron (PlanRegio) := = Voorkeuren/NewRestWarmte ? 'AanlegAfweging ? Assignment/Bronnen_rel : PrevState/CurrBron' : 'PrevState/CurrBron';
 
-		unit<uint32> ConnectedPlanRegio := Subset(ExtraGebruikRestWarmte)
+		unit<uint32> ConnectedPlanRegio := select_with_org_rel(ExtraGebruikRestWarmte)
 		{
+			attribute<PrevState/BronConnections> BronConnections_rel := Assignment[org_rel];
+			attribute<Bronnen>                   Bronnen_rel         := BronConnections_rel->Bronnen_rel;
 			// the following is merely for display only
 			unit<uint32> Extrapoints := union_unit(ConnectedPlanRegio, ConnectedPlanRegio)
 			{
-				attribute<rdc_meter>          point      := union_data(., PrevState/BronConnections/point[Assignment[ConnectedPlanRegio/nr_OrgEntity]],PlanRegio/point[ConnectedPlanRegio/nr_OrgEntity]);
+				attribute<rdc_meter>          point      := union_data(., PrevState/BronConnections/point[BronConnections_rel],PlanRegio/point[org_rel]);
 				attribute<ConnectedPlanRegio> SequenceNr := union_data(., id(ConnectedPlanRegio), id(ConnectedPlanRegio));
 				attribute<uint32>             Ordinal    := union_data(., const(0, ConnectedPlanRegio), const(1, ConnectedPlanRegio));
 			}
@@ -141,20 +143,19 @@ template RestWarmteIteratie
 
 		unit<uint32> BronConnections := union_unit(PrevState/BronConnections, ConnectedPlanRegio)
 		{
-			attribute<Bronnen>   Bronnen_rel := union_data(., PrevState/BronConnections/Bronnen_rel, Assignment/Bronnen_rel[ConnectedPlanRegio/nr_OrgEntity]);
-			attribute<m>         CumulDist   := union_data(., PrevState/BronConnections/CumulDist,   Assignment/CumulDist  [ConnectedPlanRegio/nr_OrgEntity]);
-			attribute<MW>        CumulP      := union_data(., PrevState/BronConnections/CumulP + sum(ExtraGebruikRestWarmte ? Assignment/P : 0[MW],  Assignment), Assignment/P[ConnectedPlanRegio/nr_OrgEntity]);
-			attribute<rdc_meter> point       := union_data(., PrevState/BronConnections/point,       PlanRegio/point[ConnectedPlanRegio/nr_OrgEntity]);
+			attribute<Bronnen>   Bronnen_rel := union_data(., PrevState/BronConnections/Bronnen_rel, ConnectedPlanRegio/Bronnen_rel);
+			attribute<m>         CumulDist   := union_data(., PrevState/BronConnections/CumulDist,   Assignment/CumulDist  [ConnectedPlanRegio/org_rel]);
+			attribute<MW>        CumulP      := union_data(., PrevState/BronConnections/CumulP + sum(ExtraGebruikRestWarmte ? Assignment/P : 0[MW],  Assignment), Assignment/P[ConnectedPlanRegio/org_rel]);
+			attribute<rdc_meter> point       := union_data(., PrevState/BronConnections/point,       PlanRegio/point[ConnectedPlanRegio/org_rel]);
 		}
 
 		attribute<BronConnections> CurrConnection (PlanRegio) := convert(ExtraGebruikRestWarmte ? Assignment : PrevState/CurrConnection, BronConnections);
 
 		unit<uint32> CumulatedArcSet := union_unit(PrevState/CumulatedArcSet, ConnectedPlanRegio), DialogType = "Map", DialogData = "CumulatedArcs"
 		{
-			attribute<rdc_meter> Bronpoint     := union_data(., PrevState/CumulatedArcSet/Bronpoint, Bronnen/point[Assignment/Bronnen_rel[ConnectedPlanRegio/nr_OrgEntity]]);
-			attribute<float64>   BronpointX    := pointCol(Bronpoint);
-			attribute<float64>   BronpointY    := pointRow(Bronpoint);
-			attribute<PlanRegio> PlanRegio_rel := union_data(., PrevState/CumulatedArcSet/PlanRegio_rel, ConnectedPlanRegio/nr_OrgEntity);
+			
+			attribute<rdc_meter> Bronpoint     := union_data(., PrevState/CumulatedArcSet/Bronpoint, PrevState/BronConnections/point[ConnectedPlanRegio/BronConnections_rel]);
+			attribute<PlanRegio> PlanRegio_rel := union_data(., PrevState/CumulatedArcSet/PlanRegio_rel, ConnectedPlanRegio/org_rel);
 		}
 
 		attribute<rdc_meter> CumulatedArcs (CumulatedArcSet, arc) := union_data(CumulatedArcSet, PrevState/CumulatedArcs, ConnectedPlanRegio/ExtraArcs)

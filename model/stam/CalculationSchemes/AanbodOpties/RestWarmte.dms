@@ -24,23 +24,29 @@ template RestWarmte
 		attribute<Eur_kW   > Ki_kW     := Ki_kW_org  * LeerCurves/MTnet/Curve;
 		attribute<Eur_yr_kW> Kj_kW     := Ki_kW * Rj_Onderhoud;
 	}
+	unit<uint32> BronConnections := ='/Invoer/RuimtelijkeData/WarmteBronnen/RestWarmte/BronSelecties/' + RekenstapName + '/BronConnections'
+	{
+//		attribute<Eur_kW   > Ki_kW_Org := (Ki_kW_min * Schuiven/KostenMin + Ki_kW_max * Schuiven/KostenMax);
+//		attribute<Eur_kW   > Ki_kW     := Ki_kW_org  * LeerCurves/MTnet/Curve;
+//		attribute<Eur_yr_kW> Kj_kW     := Ki_kW * Rj_Onderhoud;
+	}
 
 	container RestWarmteStartingState := BeginStatus/RestWarmte
 	{
-		unit<uint32> BronConnections := ../Bronnen;
+		unit<uint32> BronConnections := ../BronConnections;
 		parameter<float64> IterNR    := 0.0;
 
-		attribute<BronConnections>  CurrBron          (PlanRegio)     := rlookup(CumulatedArcSet/Bronpoint, BronConnections/point)[invert(CumulatedArcSet/PlanRegio_rel)];
-		attribute<BronConnections>  CurrConnection    (PlanRegio)     := CurrBron;
+		attribute<BronConnections>  CurrConnection    (PlanRegio)     := rlookup(CumulatedArcSet/Bronpoint, BronConnections/point)[invert(CumulatedArcSet/PlanRegio_rel)];
+		attribute<Bronnen>          CurrBron          (PlanRegio)     := CurrConnection->Bronnen_rel;
 		attribute<bool>             GebruikRestwarmte (PlanRegio)     := OldGebruikOptie;
 		attribute<MW>               MWth_vraag        (PlanRegio)     := KostenBaten/KostenD/PrimairNet/P_ASW * 0.001[ MW / kW];
 
-		attribute<MW>               MWth_used       (BronConnections) := BronConnections/P_cap * sum(MWth_vraag, CurrBron);
-		attribute<MW>               MWth_capaciteit (BronConnections) := Bronnen/MWth_max  - MWth_used;
+		attribute<MW>               MWth_used       (BronConnections) := Bronnen/P_cap[BronConnections/Bronnen_rel] * sum(MWth_vraag, CurrConnection);
+		attribute<MW>               MWth_max        (Bronnen) := Bronnen/MWth_max  - sum(MWth_used, BronConnections/Bronnen_rel);
 	}
 	attribute<bool> HasWarmteVraag (PlanRegio) := not(IsDefined(BeginStatus/PlanRegioWarmteAllocatie_REMOVE));
 
-	parameter<uint32> NrIterations := VoorkEuren/NewRestWarmte ? 400 : 1;
+	parameter<uint32> NrIterations := VoorkEuren/NewRestWarmte ? 100 : 1;
 
 	unit<uint32> Iteration := Range(uint32, 0, NrIterations)
 	{
@@ -108,7 +114,7 @@ template RestWarmte
 		);
 	}
 
-	container Results := BeginStatus, IntegrityCheck = "P_Bron <= Bronnen/MWTh_Max * float64(3.34)"
+	container Results := BeginStatus, IntegrityCheck = "P_Bron <= Bronnen/MWth_Max * float64(3.34)"
 	{
 		container BebouwingMutatie :=
 			for_each_ne(Classifications/BebouwingsComponent/name
@@ -137,10 +143,14 @@ template RestWarmte
 																	: 'NieuwGebruik ? LastIter/NextState/CurrBron : VorigePeriode/Welke_bron_nu[bronnen]' ; //Casting is zoals in eerdere startanalyse, maar is wel fout.
 			//attribute<bronnen> Welke_bron_gebruik (PlanRegio) := NieuwGebruik ? LastIter/NextState/CurrBron : VorigePeriode/Welke_bron_nu;
 
-			attribute<string>  Bron_label          (PlanRegio) := Bronnen/label[welke_bron_gebruik];
+			attribute<string>  Bron_label         (PlanRegio) := Bronnen/label[welke_bron_gebruik];
 			attribute<string>  Bron_naam          (PlanRegio) := Bronnen/naam[welke_bron_gebruik];
-			attribute</Units/MW>  Bron_MWth_max   (PlanRegio) := Bronnen/MWth_max[welke_bron_gebruik];
+			attribute<MW>      Bron_MWth_max      (PlanRegio) := Bronnen/MWth_max[welke_bron_gebruik];
 			attribute<Eur_GJ>  Bron_kmGJ          (PlanRegio) := Bronnen/Km_gj[welke_bron_gebruik];
+			
+			attribute<PlanRegio> Bron_PlanRegio_count(bronnen) := pcount(Welke_bron_gebruik);
+			attribute<MW>        Bron_MWth_used      (bronnen) := sum(Bronnen/P_cap [ Welke_bron_gebruik ] * KostenBaten/CapaciteitsVraagD, welke_bron_gebruik);
+			attribute<MW>        Bron_MWth_rest      (bronnen) := Bronnen/MWth_max - Bron_MWth_used;
 
 			container jaarlijks
 			{
@@ -338,6 +348,7 @@ template RestWarmte
 			{
 				attribute<rdc_meter> Bronpoint     := union_data(., StartArcSet/Bronpoint, LastCumulatedArcSet/Bronpoint[ExtraArcSet/LastCumulatedArcSet_rel]), DisableStorage = "True";
 				attribute<PlanRegio> PlanRegio_rel := union_data(., StartArcSet/PlanRegio_rel, ExtraArcSet/PlanRegio_rel);
+				attribute<bronnen>   Bron_rel := Welke_bron_gebruik[PlanRegio_rel];
 
 				parameter<bool> HasArcs := true, DisableStorage = "True";
 			}
