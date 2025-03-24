@@ -46,7 +46,7 @@ template RestWarmte
 	}
 	attribute<bool> HasWarmteVraag (PlanRegio) := not(IsDefined(BeginStatus/PlanRegioWarmteAllocatie_REMOVE));
 
-	parameter<uint32> NrIterations := VoorkEuren/NewRestWarmte ? 100 : 1;
+	parameter<uint32> NrIterations := VoorkEuren/NewRestWarmte ? 400 : 1;
 
 	unit<uint32> Iteration := Range(uint32, 0, NrIterations)
 	{
@@ -96,10 +96,11 @@ template RestWarmte
 	attribute<bool>           bron_gebruikt      (bronnen) := pcount(Results/Restwarmte/Welke_bron_nu) > 0;
 	attribute<gebruikte_bron> gebruikte_bron_rel (bronnen) := value(sub_or_null(cumulate(uint32(bron_gebruikt)),1), gebruikte_bron);
 
-	unit<uint32> gebruikte_bron := range(uint32, 0, sum(uint32(bron_gebruikt)))
+	unit<uint32> gebruikte_bron := select_with_org_rel(bron_gebruikt)//range(uint32, 0, sum(uint32(bron_gebruikt)))
 	{
-		attribute<bronnen> bron_rel := invert(gebruikte_bron_rel);
-		attribute<string>  label    := bronnen/label[bron_rel];
+		//attribute<bronnen> bron_rel := const(1[bronnen],.);//invert(gebruikte_bron_rel);
+		attribute<string>  label    := bronnen/label[org_rel];
+		attribute<string>  naam     := bronnen/naam[org_rel];
 	}
 
 	unit<uint32> NewAfnameGebied := union_unit(BeginStatus/AfnameGebied, gebruikte_bron)
@@ -111,6 +112,11 @@ template RestWarmte
 		attribute<string> label := union_data(.
 			, BeginStatus/AfnameGebied/label
 			, gebruikte_bron/label
+		);
+		
+		attribute<string> naam := union_data(.
+			, BeginStatus/AfnameGebied/label
+			, gebruikte_bron/naam
 		);
 	}
 
