@@ -35,21 +35,21 @@ template select_with_org_relGebouwOptieT
 	//===== Selectie van woningen die voldoen aan de minimale isolatiegraad voor de gebouwoptie in kwestie =====
 	unit<uint32> GeschiktObject := select(LabelGeschikt && KoudeGeschikt && Criterium), ishidden = "True"
 	{
-		attribute<BO>                              BO_rel                 := select_data(GeschiktObject, ActiefObject/BO_rel);
-		attribute<Classifications/SchilLabel>      SchilLabel_rel         := select_data(GeschiktObject, ActiefObject/SchilLabel_rel);
+		attribute<BO>                              BO_rel                 := collect_by_cond(GeschiktObject, ActiefObject/BO_rel);
+		attribute<Classifications/SchilLabel>      SchilLabel_rel         := collect_by_cond(GeschiktObject, ActiefObject/SchilLabel_rel);
 		attribute<Classifications/SchilLabel>      Energielabel_rel       := ../Energielabel_rel;
-		attribute<Classifications/GebouwOptie>     GebouwOptie_rel        := select_data(GeschiktObject, ../GebouwOptie_rel);
-		attribute<Classifications/IsolatieAmbitie> MinIsolatieAmbitie_rel := select_data(GeschiktObject, ../MinIsolatieAmbitie_rel);
-		attribute<Classifications/IsolatieAmbitie> MaxIsolatieAmbitie_rel := select_data(GeschiktObject, ../MaxIsolatieAmbitie_rel);
+		attribute<Classifications/GebouwOptie>     GebouwOptie_rel        := collect_by_cond(GeschiktObject, ../GebouwOptie_rel);
+		attribute<Classifications/IsolatieAmbitie> MinIsolatieAmbitie_rel := collect_by_cond(GeschiktObject, ../MinIsolatieAmbitie_rel);
+		attribute<Classifications/IsolatieAmbitie> MaxIsolatieAmbitie_rel := collect_by_cond(GeschiktObject, ../MaxIsolatieAmbitie_rel);
 		attribute<m2>                              Oppervlakte_i          := BO/Oppervlakte[BO_Rel];
 		attribute<nrAsl>                           nrAansluitingen_i      := BO/nrAansluitingen[BO_Rel];
 		attribute<Classifications/Woningtype>      WoningType_rel         := BO/WoningType_rel[BO_Rel];
 		
 		container AansluitCapaciteit
 		{
-			attribute<kW> RV (GeschiktObject) := select_data(GeschiktObject, ActiefObject/AansluitCapaciteit/RV);
-			attribute<kW> TW (GeschiktObject) := select_data(GeschiktObject, ActiefObject/AansluitCapaciteit/TW);
-			attribute<kW> KD (GeschiktObject) := select_data(GeschiktObject, ActiefObject/AansluitCapaciteit/KD);
+			attribute<kW> RV (GeschiktObject) := collect_by_cond(GeschiktObject, ActiefObject/AansluitCapaciteit/RV);
+			attribute<kW> TW (GeschiktObject) := collect_by_cond(GeschiktObject, ActiefObject/AansluitCapaciteit/TW);
+			attribute<kW> KD (GeschiktObject) := collect_by_cond(GeschiktObject, ActiefObject/AansluitCapaciteit/KD);
 		}
 
 		container Bouwdelen := for_each_nedv(Classifications/Bouwdeel/name
@@ -58,14 +58,14 @@ template select_with_org_relGebouwOptieT
 			)
 		{
 		container Isolatie := for_each_nedv(Classifications/Bouwdeel/name
-			,	replace('select_data(GeschiktObject, ActiefObject/Bouwdelen/Isolatie/@BN)', '@BN', Classifications/Bouwdeel/name)
+			,	replace('collect_by_cond(GeschiktObject, ActiefObject/Bouwdelen/Isolatie/@BN)', '@BN', Classifications/Bouwdeel/name)
 			,	GeschiktObject, Classifications/IsolatieNiveau
 			);
 		}
 		container Functioneel := for_each_nedv(Classifications/FunctioneleVraag/name
 			,	Classifications/FunctioneleVraag/name == 'VT' ? 'OverigeInstallaties/Ventilatie/Afweging/V_E' :
-				Classifications/FunctioneleVraag/name == 'RV' ? 'select_data(GeschiktObject, ActiefObject/Functioneel/RV) - BO/Functioneel/Vrv_VT[BO_rel] + OverigeInstallaties/Ventilatie/Afweging/V_RV' :
-				replace('select_data(GeschiktObject, ActiefObject/Functioneel/@BN)', '@BN', Classifications/FunctioneleVraag/name)
+				Classifications/FunctioneleVraag/name == 'RV' ? 'collect_by_cond(GeschiktObject, ActiefObject/Functioneel/RV) - BO/Functioneel/Vrv_VT[BO_rel] + OverigeInstallaties/Ventilatie/Afweging/V_RV' :
+				replace('collect_by_cond(GeschiktObject, ActiefObject/Functioneel/@BN)', '@BN', Classifications/FunctioneleVraag/name)
 			,	GeschiktObject, GJ_yr
 			);
 		
@@ -88,8 +88,8 @@ template select_with_org_relGebouwOptieT
 		// code copied form GebouwOptie maar nu per GeschiktObject vanwege rol specifieke activatie op voor welk een installatie vervanging is.
 		unit<uint32> xProduct := combine(Classifications/Product, GeschiktObject)
 		{
-			attribute<Classifications/Product>      Product_rel     := nr_1;
-			attribute<GeschiktObject> GeschiktObject_rel := nr_2;
+			attribute<Classifications/Product>      Product_rel     := first_rel;
+			attribute<GeschiktObject> GeschiktObject_rel := second_rel;
 			attribute<Classifications/GebouwOptie>  GebouwOptie_rel := GeschiktObject_rel->GebouwOptie_rel;
 //			attribute<string>       label           := BO_rel->Label + ':'+Classifications/Product/name[Product_rel] + '.' + GebouwOptie/name[GebouwOptie_rel];
 			attribute<Classifications/Installatie>  Installatie_rel := ='union_data(., '+AsItemList('GeschiktObject/GebouwOptie_rel->PerProduct/'+Classifications/Product/name)+')';
@@ -193,9 +193,9 @@ template select_with_org_relGebouwOptieT
 		attribute<Eur_yr> Kj_Vastrecht_g (GeschiktObject) := VastRechtBijdrageG; // bijdrage en heffingskortingen voor E, MT en LT zijn voor alle GebouwOpties hetzelfde, dus niet relevant voor de afweging.
 	}
 	
-	attribute<Eur>    Ki_gv       (GeschiktObject) := leerCurves/Isolatie/Curve * select_data(GeschiktObject, ActiefObject/Ki_GV );
-	attribute<Eur_yr> Kji_gv      (GeschiktObject) := leerCurves/Isolatie/Curve * select_data(GeschiktObject, ActiefObject/Kji_GV);
-	attribute<Eur_yr> Kmi_gv      (GeschiktObject) := leerCurves/Isolatie/Curve * select_data(GeschiktObject, ActiefObject/Kmi_GV);
+	attribute<Eur>    Ki_gv       (GeschiktObject) := leerCurves/Isolatie/Curve * collect_by_cond(GeschiktObject, ActiefObject/Ki_GV );
+	attribute<Eur_yr> Kji_gv      (GeschiktObject) := leerCurves/Isolatie/Curve * collect_by_cond(GeschiktObject, ActiefObject/Kji_GV);
+	attribute<Eur_yr> Kmi_gv      (GeschiktObject) := leerCurves/Isolatie/Curve * collect_by_cond(GeschiktObject, ActiefObject/Kmi_GV);
 
 	attribute<Eur>    Ki_totaal   (GeschiktObject) := sum(Ki_LO  , GeschiktObject/xProduct/GeschiktObject_rel)  + Ki_GV + Ki_LTAS;
 	attribute<Eur>    Ki30_totaal (GeschiktObject) := sum(Ki30_LO, GeschiktObject/xProduct/GeschiktObject_rel) + Ki_GV + Ki_LTAS;
@@ -477,7 +477,7 @@ template select_with_org_relGebouwOptieT
 	attribute<bool> LabelNormOK (GeschiktObject) := =LabelNormen/GeenNormen ? 'const(true,GeschiktObject)' : 'Energielabel_rel <= LabelNormen/Norm';
 	//======
 
-	attribute<Eur_yr> kosten_or_undefined (GeschiktObject) := select_data(GeschiktObject, Criterium) && LabelNormOK && not(Verboden) ? kosten : (0/0)[Eur_yr];
+	attribute<Eur_yr> kosten_or_undefined (GeschiktObject) := collect_by_cond(GeschiktObject, Criterium) && LabelNormOK && not(Verboden) ? kosten : (0/0)[Eur_yr];
 
 	container energielabelberekening := CalculationSchemes/NTA8800(GeschiktObject);
 	attribute<Classifications/Schillabel> Energielabel_rel     (GeschiktObject) := energielabelberekening/Energielabel_rel;

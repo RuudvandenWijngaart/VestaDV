@@ -96,8 +96,8 @@ unit<uint32> ActieveWoning := select_with_org_rel(PGBO/ProductActief || PGBO/Bou
 			
 	unit<uint32> GeschikteOptie := GeschikteOptieBerekening/results, ishidden = "True"
 	{
-		attribute<xInvesteringsOptie>          xInvesteringsOptie_rel := select_data(GeschikteOptie, xGebouwOptie/xInvesteringsOptie_rel);
-		attribute<Classifications/GebouwOptie> GebouwOptie_rel        := select_data(GeschikteOptie, xGebouwOptie/GebouwOptie_rel);
+		attribute<xInvesteringsOptie>          xInvesteringsOptie_rel := collect_by_cond(GeschikteOptie, xGebouwOptie/xInvesteringsOptie_rel);
+		attribute<Classifications/GebouwOptie> GebouwOptie_rel        := collect_by_cond(GeschikteOptie, xGebouwOptie/GebouwOptie_rel);
 	}
 	
 	// Kies GebouwOptie per xInvesteringsOptie
@@ -117,7 +117,7 @@ unit<uint32> ActieveWoning := select_with_org_rel(PGBO/ProductActief || PGBO/Bou
 		attribute<Float64> SpecificBeta  (GeschikteOptie)     := Classifications/Scurve_gebouwoptie/beta_f[combine_data(Classifications/Scurve_gebouwoptie, BO/Eigendom_rel[GeschikteOptie/BO_rel], GeschikteOptie/GebouwOptie_rel)];
 		attribute<Float64> MaxKosten     (xInvesteringsOptie) := max(GeschikteOptie/kosten_tbv_afweging, GeschikteOptie/xInvesteringsOptie_rel);
 		attribute<Float64> Geschiktheid  (GeschikteOptie)     := MaxKosten[GeschikteOptie/xInvesteringsOptie_rel] - GeschikteOptie/kosten_tbv_afweging;
-		attribute<Float64> OddsRatio     (GeschikteOptie)     := IsDefined(Geschiktheid) ? exp(min_elem(Geschiktheid * beta * SpecificBeta, LOG_MAX_FLOAT64)) : 0.0;
+		attribute<Float64> OddsRatio     (GeschikteOptie)     := IsDefined(Geschiktheid) ? exp(min_elem(Geschiktheid * beta * SpecificBeta / 1.0[EUR_yr], LOG_MAX_FLOAT64)) : 0.0;
 		attribute<Float64> TotalOddsRatio(xInvesteringsOptie) := sum(OddsRatio, GeschikteOptie/xInvesteringsOptie_rel);
 		attribute<Float64> Probability   (GeschikteOptie)     := OddsRatio / TotalOddsRatio[GeschikteOptie/xInvesteringsOptie_rel];
 		attribute<Float64> CumulProb     (GeschikteOptie)     := cumulate(Probability, GeschikteOptie/xInvesteringsOptie_rel);
@@ -164,7 +164,7 @@ unit<uint32> ActieveWoning := select_with_org_rel(PGBO/ProductActief || PGBO/Bou
 				];		 
 		attribute<Float64> MaxKosten     (ActieveWoning)      := max(Choice_per_xInvesteringsOptie/kosten_tbv_afweging, xInvesteringsOptie/ActieveWoning_rel);
 		attribute<Float64> Geschiktheid  (xInvesteringsOptie) := MaxKosten[xInvesteringsOptie/ActieveWoning_rel] - Choice_per_xInvesteringsOptie/kosten_tbv_afweging;
-		attribute<Float64> OddsRatio     (xInvesteringsOptie) := IsDefined(Geschiktheid) ? exp(min_elem(Geschiktheid * beta * SpecificBeta, LOG_MAX_FLOAT64)) : 0.0;
+		attribute<Float64> OddsRatio     (xInvesteringsOptie) := IsDefined(Geschiktheid) ? exp(min_elem(Geschiktheid * beta * SpecificBeta/ 1.0[EUR_yr], LOG_MAX_FLOAT64)) : 0.0;
 		attribute<Float64> TotalOddsRatio(ActieveWoning)      := sum(OddsRatio, xInvesteringsOptie/ActieveWoning_rel);
 		attribute<Float64> Probability   (xInvesteringsOptie) := OddsRatio / TotalOddsRatio[xInvesteringsOptie/ActieveWoning_rel];
 		attribute<Float64> CumulProb     (xInvesteringsOptie) := cumulate(Probability, xInvesteringsOptie/ActieveWoning_rel);
@@ -254,10 +254,8 @@ unit<uint32> ActieveWoning := select_with_org_rel(PGBO/ProductActief || PGBO/Bou
 			Classifications/GebouwOptie_eenmalig/name,
 			replace('makedefined(GeschikteOptie/eenmalig/@GE@[Choice_per_PGBO/GeschikteOptie_rel], 0[Eur])', '@GE@', Classifications/GebouwOptie_eenmalig/name ),
 			PGBO,
-			Eur)
-		{
-			attribute<eur> Ki_gv (PGBO) := makedefined(GeschikteOptie/eenmalig/Ki_gv[Choice_per_PGBO/GeschikteOptie_rel], 0.0[eur]);
-		}
+			Eur);
+
 		container jaarlijks := for_each_nedv(
 			Classifications/GebouwOptie_jaarlijks/name,
 			replace('makedefined(GeschikteOptie/jaarlijks/@GJ@[Choice_per_PGBO/GeschikteOptie_rel], collect_by_cond(PGBO, BO/jaarlijks/@GJ@))', '@GJ@', Classifications/GebouwOptie_jaarlijks/name ),
