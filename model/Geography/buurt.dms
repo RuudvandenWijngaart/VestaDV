@@ -71,7 +71,8 @@ unit<uint32> Buurt:
 	// overige kenmerken die van belang zijn voor de modelberekening
 	container Overigen : Using = Invoer/RuimtelijkeData/CBSWijkEnBuurt/per_jaar 
 	{
-		attribute<percent> p_stadsv  (..) := = replace(rjoin_per_jaar_expr_template, '@@@var@@@', 'p_stadsv[percent]'); // aandeel huidige aansluiting stadsverwarming
+		//attribute<percent> p_stadsv  (..) := = replace(rjoin_per_jaar_expr_template, '@@@var@@@', 'p_stadsv[percent]'); // aandeel huidige aansluiting stadsverwarming
+		attribute<percent> p_stadsv  (..) := Stadsv_berekening/p_stadsv; // aandeel huidige aansluiting stadsverwarming
 		attribute<percent> p_aardgas (..) := 100[percent] - (p_stadsv);                                                 // aandeel huidige aansluiting aardgas
 
 		attribute<ha> a_opp_ha       (..) := = replace(rjoin_per_jaar_expr_template, '@@@var@@@', 'a_opp_ha[ha]'); // totaal oppervlak buurt
@@ -83,6 +84,44 @@ unit<uint32> Buurt:
 		attribute<ratio> r_land      (..) := 1d / a_opp_ha* a_lan_ha;
 		attribute<ratio> r_water     (..) := (1d / a_opp_ha)* a_wat_ha;
 		attribute<ratio> r_checksum  (..) := r_land + r_water;
+	}
+	
+	container Stadsv_berekening: Using = Invoer/RuimtelijkeData/CBSWijkEnBuurt/per_jaar
+	{
+		parameter<string> rjoin_per_jaar_expr_template := 
+			'MakeDefined('
+				+ AsList('rjoin(@@BU@@, j' + Invoer/RuimtelijkeData/CBSWijkEnBuurt/Jaar/reverse + '/src/gwb_code_10, j' + Invoer/RuimtelijkeData/CBSWijkEnBuurt/Jaar/reverse + '/src/@@@var@@@)' ,',')
+			+ ')';
+		attribute<string> BU_CODE_2023 	(..) := BU_CODE;
+		attribute<string> BU_CODE_2022 	(..) := rjoin(BU_CODE_2023, vernummering/j2022_2023/code_buurt_of_wijk_2023, vernummering/j2022_2023/code_buurt_of_wijk_2022);
+		attribute<string> BU_CODE_2021 	(..) := MakeDefined(
+												 rjoin(BU_CODE_2023, vernummering/j2021_2022/code_buurt_of_wijk_2022, vernummering/j2021_2022/code_buurt_of_wijk_2021)
+												,rjoin(BU_CODE_2022, vernummering/j2021_2022/code_buurt_of_wijk_2022, vernummering/j2021_2022/code_buurt_of_wijk_2021))
+													;
+		attribute<string> BU_CODE_2020 	(..) := MakeDefined(MakeDefined(
+												 rjoin(BU_CODE_2023, vernummering/j2020_2021/code_buurt_of_wijk_2021, vernummering/j2020_2021/code_buurt_of_wijk_2020)
+												,rjoin(BU_CODE_2022, vernummering/j2020_2021/code_buurt_of_wijk_2021, vernummering/j2020_2021/code_buurt_of_wijk_2020))
+												,rjoin(BU_CODE_2021, vernummering/j2020_2021/code_buurt_of_wijk_2021, vernummering/j2020_2021/code_buurt_of_wijk_2020))
+													;
+		attribute<string> BU_CODE_2019 	(..) := MakeDefined(MakeDefined(MakeDefined(
+												 rjoin(BU_CODE_2023, vernummering/j2019_2020/code_buurt_of_wijk_2020, vernummering/j2019_2020/code_buurt_of_wijk_2019)
+												,rjoin(BU_CODE_2022, vernummering/j2019_2020/code_buurt_of_wijk_2020, vernummering/j2019_2020/code_buurt_of_wijk_2019))
+												,rjoin(BU_CODE_2021, vernummering/j2019_2020/code_buurt_of_wijk_2020, vernummering/j2019_2020/code_buurt_of_wijk_2019))
+												,rjoin(BU_CODE_2020, vernummering/j2019_2020/code_buurt_of_wijk_2020, vernummering/j2019_2020/code_buurt_of_wijk_2019))
+												;
+
+		attribute<percent> p_stadsv_BU2023  (..) := = replace(replace(rjoin_per_jaar_expr_template, '@@@var@@@', 'p_stadsv[percent]'), '@@BU@@', 'BU_CODE_2023');
+		attribute<percent> p_stadsv_BU2022  (..) := = replace(replace(rjoin_per_jaar_expr_template, '@@@var@@@', 'p_stadsv[percent]'), '@@BU@@', 'BU_CODE_2022');
+		attribute<percent> p_stadsv_BU2021  (..) := = replace(replace(rjoin_per_jaar_expr_template, '@@@var@@@', 'p_stadsv[percent]'), '@@BU@@', 'BU_CODE_2021');
+		attribute<percent> p_stadsv_BU2020  (..) := = replace(replace(rjoin_per_jaar_expr_template, '@@@var@@@', 'p_stadsv[percent]'), '@@BU@@', 'BU_CODE_2020');
+		attribute<percent> p_stadsv_BU2019  (..) := = replace(replace(rjoin_per_jaar_expr_template, '@@@var@@@', 'p_stadsv[percent]'), '@@BU@@', 'BU_CODE_2019');
+		
+		attribute<percent> p_stadsv		(..) := MakeDefined(p_stadsv_BU2023, MakeDefined(p_stadsv_BU2022, MakeDefined(p_stadsv_BU2021, MakeDefined(p_stadsv_BU2020, p_stadsv_BU2019))));
+		attribute<percent> p_stadsv2  	(..) := MakeDefined(p_stadsv_BU2019, MakeDefined(p_stadsv_BU2020, MakeDefined(p_stadsv_BU2021, MakeDefined(p_stadsv_BU2022, p_stadsv_BU2023))));
+
+		attribute<bool>	   Heeft_stadsv_standaard	(..) := IsDefined(overigen/p_stadsv);
+		attribute<bool>	   Heeft_stadsv_metchecks 	(..) := IsDefined(p_stadsv);
+
 	}
 }
 
