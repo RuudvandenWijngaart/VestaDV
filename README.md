@@ -16,7 +16,7 @@ nationaal niveau waarbij de uitersten van de scenario’s Hoog en Laag de waarsc
 gewenst kan de gebruiker vervolgens zelf de ruimtelijke ontwikkeling van sloop en nieuwbouw opgeven op basis van eigen inzichten.
 
 # Vraag vanuit het Vesta team
-Voordat u aan de slag gaat met Vesta, willen we u vragen om wat eenvoudige gegevens ter informatie te versturen naar het Vesta team. De reden dat we dit vragen is dat we vanuit GitHub geen informatie krijgen wie het model allemaal downloaden. Om toch een idee te krijgen wat betreft de toepassing van Vesta vragen we u daarom de volgende gegevens door te sturen naar Info-Vesta@pbl.nl:
+Voordat u aan de slag gaat met Vesta, willen we u vragen om wat eenvoudige gegevens ter informatie te versturen naar het Vesta team. De reden dat we dit vragen is dat we vanuit GitHub geen informatie krijgen wie het model allemaal downloaden. Om toch een idee te krijgen wat betreft de toepassing van Vesta vragen we u daarom de volgende gegevens door te sturen naar startanalyse@pbl.nl
 -	Naam
 -	Emailadres
 -	Telefoonnummer
